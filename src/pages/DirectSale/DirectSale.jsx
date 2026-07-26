@@ -296,6 +296,25 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               <h1>{headerTitle}</h1>
               <span className="ds-count-badge">{productCount} Ürün</span>
             </div>
+            <div className="ds-header-table">
+              <select
+                className="ds-table-select-mini"
+                value={selectedTable}
+                onChange={(e) => setSelectedTable(e.target.value)}
+              >
+                {TABLES.map((t) => {
+                  const tot = getTableTotal(t);
+                  const hasOrder = orders[t] && orders[t].length > 0;
+                  return (
+                    <option key={t} value={t}>
+                      {t} {hasOrder ? `(${TL(tot)})` : '[Boş]'}
+                    </option>
+                  );
+                })}
+              </select>
+              <button className="ds-mini-btn" onClick={handleTableTransfer} title="Masayı taşı">⇄</button>
+              <button className="ds-mini-btn purple" onClick={handleTableMerge} title="Masaları birleştir">🔗</button>
+            </div>
             <div className="ds-search">
               <input
                 type="text"
@@ -305,6 +324,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               />
             </div>
           </header>
+          <div className="ds-note-strip">
+            <input
+              type="text"
+              className="ds-table-note-inline"
+              placeholder="Masa notu (örn: Müşteri 10 dk sonra gelecek)"
+              value={tableNotes[selectedTable] || ''}
+              onChange={(e) => handleNoteChange(e.target.value)}
+            />
+          </div>
 
           {/* FAVORİLER */}
           <section className="ds-favorites">
@@ -360,38 +388,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
         {/* SİPARİŞ / SEPET PANELİ */}
         <aside className="ds-order-panel">
-          <div className="ds-table-head">
-            <div className="ds-table-row">
-              <label className="ds-table-label">Satış Masası</label>
-              <select
-                className="ds-table-select"
-                value={selectedTable}
-                onChange={(e) => setSelectedTable(e.target.value)}
-              >
-                {TABLES.map((t) => {
-                  const tot = getTableTotal(t);
-                  const hasOrder = orders[t] && orders[t].length > 0;
-                  return (
-                    <option key={t} value={t}>
-                      {t} {hasOrder ? `(${TL(tot)})` : '[Boş]'}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-            <div className="ds-table-actions-row">
-              <button className="ds-mini-btn" onClick={handleTableTransfer}>⇄ Taşı</button>
-              <button className="ds-mini-btn purple" onClick={handleTableMerge}>🔗 Birleştir</button>
-            </div>
-            <textarea
-              className="ds-table-note"
-              placeholder="Masa notu (örn: Müşteri 10 dk sonra gelecek)"
-              value={tableNotes[selectedTable] || ''}
-              onChange={(e) => handleNoteChange(e.target.value)}
-            />
-          </div>
-
-          <div className="ds-order-list">
+          <div className={`ds-order-list ${currentOrder.length > 14 ? 'ultra-compact' : currentOrder.length > 7 ? 'compact' : ''}`}>
             {currentOrder.length === 0 && <div className="ds-empty">Sipariş boş — ürüne dokunarak ekleyin</div>}
             {currentOrder.map((item) => {
               if (item.note) {
@@ -470,10 +467,18 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
           </div>
 
           <div className="ds-pay-grid">
-            <button disabled={isOrderEmpty} className="cash" onClick={() => handlePay('NAKİT')}>💵 NAKİT</button>
-            <button disabled={isOrderEmpty} className="card" onClick={() => handlePay('KREDİ KARTI')}>💳 KREDİ KARTI</button>
-            <button disabled={isOrderEmpty} className="meal" onClick={() => handlePay('YEMEK KARTI')}>🍽 YEMEK KARTI</button>
-            <button disabled={isOrderEmpty} className="credit" onClick={() => handlePay('CARİ')}>📖 CARİYE YAZ</button>
+            <button disabled={isOrderEmpty} className="cash" onClick={() => handlePay('NAKİT')}>
+              <span className="ico">💵</span><span className="lbl">Nakit</span>
+            </button>
+            <button disabled={isOrderEmpty} className="card" onClick={() => handlePay('KREDİ KARTI')}>
+              <span className="ico">💳</span><span className="lbl">Kredi K.</span>
+            </button>
+            <button disabled={isOrderEmpty} className="meal" onClick={() => handlePay('YEMEK KARTI')}>
+              <span className="ico">🍽</span><span className="lbl">Yemek K.</span>
+            </button>
+            <button disabled={isOrderEmpty} className="credit" onClick={() => handlePay('CARİ')}>
+              <span className="ico">📖</span><span className="lbl">Cari</span>
+            </button>
           </div>
           <div className="ds-bottom-actions">
             <button disabled={isOrderEmpty} onClick={handlePrint}>🖨 Yazdır</button>
