@@ -1,0 +1,27 @@
+.nav-bottom {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 56px;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid #ddd5c4;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 50;
+}
+.nav-bottom button {
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: #8a8474;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+.nav-bottom button .ico { font-size: 17px; }
+.nav-bottom button .label { font-size: 10px; }
+.nav-bottom button.active { color: #2f5233; font-weight: 800; }

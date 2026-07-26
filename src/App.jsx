@@ -1,13 +1,20 @@
-import { useEffect } from 'react';
-import DirectSale from "./pages/DirectSale/DirectSale";
+import { useEffect, useState } from 'react';
+import DirectSale from './pages/DirectSale/DirectSale';
+import Tables from './pages/Tables/Tables';
+import BottomNav from './components/BottomNav/BottomNav';
+import useHipposData, { TABLES } from './hooks/useHipposData';
 import { supabase } from './services/supabase';
 
 export default function App() {
+  const data = useHipposData();
+  const [activePage, setActivePage] = useState('pos');
+  const [selectedTable, setSelectedTable] = useState(TABLES[0]);
+
   useEffect(() => {
     async function testConnection() {
       // Supabase 'tables' tablosu test çağrısı
       const { data, error } = await supabase.from('tables').select('*');
-      
+
       if (error) {
         console.error('❌ Supabase Bağlantı Hatası:', error.message);
       } else {
@@ -18,5 +25,29 @@ export default function App() {
     testConnection();
   }, []);
 
-  return <DirectSale />;
+  function handleNavigate(page) {
+    if (page === 'tables' || page === 'pos') {
+      setActivePage(page);
+    } else {
+      // Kasa & Rapor, Ayarlar sayfaları henüz hazır değil
+      alert('Bu sayfa henüz hazırlanıyor.');
+    }
+  }
+
+  return (
+    <>
+      {activePage === 'pos' && (
+        <DirectSale
+          data={data}
+          selectedTable={selectedTable}
+          setSelectedTable={setSelectedTable}
+          onNavigate={handleNavigate}
+        />
+      )}
+      {activePage === 'tables' && (
+        <Tables data={data} setSelectedTable={setSelectedTable} onNavigate={handleNavigate} />
+      )}
+      <BottomNav activePage={activePage} onNavigate={handleNavigate} />
+    </>
+  );
 }
