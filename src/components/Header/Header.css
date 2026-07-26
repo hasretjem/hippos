@@ -1,0 +1,27 @@
+.header{
+
+    height:64px;
+    background:#202733;
+    color:white;
+
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+
+    padding:0 24px;
+
+}
+
+.logo{
+
+    font-size:26px;
+    font-weight:bold;
+
+}
+
+.header-right{
+
+    display:flex;
+    gap:20px;
+
+}

@@ -1,0 +1,53 @@
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    background:#eceff3;
+    font-family:Arial, Helvetica, sans-serif;
+}
+
+.layout{
+    height:100vh;
+    display:flex;
+    flex-direction:column;
+}
+
+.layout-body{
+    flex:1;
+    display:flex;
+}
+
+.layout-content{
+    flex:1;
+    padding:24px;
+    overflow:auto;
+}
+
+.layout-cart{
+    width:340px;
+    background:white;
+    border-left:1px solid #ddd;
+    padding:20px;
+    display:flex;
+    flex-direction:column;
+}
+
+.cart-total{
+    margin-top:auto;
+    display:flex;
+    justify-content:space-between;
+    font-size:24px;
+    padding:20px 0;
+}
+
+.pay-button{
+    height:64px;
+    border:none;
+    border-radius:10px;
+    background:#00a86b;
+    color:white;
+    font-size:22px;
+    cursor:pointer;
+}
