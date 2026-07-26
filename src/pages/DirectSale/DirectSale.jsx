@@ -1,6 +1,9 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import './DirectSale.css';
 import { TABLES, TL } from '../../hooks/useHipposData';
+
+const CAT_COLORS = ['#c9622b', '#2f6b52', '#1f6b7a', '#a3542f', '#5b4b8a', '#3a6b8a', '#7a3b52', '#8a7a2f'];
+
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
   const {
@@ -93,6 +96,30 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   // ---- Masa notu ----
   function handleNoteChange(value) {
     setTableNotes((prev) => ({ ...prev, [selectedTable]: value }));
+  }
+
+  async function pasteToTableNote() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) return;
+      const current = tableNotes[selectedTable] || '';
+      handleNoteChange(current ? `${current} ${text}` : text);
+    } catch {
+      showToast('Panoya erişilemedi');
+    }
+  }
+
+  async function pasteKitchenNote() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) return;
+      updateOrder(selectedTable, (items) => [
+        ...items,
+        { id: Date.now() + Math.random(), ad: text.trim(), fiyat: 0, selected: false, note: true, persistentHighlight: false },
+      ]);
+    } catch {
+      showToast('Panoya erişilemedi');
+    }
   }
 
   // ---- Mutfak notu ekleme (genel modal ile) ----
@@ -231,6 +258,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   }
 
   const printRef = useRef(null);
+  const orderListRef = useRef(null);
+
+  useEffect(() => {
+    if (orderListRef.current) {
+      orderListRef.current.scrollTop = orderListRef.current.scrollHeight;
+    }
+  }, [currentOrder.length, selectedTable]);
+
   function handlePrint() {
     if (currentOrder.length === 0) return;
     window.print();
@@ -264,31 +299,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   return (
     <div className="ds-shell">
       <div className="ds-body">
-        {/* KATEGORİ SIDEBAR */}
-        <aside className="ds-category-sidebar">
-          <div className="ds-brand">
-            <span className="ds-brand-name">HIPPOS</span>
-            <span className="ds-brand-sub">⚡ HIZLI SATIŞ</span>
-          </div>
-          <div className="ds-category-list">
-            {categories.map((cat) => {
-              const isActive = cat === activeCategory && !searchQuery;
-              return (
-                <button
-                  key={cat}
-                  className={`ds-category-btn ${isActive ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveCategory(cat);
-                    setSearchQuery('');
-                  }}
-                >
-                  {cat}
-                </button>
-              );
-            })}
-          </div>
-        </aside>
-
         {/* ANA GÖVDE */}
         <main className="ds-main">
           <header className="ds-header">
@@ -325,6 +335,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             </div>
           </header>
           <div className="ds-note-strip">
+            <button className="ds-paste-btn" onClick={pasteToTableNote} title="Panodan yapıştır">📋</button>
             <input
               type="text"
               className="ds-table-note-inline"
@@ -332,6 +343,27 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               value={tableNotes[selectedTable] || ''}
               onChange={(e) => handleNoteChange(e.target.value)}
             />
+          </div>
+
+          {/* KATEGORİ ŞERİDİ */}
+          <div className="ds-category-strip">
+            {categories.map((cat, idx) => {
+              const isActive = cat === activeCategory && !searchQuery;
+              const color = cat === 'TÜMÜ' ? '#3a352c' : CAT_COLORS[(idx - 1 + CAT_COLORS.length) % CAT_COLORS.length];
+              return (
+                <button
+                  key={cat}
+                  className={`ds-cat-card ${isActive ? 'active' : ''}`}
+                  style={{ '--cat-color': color }}
+                  onClick={() => {
+                    setActiveCategory(cat);
+                    setSearchQuery('');
+                  }}
+                >
+                  {cat}
+                </button>
+              );
+            })}
           </div>
 
           {/* FAVORİLER */}
@@ -388,7 +420,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
         {/* SİPARİŞ / SEPET PANELİ */}
         <aside className="ds-order-panel">
-          <div className={`ds-order-list ${currentOrder.length > 14 ? 'ultra-compact' : currentOrder.length > 7 ? 'compact' : ''}`}>
+          <div
+            ref={orderListRef}
+            className={`ds-order-list ${currentOrder.length > 14 ? 'ultra-compact' : currentOrder.length > 7 ? 'compact' : ''}`}
+          >
             {currentOrder.length === 0 && <div className="ds-empty">Sipariş boş — ürüne dokunarak ekleyin</div>}
             {currentOrder.map((item) => {
               if (item.note) {
@@ -418,6 +453,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
           <div className="ds-order-tools">
             <div className="ds-order-tools-row">
+              <button className="ds-paste-btn" onClick={pasteKitchenNote} title="Panodan not olarak yapıştır">📋</button>
               <button className="ds-note-btn" onClick={openKitchenNoteModal}>📝 + Mutfağa Not Ekle</button>
               <button className="ds-numpad-toggle" onClick={() => setNumpadOpen((v) => !v)}>🔢 İndirim Tuşluğu</button>
             </div>
