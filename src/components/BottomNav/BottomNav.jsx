@@ -1,24 +1,25 @@
 import React from 'react';
 import './BottomNav.css';
+import { Home, Table2, BarChart3, Settings } from 'lucide-react';
 
 const ITEMS = [
-  { key: 'pos', label: 'Ana Sayfa (POS)', icon: '🏠' },
-  { key: 'tables', label: 'Masalar', icon: '🪑' },
-  { key: 'reports', label: 'Kasa & Rapor', icon: '📊' },
-  { key: 'settings', label: 'Ayarlar', icon: '⚙️' },
+  { key: 'pos', label: 'Ana Sayfa (POS)', Icon: Home },
+  { key: 'tables', label: 'Masalar', Icon: Table2 },
+  { key: 'reports', label: 'Kasa & Rapor', Icon: BarChart3 },
+  { key: 'settings', label: 'Ayarlar', Icon: Settings },
 ];
 
 export default function BottomNav({ activePage, onNavigate }) {
   return (
     <nav className="nav-bottom">
-      {ITEMS.map((item) => (
+      {ITEMS.map(({ key, label, Icon }) => (
         <button
-          key={item.key}
-          className={activePage === item.key ? 'active' : ''}
-          onClick={() => onNavigate(item.key)}
+          key={key}
+          className={activePage === key ? 'active' : ''}
+          onClick={() => onNavigate(key)}
         >
-          <span className="ico">{item.icon}</span>
-          <span className="label">{item.label}</span>
+          <Icon size={18} strokeWidth={2} />
+          <span className="label">{label}</span>
         </button>
       ))}
     </nav>

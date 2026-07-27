@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import './DirectSale.css';
 import { TABLES, TL } from '../../hooks/useHipposData';
-
-const CAT_COLORS = ['#c9622b', '#2f6b52', '#1f6b7a', '#a3542f', '#5b4b8a', '#3a6b8a', '#7a3b52', '#8a7a2f'];
-
+import {
+  Search, Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
+  Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
+  Trash2, Star, Check, AlertTriangle,
+} from 'lucide-react';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
   const {
@@ -322,10 +324,11 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   );
                 })}
               </select>
-              <button className="ds-mini-btn" onClick={handleTableTransfer} title="Masayı taşı">⇄</button>
-              <button className="ds-mini-btn purple" onClick={handleTableMerge} title="Masaları birleştir">🔗</button>
+              <button className="ds-mini-btn" onClick={handleTableTransfer} title="Masayı taşı"><ArrowLeftRight size={15} /></button>
+              <button className="ds-mini-btn purple" onClick={handleTableMerge} title="Masaları birleştir"><Link2 size={15} /></button>
             </div>
             <div className="ds-search">
+              <Search size={15} className="ds-search-ico" />
               <input
                 type="text"
                 placeholder="Ürün ara..."
@@ -335,7 +338,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             </div>
           </header>
           <div className="ds-note-strip">
-            <button className="ds-paste-btn" onClick={pasteToTableNote} title="Panodan yapıştır">📋</button>
+            <button className="ds-paste-btn" onClick={pasteToTableNote} title="Panodan yapıştır"><ClipboardPaste size={14} /></button>
             <input
               type="text"
               className="ds-table-note-inline"
@@ -347,14 +350,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
           {/* KATEGORİ ŞERİDİ */}
           <div className="ds-category-strip">
-            {categories.map((cat, idx) => {
+            {categories.map((cat) => {
               const isActive = cat === activeCategory && !searchQuery;
-              const color = cat === 'TÜMÜ' ? '#3a352c' : CAT_COLORS[(idx - 1 + CAT_COLORS.length) % CAT_COLORS.length];
               return (
                 <button
                   key={cat}
                   className={`ds-cat-card ${isActive ? 'active' : ''}`}
-                  style={{ '--cat-color': color }}
                   onClick={() => {
                     setActiveCategory(cat);
                     setSearchQuery('');
@@ -369,9 +370,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
           {/* FAVORİLER */}
           <section className="ds-favorites">
             <div className="ds-favorites-head">
-              <span className="ds-favorites-label">⭐ HIZLI FAVORİLER</span>
+              <span className="ds-favorites-label"><Star size={12} /> HIZLI FAVORİLER</span>
               <button className="ds-edit-fav-btn" onClick={() => setFavModalOpen(true)}>
-                ✏️ Düzenle
+                <Pencil size={12} /> Düzenle
               </button>
             </div>
             <div className="ds-favorites-row">
@@ -406,7 +407,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                       >
                         <div className="ds-product-card-top">
                           <span className="ds-product-name">{product.ad}</span>
-                          {isFav && <span className="ds-star">⭐</span>}
+                          {isFav && <Star size={11} className="ds-star" fill="currentColor" />}
                         </div>
                         <span className="ds-product-price">{TL(product.fiyat)}</span>
                       </button>
@@ -429,19 +430,19 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               if (item.note) {
                 return (
                   <div key={item.id} className="ds-order-line note">
-                    <span className="ds-order-line-name">📝 {item.ad}</span>
-                    <button className="ds-remove-btn" onClick={() => removeItem(item.id)}>✕</button>
+                    <span className="ds-order-line-name"><StickyNote size={13} /> {item.ad}</span>
+                    <button className="ds-remove-btn" onClick={() => removeItem(item.id)}><X size={16} /></button>
                   </div>
                 );
               }
               const styleClass = item.selected ? 'selected' : item.persistentHighlight ? 'duplicate' : '';
               return (
                 <div key={item.id} className={`ds-order-line ${styleClass}`}>
-                  <button className="ds-remove-btn" onClick={() => removeItem(item.id)}>✕</button>
+                  <button className="ds-remove-btn" onClick={() => removeItem(item.id)}><X size={16} /></button>
                   <div className="ds-order-line-mid" onClick={() => toggleSelectItem(item.id)}>
                     <span className="ds-order-line-name">{item.ad}</span>
-                    {item.selected && <span className="ds-tag selected">✓ SEÇİLİ</span>}
-                    {!item.selected && item.persistentHighlight && <span className="ds-tag duplicate">⚠️ İKAZ</span>}
+                    {item.selected && <span className="ds-tag selected"><Check size={10} /> SEÇİLİ</span>}
+                    {!item.selected && item.persistentHighlight && <span className="ds-tag duplicate"><AlertTriangle size={10} /> İKAZ</span>}
                   </div>
                   <span className="ds-order-line-price" onClick={() => openPriceModal(item)}>
                     {TL(item.fiyat)}
@@ -453,9 +454,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
           <div className="ds-order-tools">
             <div className="ds-order-tools-row">
-              <button className="ds-paste-btn" onClick={pasteKitchenNote} title="Panodan not olarak yapıştır">📋</button>
-              <button className="ds-note-btn" onClick={openKitchenNoteModal}>📝 + Mutfağa Not Ekle</button>
-              <button className="ds-numpad-toggle" onClick={() => setNumpadOpen((v) => !v)}>🔢 İndirim Tuşluğu</button>
+              <button className="ds-paste-btn" onClick={pasteKitchenNote} title="Panodan not olarak yapıştır"><ClipboardPaste size={14} /></button>
+              <button className="ds-note-btn" onClick={openKitchenNoteModal}><StickyNote size={13} /> + Mutfağa Not Ekle</button>
+              <button className="ds-numpad-toggle" onClick={() => setNumpadOpen((v) => !v)}><Percent size={13} /> İndirim Tuşluğu</button>
             </div>
             {numpadOpen && (
               <div className="ds-numpad-box">
@@ -504,22 +505,22 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
           <div className="ds-pay-grid">
             <button disabled={isOrderEmpty} className="cash" onClick={() => handlePay('NAKİT')}>
-              <span className="ico">💵</span><span className="lbl">Nakit</span>
+              <Banknote size={19} /><span className="lbl">Nakit</span>
             </button>
             <button disabled={isOrderEmpty} className="card" onClick={() => handlePay('KREDİ KARTI')}>
-              <span className="ico">💳</span><span className="lbl">Kredi K.</span>
+              <CreditCard size={19} /><span className="lbl">Kredi K.</span>
             </button>
             <button disabled={isOrderEmpty} className="meal" onClick={() => handlePay('YEMEK KARTI')}>
-              <span className="ico">🍽</span><span className="lbl">Yemek K.</span>
+              <UtensilsCrossed size={19} /><span className="lbl">Yemek K.</span>
             </button>
             <button disabled={isOrderEmpty} className="credit" onClick={() => handlePay('CARİ')}>
-              <span className="ico">📖</span><span className="lbl">Cari</span>
+              <BookOpen size={19} /><span className="lbl">Cari</span>
             </button>
           </div>
           <div className="ds-bottom-actions">
-            <button disabled={isOrderEmpty} onClick={handlePrint}>🖨 Yazdır</button>
-            <button disabled={isOrderEmpty} onClick={handleUndoLastItem}>↩️ Geri Al</button>
-            <button disabled={isOrderEmpty} className="danger" onClick={handleClearTable}>🗑 Boşalt</button>
+            <button disabled={isOrderEmpty} onClick={handlePrint}><Printer size={14} /> Yazdır</button>
+            <button disabled={isOrderEmpty} onClick={handleUndoLastItem}><Undo2 size={14} /> Geri Al</button>
+            <button disabled={isOrderEmpty} className="danger" onClick={handleClearTable}><Trash2 size={14} /> Boşalt</button>
           </div>
         </aside>
       </div>
@@ -531,8 +532,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
         <div className="ds-modal-overlay" onClick={() => setFavModalOpen(false)}>
           <div className="ds-modal ds-fav-modal" onClick={(e) => e.stopPropagation()}>
             <div className="ds-modal-head">
-              <h3>⭐ Hızlı Favorileri Düzenle</h3>
-              <button onClick={() => setFavModalOpen(false)}>✕</button>
+              <h3><Star size={14} /> Hızlı Favorileri Düzenle</h3>
+              <button className="ds-modal-x" onClick={() => setFavModalOpen(false)}><X size={16} /></button>
             </div>
             <input
               type="text"
@@ -562,7 +563,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   return (
                     <div key={prod.id} className={`ds-fav-modal-item ${isFav ? 'active' : ''}`} onClick={() => toggleFavorite(prod.id)}>
                       <div className="ds-fav-modal-item-left">
-                        <span>{isFav ? '⭐' : '☆'}</span>
+                        <Star size={14} fill={isFav ? 'currentColor' : 'none'} />
                         <div>
                           <p className="name">{prod.ad}</p>
                           <p className="cat">{prod.kategori}{prod.altKategori ? ` • ${prod.altKategori}` : ''}</p>
@@ -586,7 +587,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
           <div className="ds-modal ds-price-modal" onClick={(e) => e.stopPropagation()}>
             <div className="ds-modal-head">
               <h3>{priceModal.item.ad} - Fiyat Değiştir</h3>
-              <button onClick={() => setPriceModal(null)}>✕</button>
+              <button className="ds-modal-x" onClick={() => setPriceModal(null)}><X size={16} /></button>
             </div>
             <div className="ds-price-display">
               <span className="label">YENİ FİYAT (₺):</span>
@@ -621,7 +622,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
         <div className="print-items">
           {currentOrder.map((item) => (
             <div key={item.id} className="print-row">
-              <span>{item.note ? `📝 ${item.ad}` : item.ad}</span>
+              <span>{item.note ? `• ${item.ad}` : item.ad}</span>
               <span>{item.note ? '' : TL(item.fiyat)}</span>
             </div>
           ))}
