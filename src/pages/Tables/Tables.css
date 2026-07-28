@@ -37,9 +37,11 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  color-scheme: light;
 }
 .tb-shell * { box-sizing: border-box; }
 .tb-shell button, .tb-shell input { color: inherit; font-family: inherit; }
+.tb-shell h1, .tb-shell h2, .tb-shell h3 { color: inherit; }
 
 /* ---- Hızlı Satış — diğerlerinden bilinçli olarak ayrışan, dolgu renkli üst buton ---- */
 .tb-quicksale {
@@ -67,7 +69,7 @@
   color: #E9C97A;
 }
 .tb-quicksale-text { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-.tb-quicksale-text .title { font-size: 15px; font-weight: 700; }
+.tb-quicksale-text .title { font-size: 15px; font-weight: 700; color: #fff; }
 .tb-quicksale-text .sub { font-size: 11.5px; color: rgba(255,255,255,0.6); font-weight: 500; }
 .tb-quicksale-amount { margin-left: auto; font-size: 17px; font-weight: 800; color: #E9C97A; }
 
@@ -220,7 +222,7 @@
 
 /* ---- Paketler paneli (sağda, sipariş paneli gibi) ---- */
 .tb-packages {
-  width: 220px;
+  width: 320px;
   flex-shrink: 0;
   background: var(--panel);
   border: 1px solid var(--border-soft);
@@ -229,20 +231,43 @@
   padding: 20px;
   overflow-y: auto;
 }
-.tb-package-list { display: flex; flex-direction: column; gap: 12px; }
-.tb-package-list .tb-card { width: 100%; }
+.tb-package-list { display: flex; flex-direction: column; gap: 8px; }
+.tb-package-list .tb-card {
+  width: 100%;
+  min-height: 76px;
+  padding: 10px 12px;
+  gap: 3px;
+}
+.tb-package-list .tb-card-note .txt { -webkit-line-clamp: 1; }
+.tb-package-list .tb-card-name { font-size: 13px; }
+.tb-package-list .tb-card-time { font-size: 10px; }
+.tb-package-list .tb-card-total { font-size: 14px; }
+
+.tb-package-list.compact .tb-card { min-height: 60px; padding: 8px 10px; gap: 2px; }
+.tb-package-list.compact .tb-card-note { display: none; }
+.tb-package-list.compact .tb-card-time { font-size: 9.5px; }
+.tb-package-list.compact .tb-card-total { font-size: 13px; }
+
+.tb-package-list.ultra-compact .tb-card { min-height: 46px; padding: 6px 10px; gap: 0; flex-direction: row; align-items: center; flex-wrap: wrap; }
+.tb-package-list.ultra-compact .tb-card-top { flex: 1; min-width: 100px; }
+.tb-package-list.ultra-compact .tb-card-time { display: none; }
+.tb-package-list.ultra-compact .tb-card-note { display: none; }
+.tb-package-list.ultra-compact .tb-card-bottom { margin-top: 0; }
+.tb-package-list.ultra-compact .tb-card-name { font-size: 12px; }
+.tb-package-list.ultra-compact .tb-card-total { font-size: 12px; }
+
 .tb-add-package {
   width: 100%;
-  height: 96px;
+  height: 52px;
   border: 1.5px dashed var(--border);
   border-radius: var(--r-card);
   background: none;
   color: var(--ink-soft);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;

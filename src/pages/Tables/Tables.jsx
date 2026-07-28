@@ -252,7 +252,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
 
         <aside className="tb-packages">
           <h2 className="tb-section-title">Paketler</h2>
-          <div className="tb-package-list">
+          <div className={`tb-package-list ${packages.length > 8 ? 'ultra-compact' : packages.length > 4 ? 'compact' : ''}`}>
             {packages.map((p) => renderTableCard(p.name))}
             <button
               className="tb-add-package"
