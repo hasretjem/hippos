@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import DirectSale from './pages/DirectSale/DirectSale';
 import Tables from './pages/Tables/Tables';
 import BottomNav from './components/BottomNav/BottomNav';
-import useHipposData, { TABLES } from './hooks/useHipposData';
+import useHipposData, { QUICK_SALE } from './hooks/useHipposData';
 import { supabase } from './services/supabase';
 
 export default function App() {
   const data = useHipposData();
   const [activePage, setActivePage] = useState('pos');
-  const [selectedTable, setSelectedTable] = useState(TABLES[0]);
+  const [selectedTable, setSelectedTable] = useState(QUICK_SALE);
 
   useEffect(() => {
     async function testConnection() {

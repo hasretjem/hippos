@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import './Tables.css';
-import { SALON_TABLES, ALT_TABLES, TABLE_PAIRS, TL, getElapsedMinutes, getColorTier } from '../../hooks/useHipposData';
+import { SALON_TABLES, ALT_TABLES, TABLE_PAIRS, QUICK_SALE, TL, getElapsedMinutes, getColorTier } from '../../hooks/useHipposData';
 import {
   MoreVertical, Plus, ClipboardPaste, ArrowLeftRight, Link2, XCircle,
-  Undo2, Banknote, CreditCard, UtensilsCrossed, BookOpen, X, Check, Pencil,
+  Undo2, Banknote, CreditCard, UtensilsCrossed, BookOpen, X, Check, Pencil, Zap,
 } from 'lucide-react';
 
 const PAIR_SECOND = new Set(TABLE_PAIRS.map((p) => p[1]));
@@ -227,6 +227,17 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
 
   return (
     <div className="tb-shell">
+      <button className="tb-quicksale" onClick={() => openTable(QUICK_SALE)}>
+        <span className="tb-quicksale-ico"><Zap size={18} fill="currentColor" /></span>
+        <span className="tb-quicksale-text">
+          <span className="title">Hızlı Satış</span>
+          <span className="sub">Masa açmadan direkt satış ekranına git</span>
+        </span>
+        {(orders[QUICK_SALE] || []).length > 0 && (
+          <span className="tb-quicksale-amount">{TL(getTableTotal(QUICK_SALE))}</span>
+        )}
+      </button>
+
       <div className="tb-columns">
         <div className="tb-left">
           <section className="tb-section">

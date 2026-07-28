@@ -34,11 +34,44 @@
   font-family: 'Inter', -apple-system, "Segoe UI", Roboto, sans-serif;
   padding: 16px 16px 88px;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 .tb-shell * { box-sizing: border-box; }
 .tb-shell button, .tb-shell input { color: inherit; font-family: inherit; }
 
-.tb-columns { display: flex; gap: 16px; height: 100%; }
+/* ---- Hızlı Satış — diğerlerinden bilinçli olarak ayrışan, dolgu renkli üst buton ---- */
+.tb-quicksale {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--smoke);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-panel);
+  padding: 16px 22px;
+  cursor: pointer;
+  box-shadow: var(--shadow-2);
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+.tb-quicksale:hover { transform: translateY(-2px); box-shadow: var(--shadow-3); }
+.tb-quicksale:active { transform: scale(0.99); }
+.tb-quicksale-ico {
+  width: 42px; height: 42px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.12);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: #E9C97A;
+}
+.tb-quicksale-text { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.tb-quicksale-text .title { font-size: 15px; font-weight: 700; }
+.tb-quicksale-text .sub { font-size: 11.5px; color: rgba(255,255,255,0.6); font-weight: 500; }
+.tb-quicksale-amount { margin-left: auto; font-size: 17px; font-weight: 800; color: #E9C97A; }
+
+.tb-columns { display: flex; gap: 16px; flex: 1; min-height: 0; }
 .tb-left { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
 
 .tb-section {
@@ -351,7 +384,9 @@
 .tb-pay-options .credit { background: var(--earth-dark); }
 
 @media (max-height: 800px) {
-  .tb-shell { padding: 10px 10px 76px; }
+  .tb-shell { padding: 10px 10px 76px; gap: 8px; }
+  .tb-quicksale { padding: 10px 16px; }
+  .tb-quicksale-ico { width: 34px; height: 34px; }
   .tb-columns { gap: 10px; }
   .tb-left { gap: 10px; }
   .tb-section { padding: 14px; }
