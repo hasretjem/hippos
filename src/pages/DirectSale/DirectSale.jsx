@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import './DirectSale.css';
-import { TABLES, TL } from '../../hooks/useHipposData';
+import { TL } from '../../hooks/useHipposData';
 import {
   Search, Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
@@ -12,6 +12,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     products,
     favorites,
     toggleFavorite,
+    allTables,
     orders,
     setOrders,
     updateOrder,
@@ -178,7 +179,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       setGenericModal({ title: 'Transfer edilecek sipariş yok!', showInput: false });
       return;
     }
-    const emptyTables = TABLES.filter((t) => t !== selectedTable && (!orders[t] || orders[t].length === 0));
+    const emptyTables = allTables.filter((t) => t !== selectedTable && (!orders[t] || orders[t].length === 0));
     if (emptyTables.length === 0) {
       setGenericModal({ title: 'Transfer edilebilecek boş masa bulunamadı!', showInput: false });
       return;
@@ -202,7 +203,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       setGenericModal({ title: 'Birleştirilecek sipariş bulunmuyor!', showInput: false });
       return;
     }
-    const occupied = TABLES.filter((t) => t !== selectedTable && orders[t] && orders[t].length > 0);
+    const occupied = allTables.filter((t) => t !== selectedTable && orders[t] && orders[t].length > 0);
     if (occupied.length === 0) {
       setGenericModal({ title: 'Birleştirilecek başka dolu masa bulunamadı!', showInput: false });
       return;
@@ -314,7 +315,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 value={selectedTable}
                 onChange={(e) => setSelectedTable(e.target.value)}
               >
-                {TABLES.map((t) => {
+                {allTables.map((t) => {
                   const tot = getTableTotal(t);
                   const hasOrder = orders[t] && orders[t].length > 0;
                   return (
