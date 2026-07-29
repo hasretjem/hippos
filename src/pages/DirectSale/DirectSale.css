@@ -139,25 +139,16 @@
 .ds-table-select-mini span { color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ds-table-select-mini svg { color: #fff; flex-shrink: 0; }
 .ds-table-select-mini:hover { background: var(--olive-dark); }
-.ds-table-picker-overlay { position: fixed; inset: 0; z-index: 90; }
-.ds-table-picker {
-  position: absolute;
-  top: 46px;
-  left: 0;
-  width: 320px;
-  max-height: 360px;
+.ds-table-picker-modal { max-width: 380px; max-height: 78vh; display: flex; flex-direction: column; padding-bottom: 12px; }
+.ds-table-picker-list {
+  flex: 1;
   overflow-y: auto;
-  background: #fff;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-3);
-  padding: 6px;
-  z-index: 95;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding-right: 2px;
 }
-.ds-table-picker button {
+.ds-table-picker-list button {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -165,16 +156,32 @@
   background: none;
   border: none;
   text-align: left;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: 10px;
   cursor: pointer;
   color: var(--ink);
   transition: background 120ms var(--ease);
 }
-.ds-table-picker button:hover { background: var(--panel-2); }
-.ds-table-picker button.active { background: var(--olive-soft); }
-.ds-table-picker button .name { font-size: 13px; font-weight: 700; color: var(--ink); }
-.ds-table-picker button .meta { font-size: 11px; color: var(--ink-muted); }
+.ds-table-picker-list button:hover { background: var(--panel-2); }
+.ds-table-picker-list button.active { background: var(--olive-soft); }
+.ds-table-picker-list button .name { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.ds-table-picker-list button .meta { font-size: 11.5px; color: var(--ink-muted); }
+.ds-table-picker-scrollbtns { display: flex; gap: 8px; padding-top: 10px; flex-shrink: 0; }
+.ds-table-picker-scrollbtns button {
+  flex: 1;
+  height: 38px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  border-radius: var(--r-btn);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: background 120ms var(--ease);
+}
+.ds-table-picker-scrollbtns button:hover { background: #fff; }
+
 .ds-mini-btn {
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -606,7 +613,7 @@
 .ds-total-row { display: flex; justify-content: space-between; align-items: baseline; }
 .ds-total-row span:first-child { font-size: 11px; font-weight: 700; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .ds-total-row span:last-child { font-size: 24px; font-weight: 800; color: var(--olive); }
-.ds-payment-hint { padding: 4px 16px; font-size: 10.5px; text-align: center; color: var(--ink-soft); height: 16px; }
+.ds-payment-hint { padding-top: 4px; font-size: 10.5px; text-align: right; color: var(--ink-soft); }
 
 .ds-payment-row {
   display: flex;

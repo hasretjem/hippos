@@ -4,7 +4,7 @@ import { TL } from '../../hooks/useHipposData';
 import {
   Search, Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
-  Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown,
+  Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp,
 } from 'lucide-react';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
@@ -31,6 +31,13 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [searchQuery, setSearchQuery] = useState('');
   const [payMode, setPayMode] = useState(false);
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
+  const tablePickerListRef = useRef(null);
+
+  function scrollTablePicker(direction) {
+    if (tablePickerListRef.current) {
+      tablePickerListRef.current.scrollBy({ top: direction * 160, behavior: 'smooth' });
+    }
+  }
 
   const [numpadOpen, setNumpadOpen] = useState(false);
   const numpadInputRef = useRef(null);
@@ -340,29 +347,38 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 <ChevronDown size={14} />
               </button>
               {tablePickerOpen && (
-                <>
-                  <div className="ds-table-picker-overlay" onClick={() => setTablePickerOpen(false)} />
-                  <div className="ds-table-picker">
-                    {allTables.map((t) => {
-                      const tot = getTableTotal(t);
-                      const hasOrder = orders[t] && orders[t].length > 0;
-                      const note = tableNotes[t];
-                      return (
-                        <button
-                          key={t}
-                          className={t === selectedTable ? 'active' : ''}
-                          onClick={() => { setSelectedTable(t); setTablePickerOpen(false); }}
-                        >
-                          <span className="name">{t}</span>
-                          <span className="meta">
-                            {hasOrder ? TL(tot) : 'Boş'}
-                            {note ? ` — ${note}` : ''}
-                          </span>
-                        </button>
-                      );
-                    })}
+                <div className="ds-modal-overlay" onClick={() => setTablePickerOpen(false)}>
+                  <div className="ds-modal ds-table-picker-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="ds-modal-head">
+                      <h3>Masa Seç</h3>
+                      <button className="ds-modal-x" onClick={() => setTablePickerOpen(false)}><X size={16} /></button>
+                    </div>
+                    <div className="ds-table-picker-list" ref={tablePickerListRef}>
+                      {allTables.map((t) => {
+                        const tot = getTableTotal(t);
+                        const hasOrder = orders[t] && orders[t].length > 0;
+                        const note = tableNotes[t];
+                        return (
+                          <button
+                            key={t}
+                            className={t === selectedTable ? 'active' : ''}
+                            onClick={() => { setSelectedTable(t); setTablePickerOpen(false); }}
+                          >
+                            <span className="name">{t}</span>
+                            <span className="meta">
+                              {hasOrder ? TL(tot) : 'Boş'}
+                              {note ? ` — ${note}` : ''}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="ds-table-picker-scrollbtns">
+                      <button onClick={() => scrollTablePicker(-1)}><ChevronUp size={16} /></button>
+                      <button onClick={() => scrollTablePicker(1)}><ChevronDown size={16} /></button>
+                    </div>
                   </div>
-                </>
+                </div>
               )}
               <button className="ds-mini-btn" onClick={handleTableTransfer} title="Masayı taşı"><ArrowLeftRight size={15} /></button>
               <button className="ds-mini-btn purple" onClick={handleTableMerge} title="Masaları birleştir"><Link2 size={15} /></button>
@@ -543,11 +559,13 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               <span>TOPLAM</span>
               <span>{TL(finalTotal)}</span>
             </div>
-          </div>
-          <div className="ds-payment-hint">
-            {selectedItems.length > 0
-              ? `Ödeme yalnızca seçili ${selectedItems.length} ürüne uygulanacak`
-              : currentOrder.length > 0 ? 'Ödeme tüm siparişe uygulanacak' : ''}
+            {(selectedItems.length > 0 || currentOrder.length > 0) && (
+              <div className="ds-payment-hint">
+                {selectedItems.length > 0
+                  ? `Ödeme yalnızca seçili ${selectedItems.length} ürüne uygulanacak`
+                  : 'Ödeme tüm siparişe uygulanacak'}
+              </div>
+            )}
           </div>
 
           <div className="ds-payment-row">

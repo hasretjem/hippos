@@ -159,7 +159,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
         onDragOver={(e) => handleDragOver(e, table)}
         onDragLeave={() => setDragOverTable((t) => (t === table ? null : t))}
         onDrop={(e) => handleDrop(e, table)}
-        onClick={() => !isEditing && openTable(table)}
+        onClick={() => openTable(table)}
       >
         <div className="tb-card-top">
           <span className="tb-card-name">{table}</span>

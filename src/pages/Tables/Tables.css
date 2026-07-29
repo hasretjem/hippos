@@ -216,6 +216,8 @@
   cursor: pointer;
 }
 .tb-note-paste { background: var(--panel-2); color: var(--ink-muted); }
+.tb-note-paste, .tb-note-paste svg { color: var(--ink-muted) !important; stroke: var(--ink-muted); }
+.tb-note-save, .tb-note-save svg { color: #fff !important; stroke: #fff; }
 .tb-note-save { background: var(--olive); color: #fff; }
 
 .tb-card-bottom { display: flex; justify-content: flex-end; margin-top: auto; }
@@ -236,26 +238,26 @@
 .tb-package-list { display: flex; flex-direction: column; gap: 10px; }
 .tb-package-list .tb-card {
   width: 100%;
-  min-height: 100px;
-  padding: 12px 14px;
-  gap: 4px;
+  min-height: 66px;
+  padding: 8px 12px;
+  gap: 2px;
 }
-.tb-package-list .tb-card-note { min-height: 20px; }
-.tb-package-list .tb-card-note .txt { -webkit-line-clamp: 1; font-size: 12px; }
-.tb-package-list .tb-card-name { font-size: 14px; }
-.tb-package-list .tb-card-time { font-size: 11px; }
-.tb-package-list .tb-card-total { font-size: 15px; }
+.tb-package-list .tb-card-note { min-height: 15px; }
+.tb-package-list .tb-card-note .txt { -webkit-line-clamp: 1; font-size: 11px; }
+.tb-package-list .tb-card-name { font-size: 13px; }
+.tb-package-list .tb-card-time { font-size: 10px; }
+.tb-package-list .tb-card-total { font-size: 13px; }
 
-.tb-package-list.compact .tb-card { min-height: 84px; padding: 10px 12px; gap: 3px; }
-.tb-package-list.compact .tb-card-time { font-size: 10.5px; }
-.tb-package-list.compact .tb-card-note .txt { font-size: 11px; }
-.tb-package-list.compact .tb-card-total { font-size: 14px; }
+.tb-package-list.compact .tb-card { min-height: 58px; padding: 7px 11px; gap: 1px; }
+.tb-package-list.compact .tb-card-time { font-size: 9.5px; }
+.tb-package-list.compact .tb-card-note .txt { font-size: 10px; }
+.tb-package-list.compact .tb-card-total { font-size: 12.5px; }
 
-.tb-package-list.ultra-compact .tb-card { min-height: 60px; padding: 8px 12px; gap: 1px; }
+.tb-package-list.ultra-compact .tb-card { min-height: 48px; padding: 6px 11px; gap: 1px; }
 .tb-package-list.ultra-compact .tb-card-note { display: none; }
-.tb-package-list.ultra-compact .tb-card-time { font-size: 9.5px; }
-.tb-package-list.ultra-compact .tb-card-name { font-size: 12.5px; }
-.tb-package-list.ultra-compact .tb-card-total { font-size: 12.5px; }
+.tb-package-list.ultra-compact .tb-card-time { font-size: 9px; }
+.tb-package-list.ultra-compact .tb-card-name { font-size: 12px; }
+.tb-package-list.ultra-compact .tb-card-total { font-size: 12px; }
 
 .tb-add-package {
   width: 100%;
