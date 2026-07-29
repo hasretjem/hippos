@@ -2,18 +2,27 @@ import { useState, useEffect, useMemo } from 'react';
 
 // ---- Varsayılan ürün kataloğu (ileride Supabase'ten gelecek) ----
 const DEFAULT_PRODUCTS = [
-  { id: 101, kategori: 'İÇECEKLER', altKategori: 'Sıcak İçeçekler', ad: 'ÇAY BÜYÜK', fiyat: 30.0, durum: 'AKTIF' },
-  { id: 102, kategori: 'İÇECEKLER', altKategori: 'Sıcak İçeçekler', ad: 'ÇAY KÜÇÜK', fiyat: 20.0, durum: 'AKTIF' },
-  { id: 103, kategori: 'İÇECEKLER', altKategori: 'Sıcak İçeçekler', ad: 'Türk Kahvesi ( Orta Şekerli )', fiyat: 80.0, durum: 'AKTIF' },
-  { id: 104, kategori: 'İÇECEKLER', altKategori: 'Soğuk İçeçekler', ad: 'COCA COLA', fiyat: 80.0, durum: 'AKTIF' },
-  { id: 105, kategori: 'İÇECEKLER', altKategori: 'Soğuk İçeçekler', ad: 'AYRAN', fiyat: 50.0, durum: 'AKTIF' },
-  { id: 106, kategori: 'KAHVALTI', altKategori: 'Kahvaltı Tabağı', ad: 'Standart Kahvaltı Tabağı', fiyat: 305.0, durum: 'AKTIF' },
-  { id: 107, kategori: 'SICAK SANDVİÇ', altKategori: 'BÜYÜK Sıcak Sandviç', ad: 'F. YARIM Köfte-Kaşar', fiyat: 230.0, durum: 'AKTIF' },
-  { id: 108, kategori: 'SICAK YUMURTA', altKategori: 'Melemen', ad: 'KAŞARLI MENEMEN', fiyat: 160.0, durum: 'AKTIF' },
-  { id: 109, kategori: 'ANA YEMEKLER', altKategori: 'Ev Yemekleri', ad: 'KURU FASÜLYE', fiyat: 130.0, durum: 'AKTIF' },
-  { id: 110, kategori: 'ANA YEMEKLER', altKategori: 'Ev Yemekleri', ad: 'PİRİNÇ PİLAVI', fiyat: 85.0, durum: 'AKTIF' },
-  { id: 111, kategori: 'Hazır Notlar', altKategori: 'Mutfak Notları', ad: 'Kepek Ekmek Olacak', fiyat: 0.0, durum: 'AKTIF' },
-  { id: 112, kategori: 'Hazır Notlar', altKategori: 'Mutfak Notları', ad: 'Servis İstemiyor.', fiyat: 0.0, durum: 'AKTIF' },
+  { id: 101, kategori: 'İÇECEKLER', altKategori: 'Sıcak İçeçekler', ad: 'ÇAY BÜYÜK', fiyat: 30.0, durum: 'AKTIF', menuSirasi: 10, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
+  { id: 102, kategori: 'İÇECEKLER', altKategori: 'Sıcak İçeçekler', ad: 'ÇAY KÜÇÜK', fiyat: 20.0, durum: 'AKTIF', menuSirasi: 10, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
+  { id: 103, kategori: 'İÇECEKLER', altKategori: 'Sıcak İçeçekler', ad: 'Türk Kahvesi ( Orta Şekerli )', fiyat: 80.0, durum: 'AKTIF', menuSirasi: 10, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
+  { id: 104, kategori: 'İÇECEKLER', altKategori: 'Soğuk İçeçekler', ad: 'COCA COLA', fiyat: 80.0, durum: 'AKTIF', menuSirasi: 10, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
+  { id: 105, kategori: 'İÇECEKLER', altKategori: 'Soğuk İçeçekler', ad: 'AYRAN', fiyat: 50.0, durum: 'AKTIF', menuSirasi: 10, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
+  { id: 106, kategori: 'KAHVALTI', altKategori: 'Kahvaltı Tabağı', ad: 'Standart Kahvaltı Tabağı', fiyat: 305.0, durum: 'AKTIF', menuSirasi: 20, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
+  { id: 107, kategori: 'SICAK SANDVİÇ', altKategori: 'BÜYÜK Sıcak Sandviç', ad: 'F. YARIM Köfte-Kaşar', fiyat: 230.0, durum: 'AKTIF', menuSirasi: 30, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
+  { id: 108, kategori: 'SICAK YUMURTA', altKategori: 'Melemen', ad: 'KAŞARLI MENEMEN', fiyat: 160.0, durum: 'AKTIF', menuSirasi: 40, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
+  { id: 109, kategori: 'ANA YEMEKLER', altKategori: 'Ev Yemekleri', ad: 'KURU FASÜLYE', fiyat: 130.0, durum: 'AKTIF', menuSirasi: 50, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
+  { id: 110, kategori: 'ANA YEMEKLER', altKategori: 'Ev Yemekleri', ad: 'PİRİNÇ PİLAVI', fiyat: 85.0, durum: 'AKTIF', menuSirasi: 50, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
+  { id: 111, kategori: 'Hazır Notlar', altKategori: 'Mutfak Notları', ad: 'Kepek Ekmek Olacak', fiyat: 0.0, durum: 'AKTIF', menuSirasi: 60, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
+  { id: 112, kategori: 'Hazır Notlar', altKategori: 'Mutfak Notları', ad: 'Servis İstemiyor.', fiyat: 0.0, durum: 'AKTIF', menuSirasi: 60, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
+];
+
+const DEFAULT_CATEGORIES = [
+  { name: 'İÇECEKLER', menuSirasi: 10, sabit: false },
+  { name: 'KAHVALTI', menuSirasi: 20, sabit: false },
+  { name: 'SICAK SANDVİÇ', menuSirasi: 30, sabit: false },
+  { name: 'SICAK YUMURTA', menuSirasi: 40, sabit: false },
+  { name: 'ANA YEMEKLER', menuSirasi: 50, sabit: false },
+  { name: 'Hazır Notlar', menuSirasi: 60, sabit: false },
 ];
 
 export const QUICK_SALE = '⚡ Hızlı Satış';
@@ -62,6 +71,7 @@ export function getColorTier(openedAt) {
 // App.jsx içinde BİR KEZ çağrılır, sonuçlar prop olarak sayfalara aktarılır.
 export default function useHipposData() {
   const [products, setProducts] = useState(() => loadLS('hippos_products', DEFAULT_PRODUCTS));
+  const [categories, setCategories] = useState(() => loadLS('hippos_categories', DEFAULT_CATEGORIES));
   const [favorites, setFavorites] = useState(() => loadLS('hippos_favorites', [104, 101, 105]));
   const [packages, setPackages] = useState(() => loadLS('hippos_packages', [])); // [{name:'Paket 1', num:1}]
   const [packageMeta, setPackageMeta] = useState(() => loadLS('hippos_package_meta', { date: todayStr(), next: 1 }));
@@ -81,6 +91,7 @@ export default function useHipposData() {
 
   useEffect(() => localStorage.setItem('hippos_favorites', JSON.stringify(favorites)), [favorites]);
   useEffect(() => localStorage.setItem('hippos_products', JSON.stringify(products)), [products]);
+  useEffect(() => localStorage.setItem('hippos_categories', JSON.stringify(categories)), [categories]);
   useEffect(() => localStorage.setItem('hippos_orders', JSON.stringify(orders)), [orders]);
   useEffect(() => localStorage.setItem('hippos_table_notes', JSON.stringify(tableNotes)), [tableNotes]);
   useEffect(() => localStorage.setItem('hippos_table_discounts', JSON.stringify(tableDiscounts)), [tableDiscounts]);
@@ -162,12 +173,120 @@ export default function useHipposData() {
     ]);
   }
 
+  // Bir ürünü aç/kapa — "Az X" varyantı varsa onu da aynı duruma çeker (bağımsız açık olamaz).
   function toggleProductStatus(id) {
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, durum: p.durum === 'PASIF' ? 'AKTIF' : 'PASIF' } : p)));
+    setProducts((prev) => {
+      const target = prev.find((p) => p.id === id);
+      if (!target) return prev;
+      const nextDurum = target.durum === 'PASIF' ? 'AKTIF' : 'PASIF';
+      return prev.map((p) => {
+        if (p.id === id) return { ...p, durum: nextDurum };
+        if (p.parentId === id) return { ...p, durum: nextDurum };
+        return p;
+      });
+    });
   }
 
+  // Kategori bazlı toplu aç/kapa — "Sabit Ürün" işaretli ürünler pasife alınırken atlanır.
   function bulkSetCategoryStatus(kategori, durum) {
-    setProducts((prev) => prev.map((p) => (p.kategori === kategori ? { ...p, durum } : p)));
+    setProducts((prev) =>
+      prev.map((p) => {
+        if (p.kategori !== kategori) return p;
+        if (durum === 'PASIF' && p.sabit) return p; // sabit ürün pasife düşmez
+        // Az varyantı, ana ürünle birlikte hareket eder (bağımsız kalmasın)
+        if (p.isAzVariant) {
+          const parent = prev.find((q) => q.id === p.parentId);
+          if (parent && parent.sabit && durum === 'PASIF') return p;
+        }
+        return { ...p, durum };
+      })
+    );
+  }
+
+  // ---- Kategori yönetimi ----
+  function addCategory(name) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setCategories((prev) => {
+      if (prev.some((c) => c.name.toLowerCase() === trimmed.toLowerCase())) return prev;
+      const maxOrder = prev.reduce((m, c) => Math.max(m, c.menuSirasi), 0);
+      return [...prev, { name: trimmed, menuSirasi: Math.min(100, maxOrder + 10) || 10, sabit: false }];
+    });
+  }
+
+  function updateCategoryMeta(name, patch) {
+    setCategories((prev) => prev.map((c) => (c.name === name ? { ...c, ...patch } : c)));
+  }
+
+  // ---- Ürün yönetimi (Ürünler sayfası) ----
+  function addProduct(product) {
+    const id = Date.now() + Math.random();
+    setProducts((prev) => [
+      ...prev,
+      {
+        id,
+        kategori: product.kategori,
+        altKategori: product.altKategori || '',
+        ad: product.ad,
+        fiyat: product.fiyat || 0,
+        durum: 'AKTIF',
+        menuSirasi: product.menuSirasi ?? 50,
+        sabit: false,
+        azPorsiyon: false,
+        azFiyat: null,
+        parentId: null,
+        isAzVariant: false,
+      },
+    ]);
+    return id;
+  }
+
+  function updateProduct(id, patch) {
+    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }
+
+  function deleteProduct(id) {
+    setProducts((prev) => prev.filter((p) => p.id !== id && p.parentId !== id));
+  }
+
+  // Az Porsiyon işaretlenince "Az <ad>" varyantını otomatik oluşturur/kaldırır.
+  function setAzPorsiyon(id, enabled, azFiyat) {
+    setProducts((prev) => {
+      const parent = prev.find((p) => p.id === id);
+      if (!parent) return prev;
+      if (enabled) {
+        const already = prev.find((p) => p.parentId === id);
+        if (already) {
+          return prev.map((p) =>
+            p.id === id ? { ...p, azPorsiyon: true, azFiyat }
+            : p.id === already.id ? { ...p, ad: `Az ${parent.ad}`, fiyat: azFiyat }
+            : p
+          );
+        }
+        const azProduct = {
+          id: Date.now() + Math.random(),
+          kategori: parent.kategori,
+          altKategori: parent.altKategori,
+          ad: `Az ${parent.ad}`,
+          fiyat: azFiyat || 0,
+          durum: parent.durum,
+          menuSirasi: parent.menuSirasi,
+          sabit: false,
+          azPorsiyon: false,
+          azFiyat: null,
+          parentId: id,
+          isAzVariant: true,
+        };
+        return [
+          ...prev.map((p) => (p.id === id ? { ...p, azPorsiyon: true, azFiyat } : p)),
+          azProduct,
+        ];
+      }
+      // kapatılınca varyantı tamamen kaldır
+      return prev
+        .filter((p) => p.parentId !== id)
+        .map((p) => (p.id === id ? { ...p, azPorsiyon: false, azFiyat: null } : p));
+    });
   }
 
   function getTableTotal(table) {
@@ -294,6 +413,14 @@ export default function useHipposData() {
     setProducts,
     toggleProductStatus,
     bulkSetCategoryStatus,
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    setAzPorsiyon,
+    categories,
+    setCategories,
+    addCategory,
+    updateCategoryMeta,
     favorites,
     toggleFavorite,
     allTables,

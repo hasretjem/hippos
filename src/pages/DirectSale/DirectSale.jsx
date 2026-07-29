@@ -24,10 +24,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     setSalesHistory,
     logSoldItems,
     getTableTotal,
+    categories: rawCategories,
   } = data;
 
   // ---- Ekran durumu ----
-  const categories = useMemo(() => ['TÜMÜ', ...new Set(products.map((p) => p.kategori))], [products]);
+  const categories = useMemo(() => {
+    const sorted = [...rawCategories].sort((a, b) => a.menuSirasi - b.menuSirasi || a.name.localeCompare(b.name, 'tr'));
+    return ['TÜMÜ', ...sorted.map((c) => c.name)];
+  }, [rawCategories]);
   const [activeCategory, setActiveCategory] = useState('TÜMÜ');
   const [searchQuery, setSearchQuery] = useState('');
   const [payMode, setPayMode] = useState(false);
@@ -321,6 +325,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       title = activeCategory;
       filtered = activeProducts.filter((p) => p.kategori === activeCategory);
     }
+    const sortKey = (p) => (p.menuSirasi ?? 50) + (p.isAzVariant ? 0.5 : 0);
+    filtered = [...filtered].sort((a, b) => sortKey(a) - sortKey(b) || a.ad.localeCompare(b.ad, 'tr'));
     const groups = {};
     filtered.forEach((p) => {
       const sub = p.altKategori || p.kategori || 'Genel';
