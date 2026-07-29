@@ -473,7 +473,13 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               <div className="ds-numpad-box">
                 <div className="ds-numpad-display-row">
                   <span>GİRİLEN DEĞER:</span>
-                  <span>{numpadValue || '0'}</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={numpadValue}
+                    onChange={(e) => setNumpadValue(e.target.value.replace(/[^0-9.,]/g, ''))}
+                    placeholder="0"
+                  />
                 </div>
                 <div className="ds-numpad-grid">
                   {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map((n) => (
@@ -514,36 +520,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               : currentOrder.length > 0 ? 'Ödeme tüm siparişe uygulanacak' : ''}
           </div>
 
-          {payMode ? (
-            <>
-              <div className="ds-pay-grid">
-                <button className="cash" onClick={() => handlePay('NAKİT')}>
-                  <Banknote size={19} /><span className="lbl">Nakit</span>
-                </button>
-                <button className="card" onClick={() => handlePay('KREDİ KARTI')}>
-                  <CreditCard size={19} /><span className="lbl">Kredi K.</span>
-                </button>
-                <button className="meal" onClick={() => handlePay('YEMEK KARTI')}>
-                  <UtensilsCrossed size={19} /><span className="lbl">Yemek K.</span>
-                </button>
-                <button className="credit" onClick={() => handlePay('CARİ')}>
-                  <BookOpen size={19} /><span className="lbl">Cari</span>
-                </button>
-              </div>
-              <button className="ds-pay-back-btn" onClick={() => setPayMode(false)}>
-                <Undo2 size={14} /> Geri
-              </button>
-            </>
-          ) : (
-            <div className="ds-payment-row">
-              <button disabled={isOrderEmpty} className="ds-pay-cta" onClick={() => setPayMode(true)}>
-                <Wallet size={16} /> Ödeme Al
-              </button>
-              <button className="ds-send-btn" onClick={handleSend}>
-                <Send size={15} /> Gönder
-              </button>
-            </div>
-          )}
+          <div className="ds-payment-row">
+            <button disabled={isOrderEmpty} className="ds-pay-cta" onClick={() => setPayMode(true)}>
+              <Wallet size={17} /> Ödeme Al
+            </button>
+            <button className="ds-send-btn" onClick={handleSend}>
+              <Send size={16} /> Gönder
+            </button>
+          </div>
           <div className="ds-bottom-actions">
             <button disabled={isOrderEmpty} onClick={handlePrint}><Printer size={14} /> Yazdır</button>
             <button disabled={isOrderEmpty} onClick={handleUndoLastItem}><Undo2 size={14} /> Geri Al</button>
@@ -618,7 +602,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             </div>
             <div className="ds-price-display">
               <span className="label">YENİ FİYAT (₺):</span>
-              <span className="value">{priceModal.value || '0'}</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                autoFocus
+                className="value-input"
+                value={priceModal.value}
+                onChange={(e) => setPriceModal((pm) => ({ ...pm, value: e.target.value.replace(/[^0-9,]/g, '') }))}
+                placeholder="0"
+              />
             </div>
             <div className="ds-price-numgrid">
               {['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0'].map((n) => (
@@ -630,6 +622,39 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               <button className="ds-secondary-btn" onClick={() => setPriceModal(null)}>Vazgeç</button>
               <button className="ds-primary-btn" onClick={confirmPriceModal}>Onayla</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ÖDEME YÖNTEMİ MODALI */}
+      {payMode && (
+        <div className="ds-modal-overlay" onClick={() => setPayMode(false)}>
+          <div className="ds-modal ds-pay-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ds-modal-head">
+              <h3>Ödeme Yöntemi Seç</h3>
+              <button className="ds-modal-x" onClick={() => setPayMode(false)}><X size={16} /></button>
+            </div>
+            <div className="ds-pay-modal-total">
+              <span>Ödenecek Tutar</span>
+              <strong>{TL(selectedItems.length > 0 ? selectedTotal : finalTotal)}</strong>
+            </div>
+            <div className="ds-pay-grid">
+              <button className="cash" onClick={() => handlePay('NAKİT')}>
+                <Banknote size={19} /><span className="lbl">Nakit</span>
+              </button>
+              <button className="card" onClick={() => handlePay('KREDİ KARTI')}>
+                <CreditCard size={19} /><span className="lbl">Kredi K.</span>
+              </button>
+              <button className="meal" onClick={() => handlePay('YEMEK KARTI')}>
+                <UtensilsCrossed size={19} /><span className="lbl">Yemek K.</span>
+              </button>
+              <button className="credit" onClick={() => handlePay('CARİ')}>
+                <BookOpen size={19} /><span className="lbl">Cari</span>
+              </button>
+            </div>
+            <button className="ds-pay-back-btn" onClick={() => setPayMode(false)}>
+              <Undo2 size={14} /> Geri
+            </button>
           </div>
         </div>
       )}

@@ -98,17 +98,17 @@
 /* ---- Masa kartı ---- */
 .tb-card {
   position: relative;
-  width: 168px;
-  min-height: 128px;
+  width: 210px;
+  min-height: 138px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-left: 4px solid var(--border);
   border-radius: var(--r-card);
-  padding: 12px;
+  padding: 14px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
   transition: transform 160ms var(--ease), box-shadow 160ms var(--ease), border-color 160ms var(--ease);
 }
 .tb-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
@@ -177,7 +177,8 @@
 
 .tb-card-note { flex: 1; min-height: 18px; cursor: text; }
 .tb-card-note .txt {
-  font-size: 11.5px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--ink-muted);
   display: block;
   overflow: hidden;
@@ -223,7 +224,7 @@
 
 /* ---- Paketler paneli (sağda, sipariş paneli gibi) ---- */
 .tb-packages {
-  width: 380px;
+  width: 440px;
   flex-shrink: 0;
   background: var(--panel);
   border: 1px solid var(--border-soft);
@@ -232,28 +233,29 @@
   padding: 20px;
   overflow-y: auto;
 }
-.tb-package-list { display: flex; flex-direction: column; gap: 8px; }
+.tb-package-list { display: flex; flex-direction: column; gap: 10px; }
 .tb-package-list .tb-card {
   width: 100%;
-  min-height: 80px;
-  padding: 10px 12px;
-  gap: 3px;
+  min-height: 100px;
+  padding: 12px 14px;
+  gap: 4px;
 }
-.tb-package-list .tb-card-note .txt { -webkit-line-clamp: 1; }
-.tb-package-list .tb-card-name { font-size: 13px; }
-.tb-package-list .tb-card-time { font-size: 10.5px; }
-.tb-package-list .tb-card-total { font-size: 14px; }
+.tb-package-list .tb-card-note { min-height: 20px; }
+.tb-package-list .tb-card-note .txt { -webkit-line-clamp: 1; font-size: 12px; }
+.tb-package-list .tb-card-name { font-size: 14px; }
+.tb-package-list .tb-card-time { font-size: 11px; }
+.tb-package-list .tb-card-total { font-size: 15px; }
 
-.tb-package-list.compact .tb-card { min-height: 68px; padding: 9px 11px; gap: 2px; }
-.tb-package-list.compact .tb-card-time { font-size: 10px; }
-.tb-package-list.compact .tb-card-note .txt { font-size: 10.5px; }
-.tb-package-list.compact .tb-card-total { font-size: 13px; }
+.tb-package-list.compact .tb-card { min-height: 84px; padding: 10px 12px; gap: 3px; }
+.tb-package-list.compact .tb-card-time { font-size: 10.5px; }
+.tb-package-list.compact .tb-card-note .txt { font-size: 11px; }
+.tb-package-list.compact .tb-card-total { font-size: 14px; }
 
-.tb-package-list.ultra-compact .tb-card { min-height: 52px; padding: 7px 10px; gap: 1px; }
+.tb-package-list.ultra-compact .tb-card { min-height: 60px; padding: 8px 12px; gap: 1px; }
 .tb-package-list.ultra-compact .tb-card-note { display: none; }
 .tb-package-list.ultra-compact .tb-card-time { font-size: 9.5px; }
-.tb-package-list.ultra-compact .tb-card-name { font-size: 12px; }
-.tb-package-list.ultra-compact .tb-card-total { font-size: 12px; }
+.tb-package-list.ultra-compact .tb-card-name { font-size: 12.5px; }
+.tb-package-list.ultra-compact .tb-card-total { font-size: 12.5px; }
 
 .tb-add-package {
   width: 100%;
