@@ -2,18 +2,18 @@ import { useState, useEffect, useMemo } from 'react';
 
 // ---- Varsayılan ürün kataloğu (ileride Supabase'ten gelecek) ----
 const DEFAULT_PRODUCTS = [
-  { id: 101, kategori: 'İÇECEKLER', altKategori: 'Sıcak İçeçekler', ad: 'ÇAY BÜYÜK', fiyat: 30.0 },
-  { id: 102, kategori: 'İÇECEKLER', altKategori: 'Sıcak İçeçekler', ad: 'ÇAY KÜÇÜK', fiyat: 20.0 },
-  { id: 103, kategori: 'İÇECEKLER', altKategori: 'Sıcak İçeçekler', ad: 'Türk Kahvesi ( Orta Şekerli )', fiyat: 80.0 },
-  { id: 104, kategori: 'İÇECEKLER', altKategori: 'Soğuk İçeçekler', ad: 'COCA COLA', fiyat: 80.0 },
-  { id: 105, kategori: 'İÇECEKLER', altKategori: 'Soğuk İçeçekler', ad: 'AYRAN', fiyat: 50.0 },
-  { id: 106, kategori: 'KAHVALTI', altKategori: 'Kahvaltı Tabağı', ad: 'Standart Kahvaltı Tabağı', fiyat: 305.0 },
-  { id: 107, kategori: 'SICAK SANDVİÇ', altKategori: 'BÜYÜK Sıcak Sandviç', ad: 'F. YARIM Köfte-Kaşar', fiyat: 230.0 },
-  { id: 108, kategori: 'SICAK YUMURTA', altKategori: 'Melemen', ad: 'KAŞARLI MENEMEN', fiyat: 160.0 },
-  { id: 109, kategori: 'ANA YEMEKLER', altKategori: 'Ev Yemekleri', ad: 'KURU FASÜLYE', fiyat: 130.0 },
-  { id: 110, kategori: 'ANA YEMEKLER', altKategori: 'Ev Yemekleri', ad: 'PİRİNÇ PİLAVI', fiyat: 85.0 },
-  { id: 111, kategori: 'Hazır Notlar', altKategori: 'Mutfak Notları', ad: 'Kepek Ekmek Olacak', fiyat: 0.0 },
-  { id: 112, kategori: 'Hazır Notlar', altKategori: 'Mutfak Notları', ad: 'Servis İstemiyor.', fiyat: 0.0 },
+  { id: 101, kategori: 'İÇECEKLER', altKategori: 'Sıcak İçeçekler', ad: 'ÇAY BÜYÜK', fiyat: 30.0, durum: 'AKTIF' },
+  { id: 102, kategori: 'İÇECEKLER', altKategori: 'Sıcak İçeçekler', ad: 'ÇAY KÜÇÜK', fiyat: 20.0, durum: 'AKTIF' },
+  { id: 103, kategori: 'İÇECEKLER', altKategori: 'Sıcak İçeçekler', ad: 'Türk Kahvesi ( Orta Şekerli )', fiyat: 80.0, durum: 'AKTIF' },
+  { id: 104, kategori: 'İÇECEKLER', altKategori: 'Soğuk İçeçekler', ad: 'COCA COLA', fiyat: 80.0, durum: 'AKTIF' },
+  { id: 105, kategori: 'İÇECEKLER', altKategori: 'Soğuk İçeçekler', ad: 'AYRAN', fiyat: 50.0, durum: 'AKTIF' },
+  { id: 106, kategori: 'KAHVALTI', altKategori: 'Kahvaltı Tabağı', ad: 'Standart Kahvaltı Tabağı', fiyat: 305.0, durum: 'AKTIF' },
+  { id: 107, kategori: 'SICAK SANDVİÇ', altKategori: 'BÜYÜK Sıcak Sandviç', ad: 'F. YARIM Köfte-Kaşar', fiyat: 230.0, durum: 'AKTIF' },
+  { id: 108, kategori: 'SICAK YUMURTA', altKategori: 'Melemen', ad: 'KAŞARLI MENEMEN', fiyat: 160.0, durum: 'AKTIF' },
+  { id: 109, kategori: 'ANA YEMEKLER', altKategori: 'Ev Yemekleri', ad: 'KURU FASÜLYE', fiyat: 130.0, durum: 'AKTIF' },
+  { id: 110, kategori: 'ANA YEMEKLER', altKategori: 'Ev Yemekleri', ad: 'PİRİNÇ PİLAVI', fiyat: 85.0, durum: 'AKTIF' },
+  { id: 111, kategori: 'Hazır Notlar', altKategori: 'Mutfak Notları', ad: 'Kepek Ekmek Olacak', fiyat: 0.0, durum: 'AKTIF' },
+  { id: 112, kategori: 'Hazır Notlar', altKategori: 'Mutfak Notları', ad: 'Servis İstemiyor.', fiyat: 0.0, durum: 'AKTIF' },
 ];
 
 export const QUICK_SALE = '⚡ Hızlı Satış';
@@ -61,7 +61,7 @@ export function getColorTier(openedAt) {
 // Tüm sayfaların (DirectSale, Tables, Reports...) paylaştığı tek veri kaynağı.
 // App.jsx içinde BİR KEZ çağrılır, sonuçlar prop olarak sayfalara aktarılır.
 export default function useHipposData() {
-  const [products] = useState(() => loadLS('hippos_products', DEFAULT_PRODUCTS));
+  const [products, setProducts] = useState(() => loadLS('hippos_products', DEFAULT_PRODUCTS));
   const [favorites, setFavorites] = useState(() => loadLS('hippos_favorites', [104, 101, 105]));
   const [packages, setPackages] = useState(() => loadLS('hippos_packages', [])); // [{name:'Paket 1', num:1}]
   const [packageMeta, setPackageMeta] = useState(() => loadLS('hippos_package_meta', { date: todayStr(), next: 1 }));
@@ -79,6 +79,7 @@ export default function useHipposData() {
   const [actionHistory, setActionHistory] = useState(() => loadLS('hippos_action_history', []));
 
   useEffect(() => localStorage.setItem('hippos_favorites', JSON.stringify(favorites)), [favorites]);
+  useEffect(() => localStorage.setItem('hippos_products', JSON.stringify(products)), [products]);
   useEffect(() => localStorage.setItem('hippos_orders', JSON.stringify(orders)), [orders]);
   useEffect(() => localStorage.setItem('hippos_table_notes', JSON.stringify(tableNotes)), [tableNotes]);
   useEffect(() => localStorage.setItem('hippos_table_discounts', JSON.stringify(tableDiscounts)), [tableDiscounts]);
@@ -137,6 +138,14 @@ export default function useHipposData() {
 
   function toggleFavorite(id) {
     setFavorites((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]));
+  }
+
+  function toggleProductStatus(id) {
+    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, durum: p.durum === 'PASIF' ? 'AKTIF' : 'PASIF' } : p)));
+  }
+
+  function bulkSetCategoryStatus(kategori, durum) {
+    setProducts((prev) => prev.map((p) => (p.kategori === kategori ? { ...p, durum } : p)));
   }
 
   function getTableTotal(table) {
@@ -242,7 +251,7 @@ export default function useHipposData() {
     const totalPay = payable.reduce((s, i) => s + i.fiyat, 0);
     pushHistory(`${table} kapatıldı (${method})`);
     setSalesHistory((prev) => [
-      { id: Date.now(), table, amount: totalPay, method, itemsCount: payable.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+      { id: Date.now(), ts: Date.now(), table, amount: totalPay, method, itemsCount: payable.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
     setOrders((prev) => ({ ...prev, [table]: [] }));
@@ -259,6 +268,9 @@ export default function useHipposData() {
 
   return {
     products,
+    setProducts,
+    toggleProductStatus,
+    bulkSetCategoryStatus,
     favorites,
     toggleFavorite,
     allTables,

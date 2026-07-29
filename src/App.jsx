@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import DirectSale from './pages/DirectSale/DirectSale';
 import Tables from './pages/Tables/Tables';
+import Settings from './pages/Settings/Settings';
 import BottomNav from './components/BottomNav/BottomNav';
 import useHipposData, { QUICK_SALE } from './hooks/useHipposData';
 import { supabase } from './services/supabase';
@@ -26,10 +27,10 @@ export default function App() {
   }, []);
 
   function handleNavigate(page) {
-    if (page === 'tables' || page === 'pos') {
+    if (page === 'tables' || page === 'pos' || page === 'settings') {
       setActivePage(page);
     } else {
-      // Kasa & Rapor, Ayarlar sayfaları henüz hazır değil
+      // Kasa & Rapor, Ürünler, Gün Sonu sayfaları henüz hazır değil
       alert('Bu sayfa henüz hazırlanıyor.');
     }
   }
@@ -46,6 +47,9 @@ export default function App() {
       )}
       {activePage === 'tables' && (
         <Tables data={data} setSelectedTable={setSelectedTable} onNavigate={handleNavigate} />
+      )}
+      {activePage === 'settings' && (
+        <Settings data={data} onNavigate={handleNavigate} />
       )}
       <BottomNav activePage={activePage} onNavigate={handleNavigate} />
     </>

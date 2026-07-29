@@ -253,7 +253,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const totalPay = toClose.reduce((s, i) => s + i.fiyat, 0);
 
     setSalesHistory((prev) => [
-      { id: Date.now(), table: selectedTable, amount: totalPay, method, itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+      { id: Date.now(), ts: Date.now(), table: selectedTable, amount: totalPay, method, itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
 
@@ -303,18 +303,19 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
   // ---- Ürün listesi filtreleme ----
   const { filteredProducts, groupedProducts, headerTitle, productCount } = useMemo(() => {
+    const activeProducts = products.filter((p) => p.durum !== 'PASIF');
     const q = searchQuery.toLowerCase();
     let filtered;
     let title;
     if (q) {
       title = `Arama: "${searchQuery}"`;
-      filtered = products.filter((p) => p.ad.toLowerCase().includes(q));
+      filtered = activeProducts.filter((p) => p.ad.toLowerCase().includes(q));
     } else if (activeCategory === 'TÜMÜ') {
       title = 'TÜM ÜRÜNLER';
-      filtered = products;
+      filtered = activeProducts;
     } else {
       title = activeCategory;
-      filtered = products.filter((p) => p.kategori === activeCategory);
+      filtered = activeProducts.filter((p) => p.kategori === activeCategory);
     }
     const groups = {};
     filtered.forEach((p) => {
@@ -324,7 +325,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     return { filteredProducts: filtered, groupedProducts: groups, headerTitle: title, productCount: filtered.length };
   }, [products, searchQuery, activeCategory]);
 
-  const favoriteProducts = products.filter((p) => favorites.includes(p.id));
+  const favoriteProducts = products.filter((p) => favorites.includes(p.id) && p.durum !== 'PASIF');
 
   return (
     <div className="ds-shell">
