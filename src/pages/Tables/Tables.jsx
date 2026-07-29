@@ -139,7 +139,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     setDragFrom(null);
   }
 
-  function renderTableCard(table, key) {
+  function renderTableCard(table, key, compact) {
     const items = orders[table] || [];
     const isEmpty = items.length === 0;
     const openedAt = tableOpenedAt[table];
@@ -150,29 +150,70 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     const isEditing = editingNoteFor === table;
     const isMenuOpen = menuFor === table;
 
+    const noteEditRow = isEditing && (
+      <div className="tb-note-edit" onClick={(e) => e.stopPropagation()}>
+        <input
+          autoFocus
+          value={noteDraft}
+          onChange={(e) => setNoteDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && saveNote(e, table)}
+          placeholder="Not yaz..."
+        />
+        <button className="tb-note-paste" onClick={pasteIntoNoteDraft} title="Panodan yapıştır"><ClipboardPaste size={13} /></button>
+        <button className="tb-note-save" onClick={(e) => saveNote(e, table)}><Check size={13} /></button>
+      </div>
+    );
+
+    const menu = isMenuOpen && (
+      <div className="tb-menu" onClick={(e) => e.stopPropagation()}>
+        <button onClick={(e) => askTransfer(e, table)} disabled={isEmpty}><ArrowLeftRight size={13} /> Taşı</button>
+        <button onClick={(e) => askMerge(e, table)} disabled={isEmpty}><Link2 size={13} /> Birleştir</button>
+        <button className="danger" onClick={(e) => askClose(e, table)} disabled={isEmpty}><XCircle size={13} /> Masayı Kapat</button>
+      </div>
+    );
+
+    const cardClass = `tb-card tier-${isEmpty ? 'empty' : tier} ${dragOverTable === table ? 'drag-over' : ''} ${isMenuOpen ? 'menu-open' : ''} ${compact ? 'tb-card-compact' : ''}`;
+    const dragProps = {
+      draggable: !isEmpty,
+      onDragStart: (e) => handleDragStart(e, table),
+      onDragOver: (e) => handleDragOver(e, table),
+      onDragLeave: () => setDragOverTable((t) => (t === table ? null : t)),
+      onDrop: (e) => handleDrop(e, table),
+      onClick: () => openTable(table),
+    };
+
+    if (compact) {
+      return (
+        <div key={key || table} className={cardClass} {...dragProps}>
+          <div className="tb-card-top">
+            <span className="tb-card-name">{table}</span>
+            {!isEmpty && <span className="tb-card-total-inline">{TL(total)}</span>}
+            <button className="tb-menu-btn" onClick={(e) => { e.stopPropagation(); setMenuFor(isMenuOpen ? null : table); }}>
+              <MoreVertical size={14} />
+            </button>
+            {menu}
+          </div>
+          {isEditing ? (
+            noteEditRow
+          ) : (
+            !isEmpty && (
+              <div className="tb-card-subline" onClick={(e) => startEditNote(e, table)}>
+                {elapsed} dk{note ? ` · ${note}` : ' · not ekle'}
+              </div>
+            )
+          )}
+        </div>
+      );
+    }
+
     return (
-      <div
-        key={key || table}
-        className={`tb-card tier-${isEmpty ? 'empty' : tier} ${dragOverTable === table ? 'drag-over' : ''} ${isMenuOpen ? 'menu-open' : ''}`}
-        draggable={!isEmpty}
-        onDragStart={(e) => handleDragStart(e, table)}
-        onDragOver={(e) => handleDragOver(e, table)}
-        onDragLeave={() => setDragOverTable((t) => (t === table ? null : t))}
-        onDrop={(e) => handleDrop(e, table)}
-        onClick={() => openTable(table)}
-      >
+      <div key={key || table} className={cardClass} {...dragProps}>
         <div className="tb-card-top">
           <span className="tb-card-name">{table}</span>
           <button className="tb-menu-btn" onClick={(e) => { e.stopPropagation(); setMenuFor(isMenuOpen ? null : table); }}>
             <MoreVertical size={15} />
           </button>
-          {isMenuOpen && (
-            <div className="tb-menu" onClick={(e) => e.stopPropagation()}>
-              <button onClick={(e) => askTransfer(e, table)} disabled={isEmpty}><ArrowLeftRight size={13} /> Taşı</button>
-              <button onClick={(e) => askMerge(e, table)} disabled={isEmpty}><Link2 size={13} /> Birleştir</button>
-              <button className="danger" onClick={(e) => askClose(e, table)} disabled={isEmpty}><XCircle size={13} /> Masayı Kapat</button>
-            </div>
-          )}
+          {menu}
         </div>
 
         {!isEmpty && (
@@ -181,22 +222,14 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
           </div>
         )}
 
-        {isEditing ? (
-          <div className="tb-note-edit" onClick={(e) => e.stopPropagation()}>
-            <input
-              autoFocus
-              value={noteDraft}
-              onChange={(e) => setNoteDraft(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && saveNote(e, table)}
-              placeholder="Not yaz..."
-            />
-            <button className="tb-note-paste" onClick={pasteIntoNoteDraft} title="Panodan yapıştır"><ClipboardPaste size={13} /></button>
-            <button className="tb-note-save" onClick={(e) => saveNote(e, table)}><Check size={13} /></button>
-          </div>
-        ) : (
-          <div className="tb-card-note" onClick={(e) => startEditNote(e, table)}>
-            {note ? <span className="txt">{note}</span> : !isEmpty && <span className="txt placeholder"><Pencil size={11} /> not ekle</span>}
-          </div>
+        {!isEmpty && (
+          isEditing ? (
+            noteEditRow
+          ) : (
+            <div className="tb-card-note" onClick={(e) => startEditNote(e, table)}>
+              {note ? <span className="txt">{note}</span> : <span className="txt placeholder"><Pencil size={11} /> not ekle</span>}
+            </div>
+          )
         )}
 
         <div className="tb-card-bottom">
@@ -253,7 +286,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
         <aside className="tb-packages">
           <h2 className="tb-section-title">Paketler</h2>
           <div className={`tb-package-list ${packages.length > 8 ? 'ultra-compact' : packages.length > 4 ? 'compact' : ''}`}>
-            {packages.map((p) => renderTableCard(p.name))}
+            {packages.map((p) => renderTableCard(p.name, p.name, true))}
             <button
               className="tb-add-package"
               onClick={() => {

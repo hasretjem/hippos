@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import './DirectSale.css';
 import { TL } from '../../hooks/useHipposData';
 import {
-  Search, Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
+  Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
   Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp,
 } from 'lucide-react';
@@ -383,26 +383,16 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               <button className="ds-mini-btn" onClick={handleTableTransfer} title="Masayı taşı"><ArrowLeftRight size={15} /></button>
               <button className="ds-mini-btn purple" onClick={handleTableMerge} title="Masaları birleştir"><Link2 size={15} /></button>
             </div>
-            <div className="ds-search">
-              <Search size={15} className="ds-search-ico" />
+            <div className="ds-header-note">
+              <button className="ds-paste-btn" onClick={pasteToTableNote} title="Panodan yapıştır"><ClipboardPaste size={14} /></button>
               <input
                 type="text"
-                placeholder="Ürün ara..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Masa notu..."
+                value={tableNotes[selectedTable] || ''}
+                onChange={(e) => handleNoteChange(e.target.value)}
               />
             </div>
           </header>
-          <div className="ds-note-strip">
-            <button className="ds-paste-btn" onClick={pasteToTableNote} title="Panodan yapıştır"><ClipboardPaste size={14} /></button>
-            <input
-              type="text"
-              className="ds-table-note-inline"
-              placeholder="Masa notu (örn: Müşteri 10 dk sonra gelecek)"
-              value={tableNotes[selectedTable] || ''}
-              onChange={(e) => handleNoteChange(e.target.value)}
-            />
-          </div>
 
           {/* KATEGORİ ŞERİDİ */}
           <div className="ds-category-strip">
@@ -764,6 +754,12 @@ function GenericModal({ modal, onClose }) {
             placeholder={modal.placeholder || 'Metin yazın...'}
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                confirm();
+              }
+            }}
           />
         )}
         {modal.showSelect && (

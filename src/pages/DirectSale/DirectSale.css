@@ -199,49 +199,24 @@
 .ds-mini-btn:hover { border-color: var(--ink-soft); transform: translateY(-1px); }
 .ds-mini-btn:active { transform: scale(0.94); transition-duration: var(--t-press); }
 .ds-mini-btn.purple { color: var(--earth); }
-.ds-search {
+.ds-header-note {
   flex-shrink: 0;
-  position: relative;
   display: flex;
   align-items: center;
+  gap: 6px;
 }
-.ds-search-ico { position: absolute; left: 12px; color: var(--ink-soft); pointer-events: none; }
-.ds-search input {
+.ds-header-note input {
   width: 170px;
   max-width: 26vw;
   height: 40px;
-  padding: 0 12px 0 34px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-input);
-  font-size: 13px;
-  background: var(--panel-2);
-  transition: background var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease);
-}
-.ds-search input:focus { background: #fff; border-color: var(--olive); outline: none; }
-
-/* ---- Masa notu şeridi (kendi paneli) ---- */
-.ds-note-strip {
-  background: var(--panel);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-1);
-  padding: 8px 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.ds-table-note-inline {
-  flex: 1;
-  height: 32px;
-  font-size: 12px;
   padding: 0 12px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-input);
+  font-size: 12.5px;
   background: var(--panel-2);
   transition: background var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease);
 }
-.ds-table-note-inline:focus { background: #fff; border-color: var(--olive); outline: none; }
+.ds-header-note input:focus { background: #fff; border-color: var(--olive); outline: none; }
 
 .ds-paste-btn {
   flex-shrink: 0;
@@ -914,7 +889,7 @@
   .ds-body { padding: 8px 8px 64px; gap: 8px; }
   .ds-main { gap: 8px; }
   .ds-header { padding: 8px 14px; }
-  .ds-note-strip { padding: 4px 10px; }
+  .ds-header-note input { width: 130px; }
   .ds-favorites { padding: 10px 14px; }
   .ds-favorites-row { min-height: 40px; }
   .ds-products { padding: 12px; }
