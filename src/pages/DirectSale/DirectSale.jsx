@@ -22,6 +22,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     tableDiscounts,
     setTableDiscounts,
     setSalesHistory,
+    logSoldItems,
     getTableTotal,
   } = data;
 
@@ -90,6 +91,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
         id: Date.now() + Math.random(),
         ad: product.ad,
         fiyat: product.fiyat,
+        kategori: product.kategori,
+        altKategori: product.altKategori,
         selected: false,
         note: product.fiyat === 0,
         persistentHighlight: isDuplicate,
@@ -256,6 +259,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       { id: Date.now(), ts: Date.now(), table: selectedTable, amount: totalPay, method, itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
+    logSoldItems(toClose, selectedTable);
 
     const remaining = currentOrder.filter((i) => !closedIds.has(i.id));
     setOrders((prev) => ({ ...prev, [selectedTable]: remaining }));

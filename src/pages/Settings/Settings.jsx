@@ -1,16 +1,28 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './Settings.css';
 import { TL } from '../../hooks/useHipposData';
+import { supabase } from '../../services/supabase';
 import {
   ListChecks, Calculator, Eye, EyeOff, Share2, Lock, Delete, Search, X,
   Banknote, CreditCard, UtensilsCrossed, BookOpen, ExternalLink, ChevronRight,
+  Undo2, Wifi, WifiOff, Printer, Database, FileSpreadsheet, Triangle,
 } from 'lucide-react';
 
 // Ciro panelini açan PIN — ileride Gelişmiş Ayarlar'dan değiştirilebilir hale gelecek.
 const REVENUE_PIN = '1234';
 
 export default function Settings({ data, onNavigate }) {
-  const { products, toggleProductStatus, bulkSetCategoryStatus, salesHistory } = data;
+  const {
+    products,
+    toggleProductStatus,
+    bulkSetCategoryStatus,
+    salesHistory,
+    soldItems,
+    allTables,
+    orders,
+    actionHistory,
+    undoLastAction,
+  } = data;
 
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -55,10 +67,100 @@ export default function Settings({ data, onNavigate }) {
 
   // ---- Gün Sonu ----
   const [eodConfirmOpen, setEodConfirmOpen] = useState(false);
+  const [eodBlockedOpen, setEodBlockedOpen] = useState(false);
+
+  const openTables = useMemo(
+    () => allTables.filter((t) => orders[t] && orders[t].length > 0),
+    [allTables, orders]
+  );
+
+  function handleEodClick() {
+    if (openTables.length > 0) {
+      setEodBlockedOpen(true);
+    } else {
+      setEodConfirmOpen(true);
+    }
+  }
+
   function confirmEod() {
     setEodConfirmOpen(false);
     onNavigate('endofday');
   }
+
+  // ---- Son işlemler / geri al (sol alt) ----
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // ---- Bugün paneli: en çok satanlar + genel istatistik ----
+  const [sandwichShowAll, setSandwichShowAll] = useState(false);
+  const [mealShowAll, setMealShowAll] = useState(false);
+
+  const todaysSoldItems = useMemo(() => {
+    const todayStr = new Date().toDateString();
+    return (soldItems || []).filter((i) => i.ts && new Date(i.ts).toDateString() === todayStr);
+  }, [soldItems]);
+
+  function topSellers(filterFn, limit) {
+    const counts = {};
+    todaysSoldItems.filter(filterFn).forEach((i) => {
+      counts[i.ad] = (counts[i.ad] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([ad, count]) => ({ ad, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, limit);
+  }
+
+  const isSandwich = (i) => i.kategori && i.kategori.includes('SANDVİÇ');
+  const isMeal = (i) => i.altKategori === 'Ev Yemekleri';
+
+  const sandwichSellers = useMemo(() => topSellers(isSandwich, sandwichShowAll ? 10 : 5), [todaysSoldItems, sandwichShowAll]);
+  const mealSellers = useMemo(() => topSellers(isMeal, mealShowAll ? 10 : 5), [todaysSoldItems, mealShowAll]);
+  const sandwichTotalQty = useMemo(() => todaysSoldItems.filter(isSandwich).length, [todaysSoldItems]);
+  const mealTotalQty = useMemo(() => todaysSoldItems.filter(isMeal).length, [todaysSoldItems]);
+
+  // ---- Bağlantı durumu ----
+  const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  useEffect(() => {
+    function goOnline() { setOnline(true); }
+    function goOffline() { setOnline(false); }
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+
+  const [supabaseOk, setSupabaseOk] = useState(null);
+  const [supabaseLastSync, setSupabaseLastSync] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    async function check() {
+      try {
+        const { error } = await supabase.from('tables').select('*').limit(1);
+        if (cancelled) return;
+        setSupabaseOk(!error);
+        if (!error) setSupabaseLastSync(new Date());
+      } catch {
+        if (!cancelled) setSupabaseOk(false);
+      }
+    }
+    check();
+    const id = setInterval(check, 30000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  // NOT: Yazıcı bağlantısı tarayıcıdan okunamıyor (web platformunun sınırı) — nötr gösteriliyor.
+  // Google Sheets senkronizasyonu henüz kurulmadı — dürüstçe "bağlı değil" gösteriliyor.
+  // Vercel: sayfa zaten oradan yüklendiği için doğası gereği bağlı.
+  const connections = [
+    { key: 'internet', label: 'İnternet', status: online ? 'ok' : 'down', Icon: online ? Wifi : WifiOff },
+    { key: 'printer', label: 'Yazıcı', status: 'unknown', Icon: Printer, note: 'Tarayıcıdan kontrol edilemiyor' },
+    { key: 'supabase', label: 'Supabase', status: supabaseOk === null ? 'checking' : supabaseOk ? 'ok' : 'down', Icon: Database, lastSync: supabaseLastSync },
+    { key: 'sheets', label: 'Google Sheets', status: 'down', Icon: FileSpreadsheet, note: 'Senkronizasyon henüz kurulmadı' },
+    { key: 'vercel', label: 'Vercel', status: 'ok', Icon: Triangle },
+  ];
+  const overallOk = online && supabaseOk !== false;
 
   // ---- Anlık Ciro ----
   const [revenueRevealed, setRevenueRevealed] = useState(false);
@@ -86,6 +188,9 @@ export default function Settings({ data, onNavigate }) {
     });
     return { ...t, total: t['NAKİT'] + t['KREDİ KARTI'] + t['YEMEK KARTI'] + t['CARİ'] };
   }, [todaysSales]);
+
+  const txCount = todaysSales.length;
+  const avgTicket = txCount > 0 ? totals.total / txCount : 0;
 
   function checkPin(digits) {
     if (digits === REVENUE_PIN) {
@@ -168,11 +273,87 @@ export default function Settings({ data, onNavigate }) {
               <span className="st-action-title">Menü Düzenleme</span>
               <span className="st-action-sub">Bugünkü menüyü hızlıca aç/kapat</span>
             </button>
-            <button className="st-action-card earth" onClick={() => setEodConfirmOpen(true)}>
+            <button className="st-action-card earth" onClick={handleEodClick}>
               <span className="st-action-ico"><Calculator size={22} /></span>
               <span className="st-action-title">Gün Sonu Al</span>
               <span className="st-action-sub">Kasa kapanış sayfasına git</span>
             </button>
+          </div>
+
+          {/* BUGÜN PANELİ */}
+          <div className="st-today-panel">
+            <h2 className="st-section-title">Bugün</h2>
+            <div className="st-today-stats">
+              <div className="st-stat-box">
+                <strong>{txCount}</strong>
+                <span>İşlem</span>
+              </div>
+              <div className="st-stat-box">
+                <strong>{TL(avgTicket)}</strong>
+                <span>Ortalama Fiş</span>
+              </div>
+            </div>
+
+            <div className="st-bestseller-block">
+              <div className="st-bestseller-head">
+                <span>Sandviç — en çok satılanlar</span>
+                <span className="st-bestseller-qty">bugün {sandwichTotalQty} adet</span>
+              </div>
+              <ol className="st-bestseller-list">
+                {sandwichSellers.length === 0 && <li className="empty">Henüz satış yok</li>}
+                {sandwichSellers.map((s, i) => (
+                  <li key={s.ad}>
+                    <span className="rank">{i + 1}</span>
+                    <span className="name">{s.ad}</span>
+                    <span className="count">{s.count} adet</span>
+                  </li>
+                ))}
+              </ol>
+              <button className="st-showall-btn" onClick={() => setSandwichShowAll((v) => !v)}>
+                {sandwichShowAll ? 'Daha az göster' : 'Tümünü Gör (10)'}
+              </button>
+            </div>
+
+            <div className="st-bestseller-block">
+              <div className="st-bestseller-head">
+                <span>Ev Yemekleri — en çok satılanlar</span>
+                <span className="st-bestseller-qty">bugün {mealTotalQty} adet</span>
+              </div>
+              <ol className="st-bestseller-list">
+                {mealSellers.length === 0 && <li className="empty">Henüz satış yok</li>}
+                {mealSellers.map((s, i) => (
+                  <li key={s.ad}>
+                    <span className="rank">{i + 1}</span>
+                    <span className="name">{s.ad}</span>
+                    <span className="count">{s.count} adet</span>
+                  </li>
+                ))}
+              </ol>
+              <button className="st-showall-btn" onClick={() => setMealShowAll((v) => !v)}>
+                {mealShowAll ? 'Daha az göster' : 'Tümünü Gör (10)'}
+              </button>
+            </div>
+          </div>
+
+          {/* BAĞLANTI PANELİ */}
+          <div className="st-conn-panel">
+            <div className="st-conn-head">
+              <span className={`st-conn-dot ${overallOk ? 'ok' : 'down'}`} />
+              <h2 className="st-section-title" style={{ margin: 0 }}>Bağlantı Durumu</h2>
+            </div>
+            <div className="st-conn-list">
+              {connections.map(({ key, label, status, Icon, lastSync, note }) => (
+                <div key={key} className="st-conn-row">
+                  <span className={`st-conn-dot ${status}`} />
+                  <Icon size={15} className="st-conn-ico" />
+                  <span className="st-conn-label">{label}</span>
+                  {lastSync && (
+                    <span className="st-conn-sync">Son Senk. {lastSync.toLocaleTimeString('tr-TR')}</span>
+                  )}
+                  {note && <span className="st-conn-note">{note}</span>}
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="st-advanced">
@@ -224,6 +405,51 @@ export default function Settings({ data, onNavigate }) {
       </div>
 
       {toast && <div className="st-toast">{toast}</div>}
+
+      {/* SON İŞLEMLER / GERİ AL (sol alt) */}
+      <div className="st-history-wrap">
+        {historyOpen && (
+          <div className="st-history-panel">
+            <div className="st-history-head">
+              <span>Son İşlemler</span>
+              <button onClick={() => setHistoryOpen(false)}><X size={14} /></button>
+            </div>
+            {actionHistory.length === 0 && <p className="st-history-empty">Henüz işlem yok</p>}
+            {actionHistory.map((h, idx) => (
+              <div key={h.id} className={`st-history-item ${idx === 0 ? 'latest' : ''}`}>
+                <div>
+                  <p className="desc">{h.description}</p>
+                  <p className="time">{h.time}</p>
+                </div>
+                {idx === 0 && (
+                  <button className="st-undo-btn" onClick={undoLastAction}>
+                    <Undo2 size={12} /> Geri Al
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <button className="st-history-fab" onClick={() => setHistoryOpen((v) => !v)}>
+          <Undo2 size={19} />
+          {actionHistory.length > 0 && <span className="st-history-badge">{actionHistory.length}</span>}
+        </button>
+      </div>
+
+      {/* AÇIK MASA — GÜN SONU ENGELLENDİ */}
+      {eodBlockedOpen && (
+        <div className="st-modal-overlay" onClick={() => setEodBlockedOpen(false)}>
+          <div className="st-modal st-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Açık masa olduğu için Gün Sonu alınamıyor</h3>
+            <p className="st-modal-hint">
+              Önce şu masaları kapatman gerekiyor: <strong>{openTables.join(', ')}</strong>
+            </p>
+            <div className="st-modal-footer">
+              <button className="st-primary" onClick={() => setEodBlockedOpen(false)}>Tamam</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MENÜ DÜZENLEME MODALI */}
       {menuModalOpen && (

@@ -76,6 +76,7 @@ export default function useHipposData() {
   }));
   const [tableOpenedAt, setTableOpenedAt] = useState(() => loadLS('hippos_table_opened_at', {}));
   const [salesHistory, setSalesHistory] = useState(() => loadLS('hippos_sales_history', []));
+  const [soldItems, setSoldItems] = useState(() => loadLS('hippos_sold_items', []));
   const [actionHistory, setActionHistory] = useState(() => loadLS('hippos_action_history', []));
 
   useEffect(() => localStorage.setItem('hippos_favorites', JSON.stringify(favorites)), [favorites]);
@@ -85,6 +86,7 @@ export default function useHipposData() {
   useEffect(() => localStorage.setItem('hippos_table_discounts', JSON.stringify(tableDiscounts)), [tableDiscounts]);
   useEffect(() => localStorage.setItem('hippos_table_opened_at', JSON.stringify(tableOpenedAt)), [tableOpenedAt]);
   useEffect(() => localStorage.setItem('hippos_sales_history', JSON.stringify(salesHistory)), [salesHistory]);
+  useEffect(() => localStorage.setItem('hippos_sold_items', JSON.stringify(soldItems)), [soldItems]);
   useEffect(() => localStorage.setItem('hippos_action_history', JSON.stringify(actionHistory)), [actionHistory]);
   useEffect(() => localStorage.setItem('hippos_packages', JSON.stringify(packages)), [packages]);
   useEffect(() => localStorage.setItem('hippos_package_meta', JSON.stringify(packageMeta)), [packageMeta]);
@@ -138,6 +140,26 @@ export default function useHipposData() {
 
   function toggleFavorite(id) {
     setFavorites((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]));
+  }
+
+  // Ödemesi alınan ürünleri (Bugün paneli / en çok satanlar için) kalıcı günlüğüe yazar.
+  function logSoldItems(items, table) {
+    if (!items || items.length === 0) return;
+    const ts = Date.now();
+    setSoldItems((prev) => [
+      ...items
+        .filter((i) => !i.note)
+        .map((i) => ({
+          id: `${ts}-${i.id}`,
+          ad: i.ad,
+          fiyat: i.fiyat,
+          kategori: i.kategori || '',
+          altKategori: i.altKategori || '',
+          table,
+          ts,
+        })),
+      ...prev,
+    ]);
   }
 
   function toggleProductStatus(id) {
@@ -249,6 +271,7 @@ export default function useHipposData() {
     const payable = items.filter((i) => !i.note);
     if (payable.length === 0) return;
     const totalPay = payable.reduce((s, i) => s + i.fiyat, 0);
+    logSoldItems(payable, table);
     pushHistory(`${table} kapatıldı (${method})`);
     setSalesHistory((prev) => [
       { id: Date.now(), ts: Date.now(), table, amount: totalPay, method, itemsCount: payable.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
@@ -287,6 +310,8 @@ export default function useHipposData() {
     tableOpenedAt,
     salesHistory,
     setSalesHistory,
+    soldItems,
+    logSoldItems,
     getTableTotal,
     actionHistory,
     undoLastAction,

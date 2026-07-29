@@ -6,7 +6,7 @@ const ITEMS = [
   { key: 'pos', label: 'Ana Sayfa (POS)', Icon: Home },
   { key: 'tables', label: 'Masalar', Icon: Table2 },
   { key: 'reports', label: 'Kasa & Rapor', Icon: BarChart3 },
-  { key: 'settings', label: 'Ayarlar', Icon: Settings },
+  { key: 'settings', label: 'Yönetim Paneli', Icon: Settings },
 ];
 
 export default function BottomNav({ activePage, onNavigate }) {
