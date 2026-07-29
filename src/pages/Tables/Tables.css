@@ -113,6 +113,7 @@
 }
 .tb-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
 .tb-card:active { transform: scale(0.98); }
+.tb-card.menu-open { z-index: 30; }
 .tb-card.drag-over { border-color: var(--olive); box-shadow: 0 0 0 3px var(--olive-soft); }
 
 .tb-card.tier-empty { border-left-color: var(--border); }
@@ -222,7 +223,7 @@
 
 /* ---- Paketler paneli (sağda, sipariş paneli gibi) ---- */
 .tb-packages {
-  width: 320px;
+  width: 380px;
   flex-shrink: 0;
   background: var(--panel);
   border: 1px solid var(--border-soft);
@@ -234,25 +235,23 @@
 .tb-package-list { display: flex; flex-direction: column; gap: 8px; }
 .tb-package-list .tb-card {
   width: 100%;
-  min-height: 76px;
+  min-height: 80px;
   padding: 10px 12px;
   gap: 3px;
 }
 .tb-package-list .tb-card-note .txt { -webkit-line-clamp: 1; }
 .tb-package-list .tb-card-name { font-size: 13px; }
-.tb-package-list .tb-card-time { font-size: 10px; }
+.tb-package-list .tb-card-time { font-size: 10.5px; }
 .tb-package-list .tb-card-total { font-size: 14px; }
 
-.tb-package-list.compact .tb-card { min-height: 60px; padding: 8px 10px; gap: 2px; }
-.tb-package-list.compact .tb-card-note { display: none; }
-.tb-package-list.compact .tb-card-time { font-size: 9.5px; }
+.tb-package-list.compact .tb-card { min-height: 68px; padding: 9px 11px; gap: 2px; }
+.tb-package-list.compact .tb-card-time { font-size: 10px; }
+.tb-package-list.compact .tb-card-note .txt { font-size: 10.5px; }
 .tb-package-list.compact .tb-card-total { font-size: 13px; }
 
-.tb-package-list.ultra-compact .tb-card { min-height: 46px; padding: 6px 10px; gap: 0; flex-direction: row; align-items: center; flex-wrap: wrap; }
-.tb-package-list.ultra-compact .tb-card-top { flex: 1; min-width: 100px; }
-.tb-package-list.ultra-compact .tb-card-time { display: none; }
+.tb-package-list.ultra-compact .tb-card { min-height: 52px; padding: 7px 10px; gap: 1px; }
 .tb-package-list.ultra-compact .tb-card-note { display: none; }
-.tb-package-list.ultra-compact .tb-card-bottom { margin-top: 0; }
+.tb-package-list.ultra-compact .tb-card-time { font-size: 9.5px; }
 .tb-package-list.ultra-compact .tb-card-name { font-size: 12px; }
 .tb-package-list.ultra-compact .tb-card-total { font-size: 12px; }
 
@@ -290,6 +289,7 @@
   box-shadow: var(--shadow-3);
   transition: transform 160ms var(--ease);
 }
+.tb-history-fab svg { color: #fff; stroke: #fff; }
 .tb-history-fab:hover { transform: translateY(-2px); }
 .tb-history-fab:active { transform: scale(0.94); }
 .tb-history-badge {

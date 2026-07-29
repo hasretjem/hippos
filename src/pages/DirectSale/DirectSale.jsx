@@ -4,7 +4,7 @@ import { TL } from '../../hooks/useHipposData';
 import {
   Search, Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
-  Trash2, Star, Check, AlertTriangle,
+  Trash2, Star, Check, AlertTriangle, Wallet, Send,
 } from 'lucide-react';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
@@ -28,6 +28,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const categories = useMemo(() => ['TÜMÜ', ...new Set(products.map((p) => p.kategori))], [products]);
   const [activeCategory, setActiveCategory] = useState('TÜMÜ');
   const [searchQuery, setSearchQuery] = useState('');
+  const [payMode, setPayMode] = useState(false);
 
   const [numpadOpen, setNumpadOpen] = useState(false);
   const [numpadValue, setNumpadValue] = useState('');
@@ -245,6 +246,11 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
     }
     showToast(`${method} ile ödeme alındı`);
+    setPayMode(false);
+  }
+
+  function handleSend() {
+    onNavigate('tables');
   }
 
   function handleClearTable() {
@@ -259,6 +265,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       },
     });
   }
+
+  useEffect(() => {
+    setPayMode(false);
+  }, [selectedTable]);
 
   const printRef = useRef(null);
   const orderListRef = useRef(null);
@@ -504,20 +514,36 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               : currentOrder.length > 0 ? 'Ödeme tüm siparişe uygulanacak' : ''}
           </div>
 
-          <div className="ds-pay-grid">
-            <button disabled={isOrderEmpty} className="cash" onClick={() => handlePay('NAKİT')}>
-              <Banknote size={19} /><span className="lbl">Nakit</span>
-            </button>
-            <button disabled={isOrderEmpty} className="card" onClick={() => handlePay('KREDİ KARTI')}>
-              <CreditCard size={19} /><span className="lbl">Kredi K.</span>
-            </button>
-            <button disabled={isOrderEmpty} className="meal" onClick={() => handlePay('YEMEK KARTI')}>
-              <UtensilsCrossed size={19} /><span className="lbl">Yemek K.</span>
-            </button>
-            <button disabled={isOrderEmpty} className="credit" onClick={() => handlePay('CARİ')}>
-              <BookOpen size={19} /><span className="lbl">Cari</span>
-            </button>
-          </div>
+          {payMode ? (
+            <>
+              <div className="ds-pay-grid">
+                <button className="cash" onClick={() => handlePay('NAKİT')}>
+                  <Banknote size={19} /><span className="lbl">Nakit</span>
+                </button>
+                <button className="card" onClick={() => handlePay('KREDİ KARTI')}>
+                  <CreditCard size={19} /><span className="lbl">Kredi K.</span>
+                </button>
+                <button className="meal" onClick={() => handlePay('YEMEK KARTI')}>
+                  <UtensilsCrossed size={19} /><span className="lbl">Yemek K.</span>
+                </button>
+                <button className="credit" onClick={() => handlePay('CARİ')}>
+                  <BookOpen size={19} /><span className="lbl">Cari</span>
+                </button>
+              </div>
+              <button className="ds-pay-back-btn" onClick={() => setPayMode(false)}>
+                <Undo2 size={14} /> Geri
+              </button>
+            </>
+          ) : (
+            <div className="ds-payment-row">
+              <button disabled={isOrderEmpty} className="ds-pay-cta" onClick={() => setPayMode(true)}>
+                <Wallet size={16} /> Ödeme Al
+              </button>
+              <button className="ds-send-btn" onClick={handleSend}>
+                <Send size={15} /> Gönder
+              </button>
+            </div>
+          )}
           <div className="ds-bottom-actions">
             <button disabled={isOrderEmpty} onClick={handlePrint}><Printer size={14} /> Yazdır</button>
             <button disabled={isOrderEmpty} onClick={handleUndoLastItem}><Undo2 size={14} /> Geri Al</button>

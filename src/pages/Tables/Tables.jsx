@@ -153,7 +153,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     return (
       <div
         key={key || table}
-        className={`tb-card tier-${isEmpty ? 'empty' : tier} ${dragOverTable === table ? 'drag-over' : ''}`}
+        className={`tb-card tier-${isEmpty ? 'empty' : tier} ${dragOverTable === table ? 'drag-over' : ''} ${isMenuOpen ? 'menu-open' : ''}`}
         draggable={!isEmpty}
         onDragStart={(e) => handleDragStart(e, table)}
         onDragOver={(e) => handleDragOver(e, table)}
