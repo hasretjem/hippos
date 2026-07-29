@@ -88,6 +88,30 @@ export default function useHipposData() {
   useEffect(() => localStorage.setItem('hippos_packages', JSON.stringify(packages)), [packages]);
   useEffect(() => localStorage.setItem('hippos_package_meta', JSON.stringify(packageMeta)), [packageMeta]);
 
+  // Sayfa açılışında: ürünü ya da notu olmayan "hayalet" paketleri temizle
+  useEffect(() => {
+    setPackages((prev) =>
+      prev.filter((p) => (orders[p.name] && orders[p.name].length > 0) || (tableNotes[p.name] && tableNotes[p.name].trim()))
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Paket, ilk ürün ya da not eklendiğinde "gerçek" hale gelir (Paketler listesine kaydolur).
+  // Öncesinde hiçbir yerde görünmez — boş bırakılıp vazgeçilirse kutu hiç açılmamış olur.
+  function registerPackageIfNeeded(table) {
+    if (!table.startsWith('Paket ')) return;
+    setPackages((prev) => {
+      if (prev.some((p) => p.name === table)) return prev;
+      const num = parseInt(table.replace('Paket ', ''), 10) || 0;
+      return [...prev, { name: table, num }];
+    });
+  }
+
+  function updateTableNote(table, value) {
+    if (value.trim()) registerPackageIfNeeded(table);
+    setTableNotes((prev) => ({ ...prev, [table]: value }));
+  }
+
   // Sipariş güncellemesi — masa boştan doluya geçince açılış saatini otomatik damgalar,
   // doluyken boşalınca damgayı siler (masa "kapanmış" sayılır).
   function updateOrder(table, updater) {
@@ -98,6 +122,7 @@ export default function useHipposData() {
       const nowEmpty = after.length === 0;
       if (wasEmpty && !nowEmpty) {
         setTableOpenedAt((p) => (p[table] ? p : { ...p, [table]: Date.now() }));
+        registerPackageIfNeeded(table);
       } else if (!wasEmpty && nowEmpty) {
         setTableOpenedAt((p) => {
           if (!(table in p)) return p;
@@ -131,7 +156,8 @@ export default function useHipposData() {
     if (meta.date !== todayStr()) meta = { date: todayStr(), next: 1 };
     const num = meta.next;
     const name = `Paket ${num}`;
-    setPackages((prev) => [...prev, { name, num }]);
+    // NOT: burada henüz packages listesine eklenmiyor — ürün ya da not girilmeden
+    // paket "gerçek" sayılmıyor (bkz. registerPackageIfNeeded).
     setPackageMeta({ date: meta.date, next: num + 1 });
     setTableNotes((prev) => ({ ...prev, [name]: '' }));
     setTableDiscounts((prev) => ({ ...prev, [name]: { type: null, value: 0 } }));
@@ -243,6 +269,7 @@ export default function useHipposData() {
     updateOrder,
     tableNotes,
     setTableNotes,
+    updateTableNote,
     tableDiscounts,
     setTableDiscounts,
     tableOpenedAt,

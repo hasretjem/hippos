@@ -4,7 +4,7 @@ import { TL } from '../../hooks/useHipposData';
 import {
   Search, Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
-  Trash2, Star, Check, AlertTriangle, Wallet, Send,
+  Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown,
 } from 'lucide-react';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
@@ -18,6 +18,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     updateOrder,
     tableNotes,
     setTableNotes,
+    updateTableNote,
     tableDiscounts,
     setTableDiscounts,
     setSalesHistory,
@@ -29,8 +30,17 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [activeCategory, setActiveCategory] = useState('TÜMÜ');
   const [searchQuery, setSearchQuery] = useState('');
   const [payMode, setPayMode] = useState(false);
+  const [tablePickerOpen, setTablePickerOpen] = useState(false);
 
   const [numpadOpen, setNumpadOpen] = useState(false);
+  const numpadInputRef = useRef(null);
+
+  useEffect(() => {
+    if (numpadOpen) {
+      const t = setTimeout(() => numpadInputRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [numpadOpen]);
   const [numpadValue, setNumpadValue] = useState('');
 
   const [priceModal, setPriceModal] = useState(null); // { item, value }
@@ -99,7 +109,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
   // ---- Masa notu ----
   function handleNoteChange(value) {
-    setTableNotes((prev) => ({ ...prev, [selectedTable]: value }));
+    updateTableNote(selectedTable, value);
   }
 
   async function pasteToTableNote() {
@@ -107,7 +117,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       const text = await navigator.clipboard.readText();
       if (!text) return;
       const current = tableNotes[selectedTable] || '';
-      handleNoteChange(current ? `${current} ${text}` : text);
+      updateTableNote(selectedTable, current ? `${current} ${text}` : text);
     } catch {
       showToast('Panoya erişilemedi');
     }
@@ -320,21 +330,40 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               <span className="ds-count-badge">{productCount} Ürün</span>
             </div>
             <div className="ds-header-table">
-              <select
+              <button
                 className="ds-table-select-mini"
-                value={selectedTable}
-                onChange={(e) => setSelectedTable(e.target.value)}
+                onClick={() => setTablePickerOpen((v) => !v)}
               >
-                {allTables.map((t) => {
-                  const tot = getTableTotal(t);
-                  const hasOrder = orders[t] && orders[t].length > 0;
-                  return (
-                    <option key={t} value={t}>
-                      {t} {hasOrder ? `(${TL(tot)})` : '[Boş]'}
-                    </option>
-                  );
-                })}
-              </select>
+                <span>
+                  {selectedTable} {(orders[selectedTable] && orders[selectedTable].length > 0) ? `(${TL(getTableTotal(selectedTable))})` : '[Boş]'}
+                </span>
+                <ChevronDown size={14} />
+              </button>
+              {tablePickerOpen && (
+                <>
+                  <div className="ds-table-picker-overlay" onClick={() => setTablePickerOpen(false)} />
+                  <div className="ds-table-picker">
+                    {allTables.map((t) => {
+                      const tot = getTableTotal(t);
+                      const hasOrder = orders[t] && orders[t].length > 0;
+                      const note = tableNotes[t];
+                      return (
+                        <button
+                          key={t}
+                          className={t === selectedTable ? 'active' : ''}
+                          onClick={() => { setSelectedTable(t); setTablePickerOpen(false); }}
+                        >
+                          <span className="name">{t}</span>
+                          <span className="meta">
+                            {hasOrder ? TL(tot) : 'Boş'}
+                            {note ? ` — ${note}` : ''}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
               <button className="ds-mini-btn" onClick={handleTableTransfer} title="Masayı taşı"><ArrowLeftRight size={15} /></button>
               <button className="ds-mini-btn purple" onClick={handleTableMerge} title="Masaları birleştir"><Link2 size={15} /></button>
             </div>
@@ -474,6 +503,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 <div className="ds-numpad-display-row">
                   <span>GİRİLEN DEĞER:</span>
                   <input
+                    ref={numpadInputRef}
                     type="text"
                     inputMode="decimal"
                     value={numpadValue}
@@ -711,6 +741,7 @@ function GenericModal({ modal, onClose }) {
         <h3>{modal.title}</h3>
         {modal.showInput && (
           <textarea
+            autoFocus
             rows={2}
             placeholder={modal.placeholder || 'Metin yazın...'}
             value={inputVal}

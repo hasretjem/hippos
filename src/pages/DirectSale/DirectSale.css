@@ -116,6 +116,7 @@
   flex: 1;
   min-width: 240px;
   justify-content: center;
+  position: relative;
 }
 .ds-table-select-mini {
   flex: 1;
@@ -130,8 +131,50 @@
   padding: 0 12px;
   cursor: pointer;
   transition: background var(--t-hover) var(--ease);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
+.ds-table-select-mini span { color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-table-select-mini svg { color: #fff; flex-shrink: 0; }
 .ds-table-select-mini:hover { background: var(--olive-dark); }
+.ds-table-picker-overlay { position: fixed; inset: 0; z-index: 90; }
+.ds-table-picker {
+  position: absolute;
+  top: 46px;
+  left: 0;
+  width: 320px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-3);
+  padding: 6px;
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ds-table-picker button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--ink);
+  transition: background 120ms var(--ease);
+}
+.ds-table-picker button:hover { background: var(--panel-2); }
+.ds-table-picker button.active { background: var(--olive-soft); }
+.ds-table-picker button .name { font-size: 13px; font-weight: 700; color: var(--ink); }
+.ds-table-picker button .meta { font-size: 11px; color: var(--ink-muted); }
 .ds-mini-btn {
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -591,6 +634,7 @@
 .ds-pay-cta:disabled { opacity: 0.35; cursor: not-allowed; }
 .ds-send-btn { background: var(--smoke); }
 .ds-send-btn:hover { transform: translateY(-1px); filter: brightness(1.15); box-shadow: var(--shadow-2); }
+.ds-pay-cta, .ds-pay-cta *, .ds-send-btn, .ds-send-btn * { color: #fff !important; stroke: #fff; }
 .ds-pay-modal { max-width: 360px; }
 .ds-pay-modal-total {
   display: flex;
@@ -873,4 +917,4 @@
   .ds-pay-grid button { height: 46px; }
   .ds-bottom-actions { padding: 0 12px 10px; }
   .ds-bottom-actions button { height: 34px; }
-} 
+}
