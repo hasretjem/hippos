@@ -45,9 +45,21 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
 
   const allDynamicTargets = [...SALON_TABLES, ...ALT_TABLES, ...packages.map((p) => p.name)];
 
+  const [occupiedConfirmTable, setOccupiedConfirmTable] = useState(null);
+
   function openTable(table) {
+    if (isTableOccupiedElsewhere(table)) {
+      setOccupiedConfirmTable(table);
+      return;
+    }
     setSelectedTable(table);
     onNavigate('pos');
+  }
+
+  function confirmOpenOccupiedTable() {
+    setSelectedTable(occupiedConfirmTable);
+    onNavigate('pos');
+    setOccupiedConfirmTable(null);
   }
 
   function startEditNote(e, table) {
@@ -362,6 +374,23 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
             <div className="tb-modal-footer">
               <button className="tb-secondary" onClick={() => setConfirmModal(null)}>Vazgeç</button>
               <button className="tb-primary" onClick={confirmModal.onConfirm}>Onayla</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Başka cihazda açık masa uyarısı */}
+      {occupiedConfirmTable && (
+        <div className="tb-modal-overlay" onClick={() => setOccupiedConfirmTable(null)}>
+          <div className="tb-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Dikkat</h3>
+            <p style={{ fontSize: '13px', color: 'var(--ink-muted)', lineHeight: 1.5, margin: '0 0 16px' }}>
+              <strong>{occupiedConfirmTable}</strong> şu an başka bir cihazda açık görünüyor. Aynı anda iki cihazdan
+              düzenlemek çakışmaya yol açabilir. Yine de girmek istiyor musun?
+            </p>
+            <div className="tb-modal-footer">
+              <button className="tb-secondary" onClick={() => setOccupiedConfirmTable(null)}>Vazgeç</button>
+              <button className="tb-primary" onClick={confirmOpenOccupiedTable}>Yine de Gir</button>
             </div>
           </div>
         </div>

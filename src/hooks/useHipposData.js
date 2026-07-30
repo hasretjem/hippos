@@ -686,6 +686,12 @@ export default function useHipposData() {
     presenceChannelRef.current?.track({ table, ts: Date.now() });
   }
 
+  // Cihaz Hızlı Satış ekranından tamamen ayrılınca (Masalar/Ayarlar'a geçince) çağrılır —
+  // yoksa son bakılan masa "başka cihazda açık" görünmeye sonsuza kadar devam eder.
+  function clearViewingTable() {
+    presenceChannelRef.current?.untrack();
+  }
+
   // Bir masada, KENDİMİZ DIŞINDA, o an ekranında duran başka bir cihaz var mı?
   function isTableOccupiedElsewhere(table) {
     const viewers = presenceMap[table] || [];
@@ -810,9 +816,23 @@ export default function useHipposData() {
     };
   }, []);
 
-  // ---- Masa/paket/hızlı satış durumu için toplu senkron (herhangi bir değişiklik olduğunda) ----
+  // ---- Masa/paket/hızlı satış durumu senkronu — SADECE gerçekten değişen masa(lar) gönderilir.
+  // Önceki "her değişiklikte tüm masaları toptan gönder" yaklaşımı, iki cihaz aynı anda işlem
+  // yapınca birbirinin verisinin üzerine eski bir kopya yazıyordu (yarış durumu / veri kaybı riski).
+  const prevTableStateRef = useRef({ orders: {}, tableNotes: {}, tableDiscounts: {}, tableOpenedAt: {} });
   useEffect(() => {
-    const rows = allTables.map((t) => ({
+    const prev = prevTableStateRef.current;
+    const changed = new Set();
+    allTables.forEach((t) => {
+      if (orders[t] !== prev.orders[t]) changed.add(t);
+      if (tableNotes[t] !== prev.tableNotes[t]) changed.add(t);
+      if (tableDiscounts[t] !== prev.tableDiscounts[t]) changed.add(t);
+      if (tableOpenedAt[t] !== prev.tableOpenedAt[t]) changed.add(t);
+    });
+    prevTableStateRef.current = { orders, tableNotes, tableDiscounts, tableOpenedAt };
+    if (changed.size === 0) return;
+
+    const rows = [...changed].map((t) => ({
       table_name: t,
       items: orders[t] || [],
       note: tableNotes[t] || '',
@@ -821,12 +841,11 @@ export default function useHipposData() {
       opened_at: tableOpenedAt[t] ? new Date(tableOpenedAt[t]).toISOString() : null,
       updated_at: new Date().toISOString(),
     }));
-    if (rows.length === 0) return;
     supabase.from('table_state').upsert(rows, { onConflict: 'table_name' }).then(({ error }) => {
       if (error) console.error('Masa durumu senkronize edilemedi:', error.message);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders, tableNotes, tableDiscounts, tableOpenedAt]);
+  }, [orders, tableNotes, tableDiscounts, tableOpenedAt, allTables]);
 
   // ---- Yeni satış kayıtlarını Supabase'e yaz (DirectSale doğrudan setSalesHistory çağırıyor) ----
   const syncedSaleIdsRef = useRef(new Set()).current;
@@ -1229,6 +1248,7 @@ export default function useHipposData() {
     closeTableWithPayment,
     writeReceiptToSheets,
     announceViewingTable,
+    clearViewingTable,
     isTableOccupiedElsewhere,
     presenceMap,
     cariler,

@@ -28,6 +28,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     categories: rawCategories,
     subcategories,
     announceViewingTable,
+    clearViewingTable,
     isTableOccupiedElsewhere,
     presenceMap,
     cariler,
@@ -57,10 +58,16 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const numpadInputRef = useRef(null);
 
   // Bu masayı ekranda açtığımızı diğer cihazlara bildir (aynı masaya girmeyi uyarmak için).
+  // Bu sayfadan tamamen ayrılınca (Masalar/Ayarlar'a geçince) kilidi bırak.
   useEffect(() => {
     announceViewingTable(selectedTable);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTable]);
+
+  useEffect(() => {
+    return () => clearViewingTable();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (numpadOpen) {
