@@ -163,17 +163,36 @@ export default function Settings({ data, onNavigate }) {
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
+  const [sheetsOk, setSheetsOk] = useState(null);
+  const [sheetsLastSync, setSheetsLastSync] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    async function check() {
+      try {
+        const res = await fetch('/api/sheets');
+        if (cancelled) return;
+        setSheetsOk(res.ok);
+        if (res.ok) setSheetsLastSync(new Date());
+      } catch {
+        if (!cancelled) setSheetsOk(false);
+      }
+    }
+    check();
+    const id = setInterval(check, 30000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
   // NOT: Yazıcı bağlantısı tarayıcıdan okunamıyor (web platformunun sınırı) — nötr gösteriliyor.
-  // Google Sheets senkronizasyonu henüz kurulmadı — dürüstçe "bağlı değil" gösteriliyor.
+  // Google Sheets: /api/sheets uç noktasına gerçek bir istek atılıp gerçek durum ölçülüyor.
   // Vercel: sayfa zaten oradan yüklendiği için doğası gereği bağlı.
   const connections = [
     { key: 'internet', label: 'İnternet', status: online ? 'ok' : 'down', Icon: online ? Wifi : WifiOff },
     { key: 'printer', label: 'Yazıcı', status: 'unknown', Icon: Printer, note: 'Tarayıcıdan kontrol edilemiyor' },
     { key: 'supabase', label: 'Supabase', status: supabaseOk === null ? 'checking' : supabaseOk ? 'ok' : 'down', Icon: Database, lastSync: supabaseLastSync },
-    { key: 'sheets', label: 'Google Sheets', status: 'down', Icon: FileSpreadsheet, note: 'Senkronizasyon henüz kurulmadı' },
+    { key: 'sheets', label: 'Google Sheets', status: sheetsOk === null ? 'checking' : sheetsOk ? 'ok' : 'down', Icon: FileSpreadsheet, lastSync: sheetsLastSync },
     { key: 'vercel', label: 'Vercel', status: 'ok', Icon: Triangle },
   ];
-  const overallOk = online && supabaseOk !== false;
+  const overallOk = online && supabaseOk !== false && sheetsOk !== false;
 
   // ---- Anlık Ciro ----
   const [revenueRevealed, setRevenueRevealed] = useState(false);
