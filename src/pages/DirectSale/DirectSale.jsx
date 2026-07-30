@@ -25,6 +25,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     logSoldItems,
     getTableTotal,
     categories: rawCategories,
+    subcategories,
   } = data;
 
   // ---- Ekran durumu ----
@@ -325,15 +326,19 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       title = activeCategory;
       filtered = activeProducts.filter((p) => p.kategori === activeCategory);
     }
+    const subOrderMap = new Map(subcategories.map((s) => [`${s.kategori}|${s.name}`, s.menuSirasi]));
+    const subOrder = (p) => subOrderMap.get(`${p.kategori}|${p.altKategori}`) ?? 50;
     const sortKey = (p) => (p.menuSirasi ?? 50) + (p.isAzVariant ? 0.5 : 0);
-    filtered = [...filtered].sort((a, b) => sortKey(a) - sortKey(b) || a.ad.localeCompare(b.ad, 'tr'));
+    filtered = [...filtered].sort(
+      (a, b) => subOrder(a) - subOrder(b) || sortKey(a) - sortKey(b) || a.ad.localeCompare(b.ad, 'tr')
+    );
     const groups = {};
     filtered.forEach((p) => {
       const sub = p.altKategori || p.kategori || 'Genel';
       (groups[sub] = groups[sub] || []).push(p);
     });
     return { filteredProducts: filtered, groupedProducts: groups, headerTitle: title, productCount: filtered.length };
-  }, [products, searchQuery, activeCategory]);
+  }, [products, searchQuery, activeCategory, subcategories]);
 
   const favoriteProducts = products.filter((p) => favorites.includes(p.id) && p.durum !== 'PASIF');
 

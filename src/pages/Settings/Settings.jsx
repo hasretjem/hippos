@@ -16,6 +16,8 @@ export default function Settings({ data, onNavigate }) {
     products,
     toggleProductStatus,
     bulkSetCategoryStatus,
+    subcategories,
+    updateSubcategoryMeta,
     salesHistory,
     soldItems,
     allTables,
@@ -57,13 +59,24 @@ export default function Settings({ data, onNavigate }) {
 
   const menuGroups = useMemo(() => {
     const q = menuSearchQuery.trim().toLowerCase();
-    const groups = {};
+    const groups = {}; // kategori -> { altKategori -> [ürünler] }
     products.forEach((p) => {
+      if (p.isAzVariant) return; // Az varyantı, ana ürünün "Az Porsiyonlu" tikiyle yönetiliyor
       if (q && !p.ad.toLowerCase().includes(q)) return;
-      (groups[p.kategori] = groups[p.kategori] || []).push(p);
+      const alt = p.altKategori || '';
+      groups[p.kategori] = groups[p.kategori] || {};
+      (groups[p.kategori][alt] = groups[p.kategori][alt] || []).push(p);
     });
     return groups;
   }, [products, menuSearchQuery]);
+
+  function sortedSubKeys(kategori, subMap) {
+    return Object.keys(subMap).sort((a, b) => {
+      const sa = subcategories.find((s) => s.kategori === kategori && s.name === a);
+      const sb = subcategories.find((s) => s.kategori === kategori && s.name === b);
+      return (sa?.menuSirasi ?? 50) - (sb?.menuSirasi ?? 50) || a.localeCompare(b, 'tr');
+    });
+  }
 
   // ---- Gün Sonu ----
   const [eodConfirmOpen, setEodConfirmOpen] = useState(false);
@@ -478,7 +491,7 @@ export default function Settings({ data, onNavigate }) {
 
             <div className="st-menu-list">
               {Object.keys(menuGroups).length === 0 && <p className="st-menu-empty">Sonuç bulunamadı</p>}
-              {Object.entries(menuGroups).map(([kategori, items]) => (
+              {Object.entries(menuGroups).map(([kategori, subMap]) => (
                 <div key={kategori} className="st-menu-group">
                   <div className="st-menu-group-head">
                     <span>{kategori}</span>
@@ -487,17 +500,40 @@ export default function Settings({ data, onNavigate }) {
                       <button onClick={() => bulkSetCategoryStatus(kategori, 'PASIF')}>Hepsini Kapat</button>
                     </div>
                   </div>
-                  {items.map((p) => {
-                    const isActive = p.durum !== 'PASIF';
+                  {sortedSubKeys(kategori, subMap).map((alt) => {
+                    const sub = subcategories.find((s) => s.kategori === kategori && s.name === alt);
                     return (
-                      <div key={p.id} className="st-menu-item">
-                        <span className={isActive ? '' : 'inactive'}>{p.ad}</span>
-                        <button
-                          className={`st-toggle ${isActive ? 'on' : ''}`}
-                          onClick={() => toggleProductStatus(p.id)}
-                        >
-                          <span className="st-toggle-knob" />
-                        </button>
+                      <div key={alt || '_'} className="st-submenu-group">
+                        {alt && (
+                          <div className="st-submenu-head">
+                            <span>{alt}</span>
+                            {sub && (
+                              <input
+                                type="number"
+                                min={1}
+                                max={100}
+                                className="st-submenu-order"
+                                value={sub.menuSirasi}
+                                onChange={(e) => updateSubcategoryMeta(kategori, alt, { menuSirasi: parseInt(e.target.value, 10) || 1 })}
+                                title="Menü Sırası (1-100)"
+                              />
+                            )}
+                          </div>
+                        )}
+                        {subMap[alt].map((p) => {
+                          const isActive = p.durum !== 'PASIF';
+                          return (
+                            <div key={p.id} className="st-menu-item">
+                              <span className={isActive ? '' : 'inactive'}>{p.ad}</span>
+                              <button
+                                className={`st-toggle ${isActive ? 'on' : ''}`}
+                                onClick={() => toggleProductStatus(p.id)}
+                              >
+                                <span className="st-toggle-knob" />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })}

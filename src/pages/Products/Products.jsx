@@ -10,6 +10,7 @@ export default function Products({ data, onNavigate }) {
   // ---- Taslak (draft) durumu — Kaydet'e basılana kadar hiçbir şey canlıya yansımaz ----
   const [draftProducts, setDraftProducts] = useState(() => data.products);
   const [draftCategories, setDraftCategories] = useState(() => data.categories);
+  const [draftSubcategories, setDraftSubcategories] = useState(() => data.subcategories);
   const [dirty, setDirty] = useState(false);
 
   const [toast, setToast] = useState('');
@@ -110,6 +111,11 @@ export default function Products({ data, onNavigate }) {
     setDirty(true);
   }
 
+  function localUpdateSubcategoryMeta(kategori, name, patch) {
+    setDraftSubcategories((prev) => prev.map((s) => (s.kategori === kategori && s.name === name ? { ...s, ...patch } : s)));
+    setDirty(true);
+  }
+
   // ---- Kaydet / Vazgeç ----
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const [pullConfirmOpen, setPullConfirmOpen] = useState(false);
@@ -117,6 +123,7 @@ export default function Products({ data, onNavigate }) {
   function handleDiscard() {
     setDraftProducts(data.products);
     setDraftCategories(data.categories);
+    setDraftSubcategories(data.subcategories);
     setDirty(false);
     showToast('Değişiklikler geri alındı');
   }
@@ -124,6 +131,7 @@ export default function Products({ data, onNavigate }) {
   function confirmSave() {
     data.setProducts(draftProducts);
     data.setCategories(draftCategories);
+    data.setSubcategories(draftSubcategories);
     setDirty(false);
     setSaveConfirmOpen(false);
     showToast('Kaydedildi');
@@ -200,6 +208,26 @@ export default function Products({ data, onNavigate }) {
       .sort((a, b) => a.menuSirasi - b.menuSirasi || a.ad.localeCompare(b.ad, 'tr'));
   }
 
+  function subcategoriesForCategory(kategori) {
+    return draftSubcategories
+      .filter((s) => s.kategori === kategori)
+      .sort((a, b) => a.menuSirasi - b.menuSirasi || a.name.localeCompare(b.name, 'tr'));
+  }
+
+  function groupedByAlt(kategori) {
+    const items = productsForCategory(kategori);
+    const subs = subcategoriesForCategory(kategori);
+    const map = {};
+    items.forEach((p) => {
+      const alt = p.altKategori || '';
+      (map[alt] = map[alt] || []).push(p);
+    });
+    // alt kategori sırasını subs listesine göre kur, subs'ta olmayan (ör. boş) grupları sona ekle
+    const ordered = subs.filter((s) => map[s.name]).map((s) => s.name);
+    Object.keys(map).forEach((k) => { if (!ordered.includes(k)) ordered.push(k); });
+    return ordered.map((alt) => ({ alt, items: map[alt], sub: subs.find((s) => s.name === alt) }));
+  }
+
   // ---- Scroll yardımcı okları ----
   const listRef = useRef(null);
   function scrollList(direction) {
@@ -253,7 +281,6 @@ export default function Products({ data, onNavigate }) {
               </div>
             ) : (
               sortedCategories.map((cat) => {
-                const items = productsForCategory(cat.name);
                 return (
                   <div key={cat.name} className="pr-category-block">
                     <div className="pr-category-head">
@@ -286,16 +313,36 @@ export default function Products({ data, onNavigate }) {
                       </div>
                     </div>
 
-                    {items.length === 0 && <p className="pr-empty">Bu kategoride ürün yok</p>}
-                    {items.map((p) => (
-                      <ProductRow
-                        key={p.id}
-                        product={p}
-                        onToggle={() => localToggleProductStatus(p.id)}
-                        onUpdate={(patch) => localUpdateProduct(p.id, patch)}
-                        onDelete={() => localDeleteProduct(p.id)}
-                        onSetAz={(enabled, fiyat) => localSetAzPorsiyon(p.id, enabled, fiyat)}
-                      />
+                    {groupedByAlt(cat.name).length === 0 && <p className="pr-empty">Bu kategoride ürün yok</p>}
+                    {groupedByAlt(cat.name).map(({ alt, items, sub }) => (
+                      <div key={alt || '_'} className="pr-subcat-block">
+                        {alt && (
+                          <div className="pr-subcat-head">
+                            <span>{alt}</span>
+                            {sub && (
+                              <input
+                                type="number"
+                                min={1}
+                                max={100}
+                                className="pr-order-input small"
+                                value={sub.menuSirasi}
+                                onChange={(e) => localUpdateSubcategoryMeta(cat.name, alt, { menuSirasi: parseInt(e.target.value, 10) || 1 })}
+                                title="Alt Kategori Menü Sırası (1-100)"
+                              />
+                            )}
+                          </div>
+                        )}
+                        {items.map((p) => (
+                          <ProductRow
+                            key={p.id}
+                            product={p}
+                            onToggle={() => localToggleProductStatus(p.id)}
+                            onUpdate={(patch) => localUpdateProduct(p.id, patch)}
+                            onDelete={() => localDeleteProduct(p.id)}
+                            onSetAz={(enabled, fiyat) => localSetAzPorsiyon(p.id, enabled, fiyat)}
+                          />
+                        ))}
+                      </div>
                     ))}
                   </div>
                 );

@@ -245,6 +245,21 @@
 .st-menu-list { flex: 1; overflow-y: auto; margin-bottom: 12px; }
 .st-menu-empty { font-size: 12.5px; color: var(--ink-soft); font-style: italic; text-align: center; padding: 20px 0; }
 .st-menu-group { margin-bottom: 14px; }
+.st-submenu-group { margin: 6px 0 10px 10px; padding-left: 8px; border-left: 2px solid var(--border-soft); }
+.st-submenu-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.st-submenu-head > span { font-size: 10.5px; font-weight: 700; color: var(--earth); text-transform: uppercase; letter-spacing: 0.04em; }
+.st-submenu-order {
+  width: 38px;
+  height: 22px;
+  text-align: center;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.st-submenu-order:focus { outline: 2px solid var(--olive); background: #fff; }
+
 .st-menu-group-head {
   display: flex;
   justify-content: space-between;
