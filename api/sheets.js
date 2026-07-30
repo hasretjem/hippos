@@ -1,9 +1,13 @@
 import { google } from 'googleapis';
 
 function getAuth() {
-  const email = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
-  const key = (process.env.GOOGLE_SHEETS_PRIVATE_KEY || '').replace(/\\n/g, '\n');
-  return new google.auth.JWT(email, null, key, ['https://www.googleapis.com/auth/spreadsheets']);
+  // Servis hesabı kimlik bilgileri tek parça base64 olarak tutuluyor — böylece
+  // private_key içindeki satır sonları Vercel'in metin kutusunda asla bozulmuyor.
+  const b64 = process.env.GOOGLE_SERVICE_ACCOUNT_B64;
+  const creds = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
+  return new google.auth.JWT(creds.client_email, null, creds.private_key, [
+    'https://www.googleapis.com/auth/spreadsheets',
+  ]);
 }
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
