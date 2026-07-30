@@ -461,6 +461,13 @@ export default function useHipposData() {
   const [products, setProducts] = useState(() => loadLS('hippos_products', DEFAULT_PRODUCTS));
   const [categories, setCategories] = useState(() => loadLS('hippos_categories', DEFAULT_CATEGORIES));
   const [subcategories, setSubcategories] = useState(() => loadLS('hippos_subcategories', DEFAULT_SUBCATEGORIES));
+
+  // ---- CARİ VERİSİ — asla Google Sheets'e gitmez, sadece burada (ileride Supabase'te) yaşar ----
+  const [cariler, setCariler] = useState(() => loadLS('hippos_cariler', []));
+  const [cariHareketler, setCariHareketler] = useState(() => loadLS('hippos_cari_hareketler', []));
+  const [cariOdemeler, setCariOdemeler] = useState(() => loadLS('hippos_cari_odemeler', []));
+  const [cariFaturalar, setCariFaturalar] = useState(() => loadLS('hippos_cari_faturalar', []));
+  const [cariGecmis, setCariGecmis] = useState(() => loadLS('hippos_cari_gecmis', []));
   const [favorites, setFavorites] = useState(() => loadLS('hippos_favorites', [104, 101, 105]));
   const [packages, setPackages] = useState(() => loadLS('hippos_packages', [])); // [{name:'Paket 1', num:1}]
   const [packageMeta, setPackageMeta] = useState(() => loadLS('hippos_package_meta', { date: todayStr(), next: 1 }));
@@ -482,6 +489,11 @@ export default function useHipposData() {
   useEffect(() => localStorage.setItem('hippos_products', JSON.stringify(products)), [products]);
   useEffect(() => localStorage.setItem('hippos_categories', JSON.stringify(categories)), [categories]);
   useEffect(() => localStorage.setItem('hippos_subcategories', JSON.stringify(subcategories)), [subcategories]);
+  useEffect(() => localStorage.setItem('hippos_cariler', JSON.stringify(cariler)), [cariler]);
+  useEffect(() => localStorage.setItem('hippos_cari_hareketler', JSON.stringify(cariHareketler)), [cariHareketler]);
+  useEffect(() => localStorage.setItem('hippos_cari_odemeler', JSON.stringify(cariOdemeler)), [cariOdemeler]);
+  useEffect(() => localStorage.setItem('hippos_cari_faturalar', JSON.stringify(cariFaturalar)), [cariFaturalar]);
+  useEffect(() => localStorage.setItem('hippos_cari_gecmis', JSON.stringify(cariGecmis)), [cariGecmis]);
   useEffect(() => localStorage.setItem('hippos_orders', JSON.stringify(orders)), [orders]);
   useEffect(() => localStorage.setItem('hippos_table_notes', JSON.stringify(tableNotes)), [tableNotes]);
   useEffect(() => localStorage.setItem('hippos_table_discounts', JSON.stringify(tableDiscounts)), [tableDiscounts]);
@@ -622,6 +634,74 @@ export default function useHipposData() {
 
   function updateSubcategoryMeta(kategori, name, patch) {
     setSubcategories((prev) => prev.map((s) => (s.kategori === kategori && s.name === name ? { ...s, ...patch } : s)));
+  }
+
+  // ================== CARİ YÖNETİMİ ==================
+  function getCariBakiye(cariId) {
+    const borc = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
+    const odenen = cariOdemeler.filter((o) => o.cariId === cariId).reduce((s, o) => s + o.tutar, 0);
+    return Math.max(0, borc - odenen);
+  }
+
+  function getCariSonHareket(cariId) {
+    const list = cariHareketler.filter((h) => h.cariId === cariId).sort((a, b) => b.ts - a.ts);
+    return list[0] || null;
+  }
+
+  function getCariSonOdeme(cariId) {
+    const list = cariOdemeler.filter((o) => o.cariId === cariId).sort((a, b) => b.ts - a.ts);
+    return list[0] || null;
+  }
+
+  function addCari({ tip, ad, telefon, adres, not: notu }) {
+    const id = Date.now() + Math.random();
+    setCariler((prev) => [
+      ...prev,
+      { id, tip, ad, telefon: telefon || '', adres: adres || '', not: notu || '', aciklama: '', olusturmaTs: Date.now() },
+    ]);
+    return id;
+  }
+
+  function updateCari(id, patch) {
+    setCariler((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  }
+
+  // Bir siparişi (Masalar/Hızlı Satış'tan) bir cariye hareket olarak işler.
+  function addCariHareket(cariId, { urunler, toplam, mutfakNotu }) {
+    const id = Date.now() + Math.random();
+    setCariHareketler((prev) => [...prev, { id, cariId, ts: Date.now(), urunler, toplam, mutfakNotu: mutfakNotu || '' }]);
+    return id;
+  }
+
+  function addCariOdeme(cariId, { tutar, tur }) {
+    const id = Date.now() + Math.random();
+    setCariOdemeler((prev) => [...prev, { id, cariId, ts: Date.now(), tutar, tur }]);
+    return id;
+  }
+
+  // Firma carilerinde: o ana kadarki faturalanmamış bakiyeyi bir faturaya bağlar.
+  function addCariFatura(cariId, { tarih, faturaNo, tutar }) {
+    const id = Date.now() + Math.random();
+    setCariFaturalar((prev) => [...prev, { id, cariId, tarih, faturaNo, tutar, eklenmeTs: Date.now() }]);
+    return id;
+  }
+
+  function getCariFaturalanmamisTutar(cariId) {
+    const toplamHareket = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
+    const faturalanan = cariFaturalar.filter((f) => f.cariId === cariId).reduce((s, f) => s + f.tutar, 0);
+    return Math.max(0, toplamHareket - faturalanan);
+  }
+
+  // Bakiye sıfırlanınca geçmişi silmez — tek satırlık özet olarak arşivler, cariyi listeden gizler.
+  function archiveCari(cariId) {
+    const toplam = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
+    setCariGecmis((prev) => [
+      ...prev,
+      { id: Date.now() + Math.random(), cariId, ts: Date.now(), toplamTutar: toplam, aciklama: 'Tamamlandı' },
+    ]);
+    setCariHareketler((prev) => prev.filter((h) => h.cariId !== cariId));
+    setCariOdemeler((prev) => prev.filter((o) => o.cariId !== cariId));
+    setCariFaturalar((prev) => prev.filter((f) => f.cariId !== cariId));
   }
 
   // ---- Ürün yönetimi (Ürünler sayfası) ----
@@ -831,6 +911,21 @@ export default function useHipposData() {
     setSubcategories,
     addSubcategory,
     updateSubcategoryMeta,
+    cariler,
+    cariHareketler,
+    cariOdemeler,
+    cariFaturalar,
+    cariGecmis,
+    getCariBakiye,
+    getCariSonHareket,
+    getCariSonOdeme,
+    addCari,
+    updateCari,
+    addCariHareket,
+    addCariOdeme,
+    addCariFatura,
+    getCariFaturalanmamisTutar,
+    archiveCari,
     favorites,
     toggleFavorite,
     allTables,

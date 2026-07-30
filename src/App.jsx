@@ -3,6 +3,7 @@ import DirectSale from './pages/DirectSale/DirectSale';
 import Tables from './pages/Tables/Tables';
 import Settings from './pages/Settings/Settings';
 import Products from './pages/Products/Products';
+import Cariler from './pages/Cariler/Cariler';
 import BottomNav from './components/BottomNav/BottomNav';
 import useHipposData, { QUICK_SALE } from './hooks/useHipposData';
 import { supabase } from './services/supabase';
@@ -28,7 +29,7 @@ export default function App() {
   }, []);
 
   function handleNavigate(page) {
-    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products') {
+    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler') {
       setActivePage(page);
     } else {
       // Kasa & Rapor, Gün Sonu sayfaları henüz hazır değil
@@ -54,6 +55,9 @@ export default function App() {
       )}
       {activePage === 'products' && (
         <Products data={data} onNavigate={handleNavigate} />
+      )}
+      {activePage === 'cariler' && (
+        <Cariler data={data} onNavigate={handleNavigate} />
       )}
       {activePage !== 'products' && <BottomNav activePage={activePage} onNavigate={handleNavigate} />}
     </>

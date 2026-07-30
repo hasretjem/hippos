@@ -1,10 +1,11 @@
 import React from 'react';
 import './BottomNav.css';
-import { Home, Table2, BarChart3, Settings } from 'lucide-react';
+import { Home, Table2, BarChart3, Settings, Wallet } from 'lucide-react';
 
 const ITEMS = [
   { key: 'pos', label: 'Ana Sayfa (POS)', Icon: Home },
   { key: 'tables', label: 'Masalar', Icon: Table2 },
+  { key: 'cariler', label: 'Cariler', Icon: Wallet },
   { key: 'reports', label: 'Kasa & Rapor', Icon: BarChart3 },
   { key: 'settings', label: 'Yönetim Paneli', Icon: Settings },
 ];

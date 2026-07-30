@@ -26,6 +26,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     getTableTotal,
     categories: rawCategories,
     subcategories,
+    cariler,
+    addCari,
+    addCariHareket,
   } = data;
 
   // ---- Ekran durumu ----
@@ -278,6 +281,57 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   function handleSend() {
     onNavigate('tables');
   }
+
+  // ---- Cariye gönder ----
+  const [cariPickerOpen, setCariPickerOpen] = useState(false);
+  const [cariSearch, setCariSearch] = useState('');
+  const [cariYeniForm, setCariYeniForm] = useState(null); // { ad, telefon }
+
+  function openCariPicker() {
+    setCariSearch('');
+    setCariYeniForm(null);
+    setCariPickerOpen(true);
+  }
+
+  function handlePayToCari(cariId) {
+    const payable = currentOrder.filter((i) => !i.note);
+    if (payable.length === 0) return;
+    const selected = payable.filter((i) => i.selected);
+    const toClose = selected.length > 0 ? selected : payable;
+    const closedIds = new Set(toClose.map((i) => i.id));
+    const totalPay = toClose.reduce((s, i) => s + i.fiyat, 0);
+    const mutfakNotu = currentOrder.filter((i) => i.note).map((i) => i.ad).join(' · ');
+
+    setSalesHistory((prev) => [
+      { id: Date.now(), ts: Date.now(), table: selectedTable, amount: totalPay, method: 'CARİ', itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+      ...prev,
+    ]);
+    logSoldItems(toClose, selectedTable);
+    addCariHareket(cariId, {
+      urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
+      toplam: totalPay,
+      mutfakNotu,
+    });
+
+    const remaining = currentOrder.filter((i) => !closedIds.has(i.id));
+    setOrders((prev) => ({ ...prev, [selectedTable]: remaining }));
+    if (remaining.length === 0) {
+      setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
+    }
+    setCariPickerOpen(false);
+    setPayMode(false);
+    showToast('Cariye gönderildi');
+  }
+
+  function submitYeniCariFromPos() {
+    if (!cariYeniForm || !cariYeniForm.ad.trim()) return;
+    const id = addCari({ tip: 'bireysel', ad: cariYeniForm.ad.trim(), telefon: cariYeniForm.telefon || '', adres: '', not: '' });
+    handlePayToCari(id);
+  }
+
+  const filteredCariler = (cariler || []).filter(
+    (c) => !cariSearch.trim() || c.ad.toLowerCase().includes(cariSearch.trim().toLowerCase())
+  );
 
   function handleClearTable() {
     if (currentOrder.length === 0) return;
@@ -702,13 +756,72 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               <button className="meal" onClick={() => handlePay('YEMEK KARTI')}>
                 <UtensilsCrossed size={19} /><span className="lbl">Yemek K.</span>
               </button>
-              <button className="credit" onClick={() => handlePay('CARİ')}>
+              <button className="credit" onClick={openCariPicker}>
                 <BookOpen size={19} /><span className="lbl">Cari</span>
               </button>
             </div>
             <button className="ds-pay-back-btn" onClick={() => setPayMode(false)}>
               <Undo2 size={14} /> Geri
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* CARİ SEÇ MODALI */}
+      {cariPickerOpen && (
+        <div className="ds-modal-overlay" onClick={() => setCariPickerOpen(false)}>
+          <div className="ds-modal ds-table-picker-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ds-modal-head">
+              <h3>Cariye Gönder</h3>
+              <button className="ds-modal-x" onClick={() => setCariPickerOpen(false)}><X size={16} /></button>
+            </div>
+            {cariYeniForm ? (
+              <>
+                <input
+                  autoFocus
+                  className="ds-modal-search"
+                  placeholder="Ad Soyad"
+                  value={cariYeniForm.ad}
+                  onChange={(e) => setCariYeniForm((f) => ({ ...f, ad: e.target.value }))}
+                />
+                <input
+                  className="ds-modal-search"
+                  placeholder="Telefon (opsiyonel)"
+                  value={cariYeniForm.telefon}
+                  onChange={(e) => setCariYeniForm((f) => ({ ...f, telefon: e.target.value }))}
+                />
+                <div className="ds-modal-footer two">
+                  <button className="ds-secondary-btn" onClick={() => setCariYeniForm(null)}>Geri</button>
+                  <button className="ds-primary-btn" onClick={submitYeniCariFromPos}>Oluştur ve Gönder</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <input
+                  autoFocus
+                  className="ds-modal-search"
+                  placeholder="Cari ara..."
+                  value={cariSearch}
+                  onChange={(e) => setCariSearch(e.target.value)}
+                />
+                <div className="ds-table-picker-list">
+                  {filteredCariler.map((c) => (
+                    <button key={c.id} onClick={() => handlePayToCari(c.id)}>
+                      <span className="name">{c.ad}</span>
+                      <span className="meta">{c.tip === 'firma' ? 'Firma' : 'Bireysel'}{c.telefon ? ` — ${c.telefon}` : ''}</span>
+                    </button>
+                  ))}
+                  {filteredCariler.length === 0 && (
+                    <p style={{ fontSize: '12px', color: 'var(--ink-soft)', fontStyle: 'italic', padding: '8px 4px' }}>
+                      Sonuç yok
+                    </p>
+                  )}
+                </div>
+                <button className="ds-primary-btn" style={{ width: '100%', marginTop: '10px' }} onClick={() => setCariYeniForm({ ad: '', telefon: '' })}>
+                  + Yeni Cari
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
