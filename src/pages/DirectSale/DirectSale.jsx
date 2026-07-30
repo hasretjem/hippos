@@ -16,6 +16,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     orders,
     setOrders,
     updateOrder,
+    addOrderItemAtomic,
     tableNotes,
     setTableNotes,
     updateTableNote,
@@ -103,28 +104,30 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
   // ---- Ürün işlemleri ----
   function addProductToOrder(product) {
-    updateOrder(selectedTable, (items) => {
-      let isDuplicate = false;
-      let base = items;
-      if (items.length > 0) {
-        const last = items[items.length - 1];
-        if (!last.note && last.ad === product.ad) {
-          isDuplicate = true;
-          base = items.map((it, i) => (i === items.length - 1 ? { ...it, persistentHighlight: true } : it));
-        }
-      }
-      const newItem = {
-        id: Date.now() + Math.random(),
-        ad: product.ad,
-        fiyat: product.fiyat,
-        kategori: product.kategori,
-        altKategori: product.altKategori,
-        selected: false,
-        note: product.fiyat === 0,
-        persistentHighlight: isDuplicate,
-      };
-      return [...base, newItem];
-    });
+    const items = currentOrder;
+    let isDuplicate = false;
+    if (items.length > 0) {
+      const last = items[items.length - 1];
+      if (!last.note && last.ad === product.ad) isDuplicate = true;
+    }
+    const newItem = {
+      id: Date.now() + Math.random(),
+      ad: product.ad,
+      fiyat: product.fiyat,
+      kategori: product.kategori,
+      altKategori: product.altKategori,
+      selected: false,
+      note: product.fiyat === 0,
+      persistentHighlight: isDuplicate,
+    };
+    if (isDuplicate) {
+      // Art arda aynı ürüne basıldığını göstermek için önceki satırı da vurgula (sadece görsel).
+      updateOrder(selectedTable, (curItems) =>
+        curItems.map((it, i) => (i === curItems.length - 1 ? { ...it, persistentHighlight: true } : it))
+      );
+    }
+    // Asıl ekleme ATOMİK — iki cihaz aynı anda ürün eklerse birbirini silmesin diye.
+    addOrderItemAtomic(selectedTable, newItem);
   }
 
   function removeItem(id) {

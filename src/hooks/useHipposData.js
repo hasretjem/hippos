@@ -820,6 +820,9 @@ export default function useHipposData() {
   // Önceki "her değişiklikte tüm masaları toptan gönder" yaklaşımı, iki cihaz aynı anda işlem
   // yapınca birbirinin verisinin üzerine eski bir kopya yazıyordu (yarış durumu / veri kaybı riski).
   const prevTableStateRef = useRef({ orders: {}, tableNotes: {}, tableDiscounts: {}, tableOpenedAt: {} });
+  // addOrderItemAtomic zaten kendi atomik isteğini gönderdi — bu masanın "items" alanını
+  // bir sonraki toptan senkron turunda TEKRAR yazmayalım (çift yazma = yeniden yarış riski).
+  const skipItemsUploadRef = useRef(new Set()).current;
   useEffect(() => {
     const prev = prevTableStateRef.current;
     const changed = new Set();
@@ -832,15 +835,23 @@ export default function useHipposData() {
     prevTableStateRef.current = { orders, tableNotes, tableDiscounts, tableOpenedAt };
     if (changed.size === 0) return;
 
-    const rows = [...changed].map((t) => ({
-      table_name: t,
-      items: orders[t] || [],
-      note: tableNotes[t] || '',
-      discount_type: (tableDiscounts[t] || {}).type ?? null,
-      discount_value: (tableDiscounts[t] || {}).value ?? 0,
-      opened_at: tableOpenedAt[t] ? new Date(tableOpenedAt[t]).toISOString() : null,
-      updated_at: new Date().toISOString(),
-    }));
+    const rows = [...changed]
+      .map((t) => {
+        const row = {
+          table_name: t,
+          note: tableNotes[t] || '',
+          discount_type: (tableDiscounts[t] || {}).type ?? null,
+          discount_value: (tableDiscounts[t] || {}).value ?? 0,
+          opened_at: tableOpenedAt[t] ? new Date(tableOpenedAt[t]).toISOString() : null,
+          updated_at: new Date().toISOString(),
+        };
+        if (skipItemsUploadRef.has(t)) {
+          skipItemsUploadRef.delete(t);
+        } else {
+          row.items = orders[t] || [];
+        }
+        return row;
+      });
     supabase.from('table_state').upsert(rows, { onConflict: 'table_name' }).then(({ error }) => {
       if (error) console.error('Masa durumu senkronize edilemedi:', error.message);
     });
@@ -887,6 +898,25 @@ export default function useHipposData() {
         });
       }
       return { ...prev, [table]: after };
+    });
+  }
+
+  // Tek bir ürünü ATOMİK olarak ekler — iki cihaz aynı masaya aynı anda ürün eklerse
+  // birbirini SİLMEZ (veritabanı isteği sıraya koyar). Ekranda anında görünmesi için
+  // önce yerel olarak da ekliyoruz, arkadan gerçek zamanlı abonelik zaten doğrulayacak.
+  function addOrderItemAtomic(table, item) {
+    setOrders((prev) => {
+      const before = prev[table] || [];
+      const after = [...before, item];
+      if (before.length === 0) {
+        setTableOpenedAt((p) => (p[table] ? p : { ...p, [table]: Date.now() }));
+        registerPackageIfNeeded(table);
+      }
+      return { ...prev, [table]: after };
+    });
+    skipItemsUploadRef.add(table);
+    supabase.rpc('append_order_item', { p_table_name: table, p_item: item }).then(({ error }) => {
+      if (error) console.error('ürün eklenemedi (atomik):', error.message);
     });
   }
 
@@ -1230,6 +1260,7 @@ export default function useHipposData() {
     orders,
     setOrders,
     updateOrder,
+    addOrderItemAtomic,
     tableNotes,
     setTableNotes,
     updateTableNote,
@@ -1267,4 +1298,4 @@ export default function useHipposData() {
     getCariFaturalanmamisTutar,
     archiveCari,
   };
-}
+} 
