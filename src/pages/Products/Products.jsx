@@ -128,18 +128,41 @@ export default function Products({ data, onNavigate }) {
     showToast('Değişiklikler geri alındı');
   }
 
-  function confirmSave() {
+  async function confirmSave() {
     data.setProducts(draftProducts);
     data.setCategories(draftCategories);
     data.setSubcategories(draftSubcategories);
     setDirty(false);
     setSaveConfirmOpen(false);
-    showToast('Kaydedildi');
+    showToast('Kaydediliyor ve Sheets\'e yazılıyor...');
+    try {
+      const res = await fetch('/api/sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products: draftProducts, categories: draftCategories, subcategories: draftSubcategories }),
+      });
+      if (!res.ok) throw new Error('sync failed');
+      showToast('Kaydedildi, Sheets güncellendi');
+    } catch {
+      showToast('Kaydedildi ama Sheets\'e yazılamadı — bağlantıyı kontrol et');
+    }
   }
 
-  function confirmPull() {
+  async function confirmPull() {
     setPullConfirmOpen(false);
-    showToast('Google Sheets bağlantısı henüz kurulmadı');
+    showToast('Sheet\'ten çekiliyor...');
+    try {
+      const res = await fetch('/api/sheets');
+      if (!res.ok) throw new Error('pull failed');
+      const json = await res.json();
+      setDraftProducts(json.products);
+      setDraftCategories(json.categories);
+      setDraftSubcategories(json.subcategories);
+      setDirty(true);
+      showToast('Sheet\'ten çekildi — kontrol edip Kaydet\'e bas');
+    } catch {
+      showToast('Sheet\'ten çekilemedi — bağlantıyı kontrol et');
+    }
   }
 
   // ---- Yeni kategori / yeni ürün modalları ----
@@ -378,7 +401,7 @@ export default function Products({ data, onNavigate }) {
           <div className="pr-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Değişiklikleri kaydet</h3>
             <p className="pr-modal-hint">
-              Değişiklikler Hippos'a kaydedilecek. <strong>Not:</strong> Google Sheets senkronizasyonu henüz kurulmadığı için şimdilik yalnızca burada saklanacak.
+              Değişiklikler Hippos'a kaydedilecek ve aynı anda Google Sheets'e de yazılacak.
             </p>
             <div className="pr-modal-footer">
               <button className="pr-secondary" onClick={() => setSaveConfirmOpen(false)}>Vazgeç</button>
