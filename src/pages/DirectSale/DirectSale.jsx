@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import './DirectSale.css';
-import { TL } from '../../hooks/useHipposData';
+import { TL, QUICK_SALE } from '../../hooks/useHipposData';
 import {
   Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
@@ -23,6 +23,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     setTableDiscounts,
     setSalesHistory,
     logSoldItems,
+    writeReceiptToSheets,
     getTableTotal,
     categories: rawCategories,
     subcategories,
@@ -268,6 +269,13 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       ...prev,
     ]);
     logSoldItems(toClose, selectedTable);
+    writeReceiptToSheets({
+      tur: selectedTable.startsWith('Paket ') ? 'Paket' : selectedTable === QUICK_SALE ? 'Hızlı Satış' : 'Masa',
+      masa: selectedTable,
+      toplam: totalPay,
+      odemeTuru: method,
+      urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
+    });
 
     const remaining = currentOrder.filter((i) => !closedIds.has(i.id));
     setOrders((prev) => ({ ...prev, [selectedTable]: remaining }));
@@ -311,6 +319,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
       toplam: totalPay,
       mutfakNotu,
+    });
+    const cariAdi = (cariler || []).find((c) => c.id === cariId)?.ad || 'Cari';
+    writeReceiptToSheets({
+      tur: 'Cari',
+      masa: cariAdi,
+      toplam: totalPay,
+      odemeTuru: 'CARİ',
+      urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
     });
 
     const remaining = currentOrder.filter((i) => !closedIds.has(i.id));

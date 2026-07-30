@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { supabase } from '../services/supabase';
 
-// ---- Varsayılan ürün kataloğu (ileride Supabase'ten gelecek) ----
 const DEFAULT_PRODUCTS = [
   { id: 1001, kategori: 'İÇECEKLER', altKategori: 'Sıcak İçeçekler', ad: 'ÇAY BÜYÜK', fiyat: 30, durum: 'AKTIF', menuSirasi: 1, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
   { id: 1002, kategori: 'İÇECEKLER', altKategori: 'Sıcak İçeçekler', ad: 'ÇAY KÜÇÜK', fiyat: 20, durum: 'AKTIF', menuSirasi: 2, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
@@ -374,7 +374,6 @@ const DEFAULT_PRODUCTS = [
   { id: 1370, kategori: 'Hazır Notlar', altKategori: 'Para Üstü', ad: 'Nakit 400 TL İçin', fiyat: 0, durum: 'AKTIF', menuSirasi: 2, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
   { id: 1371, kategori: 'Hazır Notlar', altKategori: 'Para Üstü', ad: 'TL Para Üstü Yanına al', fiyat: 0, durum: 'AKTIF', menuSirasi: 3, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
 ];
-
 const DEFAULT_CATEGORIES = [
   { name: 'İÇECEKLER', menuSirasi: 10, sabit: false },
   { name: 'KAHVALTI', menuSirasi: 20, sabit: false },
@@ -455,124 +454,64 @@ export function getColorTier(openedAt) {
   return 3;
 }
 
+// ---- Supabase satırı <-> uygulama nesnesi dönüşümleri ----
+function rowToSale(r) {
+  return { id: r.id, ts: Number(r.ts), table: r.table_name, amount: Number(r.amount), method: r.method, itemsCount: r.items_count, date: r.date_display };
+}
+function rowToSoldItem(r) {
+  return { id: r.id, ts: Number(r.ts), ad: r.ad, fiyat: Number(r.fiyat), kategori: r.kategori || '', altKategori: r.alt_kategori || '', table: r.table_name };
+}
+function rowToAction(r) {
+  return { id: r.id, description: r.description, time: r.time_display, snapshot: r.snapshot };
+}
+function rowToCari(r) {
+  return {
+    id: r.id,
+    tip: r.tip,
+    ad: r.ad,
+    telefon: r.telefon || '',
+    adres: r.adres || '',
+    not: r.kisa_not || '',
+    aciklama: r.aciklama || '',
+    olusturmaTs: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+  };
+}
+function rowToHareket(r) {
+  return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), urunler: r.urunler || [], toplam: Number(r.toplam), mutfakNotu: r.mutfak_notu || '' };
+}
+function rowToOdeme(r) {
+  return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), tutar: Number(r.tutar), tur: r.tur };
+}
+function rowToFatura(r) {
+  return { id: r.id, cariId: r.cari_id, tarih: r.tarih, faturaNo: r.fatura_no, tutar: Number(r.tutar), eklenmeTs: Number(r.eklenme_ts) };
+}
+function rowToGecmis(r) {
+  return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), toplamTutar: Number(r.toplam_tutar), aciklama: r.aciklama };
+}
+
 // Tüm sayfaların (DirectSale, Tables, Reports...) paylaştığı tek veri kaynağı.
 // App.jsx içinde BİR KEZ çağrılır, sonuçlar prop olarak sayfalara aktarılır.
+//
+// VERİ MİMARİSİ:
+//  - Ürün / kategori / alt kategori / favoriler: nadiren değişir, Google Sheets ile
+//    senkronize olur, tarayıcıda (localStorage) tutulur — bu kısım değişmedi.
+//  - Masalar / paketler / siparişler / satış geçmişi / cari: saniyeler içinde değişir,
+//    birden fazla cihaz aynı anda kullanacağı için Supabase'de tutulur ve gerçek
+//    zamanlı (realtime) abonelikle her cihaza anında yansır.
 export default function useHipposData() {
+  // ================== ÜRÜN / KATEGORİ (Sheets ile senkron, localStorage) ==================
   const [products, setProducts] = useState(() => loadLS('hippos_products', DEFAULT_PRODUCTS));
   const [categories, setCategories] = useState(() => loadLS('hippos_categories', DEFAULT_CATEGORIES));
   const [subcategories, setSubcategories] = useState(() => loadLS('hippos_subcategories', DEFAULT_SUBCATEGORIES));
-
-  // ---- CARİ VERİSİ — asla Google Sheets'e gitmez, sadece burada (ileride Supabase'te) yaşar ----
-  const [cariler, setCariler] = useState(() => loadLS('hippos_cariler', []));
-  const [cariHareketler, setCariHareketler] = useState(() => loadLS('hippos_cari_hareketler', []));
-  const [cariOdemeler, setCariOdemeler] = useState(() => loadLS('hippos_cari_odemeler', []));
-  const [cariFaturalar, setCariFaturalar] = useState(() => loadLS('hippos_cari_faturalar', []));
-  const [cariGecmis, setCariGecmis] = useState(() => loadLS('hippos_cari_gecmis', []));
   const [favorites, setFavorites] = useState(() => loadLS('hippos_favorites', [104, 101, 105]));
-  const [packages, setPackages] = useState(() => loadLS('hippos_packages', [])); // [{name:'Paket 1', num:1}]
-  const [packageMeta, setPackageMeta] = useState(() => loadLS('hippos_package_meta', { date: todayStr(), next: 1 }));
 
-  const allTables = useMemo(() => [...FIXED_TABLES, ...packages.map((p) => p.name)], [packages]);
-
-  const [orders, setOrders] = useState(() => ({ ...emptyTableMap(FIXED_TABLES, []), ...loadLS('hippos_orders', {}) }));
-  const [tableNotes, setTableNotes] = useState(() => ({ ...emptyTableMap(FIXED_TABLES, ''), ...loadLS('hippos_table_notes', {}) }));
-  const [tableDiscounts, setTableDiscounts] = useState(() => ({
-    ...emptyTableMap(FIXED_TABLES, () => ({ type: null, value: 0 })),
-    ...loadLS('hippos_table_discounts', {}),
-  }));
-  const [tableOpenedAt, setTableOpenedAt] = useState(() => loadLS('hippos_table_opened_at', {}));
-  const [salesHistory, setSalesHistory] = useState(() => loadLS('hippos_sales_history', []));
-  const [soldItems, setSoldItems] = useState(() => loadLS('hippos_sold_items', []));
-  const [actionHistory, setActionHistory] = useState(() => loadLS('hippos_action_history', []));
-
-  useEffect(() => localStorage.setItem('hippos_favorites', JSON.stringify(favorites)), [favorites]);
   useEffect(() => localStorage.setItem('hippos_products', JSON.stringify(products)), [products]);
   useEffect(() => localStorage.setItem('hippos_categories', JSON.stringify(categories)), [categories]);
   useEffect(() => localStorage.setItem('hippos_subcategories', JSON.stringify(subcategories)), [subcategories]);
-  useEffect(() => localStorage.setItem('hippos_cariler', JSON.stringify(cariler)), [cariler]);
-  useEffect(() => localStorage.setItem('hippos_cari_hareketler', JSON.stringify(cariHareketler)), [cariHareketler]);
-  useEffect(() => localStorage.setItem('hippos_cari_odemeler', JSON.stringify(cariOdemeler)), [cariOdemeler]);
-  useEffect(() => localStorage.setItem('hippos_cari_faturalar', JSON.stringify(cariFaturalar)), [cariFaturalar]);
-  useEffect(() => localStorage.setItem('hippos_cari_gecmis', JSON.stringify(cariGecmis)), [cariGecmis]);
-  useEffect(() => localStorage.setItem('hippos_orders', JSON.stringify(orders)), [orders]);
-  useEffect(() => localStorage.setItem('hippos_table_notes', JSON.stringify(tableNotes)), [tableNotes]);
-  useEffect(() => localStorage.setItem('hippos_table_discounts', JSON.stringify(tableDiscounts)), [tableDiscounts]);
-  useEffect(() => localStorage.setItem('hippos_table_opened_at', JSON.stringify(tableOpenedAt)), [tableOpenedAt]);
-  useEffect(() => localStorage.setItem('hippos_sales_history', JSON.stringify(salesHistory)), [salesHistory]);
-  useEffect(() => localStorage.setItem('hippos_sold_items', JSON.stringify(soldItems)), [soldItems]);
-  useEffect(() => localStorage.setItem('hippos_action_history', JSON.stringify(actionHistory)), [actionHistory]);
-  useEffect(() => localStorage.setItem('hippos_packages', JSON.stringify(packages)), [packages]);
-  useEffect(() => localStorage.setItem('hippos_package_meta', JSON.stringify(packageMeta)), [packageMeta]);
-
-  // Sayfa açılışında: ürünü ya da notu olmayan "hayalet" paketleri temizle
-  useEffect(() => {
-    setPackages((prev) =>
-      prev.filter((p) => (orders[p.name] && orders[p.name].length > 0) || (tableNotes[p.name] && tableNotes[p.name].trim()))
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Paket, ilk ürün ya da not eklendiğinde "gerçek" hale gelir (Paketler listesine kaydolur).
-  // Öncesinde hiçbir yerde görünmez — boş bırakılıp vazgeçilirse kutu hiç açılmamış olur.
-  function registerPackageIfNeeded(table) {
-    if (!table.startsWith('Paket ')) return;
-    setPackages((prev) => {
-      if (prev.some((p) => p.name === table)) return prev;
-      const num = parseInt(table.replace('Paket ', ''), 10) || 0;
-      return [...prev, { name: table, num }];
-    });
-  }
-
-  function updateTableNote(table, value) {
-    if (value.trim()) registerPackageIfNeeded(table);
-    setTableNotes((prev) => ({ ...prev, [table]: value }));
-  }
-
-  // Sipariş güncellemesi — masa boştan doluya geçince açılış saatini otomatik damgalar,
-  // doluyken boşalınca damgayı siler (masa "kapanmış" sayılır).
-  function updateOrder(table, updater) {
-    setOrders((prev) => {
-      const before = prev[table] || [];
-      const after = updater(before);
-      const wasEmpty = before.length === 0;
-      const nowEmpty = after.length === 0;
-      if (wasEmpty && !nowEmpty) {
-        setTableOpenedAt((p) => (p[table] ? p : { ...p, [table]: Date.now() }));
-        registerPackageIfNeeded(table);
-      } else if (!wasEmpty && nowEmpty) {
-        setTableOpenedAt((p) => {
-          if (!(table in p)) return p;
-          const n = { ...p };
-          delete n[table];
-          return n;
-        });
-      }
-      return { ...prev, [table]: after };
-    });
-  }
+  useEffect(() => localStorage.setItem('hippos_favorites', JSON.stringify(favorites)), [favorites]);
 
   function toggleFavorite(id) {
     setFavorites((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]));
-  }
-
-  // Ödemesi alınan ürünleri (Bugün paneli / en çok satanlar için) kalıcı günlüğüe yazar.
-  function logSoldItems(items, table) {
-    if (!items || items.length === 0) return;
-    const ts = Date.now();
-    setSoldItems((prev) => [
-      ...items
-        .filter((i) => !i.note)
-        .map((i) => ({
-          id: `${ts}-${i.id}`,
-          ad: i.ad,
-          fiyat: i.fiyat,
-          kategori: i.kategori || '',
-          altKategori: i.altKategori || '',
-          table,
-          ts,
-        })),
-      ...prev,
-    ]);
   }
 
   // Bir ürünü aç/kapa — "Az X" varyantı varsa onu da aynı duruma çeker (bağımsız açık olamaz).
@@ -594,8 +533,7 @@ export default function useHipposData() {
     setProducts((prev) =>
       prev.map((p) => {
         if (p.kategori !== kategori) return p;
-        if (durum === 'PASIF' && p.sabit) return p; // sabit ürün pasife düşmez
-        // Az varyantı, ana ürünle birlikte hareket eder (bağımsız kalmasın)
+        if (durum === 'PASIF' && p.sabit) return p;
         if (p.isAzVariant) {
           const parent = prev.find((q) => q.id === p.parentId);
           if (parent && parent.sabit && durum === 'PASIF') return p;
@@ -605,7 +543,6 @@ export default function useHipposData() {
     );
   }
 
-  // ---- Kategori yönetimi ----
   function addCategory(name) {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -620,7 +557,6 @@ export default function useHipposData() {
     setCategories((prev) => prev.map((c) => (c.name === name ? { ...c, ...patch } : c)));
   }
 
-  // ---- Alt kategori yönetimi ----
   function addSubcategory(kategori, name) {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -636,75 +572,6 @@ export default function useHipposData() {
     setSubcategories((prev) => prev.map((s) => (s.kategori === kategori && s.name === name ? { ...s, ...patch } : s)));
   }
 
-  // ================== CARİ YÖNETİMİ ==================
-  function getCariBakiye(cariId) {
-    const borc = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
-    const odenen = cariOdemeler.filter((o) => o.cariId === cariId).reduce((s, o) => s + o.tutar, 0);
-    return Math.max(0, borc - odenen);
-  }
-
-  function getCariSonHareket(cariId) {
-    const list = cariHareketler.filter((h) => h.cariId === cariId).sort((a, b) => b.ts - a.ts);
-    return list[0] || null;
-  }
-
-  function getCariSonOdeme(cariId) {
-    const list = cariOdemeler.filter((o) => o.cariId === cariId).sort((a, b) => b.ts - a.ts);
-    return list[0] || null;
-  }
-
-  function addCari({ tip, ad, telefon, adres, not: notu }) {
-    const id = Date.now() + Math.random();
-    setCariler((prev) => [
-      ...prev,
-      { id, tip, ad, telefon: telefon || '', adres: adres || '', not: notu || '', aciklama: '', olusturmaTs: Date.now() },
-    ]);
-    return id;
-  }
-
-  function updateCari(id, patch) {
-    setCariler((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-  }
-
-  // Bir siparişi (Masalar/Hızlı Satış'tan) bir cariye hareket olarak işler.
-  function addCariHareket(cariId, { urunler, toplam, mutfakNotu }) {
-    const id = Date.now() + Math.random();
-    setCariHareketler((prev) => [...prev, { id, cariId, ts: Date.now(), urunler, toplam, mutfakNotu: mutfakNotu || '' }]);
-    return id;
-  }
-
-  function addCariOdeme(cariId, { tutar, tur }) {
-    const id = Date.now() + Math.random();
-    setCariOdemeler((prev) => [...prev, { id, cariId, ts: Date.now(), tutar, tur }]);
-    return id;
-  }
-
-  // Firma carilerinde: o ana kadarki faturalanmamış bakiyeyi bir faturaya bağlar.
-  function addCariFatura(cariId, { tarih, faturaNo, tutar }) {
-    const id = Date.now() + Math.random();
-    setCariFaturalar((prev) => [...prev, { id, cariId, tarih, faturaNo, tutar, eklenmeTs: Date.now() }]);
-    return id;
-  }
-
-  function getCariFaturalanmamisTutar(cariId) {
-    const toplamHareket = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
-    const faturalanan = cariFaturalar.filter((f) => f.cariId === cariId).reduce((s, f) => s + f.tutar, 0);
-    return Math.max(0, toplamHareket - faturalanan);
-  }
-
-  // Bakiye sıfırlanınca geçmişi silmez — tek satırlık özet olarak arşivler, cariyi listeden gizler.
-  function archiveCari(cariId) {
-    const toplam = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
-    setCariGecmis((prev) => [
-      ...prev,
-      { id: Date.now() + Math.random(), cariId, ts: Date.now(), toplamTutar: toplam, aciklama: 'Tamamlandı' },
-    ]);
-    setCariHareketler((prev) => prev.filter((h) => h.cariId !== cariId));
-    setCariOdemeler((prev) => prev.filter((o) => o.cariId !== cariId));
-    setCariFaturalar((prev) => prev.filter((f) => f.cariId !== cariId));
-  }
-
-  // ---- Ürün yönetimi (Ürünler sayfası) ----
   function addProduct(product) {
     const id = Date.now() + Math.random();
     setProducts((prev) => [
@@ -735,7 +602,6 @@ export default function useHipposData() {
     setProducts((prev) => prev.filter((p) => p.id !== id && p.parentId !== id));
   }
 
-  // Az Porsiyon işaretlenince "Az <ad>" varyantını otomatik oluşturur/kaldırır.
   function setAzPorsiyon(id, enabled, azFiyat) {
     setProducts((prev) => {
       const parent = prev.find((p) => p.id === id);
@@ -763,16 +629,211 @@ export default function useHipposData() {
           parentId: id,
           isAzVariant: true,
         };
-        return [
-          ...prev.map((p) => (p.id === id ? { ...p, azPorsiyon: true, azFiyat } : p)),
-          azProduct,
-        ];
+        return [...prev.map((p) => (p.id === id ? { ...p, azPorsiyon: true, azFiyat } : p)), azProduct];
       }
-      // kapatılınca varyantı tamamen kaldır
       return prev
         .filter((p) => p.parentId !== id)
         .map((p) => (p.id === id ? { ...p, azPorsiyon: false, azFiyat: null } : p));
     });
+  }
+
+  // ================== CANLI VERİ (Supabase + gerçek zamanlı) ==================
+  const [orders, setOrders] = useState(() => emptyTableMap(FIXED_TABLES, []));
+  const [tableNotes, setTableNotes] = useState(() => emptyTableMap(FIXED_TABLES, ''));
+  const [tableDiscounts, setTableDiscounts] = useState(() => emptyTableMap(FIXED_TABLES, () => ({ type: null, value: 0 })));
+  const [tableOpenedAt, setTableOpenedAt] = useState({});
+  const [packages, setPackages] = useState([]);
+  const [packageMeta, setPackageMeta] = useState({ date: todayStr(), next: 1 });
+  const [salesHistory, setSalesHistory] = useState([]);
+  const [soldItems, setSoldItems] = useState([]);
+  const [actionHistory, setActionHistory] = useState([]);
+  const [cariler, setCariler] = useState([]);
+  const [cariHareketler, setCariHareketler] = useState([]);
+  const [cariOdemeler, setCariOdemeler] = useState([]);
+  const [cariFaturalar, setCariFaturalar] = useState([]);
+  const [cariGecmis, setCariGecmis] = useState([]);
+
+  const allTables = useMemo(() => [...FIXED_TABLES, ...packages.map((p) => p.name)], [packages]);
+
+  // ---- İlk yükleme + gerçek zamanlı abonelikler ----
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAll() {
+      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg] = await Promise.all([
+        supabase.from('table_state').select('*'),
+        supabase.from('packages').select('*'),
+        supabase.from('package_meta').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('sales_history').select('*'),
+        supabase.from('sold_items').select('*'),
+        supabase.from('action_history').select('*').order('created_at', { ascending: false }).limit(5),
+        supabase.from('cariler').select('*'),
+        supabase.from('cari_hareketler').select('*'),
+        supabase.from('cari_odemeler').select('*'),
+        supabase.from('cari_faturalar').select('*'),
+        supabase.from('cari_gecmis').select('*'),
+      ]);
+      if (cancelled) return;
+
+      const o = emptyTableMap(FIXED_TABLES, []);
+      const n = emptyTableMap(FIXED_TABLES, '');
+      const d = emptyTableMap(FIXED_TABLES, () => ({ type: null, value: 0 }));
+      const oa = {};
+      (ts.data || []).forEach((row) => {
+        o[row.table_name] = row.items || [];
+        n[row.table_name] = row.note || '';
+        d[row.table_name] = { type: row.discount_type, value: row.discount_value || 0 };
+        if (row.opened_at) oa[row.table_name] = new Date(row.opened_at).getTime();
+      });
+      setOrders(o);
+      setTableNotes(n);
+      setTableDiscounts(d);
+      setTableOpenedAt(oa);
+      setPackages((pk.data || []).map((r) => ({ name: r.name, num: r.num })));
+      if (pm.data) setPackageMeta({ date: pm.data.meta_date, next: pm.data.next_num });
+      setSalesHistory((sh.data || []).map(rowToSale).sort((a, b) => b.ts - a.ts));
+      setSoldItems((si.data || []).map(rowToSoldItem));
+      setActionHistory((ah.data || []).map(rowToAction));
+      setCariler((cr.data || []).map(rowToCari));
+      setCariHareketler((ch.data || []).map(rowToHareket));
+      setCariOdemeler((co.data || []).map(rowToOdeme));
+      setCariFaturalar((cf.data || []).map(rowToFatura));
+      setCariGecmis((cg.data || []).map(rowToGecmis));
+    }
+    loadAll();
+
+    const channel = supabase
+      .channel('hippos-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'table_state' }, (payload) => {
+        if (payload.eventType === 'DELETE') return;
+        const row = payload.new;
+        const t = row.table_name;
+        setOrders((prev) => ({ ...prev, [t]: row.items || [] }));
+        setTableNotes((prev) => ({ ...prev, [t]: row.note || '' }));
+        setTableDiscounts((prev) => ({ ...prev, [t]: { type: row.discount_type, value: row.discount_value || 0 } }));
+        setTableOpenedAt((prev) => {
+          const next = { ...prev };
+          if (row.opened_at) next[t] = new Date(row.opened_at).getTime();
+          else delete next[t];
+          return next;
+        });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'packages' }, () => {
+        supabase.from('packages').select('*').then(({ data }) => setPackages((data || []).map((r) => ({ name: r.name, num: r.num }))));
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'package_meta' }, (payload) => {
+        if (payload.new) setPackageMeta({ date: payload.new.meta_date, next: payload.new.next_num });
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sales_history' }, (payload) => {
+        setSalesHistory((prev) => (prev.some((s) => s.id === payload.new.id) ? prev : [rowToSale(payload.new), ...prev]));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sold_items' }, (payload) => {
+        setSoldItems((prev) => (prev.some((s) => s.id === payload.new.id) ? prev : [rowToSoldItem(payload.new), ...prev]));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'action_history' }, (payload) => {
+        setActionHistory((prev) => (prev.some((a) => a.id === payload.new.id) ? prev : [rowToAction(payload.new), ...prev].slice(0, 5)));
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cariler' }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          setCariler((prev) => prev.filter((c) => c.id !== payload.old.id));
+          return;
+        }
+        const row = rowToCari(payload.new);
+        setCariler((prev) => (prev.some((c) => c.id === row.id) ? prev.map((c) => (c.id === row.id ? row : c)) : [...prev, row]));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_hareketler' }, (payload) => {
+        setCariHareketler((prev) => (prev.some((h) => h.id === payload.new.id) ? prev : [...prev, rowToHareket(payload.new)]));
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_hareketler' }, (payload) => {
+        setCariHareketler((prev) => prev.filter((h) => h.id !== payload.old.id));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_odemeler' }, (payload) => {
+        setCariOdemeler((prev) => (prev.some((o) => o.id === payload.new.id) ? prev : [...prev, rowToOdeme(payload.new)]));
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_odemeler' }, (payload) => {
+        setCariOdemeler((prev) => prev.filter((o) => o.id !== payload.old.id));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_faturalar' }, (payload) => {
+        setCariFaturalar((prev) => (prev.some((f) => f.id === payload.new.id) ? prev : [...prev, rowToFatura(payload.new)]));
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_faturalar' }, (payload) => {
+        setCariFaturalar((prev) => prev.filter((f) => f.id !== payload.old.id));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_gecmis' }, (payload) => {
+        setCariGecmis((prev) => (prev.some((g) => g.id === payload.new.id) ? prev : [...prev, rowToGecmis(payload.new)]));
+      })
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // ---- Masa/paket/hızlı satış durumu için toplu senkron (herhangi bir değişiklik olduğunda) ----
+  useEffect(() => {
+    const rows = allTables.map((t) => ({
+      table_name: t,
+      items: orders[t] || [],
+      note: tableNotes[t] || '',
+      discount_type: (tableDiscounts[t] || {}).type ?? null,
+      discount_value: (tableDiscounts[t] || {}).value ?? 0,
+      opened_at: tableOpenedAt[t] ? new Date(tableOpenedAt[t]).toISOString() : null,
+      updated_at: new Date().toISOString(),
+    }));
+    if (rows.length === 0) return;
+    supabase.from('table_state').upsert(rows, { onConflict: 'table_name' }).then(({ error }) => {
+      if (error) console.error('Masa durumu senkronize edilemedi:', error.message);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, tableNotes, tableDiscounts, tableOpenedAt]);
+
+  // ---- Yeni satış kayıtlarını Supabase'e yaz (DirectSale doğrudan setSalesHistory çağırıyor) ----
+  const syncedSaleIdsRef = useRef(new Set()).current;
+  useEffect(() => {
+    const newOnes = salesHistory.filter((s) => !syncedSaleIdsRef.has(s.id));
+    if (newOnes.length === 0) return;
+    newOnes.forEach((s) => syncedSaleIdsRef.add(s.id));
+    const rows = newOnes.map((s) => ({ id: s.id, ts: s.ts, table_name: s.table, amount: s.amount, method: s.method, items_count: s.itemsCount, date_display: s.date }));
+    supabase.from('sales_history').insert(rows).then(({ error }) => {
+      if (error) console.error('Satış kaydı senkronize edilemedi:', error.message);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [salesHistory]);
+
+  // İlk yükleme sırasında Supabase'ten gelen kayıtları "zaten senkron" olarak işaretle
+  useEffect(() => {
+    salesHistory.forEach((s) => syncedSaleIdsRef.add(s.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sipariş güncellemesi — masa boştan doluya geçince açılış saatini otomatik damgalar,
+  // doluyken boşalınca damgayı siler (masa "kapanmış" sayılır). Gerçek yazma işi yukarıdaki
+  // toplu senkron efektinde oluyor.
+  function updateOrder(table, updater) {
+    setOrders((prev) => {
+      const before = prev[table] || [];
+      const after = updater(before);
+      const wasEmpty = before.length === 0;
+      const nowEmpty = after.length === 0;
+      if (wasEmpty && !nowEmpty) {
+        setTableOpenedAt((p) => (p[table] ? p : { ...p, [table]: Date.now() }));
+        registerPackageIfNeeded(table);
+      } else if (!wasEmpty && nowEmpty) {
+        setTableOpenedAt((p) => {
+          if (!(table in p)) return p;
+          const n = { ...p };
+          delete n[table];
+          return n;
+        });
+      }
+      return { ...prev, [table]: after };
+    });
+  }
+
+  function updateTableNote(table, value) {
+    if (value.trim()) registerPackageIfNeeded(table);
+    setTableNotes((prev) => ({ ...prev, [table]: value }));
   }
 
   function getTableTotal(table) {
@@ -792,12 +853,27 @@ export default function useHipposData() {
     if (meta.date !== todayStr()) meta = { date: todayStr(), next: 1 };
     const num = meta.next;
     const name = `Paket ${num}`;
-    // NOT: burada henüz packages listesine eklenmiyor — ürün ya da not girilmeden
-    // paket "gerçek" sayılmıyor (bkz. registerPackageIfNeeded).
-    setPackageMeta({ date: meta.date, next: num + 1 });
+    const nextMeta = { date: meta.date, next: num + 1 };
+    setPackageMeta(nextMeta);
     setTableNotes((prev) => ({ ...prev, [name]: '' }));
     setTableDiscounts((prev) => ({ ...prev, [name]: { type: null, value: 0 } }));
+    supabase
+      .from('package_meta')
+      .upsert({ id: 1, meta_date: nextMeta.date, next_num: nextMeta.next })
+      .then(({ error }) => { if (error) console.error('paket sayacı güncellenemedi:', error.message); });
     return name;
+  }
+
+  function registerPackageIfNeeded(table) {
+    if (!table.startsWith('Paket ')) return;
+    setPackages((prev) => {
+      if (prev.some((p) => p.name === table)) return prev;
+      const num = parseInt(table.replace('Paket ', ''), 10) || 0;
+      supabase.from('packages').insert({ name: table, num }).then(({ error }) => {
+        if (error) console.error('paket eklenemedi:', error.message);
+      });
+      return [...prev, { name: table, num }];
+    });
   }
 
   function removePackageRecord(name) {
@@ -808,6 +884,12 @@ export default function useHipposData() {
       delete n[name];
       return n;
     });
+    supabase.from('packages').delete().eq('name', name).then(({ error }) => {
+      if (error) console.error('paket silinemedi:', error.message);
+    });
+    supabase.from('table_state').delete().eq('table_name', name).then(({ error }) => {
+      if (error) console.error('paket durumu silinemedi:', error.message);
+    });
   }
 
   // ---- Geri al geçmişi (son 5 işlem, tam durum anlık görüntüsü ile) ----
@@ -815,9 +897,17 @@ export default function useHipposData() {
     return { orders, tableNotes, tableDiscounts, tableOpenedAt, packages, packageMeta };
   }
   function pushHistory(description) {
-    setActionHistory((prev) =>
-      [{ id: Date.now() + Math.random(), description, time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), snapshot: snapshotState() }, ...prev].slice(0, 5)
-    );
+    const entry = {
+      id: Date.now() + Math.random(),
+      description,
+      time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+      snapshot: snapshotState(),
+    };
+    setActionHistory((prev) => [entry, ...prev].slice(0, 5));
+    supabase
+      .from('action_history')
+      .insert({ description: entry.description, time_display: entry.time, snapshot: entry.snapshot })
+      .then(({ error }) => { if (error) console.error('işlem geçmişi kaydedilemedi:', error.message); });
   }
   function undoLastAction() {
     setActionHistory((prev) => {
@@ -870,6 +960,37 @@ export default function useHipposData() {
     if (from.startsWith('Paket ')) removePackageRecord(from);
   }
 
+  // Bir satışı Google Sheets'e KALICI kayıt olarak yazar (Fişler + Fiş Detayları sekmeleri,
+  // yıl bazlı otomatik arşiv). Kullanıcıyı asla bekletmez — fiş numarası al, arka planda gönder.
+  function writeReceiptToSheets({ tur, masa, toplam, odemeTuru, urunler }) {
+    supabase
+      .from('receipt_seq')
+      .insert({})
+      .select('id')
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) {
+          console.error('fiş numarası alınamadı:', error?.message);
+          return;
+        }
+        const now = new Date();
+        fetch('/api/receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fisNo: data.id,
+            tarih: now.toLocaleDateString('tr-TR'),
+            saat: now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+            tur,
+            masa,
+            toplam,
+            odemeTuru,
+            urunler,
+          }),
+        }).catch((e) => console.error('fiş Sheets\'e yazılamadı:', e.message));
+      });
+  }
+
   // ---- Masayı ödeme ile tamamen kapat (Masalar ekranından, 3 nokta > Masayı Kapat) ----
   function closeTableWithPayment(table, method) {
     const items = orders[table] || [];
@@ -882,6 +1003,13 @@ export default function useHipposData() {
       { id: Date.now(), ts: Date.now(), table, amount: totalPay, method, itemsCount: payable.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
+    writeReceiptToSheets({
+      tur: table.startsWith('Paket ') ? 'Paket' : table === QUICK_SALE ? 'Hızlı Satış' : 'Masa',
+      masa: table,
+      toplam: totalPay,
+      odemeTuru: method,
+      urunler: payable.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
+    });
     setOrders((prev) => ({ ...prev, [table]: [] }));
     setTableNotes((prev) => ({ ...prev, [table]: '' }));
     setTableDiscounts((prev) => ({ ...prev, [table]: { type: null, value: 0 } }));
@@ -892,6 +1020,130 @@ export default function useHipposData() {
       return n;
     });
     if (table.startsWith('Paket ')) removePackageRecord(table);
+  }
+
+  // Ödemesi alınan ürünleri (Bugün paneli / en çok satanlar için hızlı önbellek — kalıcı
+  // kayıt Sheets'tedir) kalıcı günlüğe yazar.
+  function logSoldItems(items, table) {
+    if (!items || items.length === 0) return;
+    const ts = Date.now();
+    const rows = items
+      .filter((i) => !i.note)
+      .map((i) => ({
+        id: `${ts}-${i.id}`,
+        ad: i.ad,
+        fiyat: i.fiyat,
+        kategori: i.kategori || '',
+        altKategori: i.altKategori || '',
+        table,
+        ts,
+      }));
+    if (rows.length === 0) return;
+    setSoldItems((prev) => [...rows, ...prev]);
+    supabase
+      .from('sold_items')
+      .insert(rows.map((r) => ({ id: r.id, ts: r.ts, ad: r.ad, fiyat: r.fiyat, kategori: r.kategori, alt_kategori: r.altKategori, table_name: r.table })))
+      .then(({ error }) => { if (error) console.error('satılan ürün kaydedilemedi:', error.message); });
+  }
+
+  // ================== CARİ YÖNETİMİ ==================
+  function getCariBakiye(cariId) {
+    const borc = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
+    const odenen = cariOdemeler.filter((o) => o.cariId === cariId).reduce((s, o) => s + o.tutar, 0);
+    return Math.max(0, borc - odenen);
+  }
+
+  function getCariSonHareket(cariId) {
+    const list = cariHareketler.filter((h) => h.cariId === cariId).sort((a, b) => b.ts - a.ts);
+    return list[0] || null;
+  }
+
+  function getCariSonOdeme(cariId) {
+    const list = cariOdemeler.filter((o) => o.cariId === cariId).sort((a, b) => b.ts - a.ts);
+    return list[0] || null;
+  }
+
+  function addCari({ tip, ad, telefon, adres, not: notu }) {
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    const cari = { id, tip, ad, telefon: telefon || '', adres: adres || '', not: notu || '', aciklama: '', olusturmaTs: Date.now() };
+    setCariler((prev) => [...prev, cari]);
+    supabase
+      .from('cariler')
+      .insert({ id, tip, ad, telefon: cari.telefon, adres: cari.adres, kisa_not: cari.not, aciklama: '' })
+      .then(({ error }) => { if (error) console.error('cari oluşturulamadı:', error.message); });
+    return id;
+  }
+
+  function updateCari(id, patch) {
+    setCariler((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    const dbPatch = {};
+    if (patch.telefon !== undefined) dbPatch.telefon = patch.telefon;
+    if (patch.adres !== undefined) dbPatch.adres = patch.adres;
+    if (patch.aciklama !== undefined) dbPatch.aciklama = patch.aciklama;
+    if (patch.not !== undefined) dbPatch.kisa_not = patch.not;
+    if (patch.ad !== undefined) dbPatch.ad = patch.ad;
+    if (Object.keys(dbPatch).length === 0) return;
+    supabase.from('cariler').update(dbPatch).eq('id', id).then(({ error }) => {
+      if (error) console.error('cari güncellenemedi:', error.message);
+    });
+  }
+
+  // Bir siparişi (Masalar/Hızlı Satış'tan) bir cariye hareket olarak işler.
+  function addCariHareket(cariId, { urunler, toplam, mutfakNotu }) {
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    const ts = Date.now();
+    setCariHareketler((prev) => [...prev, { id, cariId, ts, urunler, toplam, mutfakNotu: mutfakNotu || '' }]);
+    supabase
+      .from('cari_hareketler')
+      .insert({ id, cari_id: cariId, ts, urunler, toplam, mutfak_notu: mutfakNotu || '' })
+      .then(({ error }) => { if (error) console.error('cari hareketi kaydedilemedi:', error.message); });
+    return id;
+  }
+
+  function addCariOdeme(cariId, { tutar, tur }) {
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    const ts = Date.now();
+    setCariOdemeler((prev) => [...prev, { id, cariId, ts, tutar, tur }]);
+    supabase
+      .from('cari_odemeler')
+      .insert({ id, cari_id: cariId, ts, tutar, tur })
+      .then(({ error }) => { if (error) console.error('cari ödemesi kaydedilemedi:', error.message); });
+    return id;
+  }
+
+  // Firma carilerinde: o ana kadarki faturalanmamış bakiyeyi bir faturaya bağlar.
+  function addCariFatura(cariId, { tarih, faturaNo, tutar }) {
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    const eklenmeTs = Date.now();
+    setCariFaturalar((prev) => [...prev, { id, cariId, tarih, faturaNo, tutar, eklenmeTs }]);
+    supabase
+      .from('cari_faturalar')
+      .insert({ id, cari_id: cariId, tarih, fatura_no: faturaNo, tutar, eklenme_ts: eklenmeTs })
+      .then(({ error }) => { if (error) console.error('fatura kaydedilemedi:', error.message); });
+    return id;
+  }
+
+  function getCariFaturalanmamisTutar(cariId) {
+    const toplamHareket = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
+    const faturalanan = cariFaturalar.filter((f) => f.cariId === cariId).reduce((s, f) => s + f.tutar, 0);
+    return Math.max(0, toplamHareket - faturalanan);
+  }
+
+  // Bakiye sıfırlanınca geçmişi silmez — tek satırlık özet olarak arşivler, cariyi listeden gizler.
+  function archiveCari(cariId) {
+    const toplam = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
+    const ts = Date.now();
+    setCariGecmis((prev) => [...prev, { id: Date.now() + Math.floor(Math.random() * 1000), cariId, ts, toplamTutar: toplam, aciklama: 'Tamamlandı' }]);
+    setCariHareketler((prev) => prev.filter((h) => h.cariId !== cariId));
+    setCariOdemeler((prev) => prev.filter((o) => o.cariId !== cariId));
+    setCariFaturalar((prev) => prev.filter((f) => f.cariId !== cariId));
+
+    supabase.from('cari_gecmis').insert({ cari_id: cariId, ts, toplam_tutar: toplam, aciklama: 'Tamamlandı' }).then(({ error }) => {
+      if (error) console.error('cari arşivlenemedi:', error.message);
+    });
+    supabase.from('cari_hareketler').delete().eq('cari_id', cariId).then(({ error }) => { if (error) console.error(error.message); });
+    supabase.from('cari_odemeler').delete().eq('cari_id', cariId).then(({ error }) => { if (error) console.error(error.message); });
+    supabase.from('cari_faturalar').delete().eq('cari_id', cariId).then(({ error }) => { if (error) console.error(error.message); });
   }
 
   return {
@@ -911,21 +1163,6 @@ export default function useHipposData() {
     setSubcategories,
     addSubcategory,
     updateSubcategoryMeta,
-    cariler,
-    cariHareketler,
-    cariOdemeler,
-    cariFaturalar,
-    cariGecmis,
-    getCariBakiye,
-    getCariSonHareket,
-    getCariSonOdeme,
-    addCari,
-    updateCari,
-    addCariHareket,
-    addCariOdeme,
-    addCariFatura,
-    getCariFaturalanmamisTutar,
-    archiveCari,
     favorites,
     toggleFavorite,
     allTables,
@@ -950,5 +1187,21 @@ export default function useHipposData() {
     transferTable,
     mergeTable,
     closeTableWithPayment,
+    writeReceiptToSheets,
+    cariler,
+    cariHareketler,
+    cariOdemeler,
+    cariFaturalar,
+    cariGecmis,
+    getCariBakiye,
+    getCariSonHareket,
+    getCariSonOdeme,
+    addCari,
+    updateCari,
+    addCariHareket,
+    addCariOdeme,
+    addCariFatura,
+    getCariFaturalanmamisTutar,
+    archiveCari,
   };
 }
