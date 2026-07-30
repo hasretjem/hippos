@@ -164,7 +164,8 @@
 }
 .ds-table-picker-list button:hover { background: var(--panel-2); }
 .ds-table-picker-list button.active { background: var(--olive-soft); }
-.ds-table-picker-list button .name { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.ds-table-picker-list button .name { font-size: 13.5px; font-weight: 700; color: var(--ink); display: flex; align-items: center; gap: 6px; }
+.ds-occupied-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); display: inline-block; flex-shrink: 0; }
 .ds-table-picker-list button .meta { font-size: 11.5px; color: var(--ink-muted); }
 .ds-table-picker-scrollbtns { display: flex; gap: 8px; padding-top: 10px; flex-shrink: 0; }
 .ds-table-picker-scrollbtns button {

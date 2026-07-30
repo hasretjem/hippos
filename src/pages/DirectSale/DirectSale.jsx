@@ -27,6 +27,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     getTableTotal,
     categories: rawCategories,
     subcategories,
+    announceViewingTable,
+    isTableOccupiedElsewhere,
+    presenceMap,
     cariler,
     addCari,
     addCariHareket,
@@ -41,6 +44,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [searchQuery, setSearchQuery] = useState('');
   const [payMode, setPayMode] = useState(false);
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
+  const [occupiedConfirmTable, setOccupiedConfirmTable] = useState(null);
   const tablePickerListRef = useRef(null);
 
   function scrollTablePicker(direction) {
@@ -51,6 +55,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
   const [numpadOpen, setNumpadOpen] = useState(false);
   const numpadInputRef = useRef(null);
+
+  // Bu masayı ekranda açtığımızı diğer cihazlara bildir (aynı masaya girmeyi uyarmak için).
+  useEffect(() => {
+    announceViewingTable(selectedTable);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTable]);
 
   useEffect(() => {
     if (numpadOpen) {
@@ -425,7 +435,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             <div className="ds-header-table">
               <button
                 className="ds-table-select-mini"
-                onClick={() => setTablePickerOpen((v) => !v)}
+                onClick={() => { setOccupiedConfirmTable(null); setTablePickerOpen((v) => !v); }}
               >
                 <span>
                   {selectedTable} {(orders[selectedTable] && orders[selectedTable].length > 0) ? `(${TL(getTableTotal(selectedTable))})` : '[Boş]'}
@@ -435,34 +445,69 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               {tablePickerOpen && (
                 <div className="ds-modal-overlay" onClick={() => setTablePickerOpen(false)}>
                   <div className="ds-modal ds-table-picker-modal" onClick={(e) => e.stopPropagation()}>
-                    <div className="ds-modal-head">
-                      <h3>Masa Seç</h3>
-                      <button className="ds-modal-x" onClick={() => setTablePickerOpen(false)}><X size={16} /></button>
-                    </div>
-                    <div className="ds-table-picker-list" ref={tablePickerListRef}>
-                      {allTables.map((t) => {
-                        const tot = getTableTotal(t);
-                        const hasOrder = orders[t] && orders[t].length > 0;
-                        const note = tableNotes[t];
-                        return (
+                    {occupiedConfirmTable ? (
+                      <>
+                        <div className="ds-modal-head">
+                          <h3><AlertTriangle size={15} /> Dikkat</h3>
+                          <button className="ds-modal-x" onClick={() => setOccupiedConfirmTable(null)}><X size={16} /></button>
+                        </div>
+                        <p style={{ fontSize: '13px', color: 'var(--ink-muted)', lineHeight: 1.5, margin: '0 0 16px' }}>
+                          <strong>{occupiedConfirmTable}</strong> şu an başka bir cihazda açık görünüyor. Aynı anda iki cihazdan
+                          düzenlemek çakışmaya yol açabilir. Yine de girmek istiyor musun?
+                        </p>
+                        <div className="ds-modal-footer two">
+                          <button className="ds-secondary-btn" onClick={() => setOccupiedConfirmTable(null)}>Vazgeç</button>
                           <button
-                            key={t}
-                            className={t === selectedTable ? 'active' : ''}
-                            onClick={() => { setSelectedTable(t); setTablePickerOpen(false); }}
+                            className="ds-primary-btn"
+                            onClick={() => {
+                              setSelectedTable(occupiedConfirmTable);
+                              setOccupiedConfirmTable(null);
+                              setTablePickerOpen(false);
+                            }}
                           >
-                            <span className="name">{t}</span>
-                            <span className="meta">
-                              {hasOrder ? TL(tot) : 'Boş'}
-                              {note ? ` — ${note}` : ''}
-                            </span>
+                            Yine de Gir
                           </button>
-                        );
-                      })}
-                    </div>
-                    <div className="ds-table-picker-scrollbtns">
-                      <button onClick={() => scrollTablePicker(-1)}><ChevronUp size={16} /></button>
-                      <button onClick={() => scrollTablePicker(1)}><ChevronDown size={16} /></button>
-                    </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="ds-modal-head">
+                          <h3>Masa Seç</h3>
+                          <button className="ds-modal-x" onClick={() => setTablePickerOpen(false)}><X size={16} /></button>
+                        </div>
+                        <div className="ds-table-picker-list" ref={tablePickerListRef}>
+                          {allTables.map((t) => {
+                            const tot = getTableTotal(t);
+                            const hasOrder = orders[t] && orders[t].length > 0;
+                            const note = tableNotes[t];
+                            const occupied = isTableOccupiedElsewhere(t);
+                            return (
+                              <button
+                                key={t}
+                                className={t === selectedTable ? 'active' : ''}
+                                onClick={() => {
+                                  if (occupied) setOccupiedConfirmTable(t);
+                                  else { setSelectedTable(t); setTablePickerOpen(false); }
+                                }}
+                              >
+                                <span className="name">
+                                  {t}
+                                  {occupied && <span className="ds-occupied-dot" title="Başka cihazda açık" />}
+                                </span>
+                                <span className="meta">
+                                  {hasOrder ? TL(tot) : 'Boş'}
+                                  {note ? ` — ${note}` : ''}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="ds-table-picker-scrollbtns">
+                          <button onClick={() => scrollTablePicker(-1)}><ChevronUp size={16} /></button>
+                          <button onClick={() => scrollTablePicker(1)}><ChevronDown size={16} /></button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               )}

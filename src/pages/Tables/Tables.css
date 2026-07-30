@@ -123,7 +123,8 @@
 .tb-card.tier-3 { border-left-color: var(--danger); background: linear-gradient(90deg, var(--danger-soft) 0%, var(--panel) 14%); }
 
 .tb-card-top { display: flex; align-items: flex-start; justify-content: space-between; position: relative; }
-.tb-card-name { font-size: 12.5px; font-weight: 700; }
+.tb-card-name { font-size: 12.5px; font-weight: 700; display: flex; align-items: center; gap: 5px; }
+.tb-occupied-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); display: inline-block; flex-shrink: 0; }
 .tb-menu-btn {
   background: none;
   border: none;

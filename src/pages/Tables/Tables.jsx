@@ -23,6 +23,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     closeTableWithPayment,
     actionHistory,
     undoLastAction,
+    isTableOccupiedElsewhere,
   } = data;
 
   // Renk-zaman kademesi her 30 dk'da bir değişsin diye periyodik yeniden çizim
@@ -149,6 +150,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     const note = tableNotes[table] || '';
     const isEditing = editingNoteFor === table;
     const isMenuOpen = menuFor === table;
+    const occupiedElsewhere = isTableOccupiedElsewhere(table);
 
     const noteEditRow = isEditing && (
       <div className="tb-note-edit" onClick={(e) => e.stopPropagation()}>
@@ -186,7 +188,10 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       return (
         <div key={key || table} className={cardClass} {...dragProps}>
           <div className="tb-card-top">
-            <span className="tb-card-name">{table}</span>
+            <span className="tb-card-name">
+              {table}
+              {occupiedElsewhere && <span className="tb-occupied-dot" title="Başka cihazda açık" />}
+            </span>
             {!isEmpty && <span className="tb-card-total-inline">{TL(total)}</span>}
             <button className="tb-menu-btn" onClick={(e) => { e.stopPropagation(); setMenuFor(isMenuOpen ? null : table); }}>
               <MoreVertical size={14} />
@@ -209,7 +214,10 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     return (
       <div key={key || table} className={cardClass} {...dragProps}>
         <div className="tb-card-top">
-          <span className="tb-card-name">{table}</span>
+          <span className="tb-card-name">
+            {table}
+            {occupiedElsewhere && <span className="tb-occupied-dot" title="Başka cihazda açık" />}
+          </span>
           <button className="tb-menu-btn" onClick={(e) => { e.stopPropagation(); setMenuFor(isMenuOpen ? null : table); }}>
             <MoreVertical size={15} />
           </button>

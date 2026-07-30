@@ -655,6 +655,43 @@ export default function useHipposData() {
 
   const allTables = useMemo(() => [...FIXED_TABLES, ...packages.map((p) => p.name)], [packages]);
 
+  // ================== "Kim nerede" — aynı masaya iki cihazın aynı anda girmesini uyarmak için ==================
+  const deviceIdRef = useRef(Math.random().toString(36).slice(2, 10));
+  const presenceChannelRef = useRef(null);
+  const [presenceMap, setPresenceMap] = useState({}); // { [tableName]: [deviceId, ...] }
+
+  useEffect(() => {
+    const channel = supabase.channel('hippos-presence', {
+      config: { presence: { key: deviceIdRef.current } },
+    });
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        const map = {};
+        Object.entries(state).forEach(([deviceId, metas]) => {
+          const meta = metas[metas.length - 1];
+          if (meta && meta.table) {
+            (map[meta.table] = map[meta.table] || []).push(deviceId);
+          }
+        });
+        setPresenceMap(map);
+      })
+      .subscribe();
+    presenceChannelRef.current = channel;
+    return () => supabase.removeChannel(channel);
+  }, []);
+
+  // Bir cihaz bir masayı ekranda açtığında çağrılır — diğer cihazlar bunu anında görür.
+  function announceViewingTable(table) {
+    presenceChannelRef.current?.track({ table, ts: Date.now() });
+  }
+
+  // Bir masada, KENDİMİZ DIŞINDA, o an ekranında duran başka bir cihaz var mı?
+  function isTableOccupiedElsewhere(table) {
+    const viewers = presenceMap[table] || [];
+    return viewers.some((id) => id !== deviceIdRef.current);
+  }
+
   // ---- İlk yükleme + gerçek zamanlı abonelikler ----
   useEffect(() => {
     let cancelled = false;
@@ -762,7 +799,10 @@ export default function useHipposData() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_gecmis' }, (payload) => {
         setCariGecmis((prev) => (prev.some((g) => g.id === payload.new.id) ? prev : [...prev, rowToGecmis(payload.new)]));
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') console.log('✅ Hippos canlı senkron bağlandı');
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.error('❌ Hippos canlı senkron bağlanamadı:', status);
+      });
 
     return () => {
       cancelled = true;
@@ -1188,6 +1228,9 @@ export default function useHipposData() {
     mergeTable,
     closeTableWithPayment,
     writeReceiptToSheets,
+    announceViewingTable,
+    isTableOccupiedElsewhere,
+    presenceMap,
     cariler,
     cariHareketler,
     cariOdemeler,
