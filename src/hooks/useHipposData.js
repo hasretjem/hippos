@@ -386,6 +386,7 @@ export default function useHipposData() {
   }
 
   // ---- İlk yükleme + gerçek zamanlı abonelikler ----
+  const lastAppliedUpdatedAtRef = useRef({});
   useEffect(() => {
     let cancelled = false;
 
@@ -470,12 +471,19 @@ export default function useHipposData() {
         );
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'table_state' }, (payload) => {
-        console.log(
-          `📡 [table_state] ${payload.eventType} — masa: "${(payload.new || payload.old)?.table_name}" — ürün sayısı: ${(payload.new?.items || []).length} — ${new Date().toLocaleTimeString('tr-TR')}`
-        );
         if (payload.eventType === 'DELETE') return;
         const row = payload.new;
         const t = row.table_name;
+        const itemCount = (row.items || []).length;
+        const incomingTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
+        const lastTs = lastAppliedUpdatedAtRef.current[t] || 0;
+        const wouldBeStale = incomingTs < lastTs;
+        console.log(
+          `🟪 [4-POSTGRES_CHANGES GELDİ] masa: "${t}" — ürün sayısı: ${itemCount} — updated_at: ${row.updated_at} — local: ${Date.now()}${wouldBeStale ? '  ⚠️ SIRASI KARIŞIK (daha eski bir güncelleme, daha yeniden SONRA geldi)' : ''}`
+        );
+        // TEŞHİS AMACIYLA GEÇİCİ OLARAK KORUMA UYGULANMIYOR — sıra karışıklığının ekranda
+        // gerçekten neye yol açtığını çıplak gözle görebilmek için (uyarı logu yeterli).
+        lastAppliedUpdatedAtRef.current[t] = Math.max(incomingTs, lastTs);
         setOrders((prev) => ({ ...prev, [t]: row.items || [] }));
         setTableNotes((prev) => ({ ...prev, [t]: row.note || '' }));
         setTableDiscounts((prev) => ({ ...prev, [t]: { type: row.discount_type, value: row.discount_value || 0 } }));
@@ -605,6 +613,19 @@ export default function useHipposData() {
     return () => clearInterval(id);
   }, []);
 
+  // ---- TEŞHİS: orders state'i her (referans olarak) değiştiğinde, hangi masa(lar)ın
+  // gerçekten değiştiğini ve o anki ürün sayısını logla.
+  const prevOrdersForLogRef = useRef({});
+  useEffect(() => {
+    const prev = prevOrdersForLogRef.current;
+    Object.keys(orders).forEach((t) => {
+      if (orders[t] !== prev[t]) {
+        console.log(`🟥 [5-ORDERS STATE DEĞİŞTİ] masa: "${t}" — ürün sayısı: ${(orders[t] || []).length} — local: ${Date.now()}`);
+      }
+    });
+    prevOrdersForLogRef.current = orders;
+  }, [orders]);
+
   // ---- Masa notu / indirim senkronu — SADECE bu iki alan için (items HARİÇ).
   // "items" (sipariş satırları) artık BURADAN asla yazılmıyor — tek yol RPC fonksiyonları.
   // Not/indirim düşük çakışma riskli olduğu için (genelde tek kişi girer) bu basit yöntem yeterli.
@@ -651,27 +672,34 @@ export default function useHipposData() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ================== SİPARİŞ SATIRLARI (items) — TEK YÖNLÜ AKIŞ ==================
-  // UI → Supabase RPC → Supabase → Realtime → UI.
-  // Bu fonksiyonlar ASLA yerel "orders" state'ini yazmaz — sadece isteği gönderir.
-  // Ekranın güncellenmesi TAMAMEN yukarıdaki gerçek zamanlı abonelikten gelir.
-  // Böylece "orders" için tek gerçek kaynak Supabase olur, yarış durumu oluşmaz.
+  // ================== SİPARİŞ SATIRLARI (items) — TEK YÖNLÜ AKIŞ (TEŞHİS MODU) ==================
+  // Optimistic update GEÇİCİ OLARAK KALDIRILDI — önce saf "sadece Realtime'dan gelir"
+  // davranışını, ayrıntılı loglarla, kanıtlamadan düzeltmeye geçmiyoruz.
 
   function addOrderItem(table, item) {
+    console.log(`🟦 [1-ÇAĞRILDI] addOrderItem — masa: "${table}" — ürün: "${item.ad}" — local: ${Date.now()}`);
     registerPackageIfNeeded(table);
+    console.log(`🟨 [2-RPC GÖNDERİLİYOR] append_order_item — masa: "${table}" — local: ${Date.now()}`);
     supabase.rpc('append_order_item', { p_table_name: table, p_item: item }).then(({ error }) => {
+      console.log(`🟩 [3-RPC DÖNDÜ] append_order_item — masa: "${table}" — hata: ${error ? error.message : 'yok'} — local: ${Date.now()}`);
       if (error) console.error('ürün eklenemedi:', error.message);
     });
   }
 
   function removeOrderItem(table, itemId) {
+    console.log(`🟦 [1-ÇAĞRILDI] removeOrderItem — masa: "${table}" — local: ${Date.now()}`);
+    console.log(`🟨 [2-RPC GÖNDERİLİYOR] remove_order_item — masa: "${table}" — local: ${Date.now()}`);
     supabase.rpc('remove_order_item', { p_table_name: table, p_item_id: itemId }).then(({ error }) => {
+      console.log(`🟩 [3-RPC DÖNDÜ] remove_order_item — masa: "${table}" — hata: ${error ? error.message : 'yok'} — local: ${Date.now()}`);
       if (error) console.error('ürün silinemedi:', error.message);
     });
   }
 
   function updateOrderItem(table, itemId, patch) {
+    console.log(`🟦 [1-ÇAĞRILDI] updateOrderItem — masa: "${table}" — local: ${Date.now()}`);
+    console.log(`🟨 [2-RPC GÖNDERİLİYOR] update_order_item — masa: "${table}" — local: ${Date.now()}`);
     supabase.rpc('update_order_item', { p_table_name: table, p_item_id: itemId, p_patch: patch }).then(({ error }) => {
+      console.log(`🟩 [3-RPC DÖNDÜ] update_order_item — masa: "${table}" — hata: ${error ? error.message : 'yok'} — local: ${Date.now()}`);
       if (error) console.error('ürün güncellenemedi:', error.message);
     });
   }
