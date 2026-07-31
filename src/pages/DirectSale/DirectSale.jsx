@@ -14,9 +14,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     toggleFavorite,
     allTables,
     orders,
-    setOrders,
-    updateOrder,
-    addOrderItemAtomic,
+    addOrderItem,
+    removeOrderItem,
+    updateOrderItem,
+    setOrderItemsRemote,
     tableNotes,
     setTableNotes,
     updateTableNote,
@@ -104,12 +105,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
   // ---- Ürün işlemleri ----
   function addProductToOrder(product) {
-    const items = currentOrder;
-    let isDuplicate = false;
-    if (items.length > 0) {
-      const last = items[items.length - 1];
-      if (!last.note && last.ad === product.ad) isDuplicate = true;
-    }
     const newItem = {
       id: Date.now() + Math.random(),
       ad: product.ad,
@@ -118,32 +113,39 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       altKategori: product.altKategori,
       selected: false,
       note: product.fiyat === 0,
-      persistentHighlight: isDuplicate,
     };
-    if (isDuplicate) {
-      // Art arda aynı ürüne basıldığını göstermek için önceki satırı da vurgula (sadece görsel).
-      updateOrder(selectedTable, (curItems) =>
-        curItems.map((it, i) => (i === curItems.length - 1 ? { ...it, persistentHighlight: true } : it))
-      );
-    }
-    // Asıl ekleme ATOMİK — iki cihaz aynı anda ürün eklerse birbirini silmesin diye.
-    addOrderItemAtomic(selectedTable, newItem);
+    // Ekleme ATOMİK — iki cihaz aynı anda ürün eklerse birbirini silmez. Ekran, buradan değil
+    // gerçek zamanlı abonelikten güncellenir (React state hiçbir zaman "gerçek veri" olmaz).
+    addOrderItem(selectedTable, newItem);
   }
 
   function removeItem(id) {
-    updateOrder(selectedTable, (items) => items.filter((i) => i.id !== id));
+    removeOrderItem(selectedTable, id);
   }
 
   function toggleSelectItem(id) {
-    updateOrder(selectedTable, (items) => items.map((i) => (i.id === id ? { ...i, selected: !i.selected } : i)));
+    const item = currentOrder.find((i) => i.id === id);
+    if (!item) return;
+    updateOrderItem(selectedTable, id, { selected: !item.selected });
   }
 
   function handleUndoLastItem() {
-    updateOrder(selectedTable, (items) => items.slice(0, -1));
+    const last = currentOrder[currentOrder.length - 1];
+    if (last) removeOrderItem(selectedTable, last.id);
   }
 
   function handleClearSelection() {
-    updateOrder(selectedTable, (items) => items.map((i) => ({ ...i, selected: false })));
+    if (currentOrder.length === 0) return;
+    setOrderItemsRemote(selectedTable, currentOrder.map((i) => ({ ...i, selected: false })));
+  }
+
+  // "Art arda aynı ürün" vurgusu artık veride saklanmıyor, ekranda anlık hesaplanıyor
+  // (bir alanı sürekli güncellemek yerine — daha az yazma, daha basit senkron).
+  function isConsecutiveDuplicate(items, index) {
+    if (index === 0) return false;
+    const cur = items[index];
+    const prev = items[index - 1];
+    return !cur.note && !prev.note && cur.ad === prev.ad;
   }
 
   // ---- Masa notu ----
@@ -166,10 +168,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     try {
       const text = await navigator.clipboard.readText();
       if (!text.trim()) return;
-      updateOrder(selectedTable, (items) => [
-        ...items,
-        { id: Date.now() + Math.random(), ad: text.trim(), fiyat: 0, selected: false, note: true, persistentHighlight: false },
-      ]);
+      addOrderItem(selectedTable, { id: Date.now() + Math.random(), ad: text.trim(), fiyat: 0, selected: false, note: true });
     } catch {
       showToast('Panoya erişilemedi');
     }
@@ -183,10 +182,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       showInput: true,
       onConfirm: (text) => {
         if (!text.trim()) return;
-        updateOrder(selectedTable, (items) => [
-          ...items,
-          { id: Date.now() + Math.random(), ad: text.trim(), fiyat: 0, selected: false, note: true, persistentHighlight: false },
-        ]);
+        addOrderItem(selectedTable, { id: Date.now() + Math.random(), ad: text.trim(), fiyat: 0, selected: false, note: true });
       },
     });
   }
@@ -218,7 +214,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     if (!priceModal) return;
     const parsed = parseFloat(priceModal.value.replace(',', '.'));
     if (!isNaN(parsed) && parsed >= 0) {
-      updateOrder(selectedTable, (items) => items.map((i) => (i.id === priceModal.item.id ? { ...i, fiyat: parsed } : i)));
+      updateOrderItem(selectedTable, priceModal.item.id, { fiyat: parsed });
     }
     setPriceModal(null);
   }
@@ -240,9 +236,11 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       showSelect: true,
       selectOptions: emptyTables.map((t) => ({ value: t, label: `${t} [Boş]` })),
       onConfirm: (_, targetTable) => {
-        setOrders((prev) => ({ ...prev, [targetTable]: prev[selectedTable], [selectedTable]: [] }));
-        setTableNotes((prev) => ({ ...prev, [targetTable]: prev[selectedTable], [selectedTable]: '' }));
-        setTableDiscounts((prev) => ({ ...prev, [targetTable]: prev[selectedTable], [selectedTable]: { type: null, value: 0 } }));
+        setOrderItemsRemote(targetTable, orders[selectedTable], {
+          note: tableNotes[selectedTable] || '',
+          discount: tableDiscounts[selectedTable] || { type: null, value: 0 },
+        });
+        setOrderItemsRemote(selectedTable, [], { note: '', discount: { type: null, value: 0 }, openedAt: null });
         setSelectedTable(targetTable);
       },
     });
@@ -264,12 +262,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       showSelect: true,
       selectOptions: occupied.map((t) => ({ value: t, label: `${t} (${TL(getTableTotal(t))})` })),
       onConfirm: (_, targetTable) => {
-        setOrders((prev) => ({ ...prev, [targetTable]: [...prev[targetTable], ...prev[selectedTable]], [selectedTable]: [] }));
-        setTableNotes((prev) => ({
-          ...prev,
-          [targetTable]: prev[selectedTable] ? `${prev[targetTable] ? prev[targetTable] + ' | ' : ''}${prev[selectedTable]}` : prev[targetTable],
-          [selectedTable]: '',
-        }));
+        setOrderItemsRemote(targetTable, [...orders[targetTable], ...orders[selectedTable]], {
+          note: tableNotes[selectedTable]
+            ? `${tableNotes[targetTable] ? tableNotes[targetTable] + ' | ' : ''}${tableNotes[selectedTable]}`
+            : tableNotes[targetTable] || '',
+        });
+        setOrderItemsRemote(selectedTable, [], { note: '', discount: { type: null, value: 0 }, openedAt: null });
         setSelectedTable(targetTable);
       },
     });
@@ -298,10 +296,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     });
 
     const remaining = currentOrder.filter((i) => !closedIds.has(i.id));
-    setOrders((prev) => ({ ...prev, [selectedTable]: remaining }));
-    if (remaining.length === 0) {
-      setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
-    }
+    setOrderItemsRemote(selectedTable, remaining, remaining.length === 0 ? { discount: { type: null, value: 0 }, openedAt: null } : {});
     showToast(`${method} ile ödeme alındı`);
     setPayMode(false);
   }
@@ -350,10 +345,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     });
 
     const remaining = currentOrder.filter((i) => !closedIds.has(i.id));
-    setOrders((prev) => ({ ...prev, [selectedTable]: remaining }));
-    if (remaining.length === 0) {
-      setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
-    }
+    setOrderItemsRemote(selectedTable, remaining, remaining.length === 0 ? { discount: { type: null, value: 0 }, openedAt: null } : {});
     setCariPickerOpen(false);
     setPayMode(false);
     showToast('Cariye gönderildi');
@@ -375,9 +367,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       title: `${selectedTable} masasındaki tüm siparişleri silmek istiyor musunuz?`,
       showInput: false,
       onConfirm: () => {
-        setOrders((prev) => ({ ...prev, [selectedTable]: [] }));
-        setTableNotes((prev) => ({ ...prev, [selectedTable]: '' }));
-        setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
+        setOrderItemsRemote(selectedTable, [], { note: '', discount: { type: null, value: 0 }, openedAt: null });
       },
     });
   }
@@ -613,7 +603,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             className={`ds-order-list ${currentOrder.length > 14 ? 'ultra-compact' : currentOrder.length > 7 ? 'compact' : ''}`}
           >
             {currentOrder.length === 0 && <div className="ds-empty">Sipariş boş — ürüne dokunarak ekleyin</div>}
-            {currentOrder.map((item) => {
+            {currentOrder.map((item, index) => {
               if (item.note) {
                 return (
                   <div key={item.id} className="ds-order-line note">
@@ -622,14 +612,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   </div>
                 );
               }
-              const styleClass = item.selected ? 'selected' : item.persistentHighlight ? 'duplicate' : '';
+              const isDup = isConsecutiveDuplicate(currentOrder, index);
+              const styleClass = item.selected ? 'selected' : isDup ? 'duplicate' : '';
               return (
                 <div key={item.id} className={`ds-order-line ${styleClass}`}>
                   <button className="ds-remove-btn" onClick={() => removeItem(item.id)}><X size={16} /></button>
                   <div className="ds-order-line-mid" onClick={() => toggleSelectItem(item.id)}>
                     <span className="ds-order-line-name">{item.ad}</span>
                     {item.selected && <span className="ds-tag selected"><Check size={10} /> SEÇİLİ</span>}
-                    {!item.selected && item.persistentHighlight && <span className="ds-tag duplicate"><AlertTriangle size={10} /> İKAZ</span>}
+                    {!item.selected && isDup && <span className="ds-tag duplicate"><AlertTriangle size={10} /> İKAZ</span>}
                   </div>
                   <span className="ds-order-line-price" onClick={() => openPriceModal(item)}>
                     {TL(item.fiyat)}

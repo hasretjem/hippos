@@ -605,47 +605,32 @@ export default function useHipposData() {
     return () => clearInterval(id);
   }, []);
 
-  // ---- Masa/paket/hızlı satış durumu senkronu — SADECE gerçekten değişen masa(lar) gönderilir.
-  // Önceki "her değişiklikte tüm masaları toptan gönder" yaklaşımı, iki cihaz aynı anda işlem
-  // yapınca birbirinin verisinin üzerine eski bir kopya yazıyordu (yarış durumu / veri kaybı riski).
-  const prevTableStateRef = useRef({ orders: {}, tableNotes: {}, tableDiscounts: {}, tableOpenedAt: {} });
-  // addOrderItemAtomic zaten kendi atomik isteğini gönderdi — bu masanın "items" alanını
-  // bir sonraki toptan senkron turunda TEKRAR yazmayalım (çift yazma = yeniden yarış riski).
-  const skipItemsUploadRef = useRef(new Set()).current;
+  // ---- Masa notu / indirim senkronu — SADECE bu iki alan için (items HARİÇ).
+  // "items" (sipariş satırları) artık BURADAN asla yazılmıyor — tek yol RPC fonksiyonları.
+  // Not/indirim düşük çakışma riskli olduğu için (genelde tek kişi girer) bu basit yöntem yeterli.
+  const prevNoteDiscountRef = useRef({ tableNotes: {}, tableDiscounts: {} });
   useEffect(() => {
-    const prev = prevTableStateRef.current;
+    const prev = prevNoteDiscountRef.current;
     const changed = new Set();
     allTables.forEach((t) => {
-      if (orders[t] !== prev.orders[t]) changed.add(t);
       if (tableNotes[t] !== prev.tableNotes[t]) changed.add(t);
       if (tableDiscounts[t] !== prev.tableDiscounts[t]) changed.add(t);
-      if (tableOpenedAt[t] !== prev.tableOpenedAt[t]) changed.add(t);
     });
-    prevTableStateRef.current = { orders, tableNotes, tableDiscounts, tableOpenedAt };
+    prevNoteDiscountRef.current = { tableNotes, tableDiscounts };
     if (changed.size === 0) return;
 
-    const rows = [...changed]
-      .map((t) => {
-        const row = {
-          table_name: t,
-          note: tableNotes[t] || '',
-          discount_type: (tableDiscounts[t] || {}).type ?? null,
-          discount_value: (tableDiscounts[t] || {}).value ?? 0,
-          opened_at: tableOpenedAt[t] ? new Date(tableOpenedAt[t]).toISOString() : null,
-          updated_at: new Date().toISOString(),
-        };
-        if (skipItemsUploadRef.has(t)) {
-          skipItemsUploadRef.delete(t);
-        } else {
-          row.items = orders[t] || [];
-        }
-        return row;
-      });
+    const rows = [...changed].map((t) => ({
+      table_name: t,
+      note: tableNotes[t] || '',
+      discount_type: (tableDiscounts[t] || {}).type ?? null,
+      discount_value: (tableDiscounts[t] || {}).value ?? 0,
+      updated_at: new Date().toISOString(),
+    }));
     supabase.from('table_state').upsert(rows, { onConflict: 'table_name' }).then(({ error }) => {
-      if (error) console.error('Masa durumu senkronize edilemedi:', error.message);
+      if (error) console.error('Not/indirim senkronize edilemedi:', error.message);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders, tableNotes, tableDiscounts, tableOpenedAt, allTables]);
+  }, [tableNotes, tableDiscounts, allTables]);
 
   // ---- Yeni satış kayıtlarını Supabase'e yaz (DirectSale doğrudan setSalesHistory çağırıyor) ----
   const syncedSaleIdsRef = useRef(new Set()).current;
@@ -666,50 +651,47 @@ export default function useHipposData() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sipariş güncellemesi — masa boştan doluya geçince açılış saatini otomatik damgalar,
-  // doluyken boşalınca damgayı siler (masa "kapanmış" sayılır). Gerçek yazma işi yukarıdaki
-  // toplu senkron efektinde oluyor.
-  function updateOrder(table, updater) {
-    setOrders((prev) => {
-      const before = prev[table] || [];
-      const after = updater(before);
-      const wasEmpty = before.length === 0;
-      const nowEmpty = after.length === 0;
-      if (wasEmpty && !nowEmpty) {
-        setTableOpenedAt((p) => (p[table] ? p : { ...p, [table]: Date.now() }));
-        registerPackageIfNeeded(table);
-      } else if (!wasEmpty && nowEmpty) {
-        setTableOpenedAt((p) => {
-          if (!(table in p)) return p;
-          const n = { ...p };
-          delete n[table];
-          return n;
-        });
-      }
-      return { ...prev, [table]: after };
+  // ================== SİPARİŞ SATIRLARI (items) — TEK YÖNLÜ AKIŞ ==================
+  // UI → Supabase RPC → Supabase → Realtime → UI.
+  // Bu fonksiyonlar ASLA yerel "orders" state'ini yazmaz — sadece isteği gönderir.
+  // Ekranın güncellenmesi TAMAMEN yukarıdaki gerçek zamanlı abonelikten gelir.
+  // Böylece "orders" için tek gerçek kaynak Supabase olur, yarış durumu oluşmaz.
+
+  function addOrderItem(table, item) {
+    registerPackageIfNeeded(table);
+    supabase.rpc('append_order_item', { p_table_name: table, p_item: item }).then(({ error }) => {
+      if (error) console.error('ürün eklenemedi:', error.message);
     });
   }
 
-  // Tek bir ürünü ATOMİK olarak ekler — iki cihaz aynı masaya aynı anda ürün eklerse
-  // birbirini SİLMEZ (veritabanı isteği sıraya koyar). Ekranda anında görünmesi için
-  // önce yerel olarak da ekliyoruz, arkadan gerçek zamanlı abonelik zaten doğrulayacak.
-  function addOrderItemAtomic(table, item) {
-    setOrders((prev) => {
-      const before = prev[table] || [];
-      const after = [...before, item];
-      if (before.length === 0) {
-        setTableOpenedAt((p) => (p[table] ? p : { ...p, [table]: Date.now() }));
-        registerPackageIfNeeded(table);
-      }
-      return { ...prev, [table]: after };
-    });
-    skipItemsUploadRef.add(table);
-    console.log(`📤 [GÖNDERİLİYOR] ${table} — "${item.ad}" — ${new Date().toLocaleTimeString('tr-TR')}`);
-    supabase.rpc('append_order_item', { p_table_name: table, p_item: item }).then(({ error }) => {
-      if (error) console.error('❌ ürün eklenemedi (atomik):', error.message);
-      else console.log(`✅ [SUNUCUYA YAZILDI] ${table} — "${item.ad}" — ${new Date().toLocaleTimeString('tr-TR')}`);
+  function removeOrderItem(table, itemId) {
+    supabase.rpc('remove_order_item', { p_table_name: table, p_item_id: itemId }).then(({ error }) => {
+      if (error) console.error('ürün silinemedi:', error.message);
     });
   }
+
+  function updateOrderItem(table, itemId, patch) {
+    supabase.rpc('update_order_item', { p_table_name: table, p_item_id: itemId, p_patch: patch }).then(({ error }) => {
+      if (error) console.error('ürün güncellenemedi:', error.message);
+    });
+  }
+
+  // Masanın TÜM sipariş listesini tek seferde değiştirir — sadece bilinçli, tek aktörlü toplu
+  // işlemler için (ödeme sonrası kalanları yazma, taşıma, birleştirme, masayı boşaltma).
+  // Ekleme/silme/güncelleme için KULLANILMAZ — o işlemler yukarıdaki atomik fonksiyonlardan gider.
+  function setOrderItemsRemote(table, items, opts = {}) {
+    const patch = { table_name: table, items, updated_at: new Date().toISOString() };
+    if ('note' in opts) patch.note = opts.note;
+    if ('openedAt' in opts) patch.opened_at = opts.openedAt ? new Date(opts.openedAt).toISOString() : null;
+    if ('discount' in opts) {
+      patch.discount_type = opts.discount?.type ?? null;
+      patch.discount_value = opts.discount?.value ?? 0;
+    }
+    supabase.from('table_state').upsert(patch, { onConflict: 'table_name' }).then(({ error }) => {
+      if (error) console.error('masa durumu yazılamadı:', error.message);
+    });
+  }
+
 
   function updateTableNote(table, value) {
     if (value.trim()) registerPackageIfNeeded(table);
@@ -794,12 +776,35 @@ export default function useHipposData() {
       if (prev.length === 0) return prev;
       const [last, ...rest] = prev;
       const s = last.snapshot;
-      setOrders(s.orders);
-      setTableNotes(s.tableNotes);
-      setTableDiscounts(s.tableDiscounts);
-      setTableOpenedAt(s.tableOpenedAt);
-      setPackages(s.packages);
-      setPackageMeta(s.packageMeta);
+      // Bu, bilinçli "tam duruma geri dön" işlemi olduğu için toptan yazım burada doğrudur —
+      // önceki hatada bu fonksiyon SADECE yerelde değişiyordu, Supabase'e hiç yazılmıyordu
+      // (yani geri alma diğer cihazlarda görünmüyor, sayfa yenilenince kayboluyordu).
+      const allSnapTables = new Set([
+        ...Object.keys(s.orders || {}),
+        ...Object.keys(s.tableNotes || {}),
+        ...Object.keys(s.tableDiscounts || {}),
+      ]);
+      const rows = [...allSnapTables].map((t) => ({
+        table_name: t,
+        items: (s.orders && s.orders[t]) || [],
+        note: (s.tableNotes && s.tableNotes[t]) || '',
+        discount_type: (s.tableDiscounts && s.tableDiscounts[t] && s.tableDiscounts[t].type) ?? null,
+        discount_value: (s.tableDiscounts && s.tableDiscounts[t] && s.tableDiscounts[t].value) ?? 0,
+        opened_at: s.tableOpenedAt && s.tableOpenedAt[t] ? new Date(s.tableOpenedAt[t]).toISOString() : null,
+        updated_at: new Date().toISOString(),
+      }));
+      if (rows.length > 0) {
+        supabase.from('table_state').upsert(rows, { onConflict: 'table_name' }).then(({ error }) => {
+          if (error) console.error('geri alma senkronize edilemedi:', error.message);
+        });
+      }
+      if (s.packageMeta) {
+        supabase
+          .from('package_meta')
+          .upsert({ id: 1, meta_date: s.packageMeta.date, next_num: s.packageMeta.next })
+          .then(({ error }) => { if (error) console.error(error.message); });
+      }
+      (s.packages || []).forEach((p) => registerPackageIfNeeded(p.name));
       return rest;
     });
   }
@@ -808,35 +813,25 @@ export default function useHipposData() {
   function transferTable(from, to) {
     if (from === to) return;
     pushHistory(`${from} → ${to} taşındı`);
-    setOrders((prev) => ({ ...prev, [to]: prev[from] || [], [from]: [] }));
-    setTableNotes((prev) => ({ ...prev, [to]: prev[from] || '', [from]: '' }));
-    setTableDiscounts((prev) => ({ ...prev, [to]: prev[from] || { type: null, value: 0 }, [from]: { type: null, value: 0 } }));
-    setTableOpenedAt((prev) => {
-      const n = { ...prev };
-      if (prev[from]) n[to] = prev[from]; else delete n[to];
-      delete n[from];
-      return n;
+    setOrderItemsRemote(to, orders[from] || [], {
+      note: tableNotes[from] || '',
+      discount: tableDiscounts[from] || { type: null, value: 0 },
+      openedAt: tableOpenedAt[from] || null,
     });
+    setOrderItemsRemote(from, [], { note: '', discount: { type: null, value: 0 }, openedAt: null });
     if (from.startsWith('Paket ')) removePackageRecord(from);
   }
 
   function mergeTable(from, to) {
     if (from === to) return;
     pushHistory(`${from} + ${to} birleştirildi`);
-    setOrders((prev) => ({ ...prev, [to]: [...(prev[to] || []), ...(prev[from] || [])], [from]: [] }));
-    setTableNotes((prev) => {
-      const merged = [prev[to], prev[from]].filter(Boolean).join(' | ');
-      return { ...prev, [to]: merged, [from]: '' };
-    });
-    setTableOpenedAt((prev) => {
-      const n = { ...prev };
-      const a = prev[to];
-      const b = prev[from];
-      if (a && b) n[to] = Math.min(a, b);
-      else if (b) n[to] = b;
-      delete n[from];
-      return n;
-    });
+    const mergedItems = [...(orders[to] || []), ...(orders[from] || [])];
+    const mergedNote = [tableNotes[to], tableNotes[from]].filter(Boolean).join(' | ');
+    const a = tableOpenedAt[to];
+    const b = tableOpenedAt[from];
+    const mergedOpenedAt = a && b ? Math.min(a, b) : b || a || null;
+    setOrderItemsRemote(to, mergedItems, { note: mergedNote, openedAt: mergedOpenedAt });
+    setOrderItemsRemote(from, [], { note: '', discount: { type: null, value: 0 }, openedAt: null });
     if (from.startsWith('Paket ')) removePackageRecord(from);
   }
 
@@ -890,15 +885,7 @@ export default function useHipposData() {
       odemeTuru: method,
       urunler: payable.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
     });
-    setOrders((prev) => ({ ...prev, [table]: [] }));
-    setTableNotes((prev) => ({ ...prev, [table]: '' }));
-    setTableDiscounts((prev) => ({ ...prev, [table]: { type: null, value: 0 } }));
-    setTableOpenedAt((prev) => {
-      if (!(table in prev)) return prev;
-      const n = { ...prev };
-      delete n[table];
-      return n;
-    });
+    setOrderItemsRemote(table, [], { note: '', discount: { type: null, value: 0 }, openedAt: null });
     if (table.startsWith('Paket ')) removePackageRecord(table);
   }
 
@@ -1046,9 +1033,10 @@ export default function useHipposData() {
     packages,
     openPackage,
     orders,
-    setOrders,
-    updateOrder,
-    addOrderItemAtomic,
+    addOrderItem,
+    removeOrderItem,
+    updateOrderItem,
+    setOrderItemsRemote,
     tableNotes,
     setTableNotes,
     updateTableNote,
