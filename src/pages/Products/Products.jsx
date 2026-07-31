@@ -3,163 +3,54 @@ import './Products.css';
 import { TL } from '../../hooks/useHipposData';
 import {
   ArrowLeft, Search, Plus, Trash2, Pin, ChevronUp, ChevronDown,
-  Check, X, RefreshCw, Save,
+  Check, X, RefreshCw,
 } from 'lucide-react';
 
+// Bu sayfadaki her değişiklik ARTIK ANINDA Supabase'e yazılır ve tüm cihazlara
+// gerçek zamanlı yansır — "Kaydet/Vazgeç" ile bekletilen bir taslak kalmadı
+// (Masalar/Cari sayfalarıyla aynı canlı çalışma mantığı).
 export default function Products({ data, onNavigate }) {
-  // ---- Taslak (draft) durumu — Kaydet'e basılana kadar hiçbir şey canlıya yansımaz ----
-  const [draftProducts, setDraftProducts] = useState(() => data.products);
-  const [draftCategories, setDraftCategories] = useState(() => data.categories);
-  const [draftSubcategories, setDraftSubcategories] = useState(() => data.subcategories);
-  const [dirty, setDirty] = useState(false);
-
   const [toast, setToast] = useState('');
   function showToast(msg) {
     setToast(msg);
     setTimeout(() => setToast(''), 1800);
   }
 
-  // ---- Yerel (taslak üzerinde çalışan) mutasyon fonksiyonları ----
-  function localToggleProductStatus(id) {
-    setDraftProducts((prev) => {
-      const target = prev.find((p) => p.id === id);
-      if (!target) return prev;
-      const nextDurum = target.durum === 'PASIF' ? 'AKTIF' : 'PASIF';
-      return prev.map((p) => (p.id === id || p.parentId === id ? { ...p, durum: nextDurum } : p));
-    });
-    setDirty(true);
-  }
-
-  function localBulkSetCategoryStatus(kategori, durum) {
-    setDraftProducts((prev) =>
-      prev.map((p) => {
-        if (p.kategori !== kategori) return p;
-        if (durum === 'PASIF' && p.sabit) return p;
-        if (p.isAzVariant) {
-          const parent = prev.find((q) => q.id === p.parentId);
-          if (parent && parent.sabit && durum === 'PASIF') return p;
-        }
-        return { ...p, durum };
-      })
-    );
-    setDirty(true);
-  }
-
-  function localUpdateProduct(id, patch) {
-    setDraftProducts((prev) => {
-      const updated = prev.map((p) => (p.id === id ? { ...p, ...patch } : p));
-      if (patch.ad !== undefined) {
-        return updated.map((p) => (p.parentId === id ? { ...p, ad: `Az ${patch.ad}` } : p));
-      }
-      return updated;
-    });
-    setDirty(true);
-  }
-
-  function localDeleteProduct(id) {
-    setDraftProducts((prev) => prev.filter((p) => p.id !== id && p.parentId !== id));
-    setDirty(true);
-  }
+  // İsimler render bölümüyle uyumlu kalsın diye aynı bırakıldı, artık doğrudan canlı veriye yazıyor.
+  const localToggleProductStatus = data.toggleProductStatus;
+  const localBulkSetCategoryStatus = data.bulkSetCategoryStatus;
+  const localUpdateProduct = data.updateProduct;
+  const localDeleteProduct = data.deleteProduct;
+  const localSetAzPorsiyon = data.setAzPorsiyon;
+  const localAddCategory = data.addCategory;
+  const localUpdateCategoryMeta = data.updateCategoryMeta;
+  const localUpdateSubcategoryMeta = data.updateSubcategoryMeta;
 
   function localAddProduct(kategori, ad, fiyat, menuSirasi) {
-    const id = Date.now() + Math.random();
-    setDraftProducts((prev) => [
-      ...prev,
-      { id, kategori, altKategori: '', ad, fiyat: fiyat || 0, durum: 'AKTIF', menuSirasi: menuSirasi ?? 50, sabit: false, azPorsiyon: false, azFiyat: null, parentId: null, isAzVariant: false },
-    ]);
-    setDirty(true);
+    data.addProduct({ kategori, altKategori: '', ad, fiyat, menuSirasi });
   }
 
-  function localSetAzPorsiyon(id, enabled, azFiyat) {
-    setDraftProducts((prev) => {
-      const parent = prev.find((p) => p.id === id);
-      if (!parent) return prev;
-      if (enabled) {
-        const already = prev.find((p) => p.parentId === id);
-        if (already) {
-          return prev.map((p) =>
-            p.id === id ? { ...p, azPorsiyon: true, azFiyat }
-            : p.id === already.id ? { ...p, ad: `Az ${parent.ad}`, fiyat: azFiyat }
-            : p
-          );
-        }
-        const azProduct = {
-          id: Date.now() + Math.random(), kategori: parent.kategori, altKategori: parent.altKategori,
-          ad: `Az ${parent.ad}`, fiyat: azFiyat || 0, durum: parent.durum, menuSirasi: parent.menuSirasi,
-          sabit: false, azPorsiyon: false, azFiyat: null, parentId: id, isAzVariant: true,
-        };
-        return [...prev.map((p) => (p.id === id ? { ...p, azPorsiyon: true, azFiyat } : p)), azProduct];
-      }
-      return prev.filter((p) => p.parentId !== id).map((p) => (p.id === id ? { ...p, azPorsiyon: false, azFiyat: null } : p));
-    });
-    setDirty(true);
-  }
-
-  function localAddCategory(name) {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    setDraftCategories((prev) => {
-      if (prev.some((c) => c.name.toLowerCase() === trimmed.toLowerCase())) return prev;
-      const maxOrder = prev.reduce((m, c) => Math.max(m, c.menuSirasi), 0);
-      return [...prev, { name: trimmed, menuSirasi: Math.min(100, maxOrder + 10) || 10, sabit: false }];
-    });
-    setDirty(true);
-  }
-
-  function localUpdateCategoryMeta(name, patch) {
-    setDraftCategories((prev) => prev.map((c) => (c.name === name ? { ...c, ...patch } : c)));
-    setDirty(true);
-  }
-
-  function localUpdateSubcategoryMeta(kategori, name, patch) {
-    setDraftSubcategories((prev) => prev.map((s) => (s.kategori === kategori && s.name === name ? { ...s, ...patch } : s)));
-    setDirty(true);
-  }
-
-  // ---- Kaydet / Vazgeç ----
-  const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
+  // ---- Sheet'ten Çek (tek yönlü, manuel — Sheet'te toplu fiyat değiştirdiysen kullan) ----
   const [pullConfirmOpen, setPullConfirmOpen] = useState(false);
-
-  function handleDiscard() {
-    setDraftProducts(data.products);
-    setDraftCategories(data.categories);
-    setDraftSubcategories(data.subcategories);
-    setDirty(false);
-    showToast('Değişiklikler geri alındı');
-  }
-
-  async function confirmSave() {
-    data.setProducts(draftProducts);
-    data.setCategories(draftCategories);
-    data.setSubcategories(draftSubcategories);
-    setDirty(false);
-    setSaveConfirmOpen(false);
-    showToast('Kaydediliyor ve Sheets\'e yazılıyor...');
-    try {
-      const res = await fetch('/api/sheets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products: draftProducts, categories: draftCategories, subcategories: draftSubcategories }),
-      });
-      if (!res.ok) throw new Error('sync failed');
-      showToast('Kaydedildi, Sheets güncellendi');
-    } catch {
-      showToast('Kaydedildi ama Sheets\'e yazılamadı — bağlantıyı kontrol et');
-    }
-  }
 
   async function confirmPull() {
     setPullConfirmOpen(false);
-    showToast('Sheet\'ten çekiliyor...');
+    showToast('Sheet\'ten çekiliyor, birkaç saniye sürebilir...');
     try {
       const res = await fetch('/api/sheets');
       if (!res.ok) throw new Error('pull failed');
       const json = await res.json();
-      setDraftProducts(json.products);
-      setDraftCategories(json.categories);
-      setDraftSubcategories(json.subcategories);
-      setDirty(true);
-      showToast('Sheet\'ten çekildi — kontrol edip Kaydet\'e bas');
+      const sheetProducts = (json.products || []).filter((p) => !p.isAzVariant);
+      sheetProducts.forEach((p) => {
+        const existing = data.products.find((dp) => dp.ad === p.ad && dp.kategori === p.kategori);
+        if (existing) {
+          data.updateProduct(existing.id, { fiyat: p.fiyat, durum: p.durum, menuSirasi: p.menuSirasi, sabit: p.sabit });
+          if (p.azPorsiyon) data.setAzPorsiyon(existing.id, true, p.azFiyat);
+        } else {
+          data.addProduct({ kategori: p.kategori, altKategori: p.altKategori, ad: p.ad, fiyat: p.fiyat, menuSirasi: p.menuSirasi });
+        }
+      });
+      showToast('Sheet\'ten güncellendi (yeni ürünler eklendi, mevcutlar güncellendi)');
     } catch {
       showToast('Sheet\'ten çekilemedi — bağlantıyı kontrol et');
     }
@@ -209,7 +100,7 @@ export default function Products({ data, onNavigate }) {
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return null;
-    const matches = draftProducts.filter((p) => !p.isAzVariant && p.ad.toLowerCase().includes(q));
+    const matches = data.products.filter((p) => !p.isAzVariant && p.ad.toLowerCase().includes(q));
     matches.sort((a, b) => {
       const aStarts = a.ad.toLowerCase().startsWith(q) ? 0 : 1;
       const bStarts = b.ad.toLowerCase().startsWith(q) ? 0 : 1;
@@ -217,22 +108,22 @@ export default function Products({ data, onNavigate }) {
       return a.ad.localeCompare(b.ad, 'tr');
     });
     return matches;
-  }, [searchQuery, draftProducts]);
+  }, [searchQuery, data.products]);
 
   // ---- Kategori/ürün sıralaması: menü sırası, eşitse alfabetik ----
   const sortedCategories = useMemo(
-    () => [...draftCategories].sort((a, b) => a.menuSirasi - b.menuSirasi || a.name.localeCompare(b.name, 'tr')),
-    [draftCategories]
+    () => [...data.categories].sort((a, b) => a.menuSirasi - b.menuSirasi || a.name.localeCompare(b.name, 'tr')),
+    [data.categories]
   );
 
   function productsForCategory(kategori) {
-    return draftProducts
+    return data.products
       .filter((p) => p.kategori === kategori && !p.isAzVariant)
       .sort((a, b) => a.menuSirasi - b.menuSirasi || a.ad.localeCompare(b.ad, 'tr'));
   }
 
   function subcategoriesForCategory(kategori) {
-    return draftSubcategories
+    return data.subcategories
       .filter((s) => s.kategori === kategori)
       .sort((a, b) => a.menuSirasi - b.menuSirasi || a.name.localeCompare(b.name, 'tr'));
   }
@@ -245,7 +136,6 @@ export default function Products({ data, onNavigate }) {
       const alt = p.altKategori || '';
       (map[alt] = map[alt] || []).push(p);
     });
-    // alt kategori sırasını subs listesine göre kur, subs'ta olmayan (ör. boş) grupları sona ekle
     const ordered = subs.filter((s) => map[s.name]).map((s) => s.name);
     Object.keys(map).forEach((k) => { if (!ordered.includes(k)) ordered.push(k); });
     return ordered.map((alt) => ({ alt, items: map[alt], sub: subs.find((s) => s.name === alt) }));
@@ -258,7 +148,7 @@ export default function Products({ data, onNavigate }) {
   }
 
   function categoryFor(name) {
-    return draftCategories.find((c) => c.name === name);
+    return data.categories.find((c) => c.name === name);
   }
 
   return (
@@ -383,33 +273,7 @@ export default function Products({ data, onNavigate }) {
         <RefreshCw size={14} /> Sheet'ten Bilgi Çek
       </button>
 
-      {dirty && (
-        <div className="pr-save-bar">
-          <span>Kaydedilmemiş değişiklikler var</span>
-          <div className="pr-save-actions">
-            <button className="pr-discard" onClick={handleDiscard}>Vazgeç</button>
-            <button className="pr-save" onClick={() => setSaveConfirmOpen(true)}><Save size={14} /> Kaydet</button>
-          </div>
-        </div>
-      )}
-
       {toast && <div className="pr-toast">{toast}</div>}
-
-      {/* KAYDET ONAY */}
-      {saveConfirmOpen && (
-        <div className="pr-modal-overlay" onClick={() => setSaveConfirmOpen(false)}>
-          <div className="pr-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Değişiklikleri kaydet</h3>
-            <p className="pr-modal-hint">
-              Değişiklikler Hippos'a kaydedilecek ve aynı anda Google Sheets'e de yazılacak.
-            </p>
-            <div className="pr-modal-footer">
-              <button className="pr-secondary" onClick={() => setSaveConfirmOpen(false)}>Vazgeç</button>
-              <button className="pr-primary" onClick={confirmSave}>Kaydet</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* SHEET'TEN ÇEK ONAY */}
       {pullConfirmOpen && (
