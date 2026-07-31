@@ -549,12 +549,10 @@ export default function useHipposData() {
     };
   }, []);
 
-  // ---- Yedek mekanizma: gerçek zamanlı bildirim ara sıra kaçarsa (ağ titremesi vb.),
-  // masa durumunu sessizce birkaç saniyede bir kontrol edip farkı kendiliğinden düzeltir.
-  // Anlık senkron bunun üstüne bir "hız" katmanı; bu, garantili doğruluk katmanı.
-  // GEÇİCİ OLARAK KAPALI — Realtime'ın tek başına güvenilir olup olmadığını temiz test
-  // edebilmek için. Teşhis bitince "false" yerine "true" yapılıp tekrar açılabilir.
-  const POLLING_ENABLED = false;
+  // ---- Yedek mekanizma: kullanıcı loguyla KANITLANDI ki Realtime bazen bildirim göndermeyi
+  // tamamen atlıyor (RPC hatasız dönüyor ama postgres_changes hiç gelmiyor). Bu artık teorik
+  // bir önlem değil, gözlemlenmiş bir ihtiyaç — bu yüzden tekrar açık ve daha sık.
+  const POLLING_ENABLED = true;
   useEffect(() => {
     if (!POLLING_ENABLED) return;
     const id = setInterval(async () => {
@@ -609,7 +607,7 @@ export default function useHipposData() {
         });
         return changed ? next : prev;
       });
-    }, 20000);
+    }, 5000);
     return () => clearInterval(id);
   }, []);
 
@@ -672,12 +670,17 @@ export default function useHipposData() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ================== SİPARİŞ SATIRLARI (items) — TEK YÖNLÜ AKIŞ (TEŞHİS MODU) ==================
-  // Optimistic update GEÇİCİ OLARAK KALDIRILDI — önce saf "sadece Realtime'dan gelir"
-  // davranışını, ayrıntılı loglarla, kanıtlamadan düzeltmeye geçmiyoruz.
+  // ================== SİPARİŞ SATIRLARI (items) — TEK YÖNLÜ AKIŞ ==================
+  // KANIT (kullanıcı logu): RPC hatasız dönüyor (veritabanına yazma başarılı) ama bazen
+  // hiçbir postgres_changes bildirimi gelmiyor — yani sorun yarış durumu değil, Supabase
+  // Realtime'ın bazen bildirim göndermeyi atlaması. Bu yüzden hem anında yerel gösterim
+  // (aşağıda) hem de bir güvenlik ağı olarak polling (aşağıda POLLING_ENABLED) gerekli —
+  // ikisi de artık varsayım değil, gözlemlenmiş kanıta dayanıyor.
+  // Yerel setOrders çağrıları hâlâ hiçbir yere GERİ YAZILMIYOR — sadece ekran için.
 
   function addOrderItem(table, item) {
     console.log(`🟦 [1-ÇAĞRILDI] addOrderItem — masa: "${table}" — ürün: "${item.ad}" — local: ${Date.now()}`);
+    setOrders((prev) => ({ ...prev, [table]: [...(prev[table] || []), item] }));
     registerPackageIfNeeded(table);
     console.log(`🟨 [2-RPC GÖNDERİLİYOR] append_order_item — masa: "${table}" — local: ${Date.now()}`);
     supabase.rpc('append_order_item', { p_table_name: table, p_item: item }).then(({ error }) => {
@@ -688,6 +691,7 @@ export default function useHipposData() {
 
   function removeOrderItem(table, itemId) {
     console.log(`🟦 [1-ÇAĞRILDI] removeOrderItem — masa: "${table}" — local: ${Date.now()}`);
+    setOrders((prev) => ({ ...prev, [table]: (prev[table] || []).filter((i) => i.id !== itemId) }));
     console.log(`🟨 [2-RPC GÖNDERİLİYOR] remove_order_item — masa: "${table}" — local: ${Date.now()}`);
     supabase.rpc('remove_order_item', { p_table_name: table, p_item_id: itemId }).then(({ error }) => {
       console.log(`🟩 [3-RPC DÖNDÜ] remove_order_item — masa: "${table}" — hata: ${error ? error.message : 'yok'} — local: ${Date.now()}`);
@@ -697,6 +701,10 @@ export default function useHipposData() {
 
   function updateOrderItem(table, itemId, patch) {
     console.log(`🟦 [1-ÇAĞRILDI] updateOrderItem — masa: "${table}" — local: ${Date.now()}`);
+    setOrders((prev) => ({
+      ...prev,
+      [table]: (prev[table] || []).map((i) => (i.id === itemId ? { ...i, ...patch } : i)),
+    }));
     console.log(`🟨 [2-RPC GÖNDERİLİYOR] update_order_item — masa: "${table}" — local: ${Date.now()}`);
     supabase.rpc('update_order_item', { p_table_name: table, p_item_id: itemId, p_patch: patch }).then(({ error }) => {
       console.log(`🟩 [3-RPC DÖNDÜ] update_order_item — masa: "${table}" — hata: ${error ? error.message : 'yok'} — local: ${Date.now()}`);
