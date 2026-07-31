@@ -14,9 +14,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     toggleFavorite,
     allTables,
     orders,
-    addOrderItem,
-    removeOrderItem,
-    updateOrderItem,
+    dataLoaded,
     setOrderItemsRemote,
     tableNotes,
     setTableNotes,
@@ -59,15 +57,58 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [numpadOpen, setNumpadOpen] = useState(false);
   const numpadInputRef = useRef(null);
 
-  // Bu masayı ekranda açtığımızı diğer cihazlara bildir (aynı masaya girmeyi uyarmak için).
-  // Bu sayfadan tamamen ayrılınca (Masalar/Ayarlar'a geçince) kilidi bırak.
+  // ================== YEREL TASLAK (draftItems) ==================
+  // Masaya girdiğimizde o masanın o anki hâli taslak olarak yüklenir. Ürün ekleme/silme/
+  // değiştirme SIRASINDA hiçbir şey Supabase'e yazılmaz — tamamen yerel, anında, beklemesiz.
+  // Sadece masadan ÇIKARKEN (başka masa seçilince, Gönder ile Masalar'a geçilince, ya da
+  // sayfadan tamamen ayrılınca) taslak TEK SEFERDE Supabase'e yazılır ve diğer cihazlara
+  // o zaman yansır. Bu, sık sık anlık senkrona ihtiyaç duymayan gerçek kullanım şekline
+  // (bir masada tek kişi çalışır, bitirince gönderir) çok daha uygun ve çok daha hızlı.
+  const [draftItems, setDraftItems] = useState(() => orders[selectedTable] || []);
+  const draftItemsRef = useRef(draftItems);
   useEffect(() => {
+    draftItemsRef.current = draftItems;
+  }, [draftItems]);
+
+  const prevTableRef = useRef(selectedTable);
+
+  function flushDraftToSupabase(table, items) {
+    if (!table) return;
+    const baseline = orders[table] || [];
+    if (JSON.stringify(baseline) === JSON.stringify(items)) return; // değişiklik yoksa yazma
+    setOrderItemsRemote(table, items, items.length === 0 ? { note: '', discount: { type: null, value: 0 }, openedAt: null } : {});
+  }
+
+  // Masa değişince: ÖNCEKİ masanın taslağını gönder, sonra YENİ masanın güncel halini yükle.
+  useEffect(() => {
+    const leaving = prevTableRef.current;
+    if (leaving && leaving !== selectedTable) {
+      flushDraftToSupabase(leaving, draftItemsRef.current);
+    }
+    setDraftItems(orders[selectedTable] || []);
     announceViewingTable(selectedTable);
+    prevTableRef.current = selectedTable;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTable]);
 
+  // Sayfa ilk açıldığında Supabase verisi henüz gelmemiş olabilir — geldiği an (dataLoaded
+  // true olunca) taslağı bir kez daha gerçek veriyle eşitliyoruz (henüz kimse bir şey
+  // eklemediyse). Böylece "boş görünüp aslında dolu olan masa" riski ortadan kalkar.
+  const hasResyncedAfterLoadRef = useRef(false);
   useEffect(() => {
-    return () => clearViewingTable();
+    if (dataLoaded && !hasResyncedAfterLoadRef.current) {
+      hasResyncedAfterLoadRef.current = true;
+      setDraftItems(orders[selectedTable] || []);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataLoaded]);
+
+  // Sayfadan tamamen ayrılınca (Masalar/Ayarlar'a geçince): son taslağı gönder, kilidi bırak.
+  useEffect(() => {
+    return () => {
+      flushDraftToSupabase(prevTableRef.current, draftItemsRef.current);
+      clearViewingTable();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -86,7 +127,17 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [favModalSearch, setFavModalSearch] = useState('');
   const [toast, setToast] = useState('');
 
-  const currentOrder = orders[selectedTable] || [];
+  const currentOrder = draftItems;
+
+  function getCurrentDraftTotal() {
+    const subtotal = currentOrder.reduce((s, i) => s + (i.note ? 0 : i.fiyat), 0);
+    const d = tableDiscounts[selectedTable];
+    let discount = 0;
+    if (d && d.value > 0) {
+      discount = d.type === 'percent' ? (subtotal * d.value) / 100 : d.value;
+    }
+    return Math.max(0, subtotal - discount);
+  }
 
   function showToast(msg) {
     setToast(msg);
@@ -103,7 +154,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const selectedTotal = selectedItems.reduce((s, i) => s + i.fiyat, 0);
   const isOrderEmpty = currentOrder.length === 0;
 
-  // ---- Ürün işlemleri ----
+  // ---- Ürün işlemleri — TAMAMEN YEREL, Supabase'e masadan çıkınca yazılır ----
   function addProductToOrder(product) {
     const newItem = {
       id: Date.now() + Math.random(),
@@ -114,29 +165,23 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       selected: false,
       note: product.fiyat === 0,
     };
-    // Ekleme ATOMİK — iki cihaz aynı anda ürün eklerse birbirini silmez. Ekran, buradan değil
-    // gerçek zamanlı abonelikten güncellenir (React state hiçbir zaman "gerçek veri" olmaz).
-    addOrderItem(selectedTable, newItem);
+    setDraftItems((prev) => [...prev, newItem]);
   }
 
   function removeItem(id) {
-    removeOrderItem(selectedTable, id);
+    setDraftItems((prev) => prev.filter((i) => i.id !== id));
   }
 
   function toggleSelectItem(id) {
-    const item = currentOrder.find((i) => i.id === id);
-    if (!item) return;
-    updateOrderItem(selectedTable, id, { selected: !item.selected });
+    setDraftItems((prev) => prev.map((i) => (i.id === id ? { ...i, selected: !i.selected } : i)));
   }
 
   function handleUndoLastItem() {
-    const last = currentOrder[currentOrder.length - 1];
-    if (last) removeOrderItem(selectedTable, last.id);
+    setDraftItems((prev) => prev.slice(0, -1));
   }
 
   function handleClearSelection() {
-    if (currentOrder.length === 0) return;
-    setOrderItemsRemote(selectedTable, currentOrder.map((i) => ({ ...i, selected: false })));
+    setDraftItems((prev) => prev.map((i) => ({ ...i, selected: false })));
   }
 
   // "Art arda aynı ürün" vurgusu artık veride saklanmıyor, ekranda anlık hesaplanıyor
@@ -148,7 +193,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     return !cur.note && !prev.note && cur.ad === prev.ad;
   }
 
-  // ---- Masa notu ----
+  // ---- Masa notu (bu hâlâ anında yazılıyor — düşük çakışma riskli, düşük sıklıklı) ----
   function handleNoteChange(value) {
     updateTableNote(selectedTable, value);
   }
@@ -168,7 +213,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     try {
       const text = await navigator.clipboard.readText();
       if (!text.trim()) return;
-      addOrderItem(selectedTable, { id: Date.now() + Math.random(), ad: text.trim(), fiyat: 0, selected: false, note: true });
+      setDraftItems((prev) => [...prev, { id: Date.now() + Math.random(), ad: text.trim(), fiyat: 0, selected: false, note: true }]);
     } catch {
       showToast('Panoya erişilemedi');
     }
@@ -182,7 +227,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       showInput: true,
       onConfirm: (text) => {
         if (!text.trim()) return;
-        addOrderItem(selectedTable, { id: Date.now() + Math.random(), ad: text.trim(), fiyat: 0, selected: false, note: true });
+        setDraftItems((prev) => [...prev, { id: Date.now() + Math.random(), ad: text.trim(), fiyat: 0, selected: false, note: true }]);
       },
     });
   }
@@ -214,7 +259,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     if (!priceModal) return;
     const parsed = parseFloat(priceModal.value.replace(',', '.'));
     if (!isNaN(parsed) && parsed >= 0) {
-      updateOrderItem(selectedTable, priceModal.item.id, { fiyat: parsed });
+      setDraftItems((prev) => prev.map((i) => (i.id === priceModal.item.id ? { ...i, fiyat: parsed } : i)));
     }
     setPriceModal(null);
   }
@@ -236,11 +281,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       showSelect: true,
       selectOptions: emptyTables.map((t) => ({ value: t, label: `${t} [Boş]` })),
       onConfirm: (_, targetTable) => {
-        setOrderItemsRemote(targetTable, orders[selectedTable], {
+        setOrderItemsRemote(targetTable, currentOrder, {
           note: tableNotes[selectedTable] || '',
           discount: tableDiscounts[selectedTable] || { type: null, value: 0 },
         });
         setOrderItemsRemote(selectedTable, [], { note: '', discount: { type: null, value: 0 }, openedAt: null });
+        setDraftItems([]);
         setSelectedTable(targetTable);
       },
     });
@@ -262,12 +308,13 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       showSelect: true,
       selectOptions: occupied.map((t) => ({ value: t, label: `${t} (${TL(getTableTotal(t))})` })),
       onConfirm: (_, targetTable) => {
-        setOrderItemsRemote(targetTable, [...orders[targetTable], ...orders[selectedTable]], {
+        setOrderItemsRemote(targetTable, [...(orders[targetTable] || []), ...currentOrder], {
           note: tableNotes[selectedTable]
             ? `${tableNotes[targetTable] ? tableNotes[targetTable] + ' | ' : ''}${tableNotes[selectedTable]}`
             : tableNotes[targetTable] || '',
         });
         setOrderItemsRemote(selectedTable, [], { note: '', discount: { type: null, value: 0 }, openedAt: null });
+        setDraftItems([]);
         setSelectedTable(targetTable);
       },
     });
@@ -296,7 +343,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     });
 
     const remaining = currentOrder.filter((i) => !closedIds.has(i.id));
-    setOrderItemsRemote(selectedTable, remaining, remaining.length === 0 ? { discount: { type: null, value: 0 }, openedAt: null } : {});
+    setDraftItems(remaining);
+    if (remaining.length === 0) {
+      setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
+    }
     showToast(`${method} ile ödeme alındı`);
     setPayMode(false);
   }
@@ -345,7 +395,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     });
 
     const remaining = currentOrder.filter((i) => !closedIds.has(i.id));
-    setOrderItemsRemote(selectedTable, remaining, remaining.length === 0 ? { discount: { type: null, value: 0 }, openedAt: null } : {});
+    setDraftItems(remaining);
+    if (remaining.length === 0) {
+      setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
+    }
     setCariPickerOpen(false);
     setPayMode(false);
     showToast('Cariye gönderildi');
@@ -367,7 +420,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       title: `${selectedTable} masasındaki tüm siparişleri silmek istiyor musunuz?`,
       showInput: false,
       onConfirm: () => {
-        setOrderItemsRemote(selectedTable, [], { note: '', discount: { type: null, value: 0 }, openedAt: null });
+        setDraftItems([]);
+        setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
       },
     });
   }
@@ -438,7 +492,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 onClick={() => { setOccupiedConfirmTable(null); setTablePickerOpen((v) => !v); }}
               >
                 <span>
-                  {selectedTable} {(orders[selectedTable] && orders[selectedTable].length > 0) ? `(${TL(getTableTotal(selectedTable))})` : '[Boş]'}
+                  {selectedTable} {currentOrder.length > 0 ? `(${TL(getCurrentDraftTotal())})` : '[Boş]'}
                 </span>
                 <ChevronDown size={14} />
               </button>
@@ -477,8 +531,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                         </div>
                         <div className="ds-table-picker-list" ref={tablePickerListRef}>
                           {allTables.map((t) => {
-                            const tot = getTableTotal(t);
-                            const hasOrder = orders[t] && orders[t].length > 0;
+                            const isCurrent = t === selectedTable;
+                            const tot = isCurrent ? getCurrentDraftTotal() : getTableTotal(t);
+                            const hasOrder = isCurrent ? currentOrder.length > 0 : orders[t] && orders[t].length > 0;
                             const note = tableNotes[t];
                             const occupied = isTableOccupiedElsewhere(t);
                             return (

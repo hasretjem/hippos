@@ -339,6 +339,9 @@ export default function useHipposData() {
   const [cariOdemeler, setCariOdemeler] = useState([]);
   const [cariFaturalar, setCariFaturalar] = useState([]);
   const [cariGecmis, setCariGecmis] = useState([]);
+  // İlk Supabase yüklemesi bitince true olur — sayfalar, gerçek veri gelmeden eski/boş
+  // durumu "kesin doğru" sanıp yerel taslak oluşturmasın diye bunu bekleyebilir.
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   const allTables = useMemo(() => [...FIXED_TABLES, ...packages.map((p) => p.name)], [packages]);
 
@@ -437,6 +440,7 @@ export default function useHipposData() {
       setCariOdemeler((co.data || []).map(rowToOdeme));
       setCariFaturalar((cf.data || []).map(rowToFatura));
       setCariGecmis((cg.data || []).map(rowToGecmis));
+      setDataLoaded(true);
     }
     loadAll();
 
@@ -1094,6 +1098,7 @@ export default function useHipposData() {
     clearViewingTable,
     isTableOccupiedElsewhere,
     presenceMap,
+    dataLoaded,
     cariler,
     cariHareketler,
     cariOdemeler,
