@@ -10,7 +10,7 @@ import { supabase } from './services/supabase';
 
 export default function App() {
   const data = useHipposData();
-  const [activePage, setActivePage] = useState('pos');
+  const [activePage, setActivePage] = useState('tables');
   const [selectedTable, setSelectedTable] = useState(QUICK_SALE);
 
   useEffect(() => {
