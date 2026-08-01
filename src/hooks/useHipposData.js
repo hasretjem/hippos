@@ -722,11 +722,21 @@ export default function useHipposData() {
   function setOrderItemsRemote(table, items, opts = {}) {
     const patch = { table_name: table, items, updated_at: new Date().toISOString() };
     if ('note' in opts) patch.note = opts.note;
-    if ('openedAt' in opts) patch.opened_at = opts.openedAt ? new Date(opts.openedAt).toISOString() : null;
+    if ('openedAt' in opts) {
+      patch.opened_at = opts.openedAt ? new Date(opts.openedAt).toISOString() : null;
+    } else if (items.length > 0 && !tableOpenedAt[table]) {
+      // Bu masa/paket ilk kez doluyor ama açılış zamanı hiç ayarlanmamış — HATA BUYDU
+      // ("Invalid Date / 0 dk" sabit kalıyordu). Şimdi burada, tek merkezden garanti ediyoruz.
+      patch.opened_at = new Date().toISOString();
+    }
     if ('discount' in opts) {
       patch.discount_type = opts.discount?.type ?? null;
       patch.discount_value = opts.discount?.value ?? 0;
     }
+    // Paket, ilk kez içerik kazandığı an "gerçek" hale gelsin — bu çağrı eskiden addOrderItem
+    // içinden geliyordu, yeni "yerel taslak" mimarisinde o yol devre dışı kaldığı için paketler
+    // hiç kayda geçmiyordu (Paketler panelinde görünmüyordu). Artık tek merkezden garanti ediliyor.
+    if (items.length > 0) registerPackageIfNeeded(table);
     supabase.from('table_state').upsert(patch, { onConflict: 'table_name' }).then(({ error }) => {
       if (error) console.error('masa durumu yazılamadı:', error.message);
     });
