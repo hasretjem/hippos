@@ -15,7 +15,7 @@ const CANVAS_H = 1920;
 const FONT = 'Trocchi';
 
 const SECTIONS = {
-  corba: { label: 'Günün Çorbası', max: 1, startX: 125, startY: 546, priceRightX: 835, lineHeight: 0 },
+  corba: { label: 'Günün Çorbası', max: 1, startX: 125, startY: 546, priceRightX: 940, lineHeight: 0 },
   ana: { label: 'Ana Yemekler', max: 10, startX: 125, startY: 681, priceRightX: 940, lineHeight: 51 },
   yardimci: { label: 'Yardımcı Yemekler', max: 2, startX: 125, startY: 1310, priceRightX: 940, lineHeight: 51 },
   zeytinyagli: { label: 'Zeytinyağlılar', max: 6, startX: 125, startY: 1509, priceRightX: 940, lineHeight: 51 },
