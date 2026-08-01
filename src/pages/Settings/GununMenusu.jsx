@@ -80,7 +80,11 @@ async function renderMenuCanvas({ tarihText, corba, ana, yardimci, zeytinyagli }
   ctx.drawImage(sablon, 0, 0, CANVAS_W, CANVAS_H);
 
   ctx.fillStyle = '#000000';
-  ctx.textBaseline = 'alphabetic';
+  // Figma'daki Y koordinatları metnin ÜST kenarını gösteriyor — Canvas'ın varsayılanı
+  // ise "baseline" (harflerin oturduğu alt çizgi). İkisi karışınca her satır olması
+  // gerekenden yukarı kayıyordu (özellikle dar aralıklı Çorba bölümünde belirgindi).
+  // 'top' moduna geçince Y artık gerçekten "metnin üstü" anlamına geliyor.
+  ctx.textBaseline = 'top';
 
   // ---- Tarih ----
   ctx.font = `${DATE_SIZE}px "${FONT}"`;
