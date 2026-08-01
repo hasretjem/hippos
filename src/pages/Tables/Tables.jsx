@@ -86,12 +86,19 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
   function askTransfer(e, table) {
     e.stopPropagation();
     setMenuFor(null);
-    const targets = allDynamicTargets.filter((t) => t !== table && (!orders[t] || orders[t].length === 0));
+    if (isTableOccupiedElsewhere(table)) {
+      return;
+    }
+    const targets = allDynamicTargets.filter((t) => t !== table && (!orders[t] || orders[t].length === 0) && !isTableOccupiedElsewhere(t));
     if (targets.length === 0) return;
     setPickModal({
       title: `${table} nereye taşınsın?`,
       options: targets,
       onPick: (target) => {
+        if (isTableOccupiedElsewhere(table) || isTableOccupiedElsewhere(target)) {
+          setPickModal(null);
+          return;
+        }
         transferTable(table, target);
         setPickModal(null);
       },
@@ -101,12 +108,19 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
   function askMerge(e, table) {
     e.stopPropagation();
     setMenuFor(null);
-    const targets = allDynamicTargets.filter((t) => t !== table && orders[t] && orders[t].length > 0);
+    if (isTableOccupiedElsewhere(table)) {
+      return;
+    }
+    const targets = allDynamicTargets.filter((t) => t !== table && orders[t] && orders[t].length > 0 && !isTableOccupiedElsewhere(t));
     if (targets.length === 0) return;
     setPickModal({
       title: `${table} hangi masayla birleştirilsin?`,
       options: targets,
       onPick: (target) => {
+        if (isTableOccupiedElsewhere(table) || isTableOccupiedElsewhere(target)) {
+          setPickModal(null);
+          return;
+        }
         mergeTable(table, target);
         setPickModal(null);
       },
@@ -125,6 +139,10 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
   }
 
   function handleDragStart(e, table) {
+    if (isTableOccupiedElsewhere(table)) {
+      e.preventDefault();
+      return;
+    }
     setDragFrom(table);
     e.dataTransfer.effectAllowed = 'move';
   }
@@ -136,6 +154,10 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     e.preventDefault();
     setDragOverTable(null);
     if (!dragFrom || dragFrom === table) {
+      setDragFrom(null);
+      return;
+    }
+    if (isTableOccupiedElsewhere(dragFrom) || isTableOccupiedElsewhere(table)) {
       setDragFrom(null);
       return;
     }
@@ -414,4 +436,4 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       )}
     </div>
   );
-}
+} 

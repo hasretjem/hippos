@@ -47,10 +47,13 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
   const [occupiedConfirmTable, setOccupiedConfirmTable] = useState(null);
   const tablePickerListRef = useRef(null);
+  const productsScrollRef = useRef(null);
 
-  function scrollTablePicker(direction) {
-    if (tablePickerListRef.current) {
-      tablePickerListRef.current.scrollBy({ top: direction * 160, behavior: 'smooth' });
+  // Aşağı/yukarı bastıkça, o an görünen kadarlık bir "sayfa" ileri/geri kayar — yani şu an
+  // ekranda duran satırlar tamamen kaybolup hemen altındaki (ya da üstündeki) satırlar gelir.
+  function scrollByPage(ref, direction) {
+    if (ref.current) {
+      ref.current.scrollBy({ top: direction * ref.current.clientHeight, behavior: 'smooth' });
     }
   }
 
@@ -64,7 +67,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   // sayfadan tamamen ayrılınca) taslak TEK SEFERDE Supabase'e yazılır ve diğer cihazlara
   // o zaman yansır. Bu, sık sık anlık senkrona ihtiyaç duymayan gerçek kullanım şekline
   // (bir masada tek kişi çalışır, bitirince gönderir) çok daha uygun ve çok daha hızlı.
-  const [draftItems, setDraftItems] = useState(() => orders[selectedTable] || []);
+  //
+  // İSTİSNA — Hızlı Satış (⚡): bu bir "masa" DEĞİL. Her cihazın kendine ait, tamamen
+  // bağımsız/yerel bir oturumu var. Supabase'e ASLA yazılmaz, kilitlenmez, diğer cihazlarla
+  // paylaşılmaz. Gönder/Ödeme Al ile satış GERÇEK bir kayıt olur (sales_history/Sheets),
+  // ama "masa" olarak hiçbir yerde saklanmaz.
+  const [draftItems, setDraftItems] = useState(() => (selectedTable === QUICK_SALE ? [] : orders[selectedTable] || []));
   const draftItemsRef = useRef(draftItems);
   useEffect(() => {
     draftItemsRef.current = draftItems;
@@ -73,7 +81,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const prevTableRef = useRef(selectedTable);
 
   function flushDraftToSupabase(table, items) {
-    if (!table) return;
+    if (!table || table === QUICK_SALE) return; // Hızlı Satış hiçbir zaman Supabase'e yazılmaz
     const baseline = orders[table] || [];
     if (JSON.stringify(baseline) === JSON.stringify(items)) return; // değişiklik yoksa yazma
     setOrderItemsRemote(table, items, items.length === 0 ? { note: '', discount: { type: null, value: 0 }, openedAt: null } : {});
@@ -85,8 +93,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     if (leaving && leaving !== selectedTable) {
       flushDraftToSupabase(leaving, draftItemsRef.current);
     }
-    setDraftItems(orders[selectedTable] || []);
-    announceViewingTable(selectedTable);
+    setDraftItems(selectedTable === QUICK_SALE ? [] : orders[selectedTable] || []);
+    if (selectedTable !== QUICK_SALE) announceViewingTable(selectedTable); // Hızlı Satış kilitlenmez
     prevTableRef.current = selectedTable;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTable]);
@@ -98,7 +106,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   useEffect(() => {
     if (dataLoaded && !hasResyncedAfterLoadRef.current) {
       hasResyncedAfterLoadRef.current = true;
-      setDraftItems(orders[selectedTable] || []);
+      if (selectedTable !== QUICK_SALE) setDraftItems(orders[selectedTable] || []);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataLoaded]);
@@ -107,7 +115,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   useEffect(() => {
     return () => {
       flushDraftToSupabase(prevTableRef.current, draftItemsRef.current);
-      clearViewingTable();
+      if (prevTableRef.current !== QUICK_SALE) clearViewingTable();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -270,9 +278,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       setGenericModal({ title: 'Transfer edilecek sipariş yok!', showInput: false });
       return;
     }
-    const emptyTables = allTables.filter((t) => t !== selectedTable && (!orders[t] || orders[t].length === 0));
+    if (isTableOccupiedElsewhere(selectedTable)) {
+      setGenericModal({ title: 'Bu masa şu an başka bir cihazda açık, taşıma yapılamaz!', showInput: false });
+      return;
+    }
+    const emptyTables = allTables.filter(
+      (t) => t !== selectedTable && (!orders[t] || orders[t].length === 0) && !isTableOccupiedElsewhere(t)
+    );
     if (emptyTables.length === 0) {
-      setGenericModal({ title: 'Transfer edilebilecek boş masa bulunamadı!', showInput: false });
+      setGenericModal({ title: 'Transfer edilebilecek boş ve kilitsiz masa bulunamadı!', showInput: false });
       return;
     }
     setGenericModal({
@@ -281,12 +295,19 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       showSelect: true,
       selectOptions: emptyTables.map((t) => ({ value: t, label: `${t} [Boş]` })),
       onConfirm: (_, targetTable) => {
+        if (isTableOccupiedElsewhere(selectedTable) || isTableOccupiedElsewhere(targetTable)) {
+          showToast('Masa(lar) artık kilitli, taşınamadı');
+          return;
+        }
         setOrderItemsRemote(targetTable, currentOrder, {
           note: tableNotes[selectedTable] || '',
           discount: tableDiscounts[selectedTable] || { type: null, value: 0 },
         });
         setOrderItemsRemote(selectedTable, [], { note: '', discount: { type: null, value: 0 }, openedAt: null });
         setDraftItems([]);
+        // Otomatik "masadan çıkış" efektinin, biraz önce elle boşalttığımız kaynak masayı
+        // TEKRAR (bayat taslakla) yazmaya çalışmasını önlemek için referansı elle ilerletiyoruz.
+        prevTableRef.current = targetTable;
         setSelectedTable(targetTable);
       },
     });
@@ -297,17 +318,27 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       setGenericModal({ title: 'Birleştirilecek sipariş bulunmuyor!', showInput: false });
       return;
     }
-    const occupied = allTables.filter((t) => t !== selectedTable && orders[t] && orders[t].length > 0);
-    if (occupied.length === 0) {
-      setGenericModal({ title: 'Birleştirilecek başka dolu masa bulunamadı!', showInput: false });
+    if (isTableOccupiedElsewhere(selectedTable)) {
+      setGenericModal({ title: 'Bu masa şu an başka bir cihazda açık, birleştirme yapılamaz!', showInput: false });
+      return;
+    }
+    const occupiedTables = allTables.filter(
+      (t) => t !== selectedTable && orders[t] && orders[t].length > 0 && !isTableOccupiedElsewhere(t)
+    );
+    if (occupiedTables.length === 0) {
+      setGenericModal({ title: 'Birleştirilebilecek dolu ve kilitsiz masa bulunamadı!', showInput: false });
       return;
     }
     setGenericModal({
       title: `${selectedTable} Masasını Dolu Masa İle Birleştir`,
       showInput: false,
       showSelect: true,
-      selectOptions: occupied.map((t) => ({ value: t, label: `${t} (${TL(getTableTotal(t))})` })),
+      selectOptions: occupiedTables.map((t) => ({ value: t, label: `${t} (${TL(getTableTotal(t))})` })),
       onConfirm: (_, targetTable) => {
+        if (isTableOccupiedElsewhere(selectedTable) || isTableOccupiedElsewhere(targetTable)) {
+          showToast('Masa(lar) artık kilitli, birleştirilemedi');
+          return;
+        }
         setOrderItemsRemote(targetTable, [...(orders[targetTable] || []), ...currentOrder], {
           note: tableNotes[selectedTable]
             ? `${tableNotes[targetTable] ? tableNotes[targetTable] + ' | ' : ''}${tableNotes[selectedTable]}`
@@ -315,6 +346,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
         });
         setOrderItemsRemote(selectedTable, [], { note: '', discount: { type: null, value: 0 }, openedAt: null });
         setDraftItems([]);
+        prevTableRef.current = targetTable;
         setSelectedTable(targetTable);
       },
     });
@@ -352,6 +384,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   }
 
   function handleSend() {
+    if (selectedTable === QUICK_SALE) {
+      // Hızlı Satış'ta "Gönder" = "Ödeme Al" ile birebir aynı: ödeme türü sorulur,
+      // seçilince taslak temizlenir, sayfa DEĞİŞMEZ — sıradaki müşteri hemen girilebilir.
+      setPayMode(true);
+      return;
+    }
     onNavigate('tables');
   }
 
@@ -558,8 +596,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                           })}
                         </div>
                         <div className="ds-table-picker-scrollbtns">
-                          <button onClick={() => scrollTablePicker(-1)}><ChevronUp size={16} /></button>
-                          <button onClick={() => scrollTablePicker(1)}><ChevronDown size={16} /></button>
+                          <button onClick={() => scrollByPage(tablePickerListRef, -1)}><ChevronUp size={16} /></button>
+                          <button onClick={() => scrollByPage(tablePickerListRef, 1)}><ChevronDown size={16} /></button>
                         </div>
                       </>
                     )}
@@ -621,33 +659,39 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
           </section>
 
           {/* ÜRÜN GRID */}
-          <div className="ds-products">
-            {Object.keys(groupedProducts).length === 0 && (
-              <div className="ds-empty">Aradığınız kriterde ürün bulunamadı.</div>
-            )}
-            {Object.entries(groupedProducts).map(([subCat, items]) => (
-              <div key={subCat} className="ds-product-group">
-                {subCat && subCat !== 'Genel' && <h3 className="ds-subcat-label">{subCat}</h3>}
-                <div className="ds-product-grid">
-                  {items.map((product) => {
-                    const isFav = favorites.includes(product.id);
-                    return (
-                      <button
-                        key={product.id}
-                        className={`ds-product-card ${isFav ? 'fav' : ''}`}
-                        onClick={() => addProductToOrder(product)}
-                      >
-                        <div className="ds-product-card-top">
-                          <span className="ds-product-name">{product.ad}</span>
-                          {isFav && <Star size={11} className="ds-star" fill="currentColor" />}
-                        </div>
-                        <span className="ds-product-price">{TL(product.fiyat)}</span>
-                      </button>
-                    );
-                  })}
+          <div className="ds-products-wrap">
+            <div className="ds-products" ref={productsScrollRef}>
+              {Object.keys(groupedProducts).length === 0 && (
+                <div className="ds-empty">Aradığınız kriterde ürün bulunamadı.</div>
+              )}
+              {Object.entries(groupedProducts).map(([subCat, items]) => (
+                <div key={subCat} className="ds-product-group">
+                  {subCat && subCat !== 'Genel' && <h3 className="ds-subcat-label">{subCat}</h3>}
+                  <div className="ds-product-grid">
+                    {items.map((product) => {
+                      const isFav = favorites.includes(product.id);
+                      return (
+                        <button
+                          key={product.id}
+                          className={`ds-product-card ${isFav ? 'fav' : ''}`}
+                          onClick={() => addProductToOrder(product)}
+                        >
+                          <div className="ds-product-card-top">
+                            <span className="ds-product-name">{product.ad}</span>
+                            {isFav && <Star size={11} className="ds-star" fill="currentColor" />}
+                          </div>
+                          <span className="ds-product-price">{TL(product.fiyat)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            <div className="ds-products-scrollbtns">
+              <button onClick={() => scrollByPage(productsScrollRef, -1)}><ChevronUp size={16} /></button>
+              <button onClick={() => scrollByPage(productsScrollRef, 1)}><ChevronDown size={16} /></button>
+            </div>
           </div>
         </main>
 
@@ -951,6 +995,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       {/* YAZDIRMA ŞABLONU */}
       <div id="print-receipt" ref={printRef}>
         <h2>{selectedTable}</h2>
+        {tableNotes[selectedTable] && <div className="print-note">{tableNotes[selectedTable]}</div>}
         <div className="print-meta">
           <span>{new Date().toLocaleDateString('tr-TR')}</span>
           <span>{new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>

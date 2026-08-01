@@ -329,6 +329,7 @@
 .ds-fav-chip-price { font-size: 13px; font-weight: 700; color: var(--olive); }
 
 /* ---- Ürün alanı (kendi paneli) ---- */
+.ds-products-wrap { flex: 1; min-height: 0; position: relative; display: flex; }
 .ds-products {
   flex: 1;
   overflow-y: auto;
@@ -338,6 +339,28 @@
   box-shadow: var(--shadow-1);
   padding: 20px;
 }
+.ds-products-scrollbtns {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: flex;
+  gap: 8px;
+  z-index: 5;
+}
+.ds-products-scrollbtns button {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--ink-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-2);
+}
+.ds-products-scrollbtns button:hover { background: var(--panel-2); color: var(--ink); }
 .ds-product-group { margin-bottom: 24px; }
 .ds-product-group:last-child { margin-bottom: 0; }
 .ds-subcat-label {
@@ -878,6 +901,7 @@
     padding: 12px;
   }
   #print-receipt h2 { text-align: center; font-size: 16px; margin: 0 0 6px; }
+  #print-receipt .print-note { text-align: center; font-size: 12px; font-weight: 700; margin: -2px 0 8px; }
   .print-meta { display: flex; justify-content: space-between; font-size: 11px; border-bottom: 1px dashed #000; padding-bottom: 6px; margin-bottom: 8px; }
   .print-items { font-size: 12px; line-height: 1.5; margin-bottom: 8px; }
   .print-row { display: flex; justify-content: space-between; }
