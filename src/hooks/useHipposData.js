@@ -760,19 +760,17 @@ export default function useHipposData() {
   }
 
   // ---- Paketler ----
+  // "Yeni Paket" butonuna basınca çağrılır — SADECE bir isim üretir (ör. "Paket 1"),
+  // sayacı henüz TÜKETMEZ. Sayı, paket GERÇEKTEN içerik kazandığında (registerPackageIfNeeded)
+  // kesinleşir. Böylece "Yeni Paket'e bas, hiç ürün ekleme, Gönder" durumunda numara boşa
+  // harcanmaz — bir sonraki gerçek paket yine aynı numarayı alır.
   function openPackage() {
     let meta = packageMeta;
     if (meta.date !== todayStr()) meta = { date: todayStr(), next: 1 };
     const num = meta.next;
     const name = `Paket ${num}`;
-    const nextMeta = { date: meta.date, next: num + 1 };
-    setPackageMeta(nextMeta);
     setTableNotes((prev) => ({ ...prev, [name]: '' }));
     setTableDiscounts((prev) => ({ ...prev, [name]: { type: null, value: 0 } }));
-    supabase
-      .from('package_meta')
-      .upsert({ id: 1, meta_date: nextMeta.date, next_num: nextMeta.next })
-      .then(({ error }) => { if (error) console.error('paket sayacı güncellenemedi:', error.message); });
     return name;
   }
 
@@ -785,6 +783,18 @@ export default function useHipposData() {
         if (error) console.error('paket eklenemedi:', error.message);
       });
       return [...prev, { name: table, num }];
+    });
+    // Sayaç, paket GERÇEKTEN içerik kazandığı bu anda tüketilir (openPackage'da değil).
+    setPackageMeta((prev) => {
+      let meta = prev;
+      if (meta.date !== todayStr()) meta = { date: todayStr(), next: 1 };
+      const num = parseInt(table.replace('Paket ', ''), 10) || 0;
+      if (num < meta.next) return meta; // bu numara zaten tüketilmiş, sayaç geride kalmasın
+      const next = { date: meta.date, next: num + 1 };
+      supabase.from('package_meta').upsert({ id: 1, meta_date: next.date, next_num: next.next }).then(({ error }) => {
+        if (error) console.error('paket sayacı güncellenemedi:', error.message);
+      });
+      return next;
     });
   }
 
