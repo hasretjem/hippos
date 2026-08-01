@@ -59,7 +59,7 @@ export default function App() {
       {activePage === 'cariler' && (
         <Cariler data={data} onNavigate={handleNavigate} />
       )}
-      {activePage !== 'products' && <BottomNav activePage={activePage} onNavigate={handleNavigate} />}
+      {activePage !== 'products' && activePage !== 'pos' && <BottomNav activePage={activePage} onNavigate={handleNavigate} />}
     </>
   );
 }
