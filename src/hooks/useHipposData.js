@@ -660,10 +660,16 @@ export default function useHipposData() {
 
       // Paketçi mobil paneli ile ana panel arasında da AYNI güvenlik ağı gerekiyor —
       // yeni paket açılması / paketçinin teslim bildirmesi Realtime'ı bazen kaçırabiliyor.
-      const [pkRes, ptRes, ctbRes] = await Promise.all([
+      // Cari tarafı da aynı şekilde: yeni cari hareketi (bakiye değişimi) veya paketçinin
+      // cari ödeme bildirimi de bu korumaya dahil.
+      const [pkRes, ptRes, ctbRes, crRes, chRes, coRes, cfRes] = await Promise.all([
         supabase.from('packages').select('*'),
         supabase.from('paket_teslimatlari').select('*'),
         supabase.from('cari_teslimat_bildirimleri').select('*'),
+        supabase.from('cariler').select('*'),
+        supabase.from('cari_hareketler').select('*'),
+        supabase.from('cari_odemeler').select('*'),
+        supabase.from('cari_faturalar').select('*'),
       ]);
       if (pkRes.data) {
         setPackages((prev) => {
@@ -680,6 +686,30 @@ export default function useHipposData() {
       if (ctbRes.data) {
         setCariTeslimatBildirimleri((prev) => {
           const next = ctbRes.data.map(rowToCariTeslimatBildirim).sort((a, b) => b.ts - a.ts);
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
+      }
+      if (crRes.data) {
+        setCariler((prev) => {
+          const next = crRes.data.map(rowToCari);
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
+      }
+      if (chRes.data) {
+        setCariHareketler((prev) => {
+          const next = chRes.data.map(rowToHareket);
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
+      }
+      if (coRes.data) {
+        setCariOdemeler((prev) => {
+          const next = coRes.data.map(rowToOdeme);
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
+      }
+      if (cfRes.data) {
+        setCariFaturalar((prev) => {
+          const next = cfRes.data.map(rowToFatura);
           return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
         });
       }

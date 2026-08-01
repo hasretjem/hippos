@@ -146,6 +146,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [favModalCategory, setFavModalCategory] = useState('Tümü');
   const [favModalSearch, setFavModalSearch] = useState('');
   const [toast, setToast] = useState('');
+  const [photoModalUrl, setPhotoModalUrl] = useState(null); // paketçi fotoğrafını pop-up'ta göstermek için
 
   const currentOrder = draftItems;
 
@@ -856,9 +857,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   </div>
                   {bekleyenHareket.notMetni && <div className="ds-courier-note">"{bekleyenHareket.notMetni}"</div>}
                   {bekleyenHareket.fotoUrl && (
-                    <a href={bekleyenHareket.fotoUrl} target="_blank" rel="noreferrer" className="ds-courier-foto-link">
+                    <button onClick={() => setPhotoModalUrl(bekleyenHareket.fotoUrl)} className="ds-courier-foto-link">
                       Fotoğrafı Gör
-                    </a>
+                    </button>
                   )}
                   <div className="ds-courier-actions">
                     <button className="ds-courier-approve" onClick={() => onaylaPaketTeslimat(bekleyenHareket.id)}>
@@ -877,6 +878,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                       {h.durum === 'bekliyor' ? 'Bekliyor' : h.durum === 'onaylandi' ? 'Onaylandı' : 'Reddedildi'}
                     </span>
                     <span>{h.tip === 'teslim_edildi' ? 'Teslim Edildi' : `Kısmi: ${TL(h.tutar)}`} — {h.paketciAdi}</span>
+                    {h.fotoUrl && (
+                      <button className="ds-courier-history-foto" onClick={() => setPhotoModalUrl(h.fotoUrl)}>Foto</button>
+                    )}
                     {h.onayNotu && <span className="ds-courier-reject-note">({h.onayNotu})</span>}
                   </div>
                 ))}
@@ -1071,6 +1075,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       {/* GENEL DİYALOG MODALI */}
       {genericModal && (
         <GenericModal modal={genericModal} onClose={() => setGenericModal(null)} />
+      )}
+
+      {photoModalUrl && (
+        <div className="ds-modal-overlay" onClick={() => setPhotoModalUrl(null)}>
+          <div className="ds-photo-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="ds-modal-x" onClick={() => setPhotoModalUrl(null)}><X size={18} /></button>
+            <img src={photoModalUrl} alt="Paketçi fotoğrafı" />
+          </div>
+        </div>
       )}
 
       {/* YAZDIRMA ŞABLONU */}

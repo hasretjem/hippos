@@ -81,6 +81,17 @@
 .pk-status-tag.reject { background: #F6DEDA; color: var(--danger); }
 .pk-status-tag.ok { background: #E1EADB; color: var(--olive); }
 
+.pk-drink-warning {
+  display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
+  background: #FDEBD3; color: #A9631A; font-size: 12px; font-weight: 800;
+  padding: 4px 10px; border-radius: 999px; margin-top: 2px;
+}
+.pk-drink-warning-big {
+  display: flex; align-items: center; gap: 8px; justify-content: center;
+  background: #FDEBD3; color: #A9631A; font-size: 14px; font-weight: 800;
+  padding: 12px; border-radius: 14px; border: 1.5px dashed #E3A34F;
+}
+
 .pk-detail { display: flex; flex-direction: column; gap: 14px; }
 .pk-back-btn {
   align-self: flex-start; display: flex; align-items: center; gap: 4px; background: none; border: none;

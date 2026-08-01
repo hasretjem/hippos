@@ -3,7 +3,7 @@ import './Paketci.css';
 import { TL } from '../../hooks/useHipposData';
 import {
   Package, Users, Camera, Image as ImageIcon, StickyNote, Check, X,
-  ChevronLeft, Wallet, Undo2, Clock, User, AlertTriangle,
+  ChevronLeft, Wallet, Undo2, Clock, User, AlertTriangle, CupSoda,
 } from 'lucide-react';
 
 const ODEME_YONTEMLERI = ['Nakit', 'Kredi Kartı', 'Yemek Kartı', 'Diğer'];
@@ -55,11 +55,12 @@ export default function Paketci({ data }) {
         const hareketler = paketTeslimatlari.filter((h) => h.paketAdi === p.name).sort((a, b) => b.ts - a.ts);
         const sonHareket = hareketler[0] || null;
         const teslimEdildiOnayli = hareketler.some((h) => h.tip === 'teslim_edildi' && h.durum === 'onaylandi');
-        return { ...p, hareketler, sonHareket, teslimEdildiOnayli };
+        const hasIcecek = (orders[p.name] || []).some((i) => i.kategori === 'İÇECEKLER');
+        return { ...p, hareketler, sonHareket, teslimEdildiOnayli, hasIcecek };
       })
       .filter((p) => !p.teslimEdildiOnayli)
       .sort((a, b) => a.num - b.num);
-  }, [packages, paketTeslimatlari]);
+  }, [packages, paketTeslimatlari, orders]);
 
   function paketTutar(name) {
     const items = orders[name] || [];
@@ -82,6 +83,7 @@ export default function Paketci({ data }) {
   const cariListesi = useMemo(() => {
     const q = cariSearch.trim().toLowerCase();
     return (cariler || [])
+      .filter((c) => c.tip === 'bireysel') // paketçi firma carilerine ulaşamaz
       .filter((c) => !q || c.ad.toLowerCase().includes(q))
       .sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
   }, [cariler, cariSearch]);
@@ -145,6 +147,7 @@ export default function Paketci({ data }) {
                     <span className="pk-list-item-total">{TL(paketTutar(p.name))}</span>
                   </div>
                   {tableNotes[p.name] && <div className="pk-list-item-note"><StickyNote size={11} /> {tableNotes[p.name]}</div>}
+                  {p.hasIcecek && <div className="pk-drink-warning"><CupSoda size={13} /> Siparişte İçecek Var!</div>}
                   {durumEtiketi && <div className={`pk-status-tag ${durumEtiketi.cls}`}>{durumEtiketi.text}</div>}
                 </button>
               );
@@ -224,9 +227,13 @@ export default function Paketci({ data }) {
 }
 
 function PaketDetay({ paket, onBack, onAction }) {
+  const hasIcecek = paket.items.some((i) => i.kategori === 'İÇECEKLER');
   return (
     <div className="pk-detail">
       <button className="pk-back-btn" onClick={onBack}><ChevronLeft size={16} /> Listeye dön</button>
+      {hasIcecek && (
+        <div className="pk-drink-warning-big"><CupSoda size={18} /> Siparişte İçecek Var!</div>
+      )}
       <div className="pk-detail-card">
         <h2>{paket.name}</h2>
         {paket.not && <div className="pk-detail-note"><StickyNote size={13} /> {paket.not}</div>}
