@@ -262,6 +262,18 @@
   cursor: text;
 }
 .tb-card-compact .tb-note-edit { margin-top: 1px; }
+.tb-delivery-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-top: 4px;
+  display: inline-block;
+  width: fit-content;
+}
+.tb-delivery-tag.bekliyor { background: #F3E7D0; color: #B8863B; }
+.tb-delivery-tag.onaylandi { background: #E1EADB; color: #4B5A3E; }
+.tb-delivery-tag.reddedildi { background: #F6DEDA; color: #B44B3E; }
 
 .tb-package-list.compact .tb-card-compact { padding: 8px 11px; }
 .tb-package-list.compact .tb-card-name { font-size: 12.5px; }

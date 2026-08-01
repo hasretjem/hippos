@@ -24,6 +24,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     actionHistory,
     undoLastAction,
     isTableOccupiedElsewhere,
+    paketTeslimatlari,
   } = data;
 
   // Renk-zaman kademesi her 30 dk'da bir değişsin diye periyodik yeniden çizim
@@ -185,6 +186,11 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     const isEditing = editingNoteFor === table;
     const isMenuOpen = menuFor === table;
     const occupiedElsewhere = isTableOccupiedElsewhere(table);
+    // Paketçi mobil panelinden gelen SON teslimat bildirimi (varsa) — sadece bilgi amaçlı,
+    // satış durumunu etkilemez.
+    const sonTeslimat = paketTeslimatlari
+      .filter((h) => h.paketAdi === table)
+      .sort((a, b) => b.ts - a.ts)[0];
 
     const noteEditRow = isEditing && (
       <div className="tb-note-edit" onClick={(e) => e.stopPropagation()}>
@@ -240,6 +246,17 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
                 {elapsed} dk{note ? ` · ${note}` : ' · not ekle'}
               </div>
             )
+          )}
+          {sonTeslimat && (
+            <div className={`tb-delivery-tag ${sonTeslimat.durum}`}>
+              {sonTeslimat.tip === 'teslim_edildi'
+                ? sonTeslimat.durum === 'onaylandi' ? '✓ Teslim edildi'
+                : sonTeslimat.durum === 'reddedildi' ? '✕ Teslimat reddedildi'
+                : 'Teslim edildi (paketçi bildirdi)'
+                : sonTeslimat.durum === 'onaylandi' ? `✓ Kısmi ödeme onaylandı`
+                : sonTeslimat.durum === 'reddedildi' ? '✕ Kısmi ödeme reddedildi'
+                : 'Kısmi ödeme bildirildi'}
+            </div>
           )}
         </div>
       );
@@ -436,4 +453,4 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       )}
     </div>
   );
-} 
+}

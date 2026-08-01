@@ -102,6 +102,24 @@ function rowToGecmis(r) {
   return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), toplamTutar: Number(r.toplam_tutar), aciklama: r.aciklama };
 }
 
+function rowToPaketTeslimat(r) {
+  return {
+    id: r.id, paketAdi: r.paket_adi, tip: r.tip,
+    tutar: r.tutar === null || r.tutar === undefined ? null : Number(r.tutar),
+    odemeYontemi: r.odeme_yontemi, notMetni: r.not_metni, fotoUrl: r.foto_url,
+    paketciAdi: r.paketci_adi, durum: r.durum, onayNotu: r.onay_notu,
+    ts: Number(r.ts), onayTs: r.onay_ts ? Number(r.onay_ts) : null,
+  };
+}
+function rowToCariTeslimatBildirim(r) {
+  return {
+    id: r.id, cariId: r.cari_id, tip: r.tip, tutar: Number(r.tutar),
+    odemeYontemi: r.odeme_yontemi, notMetni: r.not_metni, fotoUrl: r.foto_url,
+    paketciAdi: r.paketci_adi, durum: r.durum, onayNotu: r.onay_notu,
+    ts: Number(r.ts), onayTs: r.onay_ts ? Number(r.onay_ts) : null,
+  };
+}
+
 // Tüm sayfaların (DirectSale, Tables, Reports...) paylaştığı tek veri kaynağı.
 // App.jsx içinde BİR KEZ çağrılır, sonuçlar prop olarak sayfalara aktarılır.
 //
@@ -342,6 +360,10 @@ export default function useHipposData() {
   // İlk Supabase yüklemesi bitince true olur — sayfalar, gerçek veri gelmeden eski/boş
   // durumu "kesin doğru" sanıp yerel taslak oluşturmasın diye bunu bekleyebilir.
   const [dataLoaded, setDataLoaded] = useState(false);
+  // Paketçi mobil panelinden gelen bildirimler — bunlar SATIŞ VERİSİ DEĞİL, ayrı bir
+  // "bildirim/onay" katmanı. Yönetici onaylamadan hiçbir satış/cari kaydını etkilemez.
+  const [paketTeslimatlari, setPaketTeslimatlari] = useState([]);
+  const [cariTeslimatBildirimleri, setCariTeslimatBildirimleri] = useState([]);
 
   const allTables = useMemo(() => [...FIXED_TABLES, ...packages.map((p) => p.name)], [packages]);
 
@@ -394,7 +416,7 @@ export default function useHipposData() {
     let cancelled = false;
 
     async function loadAll() {
-      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub] = await Promise.all([
+      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb] = await Promise.all([
         supabase.from('table_state').select('*'),
         supabase.from('packages').select('*'),
         supabase.from('package_meta').select('*').eq('id', 1).maybeSingle(),
@@ -409,12 +431,16 @@ export default function useHipposData() {
         supabase.from('products').select('*'),
         supabase.from('categories').select('*'),
         supabase.from('subcategories').select('*'),
+        supabase.from('paket_teslimatlari').select('*'),
+        supabase.from('cari_teslimat_bildirimleri').select('*'),
       ]);
       if (cancelled) return;
 
       setProducts((pr.data || []).map(rowToProduct));
       setCategories((cat.data || []).map(rowToCategory));
       setSubcategories((sub.data || []).map(rowToSubcategory));
+      setPaketTeslimatlari((pt.data || []).map(rowToPaketTeslimat).sort((a, b) => b.ts - a.ts));
+      setCariTeslimatBildirimleri((ctb.data || []).map(rowToCariTeslimatBildirim).sort((a, b) => b.ts - a.ts));
 
       const o = emptyTableMap(FIXED_TABLES, []);
       const n = emptyTableMap(FIXED_TABLES, '');
@@ -541,6 +567,26 @@ export default function useHipposData() {
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_gecmis' }, (payload) => {
         setCariGecmis((prev) => (prev.some((g) => g.id === payload.new.id) ? prev : [...prev, rowToGecmis(payload.new)]));
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'paket_teslimatlari' }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          setPaketTeslimatlari((prev) => prev.filter((p) => p.id !== payload.old.id));
+          return;
+        }
+        const row = rowToPaketTeslimat(payload.new);
+        setPaketTeslimatlari((prev) =>
+          prev.some((p) => p.id === row.id) ? prev.map((p) => (p.id === row.id ? row : p)) : [row, ...prev]
+        );
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cari_teslimat_bildirimleri' }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          setCariTeslimatBildirimleri((prev) => prev.filter((c) => c.id !== payload.old.id));
+          return;
+        }
+        const row = rowToCariTeslimatBildirim(payload.new);
+        setCariTeslimatBildirimleri((prev) =>
+          prev.some((c) => c.id === row.id) ? prev.map((c) => (c.id === row.id ? row : c)) : [row, ...prev]
+        );
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') console.log('✅ Hippos canlı senkron bağlandı');
@@ -1073,6 +1119,101 @@ export default function useHipposData() {
     supabase.from('cari_faturalar').delete().eq('cari_id', cariId).then(({ error }) => { if (error) console.error(error.message); });
   }
 
+  // ================== PAKETÇİ MOBİL PANELİ ==================
+  // Bu fonksiyonların hiçbiri satış/cari kaydını DEĞİŞTİRMEZ — sadece "bildirim" oluşturur,
+  // yönetici onaylayana/reddedene kadar ayrı bir katmanda bekler.
+
+  async function uploadTeslimatFoto(file) {
+    if (!file) return null;
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${Date.now()}-${Math.floor(Math.random() * 100000)}.${ext}`;
+    const { error } = await supabase.storage.from('teslimat-fotograflari').upload(path, file);
+    if (error) {
+      console.error('fotoğraf yüklenemedi:', error.message);
+      return null;
+    }
+    const { data } = supabase.storage.from('teslimat-fotograflari').getPublicUrl(path);
+    return data?.publicUrl || null;
+  }
+
+  // Paketçi "Teslim Ettim" / "Kısmi Ödeme Aldım" gönderince çağrılır. Oluşan kaydı (id ile
+  // birlikte) geri döner — paketçi ekranı bunu "son 5 işlem" geri-al listesinde tutar.
+  async function submitPaketTeslimat({ paketAdi, tip, tutar, odemeYontemi, notMetni, fotoUrl, paketciAdi }) {
+    const ts = Date.now();
+    const row = {
+      paket_adi: paketAdi, tip, tutar: tutar ?? null, odeme_yontemi: odemeYontemi || null,
+      not_metni: notMetni || null, foto_url: fotoUrl || null, paketci_adi: paketciAdi, durum: 'bekliyor', ts,
+    };
+    const { data, error } = await supabase.from('paket_teslimatlari').insert(row).select().single();
+    if (error) {
+      console.error('teslimat bildirilemedi:', error.message);
+      return null;
+    }
+    const created = rowToPaketTeslimat(data);
+    setPaketTeslimatlari((prev) => [created, ...prev]);
+    return created;
+  }
+
+  async function submitCariTeslimatBildirim({ cariId, tip, tutar, odemeYontemi, notMetni, fotoUrl, paketciAdi }) {
+    const ts = Date.now();
+    const row = {
+      cari_id: cariId, tip, tutar, odeme_yontemi: odemeYontemi,
+      not_metni: notMetni || null, foto_url: fotoUrl || null, paketci_adi: paketciAdi, durum: 'bekliyor', ts,
+    };
+    const { data, error } = await supabase.from('cari_teslimat_bildirimleri').insert(row).select().single();
+    if (error) {
+      console.error('cari ödeme bildirilemedi:', error.message);
+      return null;
+    }
+    const created = rowToCariTeslimatBildirim(data);
+    setCariTeslimatBildirimleri((prev) => [created, ...prev]);
+    return created;
+  }
+
+  // Paketçinin KENDİ az önce yaptığı işlemi geri alması için (henüz onaylanmamışsa).
+  function deletePaketTeslimat(id) {
+    setPaketTeslimatlari((prev) => prev.filter((p) => p.id !== id));
+    supabase.from('paket_teslimatlari').delete().eq('id', id).then(({ error }) => {
+      if (error) console.error('geri alınamadı:', error.message);
+    });
+  }
+  function deleteCariTeslimatBildirim(id) {
+    setCariTeslimatBildirimleri((prev) => prev.filter((c) => c.id !== id));
+    supabase.from('cari_teslimat_bildirimleri').delete().eq('id', id).then(({ error }) => {
+      if (error) console.error('geri alınamadı:', error.message);
+    });
+  }
+
+  // ---- Yönetici onay/red (ana panelden) ----
+  function onaylaPaketTeslimat(id) {
+    const onayTs = Date.now();
+    setPaketTeslimatlari((prev) => prev.map((p) => (p.id === id ? { ...p, durum: 'onaylandi', onayTs } : p)));
+    supabase.from('paket_teslimatlari').update({ durum: 'onaylandi', onay_ts: onayTs }).eq('id', id).then(({ error }) => {
+      if (error) console.error(error.message);
+    });
+  }
+  function reddetPaketTeslimat(id, onayNotu) {
+    const onayTs = Date.now();
+    setPaketTeslimatlari((prev) => prev.map((p) => (p.id === id ? { ...p, durum: 'reddedildi', onayNotu, onayTs } : p)));
+    supabase.from('paket_teslimatlari').update({ durum: 'reddedildi', onay_notu: onayNotu, onay_ts: onayTs }).eq('id', id).then(({ error }) => {
+      if (error) console.error(error.message);
+    });
+  }
+  function onaylaCariTeslimatBildirim(id) {
+    const onayTs = Date.now();
+    setCariTeslimatBildirimleri((prev) => prev.map((c) => (c.id === id ? { ...c, durum: 'onaylandi', onayTs } : c)));
+    supabase.from('cari_teslimat_bildirimleri').update({ durum: 'onaylandi', onay_ts: onayTs }).eq('id', id).then(({ error }) => {
+      if (error) console.error(error.message);
+    });
+  }
+  function reddetCariTeslimatBildirim(id, onayNotu) {
+    const onayTs = Date.now();
+    setCariTeslimatBildirimleri((prev) => prev.map((c) => (c.id === id ? { ...c, durum: 'reddedildi', onayNotu, onayTs } : c)));
+    supabase.from('cari_teslimat_bildirimleri').update({ durum: 'reddedildi', onay_notu: onayNotu, onay_ts: onayTs }).eq('id', id).then(({ error }) => {
+      if (error) console.error(error.message);
+    });
+  }
+
   return {
     products,
     toggleProductStatus,
@@ -1134,5 +1275,16 @@ export default function useHipposData() {
     addCariFatura,
     getCariFaturalanmamisTutar,
     archiveCari,
+    paketTeslimatlari,
+    cariTeslimatBildirimleri,
+    uploadTeslimatFoto,
+    submitPaketTeslimat,
+    submitCariTeslimatBildirim,
+    deletePaketTeslimat,
+    deleteCariTeslimatBildirim,
+    onaylaPaketTeslimat,
+    reddetPaketTeslimat,
+    onaylaCariTeslimatBildirim,
+    reddetCariTeslimatBildirim,
   };
 }

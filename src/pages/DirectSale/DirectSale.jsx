@@ -4,7 +4,7 @@ import { TL, QUICK_SALE } from '../../hooks/useHipposData';
 import {
   Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
-  Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp, ArrowLeft,
+  Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp, ArrowLeft, Package,
 } from 'lucide-react';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
@@ -30,6 +30,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     announceViewingTable,
     clearViewingTable,
     isTableOccupiedElsewhere,
+    paketTeslimatlari,
+    onaylaPaketTeslimat,
+    reddetPaketTeslimat,
     presenceMap,
     cariler,
     addCari,
@@ -525,6 +528,25 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
   const favoriteProducts = products.filter((p) => favorites.includes(p.id) && p.durum !== 'PASIF');
 
+  // Sadece paket ekranında: paketçiden gelen bildirimler (en yeni önce).
+  const isPaketEkrani = selectedTable.startsWith('Paket ');
+  const paketciHareketleri = isPaketEkrani
+    ? paketTeslimatlari.filter((h) => h.paketAdi === selectedTable).sort((a, b) => b.ts - a.ts)
+    : [];
+  const bekleyenHareket = paketciHareketleri.find((h) => h.durum === 'bekliyor');
+
+  function openRejectPrompt(hareketId) {
+    setGenericModal({
+      title: 'Teslimatı reddet — sebep yaz',
+      placeholder: 'Örn: Adres yanlış, tekrar gönder',
+      showInput: true,
+      onConfirm: (text) => {
+        if (!text.trim()) return;
+        reddetPaketTeslimat(hareketId, text.trim());
+      },
+    });
+  }
+
   return (
     <div className="ds-shell">
       <div className="ds-body">
@@ -819,6 +841,48 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             <button disabled={isOrderEmpty} onClick={handleUndoLastItem}><Undo2 size={14} /> Geri Al</button>
             <button disabled={isOrderEmpty} className="danger" onClick={handleClearTable}><Trash2 size={14} /> Boşalt</button>
           </div>
+
+          {isPaketEkrani && paketciHareketleri.length > 0 && (
+            <div className="ds-courier-panel">
+              <h4><Package size={13} /> Paketçi Bildirimi</h4>
+              {bekleyenHareket && (
+                <div className="ds-courier-pending">
+                  <div className="ds-courier-row">
+                    <span className="ds-courier-tag wait">Onay bekliyor</span>
+                    <span>{bekleyenHareket.tip === 'teslim_edildi' ? 'Teslim Edildi' : `Kısmi Ödeme: ${TL(bekleyenHareket.tutar)} (${bekleyenHareket.odemeYontemi})`}</span>
+                  </div>
+                  <div className="ds-courier-meta">
+                    <Package size={11} /> {bekleyenHareket.paketciAdi} — {new Date(bekleyenHareket.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  {bekleyenHareket.notMetni && <div className="ds-courier-note">"{bekleyenHareket.notMetni}"</div>}
+                  {bekleyenHareket.fotoUrl && (
+                    <a href={bekleyenHareket.fotoUrl} target="_blank" rel="noreferrer" className="ds-courier-foto-link">
+                      Fotoğrafı Gör
+                    </a>
+                  )}
+                  <div className="ds-courier-actions">
+                    <button className="ds-courier-approve" onClick={() => onaylaPaketTeslimat(bekleyenHareket.id)}>
+                      <Check size={14} /> Onayla
+                    </button>
+                    <button className="ds-courier-reject" onClick={() => openRejectPrompt(bekleyenHareket.id)}>
+                      <X size={14} /> Reddet
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="ds-courier-history">
+                {paketciHareketleri.map((h) => (
+                  <div key={h.id} className="ds-courier-history-row">
+                    <span className={`ds-courier-tag ${h.durum}`}>
+                      {h.durum === 'bekliyor' ? 'Bekliyor' : h.durum === 'onaylandi' ? 'Onaylandı' : 'Reddedildi'}
+                    </span>
+                    <span>{h.tip === 'teslim_edildi' ? 'Teslim Edildi' : `Kısmi: ${TL(h.tutar)}`} — {h.paketciAdi}</span>
+                    {h.onayNotu && <span className="ds-courier-reject-note">({h.onayNotu})</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </aside>
       </div>
 
