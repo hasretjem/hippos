@@ -689,27 +689,38 @@ export default function useHipposData() {
           return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
         });
       }
+      // ÖNEMLİ: polling sonucu asla LOCAL'de olup henüz Supabase'e tam yansımamış (optimistic)
+      // bir kaydı SİLMEZ — sadece "birleştirir" (poll verisi + hâlâ yerelde olan ekstra kayıtlar).
+      // Önceki hâli tam "değiştirme" yapıyordu; bu da yeni eklenen bir cari hareketi tam o anda
+      // 5 saniyelik anket çekilirse (Supabase'e yazma henüz görünür olmadan) SİLİNMİŞ gibi
+      // görünmesine yol açıyordu — cari ödemesinin "gitmediği" hissi buradan geliyordu.
+      function mergeById(prev, pollData) {
+        const pollIds = new Set(pollData.map((r) => r.id));
+        const localOnly = prev.filter((r) => !pollIds.has(r.id));
+        return [...pollData, ...localOnly];
+      }
+
       if (crRes.data) {
         setCariler((prev) => {
-          const next = crRes.data.map(rowToCari);
+          const next = mergeById(prev, crRes.data.map(rowToCari));
           return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
         });
       }
       if (chRes.data) {
         setCariHareketler((prev) => {
-          const next = chRes.data.map(rowToHareket);
+          const next = mergeById(prev, chRes.data.map(rowToHareket));
           return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
         });
       }
       if (coRes.data) {
         setCariOdemeler((prev) => {
-          const next = coRes.data.map(rowToOdeme);
+          const next = mergeById(prev, coRes.data.map(rowToOdeme));
           return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
         });
       }
       if (cfRes.data) {
         setCariFaturalar((prev) => {
-          const next = cfRes.data.map(rowToFatura);
+          const next = mergeById(prev, cfRes.data.map(rowToFatura));
           return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
         });
       }
@@ -838,7 +849,10 @@ export default function useHipposData() {
     // Paket, ilk kez içerik kazandığı an "gerçek" hale gelsin — bu çağrı eskiden addOrderItem
     // içinden geliyordu, yeni "yerel taslak" mimarisinde o yol devre dışı kaldığı için paketler
     // hiç kayda geçmiyordu (Paketler panelinde görünmüyordu). Artık tek merkezden garanti ediliyor.
+    // Aynı şekilde paket BOŞALINCA da kaydı kaldırılmalı — yoksa (ödeme alındıktan sonra bile)
+    // "hayalet" olarak hem Masalar/Paketler panelinde hem Paketçi ekranında görünmeye devam eder.
     if (items.length > 0) registerPackageIfNeeded(table);
+    else if (table.startsWith('Paket ')) removePackageRecord(table);
     supabase.from('table_state').upsert(patch, { onConflict: 'table_name' }).then(({ error }) => {
       if (error) console.error('masa durumu yazılamadı:', error.message);
     });

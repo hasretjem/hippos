@@ -84,9 +84,10 @@ export default function Paketci({ data }) {
     const q = cariSearch.trim().toLowerCase();
     return (cariler || [])
       .filter((c) => c.tip === 'bireysel') // paketçi firma carilerine ulaşamaz
+      .filter((c) => getCariBakiye(c.id) > 0) // bakiyesi sıfırlanan/kapanan cari listeden düşer
       .filter((c) => !q || c.ad.toLowerCase().includes(q))
       .sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
-  }, [cariler, cariSearch]);
+  }, [cariler, cariSearch, getCariBakiye]);
 
   const selectedCariData = selectedCari
     ? {
