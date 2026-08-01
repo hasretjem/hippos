@@ -158,6 +158,13 @@
   width: 100%; min-height: 70px; border-radius: 14px; border: 1px solid var(--border); padding: 12px 14px;
   font-size: 14px; background: #fff; resize: vertical; margin-top: 8px;
 }
+.pk-modal-total-hint {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+  padding: 10px 14px; font-size: 13px; color: var(--ink-muted); margin-bottom: 14px;
+}
+.pk-modal-total-hint strong { color: var(--ink); font-size: 15px; }
+.pk-input-error { border-color: var(--danger) !important; background: #FBEEEC !important; }
+.pk-inline-error { color: var(--danger); font-size: 12px; font-weight: 700; margin-top: 6px; }
 .pk-method-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .pk-method-row button {
   padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border); background: #fff; font-size: 13px; font-weight: 700; color: var(--ink-muted);

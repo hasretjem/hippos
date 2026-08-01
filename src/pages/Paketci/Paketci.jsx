@@ -350,7 +350,8 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
   }
 
   const parsedTutar = parseFloat(tutar.replace(',', '.'));
-  const tutarGecerli = !isKismi || (!isNaN(parsedTutar) && parsedTutar > 0);
+  const tutarAsimVar = isKismi && !isNaN(parsedTutar) && modal.ustTutar != null && parsedTutar > modal.ustTutar;
+  const tutarGecerli = !isKismi || (!isNaN(parsedTutar) && parsedTutar > 0 && !tutarAsimVar);
   const notZorunluTamam = evidenceType === 'not' ? notMetni.trim().length > 0 : true;
   const kismiNotZorunlu = isKismi ? notMetni.trim().length > 0 : true;
   const kanitVar = evidenceType === 'not' ? notMetni.trim().length > 0 : !!fotoFile;
@@ -405,10 +406,24 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
           <button className="pk-modal-x" onClick={onClose}><X size={18} /></button>
         </div>
 
+        {isKismi && modal.ustTutar != null && (
+          <div className="pk-modal-total-hint">
+            {modal.hedefTip === 'paket' ? 'Sipariş Toplamı' : 'Güncel Bakiye'}: <strong>{TL(modal.ustTutar)}</strong>
+          </div>
+        )}
         {isKismi && (
           <div className="pk-modal-section">
             <label>Alınan Tutar (TL)</label>
-            <input type="text" inputMode="decimal" placeholder="ör. 90" value={tutar} onChange={(e) => setTutar(e.target.value)} />
+            <input
+              type="text" inputMode="decimal" placeholder="ör. 90" value={tutar}
+              onChange={(e) => setTutar(e.target.value)}
+              className={tutarAsimVar ? 'pk-input-error' : ''}
+            />
+            {tutarAsimVar && (
+              <div className="pk-inline-error">
+                Girilen tutar toplamı ({TL(modal.ustTutar)}) aşıyor — kontrol et.
+              </div>
+            )}
           </div>
         )}
         {(isKismi || isCari) && (
@@ -450,7 +465,8 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
 
         {!canSubmit && (
           <p className="pk-modal-warning">
-            {isKismi && !tutarGecerli && 'Geçerli bir tutar gir. '}
+            {isKismi && tutarAsimVar && 'Girilen tutar toplamı aşamaz. '}
+            {isKismi && !tutarAsimVar && !tutarGecerli && 'Geçerli bir tutar gir. '}
             {isKismi && !odemeYontemi && 'Ödeme yöntemi seç. '}
             {isKismi && !notMetni.trim() && 'Kısmi ödemede not zorunlu. '}
             {!isKismi && !kanitVar && 'Fotoğraf yükle veya not yaz.'}
