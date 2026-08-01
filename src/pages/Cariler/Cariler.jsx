@@ -4,7 +4,7 @@ import { TL } from '../../hooks/useHipposData';
 import {
   Search, Plus, User, Building2, Phone, MapPin, Clock, Wallet,
   Copy, MessageCircle, X, ChevronUp, ChevronDown, FileText, History, Check,
-  Banknote, CreditCard, UtensilsCrossed, Landmark, StickyNote, ArrowLeft,
+  Banknote, CreditCard, UtensilsCrossed, Landmark, StickyNote, ArrowLeft, Download,
 } from 'lucide-react';
 
 function fmtDateTime(ts) {
@@ -116,8 +116,16 @@ export default function Cariler({ data, onNavigate }) {
     }
   }
 
+  // wa.me, numarayı ülke koduyla (90...) ve başında 0 OLMADAN ister — kayıtlı numaralar
+  // genelde yerel formatta (0532...) tutulduğu için bu dönüşüm olmadan link geçersiz oluyordu.
+  function normalizeTrPhone(phone) {
+    let digits = (phone || '').replace(/[^0-9]/g, '');
+    if (digits.startsWith('0')) digits = digits.slice(1);
+    if (!digits.startsWith('90')) digits = '90' + digits;
+    return digits;
+  }
   function whatsappShare(text, phone) {
-    const digits = (phone || '').replace(/[^0-9]/g, '');
+    const digits = normalizeTrPhone(phone);
     const url = `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   }
@@ -156,6 +164,49 @@ export default function Cariler({ data, onNavigate }) {
   // ---- Cari Özeti Oluştur (firma) ----
   const [ozetModalOpen, setOzetModalOpen] = useState(false);
   const [ozetText, setOzetText] = useState('');
+
+  // ---- Hareket Dökümü (PDF) ----
+  const [dokumModalOpen, setDokumModalOpen] = useState(false);
+  const [dokumMode, setDokumMode] = useState('sifirdan'); // 'sifirdan' | 'aralik'
+  const [dokumBaslangic, setDokumBaslangic] = useState('');
+  const [dokumBitis, setDokumBitis] = useState('');
+  const [dokumData, setDokumData] = useState(null);
+
+  function openDokumModal() {
+    setDokumMode('sifirdan');
+    setDokumBaslangic('');
+    setDokumBitis('');
+    setDokumModalOpen(true);
+  }
+
+  function sonSifirlanmaTs(cariId) {
+    const kayitlar = cariGecmis.filter((g) => g.cariId === cariId).sort((a, b) => b.ts - a.ts);
+    return kayitlar[0]?.ts || null;
+  }
+
+  function generateDokum() {
+    if (!selectedCari) return;
+    const cariId = selectedCari.id;
+    let baslangicTs, bitisTs;
+    if (dokumMode === 'sifirdan') {
+      baslangicTs = sonSifirlanmaTs(cariId) || 0;
+      bitisTs = Date.now();
+    } else {
+      baslangicTs = dokumBaslangic ? new Date(dokumBaslangic + 'T00:00:00').getTime() : 0;
+      bitisTs = dokumBitis ? new Date(dokumBitis + 'T23:59:59').getTime() : Date.now();
+    }
+    const rows = [
+      ...cariHareketler
+        .filter((h) => h.cariId === cariId && h.ts >= baslangicTs && h.ts <= bitisTs)
+        .map((h) => ({ ts: h.ts, tip: 'siparis', aciklama: h.urunler.map((u) => u.ad).join(', '), tutar: h.toplam })),
+      ...cariOdemeler
+        .filter((o) => o.cariId === cariId && o.ts >= baslangicTs && o.ts <= bitisTs)
+        .map((o) => ({ ts: o.ts, tip: 'odeme', aciklama: `Ödeme Alındı — ${o.tur}`, tutar: -o.tutar })),
+    ].sort((a, b) => a.ts - b.ts);
+    setDokumData({ cari: selectedCari, rows, baslangicTs, bitisTs });
+    setDokumModalOpen(false);
+    setTimeout(() => window.print(), 150);
+  }
 
   function openOzet() {
     if (!selectedCari) return;
@@ -208,6 +259,13 @@ export default function Cariler({ data, onNavigate }) {
     ? cariOdemeler.filter((o) => o.cariId === selectedCari.id).sort((a, b) => b.ts - a.ts)
     : [];
   const toplamTahsilat = odemelerListe.reduce((s, o) => s + o.tutar, 0);
+  // Hareketler ve Ödeme Hareketleri artık tek, kronolojik bir listede birleşik.
+  const birlesikHareketler = selectedCari
+    ? [
+        ...hareketlerListe.map((h) => ({ tip: 'siparis', ts: h.ts, data: h })),
+        ...odemelerListe.map((o) => ({ tip: 'odeme', ts: o.ts, data: o })),
+      ].sort((a, b) => b.ts - a.ts)
+    : [];
   const faturalanmamis = selectedCari ? getCariFaturalanmamisTutar(selectedCari.id) : 0;
   const faturalarListe = selectedCari ? cariFaturalar.filter((f) => f.cariId === selectedCari.id).sort((a, b) => b.eklenmeTs - a.eklenmeTs) : [];
 
@@ -312,49 +370,44 @@ export default function Cariler({ data, onNavigate }) {
 
               <div className="cr-detail-tabs">
                 <button className={detailTab === 'hareketler' ? 'active' : ''} onClick={() => setDetailTab('hareketler')}>Hareketler</button>
-                <button className={detailTab === 'odemeler' ? 'active' : ''} onClick={() => setDetailTab('odemeler')}>Ödeme Hareketleri</button>
                 <button className={detailTab === 'bilgiler' ? 'active' : ''} onClick={() => setDetailTab('bilgiler')}>Cari Bilgileri</button>
+                <button className="cr-dokum-btn" onClick={openDokumModal}><Download size={13} /> Hareket Dökümü</button>
               </div>
 
               <div className="cr-detail-body">
                 {detailTab === 'hareketler' && (
                   <div className="cr-hareket-list">
-                    {hareketlerListe.length === 0 && <p className="cr-empty">Henüz hareket yok</p>}
-                    {hareketlerListe.map((h) => (
-                      <div key={h.id} className="cr-hareket-card">
-                        <div className="cr-hareket-head">
-                          <span>{fmtDateTime(h.ts)}</span>
-                          <strong>{TL(h.toplam)}</strong>
-                        </div>
-                        <div className="cr-hareket-items">
-                          {h.urunler.map((u, i) => (
-                            <div key={i} className="cr-hareket-item">
-                              <span>{u.ad}</span>
-                              <span>{TL(u.fiyat)}</span>
-                            </div>
-                          ))}
-                        </div>
-                        {h.mutfakNotu && <div className="cr-hareket-note"><StickyNote size={11} /> {h.mutfakNotu}</div>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {detailTab === 'odemeler' && (
-                  <div className="cr-odeme-list">
-                    {odemelerListe.length === 0 && <p className="cr-empty">Henüz ödeme yok</p>}
-                    {odemelerListe.map((o) => (
-                      <div key={o.id} className="cr-odeme-row">
-                        <span className="cr-odeme-date">{fmtDateTime(o.ts)}</span>
-                        <span className="cr-odeme-tur">{o.tur}</span>
-                        <strong>{TL(o.tutar)}</strong>
-                      </div>
-                    ))}
+                    {birlesikHareketler.length === 0 && <p className="cr-empty">Henüz hareket yok</p>}
                     {odemelerListe.length > 0 && (
                       <div className="cr-odeme-total">
                         <span>Toplam Tahsilat</span>
                         <strong>{TL(toplamTahsilat)}</strong>
                       </div>
+                    )}
+                    {birlesikHareketler.map((entry) =>
+                      entry.tip === 'siparis' ? (
+                        <div key={`s-${entry.data.id}`} className="cr-hareket-card">
+                          <div className="cr-hareket-head">
+                            <span>{fmtDateTime(entry.data.ts)}</span>
+                            <strong>{TL(entry.data.toplam)}</strong>
+                          </div>
+                          <div className="cr-hareket-items">
+                            {entry.data.urunler.map((u, i) => (
+                              <div key={i} className="cr-hareket-item">
+                                <span>{u.ad}</span>
+                                <span>{TL(u.fiyat)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          {entry.data.mutfakNotu && <div className="cr-hareket-note"><StickyNote size={11} /> {entry.data.mutfakNotu}</div>}
+                        </div>
+                      ) : (
+                        <div key={`o-${entry.data.id}`} className="cr-odeme-row">
+                          <span className="cr-odeme-date">{fmtDateTime(entry.data.ts)}</span>
+                          <span className="cr-odeme-tur">Ödeme Alındı — {entry.data.tur}</span>
+                          <strong className="cr-odeme-tutar">-{TL(entry.data.tutar)}</strong>
+                        </div>
+                      )
                     )}
                   </div>
                 )}
@@ -515,6 +568,67 @@ export default function Cariler({ data, onNavigate }) {
               <button onClick={() => copyText(ozetText)}><Copy size={14} /> Kopyala</button>
               <button className="whatsapp" onClick={() => whatsappShare(ozetText, selectedCari.telefon)}><MessageCircle size={14} /> WhatsApp ile Paylaş</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* HAREKET DÖKÜMÜ (PDF için tarih aralığı seçimi) */}
+      {dokumModalOpen && selectedCari && (
+        <div className="cr-modal-overlay" onClick={() => setDokumModalOpen(false)}>
+          <div className="cr-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="cr-modal-head">
+              <h3><Download size={15} /> Hareket Dökümü</h3>
+              <button className="cr-modal-x" onClick={() => setDokumModalOpen(false)}><X size={16} /></button>
+            </div>
+            <div className="cr-dokum-mode">
+              <label className={dokumMode === 'sifirdan' ? 'active' : ''}>
+                <input type="radio" checked={dokumMode === 'sifirdan'} onChange={() => setDokumMode('sifirdan')} />
+                Son bakiye sıfırlandığından bugüne
+              </label>
+              <label className={dokumMode === 'aralik' ? 'active' : ''}>
+                <input type="radio" checked={dokumMode === 'aralik'} onChange={() => setDokumMode('aralik')} />
+                Tarih aralığı seç
+              </label>
+            </div>
+            {dokumMode === 'aralik' && (
+              <div className="cr-dokum-range">
+                <div>
+                  <span>Başlangıç</span>
+                  <input type="date" value={dokumBaslangic} onChange={(e) => setDokumBaslangic(e.target.value)} />
+                </div>
+                <div>
+                  <span>Bitiş</span>
+                  <input type="date" value={dokumBitis} onChange={(e) => setDokumBitis(e.target.value)} />
+                </div>
+              </div>
+            )}
+            <button className="cr-dokum-generate" onClick={generateDokum}>
+              <Download size={14} /> PDF Oluştur (Yazdır ekranından "PDF olarak kaydet" seç)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Yazdırma şablonu — sadece @media print'te görünür, normalde gizli */}
+      {dokumData && (
+        <div id="cr-print-statement">
+          <h2>{dokumData.cari.ad}</h2>
+          <p className="cr-print-range">
+            {fmtDate(dokumData.baslangicTs)} — {fmtDate(dokumData.bitisTs)}
+          </p>
+          <div className="cr-print-rows">
+            {dokumData.rows.length === 0 && <p>Bu aralıkta hareket bulunamadı.</p>}
+            {dokumData.rows.map((r, i) => (
+              <div key={i} className="cr-print-row">
+                <span>{fmtDate(r.ts)}</span>
+                <span>{r.aciklama}</span>
+                <span>{r.tutar < 0 ? '-' : ''}{TL(Math.abs(r.tutar))}</span>
+              </div>
+            ))}
+          </div>
+          <div className="cr-print-total">
+            <span>Dönem Bakiyesi</span>
+            <strong>{TL(dokumData.rows.reduce((s, r) => s + r.tutar, 0))}</strong>
           </div>
         </div>
       )}
