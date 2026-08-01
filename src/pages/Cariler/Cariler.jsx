@@ -27,7 +27,12 @@ export default function Cariler({ data, onNavigate }) {
     cariler, cariHareketler, cariOdemeler, cariFaturalar, cariGecmis,
     getCariBakiye, getCariSonHareket, getCariSonOdeme,
     addCari, updateCari, addCariOdeme, addCariFatura, getCariFaturalanmamisTutar, archiveCari,
+    cariTeslimatBildirimleri, onaylaCariTeslimatBildirim, reddetCariTeslimatBildirim,
   } = data;
+
+  function bekleyenBildirim(cariId) {
+    return cariTeslimatBildirimleri.find((b) => b.cariId === cariId && b.durum === 'bekliyor') || null;
+  }
 
   const [activeTab, setActiveTab] = useState('bireysel');
   const [searchQuery, setSearchQuery] = useState('');
@@ -231,6 +236,7 @@ export default function Cariler({ data, onNavigate }) {
               {visibleCariler.map((c) => {
                 const b = getCariBakiye(c.id);
                 const sh = getCariSonHareket(c.id);
+                const bekleyen = bekleyenBildirim(c.id);
                 return (
                   <button key={c.id} className={`cr-item ${selectedCariId === c.id ? 'active' : ''}`} onClick={() => { setSelectedCariId(c.id); setDetailTab('hareketler'); }}>
                     <div className="cr-item-top">
@@ -242,6 +248,9 @@ export default function Cariler({ data, onNavigate }) {
                       <span className="cr-item-date">{sh ? fmtDateTime(sh.ts) : '—'}</span>
                       {c.not && <span className="cr-item-note">{c.not}</span>}
                     </div>
+                    {bekleyen && (
+                      <div className="cr-pending-badge">🟡 Bekleyen ödeme talebi ({TL(bekleyen.tutar)})</div>
+                    )}
                   </button>
                 );
               })}
@@ -269,6 +278,13 @@ export default function Cariler({ data, onNavigate }) {
             </div>
           ) : (
             <>
+              {bekleyenBildirim(selectedCari.id) && (
+                <CariBekleyenKart
+                  bildirim={bekleyenBildirim(selectedCari.id)}
+                  onOnayla={() => onaylaCariTeslimatBildirim(bekleyenBildirim(selectedCari.id).id)}
+                  onReddet={(sebep) => reddetCariTeslimatBildirim(bekleyenBildirim(selectedCari.id).id, sebep)}
+                />
+              )}
               <div className="cr-summary-card">
                 <div className="cr-summary-head">
                   <div>
@@ -525,6 +541,66 @@ export default function Cariler({ data, onNavigate }) {
                 );
               })}
             </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Paketçiden gelen, henüz onaylanmamış ödeme bildirimi kartı ----
+// Onaylamadan önce cari bakiyesine ASLA dokunulmaz — sadece bu bildirim gösterilir.
+function CariBekleyenKart({ bildirim, onOnayla, onReddet }) {
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectText, setRejectText] = useState('');
+  const [photoOpen, setPhotoOpen] = useState(false);
+
+  return (
+    <div className="cr-pending-card">
+      <div className="cr-pending-head">
+        <span className="cr-pending-title">🟡 Bekleyen Paketçi İşlemi</span>
+      </div>
+      <div className="cr-pending-grid">
+        <div><span>Paketçi</span><strong>{bildirim.paketciAdi}</strong></div>
+        <div><span>İşlem</span><strong>{bildirim.tip === 'tam_odeme' ? 'Ödeme bildirimi' : 'Kısmi ödeme bildirimi'}</strong></div>
+        <div><span>Talep Edilen Tutar</span><strong>{TL(bildirim.tutar)}</strong></div>
+        <div><span>Ödeme Yöntemi</span><strong>{bildirim.odemeYontemi}</strong></div>
+        <div><span>Tarih</span><strong>{fmtDateTime(bildirim.ts)}</strong></div>
+      </div>
+      {bildirim.notMetni && (
+        <div className="cr-pending-note"><StickyNote size={12} /> "{bildirim.notMetni}"</div>
+      )}
+      {bildirim.fotoUrl && (
+        <button className="cr-pending-foto-btn" onClick={() => setPhotoOpen(true)}>Fotoğrafı Gör</button>
+      )}
+
+      {!rejectOpen ? (
+        <div className="cr-pending-actions">
+          <button className="cr-pending-reject" onClick={() => setRejectOpen(true)}><X size={14} /> Reddet</button>
+          <button className="cr-pending-approve" onClick={onOnayla}><Check size={14} /> Onayla</button>
+        </div>
+      ) : (
+        <div className="cr-pending-reject-form">
+          <textarea
+            autoFocus
+            placeholder='Red sebebi — örn: "Yanlış müşteri seçilmiş"'
+            value={rejectText}
+            onChange={(e) => setRejectText(e.target.value)}
+          />
+          <div className="cr-pending-actions">
+            <button className="cr-pending-cancel" onClick={() => { setRejectOpen(false); setRejectText(''); }}>Vazgeç</button>
+            <button className="cr-pending-reject" disabled={!rejectText.trim()} onClick={() => { onReddet(rejectText.trim()); setRejectOpen(false); }}>
+              Reddi Onayla
+            </button>
+          </div>
+        </div>
+      )}
+
+      {photoOpen && (
+        <div className="cr-photo-modal-overlay" onClick={() => setPhotoOpen(false)}>
+          <div className="cr-photo-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="cr-photo-modal-x" onClick={() => setPhotoOpen(false)}><X size={18} /></button>
+            <img src={bildirim.fotoUrl} alt="Paketçi fotoğrafı" />
           </div>
         </div>
       )}

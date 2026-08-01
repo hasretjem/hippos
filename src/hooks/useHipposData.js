@@ -1269,12 +1269,18 @@ export default function useHipposData() {
       if (error) console.error(error.message);
     });
   }
+  // Onaylama: SADECE burada gerçek bir cari ödemesi oluşur ve bakiye düşer. Paketçinin
+  // bildirimi kendi başına ASLA cari verisini etkilemez — onay bu ayrımın tek geçidi.
   function onaylaCariTeslimatBildirim(id) {
+    const bildirim = cariTeslimatBildirimleri.find((c) => c.id === id);
+    if (!bildirim) return;
     const onayTs = Date.now();
     setCariTeslimatBildirimleri((prev) => prev.map((c) => (c.id === id ? { ...c, durum: 'onaylandi', onayTs } : c)));
     supabase.from('cari_teslimat_bildirimleri').update({ durum: 'onaylandi', onay_ts: onayTs }).eq('id', id).then(({ error }) => {
       if (error) console.error(error.message);
     });
+    // Gerçek ödeme kaydı — bakiyeyi düşüren tek yer burası.
+    addCariOdeme(bildirim.cariId, { tutar: bildirim.tutar, tur: bildirim.odemeYontemi });
   }
   function reddetCariTeslimatBildirim(id, onayNotu) {
     const onayTs = Date.now();
