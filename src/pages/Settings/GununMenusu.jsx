@@ -117,16 +117,32 @@ async function renderMenuCanvas({ tarihText, corba, ana, yardimci, zeytinyagli }
 }
 
 function todayTr() {
-  return new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+  return new Date().toLocaleDateString('tr-TR', { weekday: 'long' }).toLocaleUpperCase('tr-TR');
+}
+
+const GUNUN_MENUSU_ESLESME = { corba: 'corba', ana: 'ana_yemek', yardimci: 'yardimci_yemek', zeytinyagli: 'zeytinyagli' };
+
+// Menü Düzenleme ekranındaki sıralama mantığıyla aynı: menü sırası, eşitse alfabetik.
+function sortByMenuOrder(list) {
+  return [...list].sort((a, b) => a.menuSirasi - b.menuSirasi || a.ad.localeCompare(b.ad, 'tr'));
+}
+
+// Ürün Yönetimi'nde etiketlenmiş ve o an AKTİF olan ürünleri, ilgili bölüme otomatik doldurur.
+function initialSelectionFor(products, sectionKey, max) {
+  const etiket = GUNUN_MENUSU_ESLESME[sectionKey];
+  const eslesenler = sortByMenuOrder(
+    products.filter((p) => p.gununMenusuKategori === etiket && p.durum === 'AKTIF' && !p.isAzVariant)
+  );
+  return eslesenler.slice(0, max).map((p) => ({ id: p.id, ad: p.ad, fiyat: p.fiyat, perAdet: false }));
 }
 
 export default function GununMenusu({ data, onClose }) {
   const { products } = data;
   const [tarihText, setTarihText] = useState(todayTr());
-  const [corba, setCorba] = useState(null);
-  const [ana, setAna] = useState([]);
-  const [yardimci, setYardimci] = useState([]);
-  const [zeytinyagli, setZeytinyagli] = useState([]);
+  const [corba, setCorba] = useState(() => initialSelectionFor(products, 'corba', 1)[0] || null);
+  const [ana, setAna] = useState(() => initialSelectionFor(products, 'ana', 10));
+  const [yardimci, setYardimci] = useState(() => initialSelectionFor(products, 'yardimci', 2));
+  const [zeytinyagli, setZeytinyagli] = useState(() => initialSelectionFor(products, 'zeytinyagli', 6));
   const [pickerFor, setPickerFor] = useState(null); // 'corba' | 'ana' | 'yardimci' | 'zeytinyagli' | null
   const [pickerSearch, setPickerSearch] = useState('');
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -210,7 +226,7 @@ export default function GununMenusu({ data, onClose }) {
         <div className="gm-body">
           <div className="gm-form">
             <div className="gm-field">
-              <label>Tarih (görselde büyük harfle yazılır)</label>
+              <label>Gün (görselde büyük harfle yazılır — örn. PAZARTESİ)</label>
               <input value={tarihText} onChange={(e) => setTarihText(e.target.value)} />
             </div>
 

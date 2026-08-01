@@ -8,6 +8,7 @@
   --danger: #B44B3E;
 
   height: 100vh;
+  height: 100dvh; /* mobil tarayıcı adres çubuğu açılınca 100vh gerçek görünür alanı yanlış hesaplıyordu — bu yüzden Gönder butonu ekranın altında, görünmeyen kısımda kalıyordu */
   width: 100vw;
   max-width: 560px;
   margin: 0 auto;
