@@ -182,6 +182,38 @@ export default function useHipposData() {
     });
   }
 
+  // ---- Mutfak Paneli: günlük "bugün hangi yemekler/zeytinyağlılar açık" bildirimi ----
+  // Sadece Yemekler + Zeytinyağlılar kategorilerindeki DEĞİŞKEN (sabit olmayan) ürünleri
+  // etkiler. Seçilenler AKTİF, o kategorilerdeki seçilmeyen diğer her şey PASİF olur.
+  // Sabit ürünlere ASLA dokunulmaz.
+  function applyMutfakMenusu(selectedIds, relevantProductIds) {
+    const selectedSet = new Set(selectedIds);
+    const toActivate = [];
+    const toDeactivate = [];
+    setProducts((prev) => {
+      const next = prev.map((p) => {
+        if (!relevantProductIds.includes(p.id) || p.sabit) return p;
+        const shouldBeActive = selectedSet.has(p.id);
+        const nextDurum = shouldBeActive ? 'AKTIF' : 'PASIF';
+        if (nextDurum === p.durum) return p;
+        if (shouldBeActive) toActivate.push(p.id);
+        else toDeactivate.push(p.id);
+        return { ...p, durum: nextDurum };
+      });
+      return next;
+    });
+    if (toActivate.length > 0) {
+      supabase.from('products').update({ durum: 'AKTIF' }).in('id', toActivate).then(({ error }) => {
+        if (error) console.error('mutfak menüsü (aktif) güncellenemedi:', error.message);
+      });
+    }
+    if (toDeactivate.length > 0) {
+      supabase.from('products').update({ durum: 'PASIF' }).in('id', toDeactivate).then(({ error }) => {
+        if (error) console.error('mutfak menüsü (pasif) güncellenemedi:', error.message);
+      });
+    }
+  }
+
   function addCategory(name) {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -1294,6 +1326,7 @@ export default function useHipposData() {
     products,
     toggleProductStatus,
     bulkSetCategoryStatus,
+    applyMutfakMenusu,
     addProduct,
     updateProduct,
     deleteProduct,

@@ -5,6 +5,7 @@ import Settings from './pages/Settings/Settings';
 import Products from './pages/Products/Products';
 import Cariler from './pages/Cariler/Cariler';
 import Paketci from './pages/Paketci/Paketci';
+import MutfakPaneli from './pages/MutfakPaneli/MutfakPaneli';
 import BottomNav from './components/BottomNav/BottomNav';
 import useHipposData, { QUICK_SALE } from './hooks/useHipposData';
 import { supabase } from './services/supabase';
@@ -17,6 +18,8 @@ export default function App() {
   // Paketçi kendi telefonundan /paketci adresine girer — ana panelden tamamen ayrı,
   // bağımsız bir mobil sayfa. Aynı Supabase verisini kullanır ama farklı arayüz.
   const isPaketciRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/paketci');
+  // Mutfak personeli de kendi telefonundan /mutfak adresine girer — aynı mantık.
+  const isMutfakRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/mutfak');
 
   useEffect(() => {
     async function testConnection() {
@@ -35,6 +38,9 @@ export default function App() {
 
   if (isPaketciRoute) {
     return <Paketci data={data} />;
+  }
+  if (isMutfakRoute) {
+    return <MutfakPaneli data={data} />;
   }
 
   function handleNavigate(page, opts) {
