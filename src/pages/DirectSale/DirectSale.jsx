@@ -79,6 +79,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   }, [draftItems]);
 
   const prevTableRef = useRef(selectedTable);
+  // Taşıma/birleştirme sonrası hedef masanın GÜNCEL (henüz Supabase'ten yankısı gelmemiş)
+  // içeriğini elle taslağa yazdığımızda, aşağıdaki "masa değişince yükle" efektinin bunu
+  // ESKİ (henüz güncellenmemiş) orders[table] ile EZMESİNİ önlemek için kullanılır.
+  const skipNextDraftLoadRef = useRef(false);
 
   function flushDraftToSupabase(table, items) {
     if (!table || table === QUICK_SALE) return; // Hızlı Satış hiçbir zaman Supabase'e yazılmaz
@@ -87,13 +91,18 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     setOrderItemsRemote(table, items, items.length === 0 ? { note: '', discount: { type: null, value: 0 }, openedAt: null } : {});
   }
 
-  // Masa değişince: ÖNCEKİ masanın taslağını gönder, sonra YENİ masanın güncel halini yükle.
+  // Masa değişince: ÖNCEKİ masanın taslağını gönder, sonra YENİ masanın güncel halini yükle
+  // (taşıma/birleştirme az önce elle doğru taslağı verdiyse bu adım atlanır).
   useEffect(() => {
     const leaving = prevTableRef.current;
     if (leaving && leaving !== selectedTable) {
       flushDraftToSupabase(leaving, draftItemsRef.current);
     }
-    setDraftItems(selectedTable === QUICK_SALE ? [] : orders[selectedTable] || []);
+    if (skipNextDraftLoadRef.current) {
+      skipNextDraftLoadRef.current = false;
+    } else {
+      setDraftItems(selectedTable === QUICK_SALE ? [] : orders[selectedTable] || []);
+    }
     if (selectedTable !== QUICK_SALE) announceViewingTable(selectedTable); // Hızlı Satış kilitlenmez
     prevTableRef.current = selectedTable;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -299,16 +308,21 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
           showToast('Masa(lar) artık kilitli, taşınamadı');
           return;
         }
-        setOrderItemsRemote(targetTable, currentOrder, {
+        const finalItems = currentOrder;
+        setOrderItemsRemote(targetTable, finalItems, {
           note: tableNotes[selectedTable] || '',
           discount: tableDiscounts[selectedTable] || { type: null, value: 0 },
         });
         setOrderItemsRemote(selectedTable, [], { note: '', discount: { type: null, value: 0 }, openedAt: null });
-        setDraftItems([]);
         // Otomatik "masadan çıkış" efektinin, biraz önce elle boşalttığımız kaynak masayı
         // TEKRAR (bayat taslakla) yazmaya çalışmasını önlemek için referansı elle ilerletiyoruz.
         prevTableRef.current = targetTable;
+        // Hedef masanın Supabase'teki yankısı henüz gelmediği için, "masa değişince yükle"
+        // efektinin eski (taşımadan önceki) veriyi göstermesini engelleyip, doğru sonucu
+        // (sayfaya geri dönmeden, ANINDA) burada elle veriyoruz.
+        skipNextDraftLoadRef.current = true;
         setSelectedTable(targetTable);
+        setDraftItems(finalItems);
       },
     });
   }
@@ -339,15 +353,18 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
           showToast('Masa(lar) artık kilitli, birleştirilemedi');
           return;
         }
-        setOrderItemsRemote(targetTable, [...(orders[targetTable] || []), ...currentOrder], {
+        const finalItems = [...(orders[targetTable] || []), ...currentOrder];
+        setOrderItemsRemote(targetTable, finalItems, {
           note: tableNotes[selectedTable]
             ? `${tableNotes[targetTable] ? tableNotes[targetTable] + ' | ' : ''}${tableNotes[selectedTable]}`
             : tableNotes[targetTable] || '',
         });
         setOrderItemsRemote(selectedTable, [], { note: '', discount: { type: null, value: 0 }, openedAt: null });
-        setDraftItems([]);
         prevTableRef.current = targetTable;
+        // Birleştirmenin GÜNCEL sonucunu (Supabase'in yankısını beklemeden) anında göster.
+        skipNextDraftLoadRef.current = true;
         setSelectedTable(targetTable);
+        setDraftItems(finalItems);
       },
     });
   }
