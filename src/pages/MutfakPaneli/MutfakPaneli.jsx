@@ -5,12 +5,16 @@ import { Search, X, Send, ChefHat, Check } from 'lucide-react';
 
 // Kategori eşleştirmesi büyük/küçük harf ve Türkçe karakter duyarlı yapılıyor —
 // mevcut ürün verisinde kategoriler genelde BÜYÜK HARF ("YEMEKLER") tutuluyor.
-function isYemek(p) {
-  return (p.kategori || '').toLocaleLowerCase('tr-TR').includes('yemek');
-}
 function isZeytinyagli(p) {
   const a = (p.altKategori || '').toLocaleLowerCase('tr-TR');
   return a === 'yoğurt - z.yağlı';
+}
+function isYemek(p) {
+  // "Yoğurt - Z.Yağlı" alt kategorisindeki ürünler kategori olarak da YEMEKLER'de
+  // duruyor — bu yüzden Zeytinyağlılar'a ait olan hiçbir ürün Yemekler listesine
+  // düşmesin diye burada açıkça hariç tutuluyor (aksi halde iki listede birden çıkıyordu).
+  if (isZeytinyagli(p)) return false;
+  return (p.kategori || '').toLocaleLowerCase('tr-TR').includes('yemek');
 }
 
 function sortByMenu(list) {
