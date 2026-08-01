@@ -4,7 +4,7 @@ import { TL, QUICK_SALE } from '../../hooks/useHipposData';
 import {
   Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
-  Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp,
+  Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp, ArrowLeft,
 } from 'lucide-react';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
@@ -401,12 +401,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   }
 
   function handleSend() {
-    if (selectedTable === QUICK_SALE) {
-      // Hızlı Satış'ta "Gönder" = "Ödeme Al" ile birebir aynı: ödeme türü sorulur,
-      // seçilince taslak temizlenir, sayfa DEĞİŞMEZ — sıradaki müşteri hemen girilebilir.
-      setPayMode(true);
-      return;
-    }
     onNavigate('tables');
   }
 
@@ -810,9 +804,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             <button disabled={isOrderEmpty} className="ds-pay-cta" onClick={() => setPayMode(true)}>
               <Wallet size={17} /> Ödeme Al
             </button>
-            <button className="ds-send-btn" onClick={handleSend}>
-              <Send size={16} /> Gönder
-            </button>
+            {selectedTable === QUICK_SALE ? (
+              <button className="ds-send-btn" onClick={handleSend}>
+                <ArrowLeft size={16} /> Geri Dön
+              </button>
+            ) : (
+              <button className="ds-send-btn" onClick={handleSend}>
+                <Send size={16} /> Gönder
+              </button>
+            )}
           </div>
           <div className="ds-bottom-actions">
             <button disabled={isOrderEmpty} onClick={handlePrint}><Printer size={14} /> Yazdır</button>

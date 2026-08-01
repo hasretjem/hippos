@@ -28,8 +28,11 @@ export default function App() {
     testConnection();
   }, []);
 
-  function handleNavigate(page) {
+  function handleNavigate(page, opts) {
     if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler') {
+      // Sadece alt menüden "Hızlı Satış"a bilerek tıklanınca seçili masa sıfırlanır.
+      // Masalar sayfasından bir masaya girerken (opts.resetTable verilmez) buna dokunulmaz.
+      if (page === 'pos' && opts?.resetTable) setSelectedTable(QUICK_SALE);
       setActivePage(page);
     } else {
       // Kasa & Rapor, Gün Sonu sayfaları henüz hazır değil

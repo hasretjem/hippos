@@ -17,7 +17,7 @@ export default function BottomNav({ activePage, onNavigate }) {
         <button
           key={key}
           className={activePage === key ? 'active' : ''}
-          onClick={() => onNavigate(key)}
+          onClick={() => onNavigate(key, key === 'pos' ? { resetTable: true } : undefined)}
         >
           <Icon size={16} strokeWidth={2} />
           <span className="label">{label}</span>
