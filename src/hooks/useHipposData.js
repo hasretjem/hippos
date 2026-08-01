@@ -657,6 +657,32 @@ export default function useHipposData() {
         });
         return changed ? next : prev;
       });
+
+      // Paketçi mobil paneli ile ana panel arasında da AYNI güvenlik ağı gerekiyor —
+      // yeni paket açılması / paketçinin teslim bildirmesi Realtime'ı bazen kaçırabiliyor.
+      const [pkRes, ptRes, ctbRes] = await Promise.all([
+        supabase.from('packages').select('*'),
+        supabase.from('paket_teslimatlari').select('*'),
+        supabase.from('cari_teslimat_bildirimleri').select('*'),
+      ]);
+      if (pkRes.data) {
+        setPackages((prev) => {
+          const next = (pkRes.data || []).map((r) => ({ name: r.name, num: r.num }));
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
+      }
+      if (ptRes.data) {
+        setPaketTeslimatlari((prev) => {
+          const next = ptRes.data.map(rowToPaketTeslimat).sort((a, b) => b.ts - a.ts);
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
+      }
+      if (ctbRes.data) {
+        setCariTeslimatBildirimleri((prev) => {
+          const next = ctbRes.data.map(rowToCariTeslimatBildirim).sort((a, b) => b.ts - a.ts);
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
+      }
     }, 5000);
     return () => clearInterval(id);
   }, []);
