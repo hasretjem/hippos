@@ -349,12 +349,24 @@ export default function Products({ data, onNavigate }) {
   );
 }
 
+const GUNUN_MENUSU_KATEGORILER = [
+  { value: '', label: '— Seçilmedi —' },
+  { value: 'corba', label: 'Günün Çorbası' },
+  { value: 'ana_yemek', label: 'Ana Yemekler' },
+  { value: 'yardimci_yemek', label: 'Yardımcı Yemekler' },
+  { value: 'zeytinyagli', label: 'Zeytinyağlılar' },
+];
+// Bu sınıflandırma sadece bu iki alt kategorideki ürünler için anlamlı — Günün Menüsü
+// görsel oluşturma sisteminin hangi ürünü hangi bölüme koyacağını bilmesi için var.
+const GUNUN_MENUSU_ALT_KATEGORILER = ['Ana Yemekler', 'Yoğurt - Z.Yağlı'];
+
 function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) {
   const [editingAd, setEditingAd] = useState(false);
   const [adDraft, setAdDraft] = useState(p.ad);
   const [azFiyatDraft, setAzFiyatDraft] = useState(p.azFiyat ?? '');
 
   const isActive = p.durum !== 'PASIF';
+  const showGununMenusuSecim = GUNUN_MENUSU_ALT_KATEGORILER.includes(p.altKategori);
 
   function saveAd() {
     if (adDraft.trim() && adDraft !== p.ad) onUpdate({ ad: adDraft.trim() });
@@ -401,6 +413,19 @@ function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) 
           <input type="checkbox" checked={p.sabit} onChange={(e) => onUpdate({ sabit: e.target.checked })} />
           <Pin size={12} />
         </label>
+
+        {showGununMenusuSecim && (
+          <select
+            className="pr-gunun-menusu-select"
+            value={p.gununMenusuKategori || ''}
+            onChange={(e) => onUpdate({ gununMenusuKategori: e.target.value || null })}
+            title="Günün Menüsü sınıflandırması"
+          >
+            {GUNUN_MENUSU_KATEGORILER.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        )}
 
         <button className={`pr-toggle ${isActive ? 'on' : ''}`} onClick={onToggle}>
           <span className="pr-toggle-knob" />

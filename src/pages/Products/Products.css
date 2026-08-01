@@ -193,6 +193,19 @@
 }
 .pr-sabit-check input { accent-color: var(--earth); width: 15px; height: 15px; }
 
+.pr-gunun-menusu-select {
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 6px;
+  max-width: 140px;
+  flex-shrink: 0;
+}
+
 /* ---- Ürün satırı ---- */
 .pr-row {
   border-bottom: 1px solid var(--border-soft);
