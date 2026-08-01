@@ -415,16 +415,27 @@ function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) 
         </label>
 
         {showGununMenusuSecim && (
-          <select
-            className="pr-gunun-menusu-select"
-            value={p.gununMenusuKategori || ''}
-            onChange={(e) => onUpdate({ gununMenusuKategori: e.target.value || null })}
-            title="Günün Menüsü sınıflandırması"
-          >
-            {GUNUN_MENUSU_KATEGORILER.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+          <>
+            <select
+              className="pr-gunun-menusu-select"
+              value={p.gununMenusuKategori || ''}
+              onChange={(e) => onUpdate({ gununMenusuKategori: e.target.value || null })}
+              title="Günün Menüsü sınıflandırması"
+            >
+              {GUNUN_MENUSU_KATEGORILER.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <input
+              type="number"
+              min={1}
+              className="pr-order-input small"
+              placeholder="Sıra"
+              value={p.gununMenusuSira ?? ''}
+              onChange={(e) => onUpdate({ gununMenusuSira: e.target.value ? parseInt(e.target.value, 10) : null })}
+              title="Günün Menüsü Sıra No — bu bölüm içindeki sırasını belirler"
+            />
+          </>
         )}
 
         <button className={`pr-toggle ${isActive ? 'on' : ''}`} onClick={onToggle}>

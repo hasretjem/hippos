@@ -28,10 +28,16 @@ const MIN_FONT_SIZE = 22; // taşma durumunda ürün adı en fazla buraya kadar 
 const PRICE_GAP = 14; // isim ile fiyat arasında en az boşluk
 
 // Türkçe karakterleri doğru işleyen "ilk harfler büyük" dönüşümü.
-// Ayrıca "01- ", "09-" gibi iç kullanım (menü sırası) önekleri müşteriye
-// gösterilen günün menüsünde anlamsız olduğu için otomatik temizlenir.
+// Ayrıca "01- ", "09-" gibi iç kullanım (menü sırası) önekleri VE isim içindeki
+// "(Adet)" / "Adet" ibareleri (fiyat formatı zaten bunu otomatik gösteriyor,
+// isimde tekrar yazılmasın diye) temizlenir.
 function turkishTitleCase(raw) {
-  const cleaned = raw.replace(/^\s*\d{1,3}\s*[-–]\s*/, '').trim();
+  const cleaned = raw
+    .replace(/^\s*\d{1,3}\s*[-–]\s*/, '')
+    .replace(/\(\s*adet\s*\)/gi, '')
+    .replace(/\badet\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
   return cleaned
     .toLocaleLowerCase('tr-TR')
     .split(' ')
@@ -39,9 +45,11 @@ function turkishTitleCase(raw) {
     .join(' ');
 }
 
-function formatPrice(fiyat, perAdet) {
+// Fiyat formatı artık ELLE seçilmiyor — az porsiyonu OLMAYAN ürünler otomatik
+// "X TL/ADET", az porsiyonu OLAN ürünler "X TL" olarak yazılır.
+function formatPrice(fiyat, azPorsiyon) {
   const sayi = Math.round(fiyat);
-  return perAdet ? `${sayi} TL/ADET` : `${sayi} TL`;
+  return azPorsiyon ? `${sayi} TL` : `${sayi} TL/ADET`;
 }
 
 function loadImage(src) {
@@ -82,7 +90,7 @@ async function renderMenuCanvas({ tarihText, corba, ana, yardimci, zeytinyagli }
   // ---- Bir ürün satırı çizer: isim taşarsa SADECE isim küçülür, fiyat sabit kalır ----
   function drawRow(item, x, y, priceRightX) {
     const name = turkishTitleCase(item.ad);
-    const price = formatPrice(item.fiyat, item.perAdet);
+    const price = formatPrice(item.fiyat, item.azPorsiyon);
 
     ctx.textAlign = 'right';
     ctx.font = `${ITEM_FONT_SIZE}px "${FONT}"`;
@@ -122,18 +130,24 @@ function todayTr() {
 
 const GUNUN_MENUSU_ESLESME = { corba: 'corba', ana: 'ana_yemek', yardimci: 'yardimci_yemek', zeytinyagli: 'zeytinyagli' };
 
-// Menü Düzenleme ekranındaki sıralama mantığıyla aynı: menü sırası, eşitse alfabetik.
-function sortByMenuOrder(list) {
-  return [...list].sort((a, b) => a.menuSirasi - b.menuSirasi || a.ad.localeCompare(b.ad, 'tr'));
+// Günün Menüsü'ne özel sıralama: her bölüm kendi içinde "Günün Menüsü Sıra No"na göre
+// küçükten büyüğe sıralanır (boş/eşit olanlar alfabetik ilerler). Genel menü sırasından
+// (Menü Düzenleme'deki) BAĞIMSIZDIR.
+function sortByGununMenusuSira(list) {
+  return [...list].sort((a, b) => {
+    const sa = a.gununMenusuSira ?? Infinity;
+    const sb = b.gununMenusuSira ?? Infinity;
+    return sa - sb || a.ad.localeCompare(b.ad, 'tr');
+  });
 }
 
 // Ürün Yönetimi'nde etiketlenmiş ve o an AKTİF olan ürünleri, ilgili bölüme otomatik doldurur.
 function initialSelectionFor(products, sectionKey, max) {
   const etiket = GUNUN_MENUSU_ESLESME[sectionKey];
-  const eslesenler = sortByMenuOrder(
+  const eslesenler = sortByGununMenusuSira(
     products.filter((p) => p.gununMenusuKategori === etiket && p.durum === 'AKTIF' && !p.isAzVariant)
   );
-  return eslesenler.slice(0, max).map((p) => ({ id: p.id, ad: p.ad, fiyat: p.fiyat, perAdet: false }));
+  return eslesenler.slice(0, max).map((p) => ({ id: p.id, ad: p.ad, fiyat: p.fiyat, azPorsiyon: p.azPorsiyon, gununMenusuSira: p.gununMenusuSira }));
 }
 
 export default function GununMenusu({ data, onClose }) {
@@ -153,7 +167,7 @@ export default function GununMenusu({ data, onClose }) {
   const sectionSetters = { corba: setCorba, ana: setAna, yardimci: setYardimci, zeytinyagli: setZeytinyagli };
 
   function addItem(section, product) {
-    const withFlag = { id: product.id, ad: product.ad, fiyat: product.fiyat, perAdet: false };
+    const withFlag = { id: product.id, ad: product.ad, fiyat: product.fiyat, azPorsiyon: product.azPorsiyon, gununMenusuSira: product.gununMenusuSira };
     if (section === 'corba') {
       setCorba(withFlag);
       setPickerFor(null);
@@ -161,7 +175,7 @@ export default function GununMenusu({ data, onClose }) {
     }
     const setter = sectionSetters[section];
     const max = SECTIONS[section].max;
-    setter((prev) => (prev.length >= max ? prev : [...prev, withFlag]));
+    setter((prev) => (prev.length >= max ? prev : sortByGununMenusuSira([...prev, withFlag])));
   }
 
   function removeItem(section, index) {
@@ -170,14 +184,6 @@ export default function GununMenusu({ data, onClose }) {
       return;
     }
     sectionSetters[section]((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function toggleAdet(section, index) {
-    if (section === 'corba') {
-      setCorba((prev) => (prev ? { ...prev, perAdet: !prev.perAdet } : prev));
-      return;
-    }
-    sectionSetters[section]((prev) => prev.map((it, i) => (i === index ? { ...it, perAdet: !it.perAdet } : it)));
   }
 
   const pickerResults = useMemo(() => {
@@ -242,13 +248,7 @@ export default function GununMenusu({ data, onClose }) {
                     {items.map((it, i) => (
                       <div key={it.id} className="gm-item-chip">
                         <span className="gm-item-name">{turkishTitleCase(it.ad)}</span>
-                        <button
-                          className={`gm-adet-toggle ${it.perAdet ? 'on' : ''}`}
-                          onClick={() => toggleAdet(key, i)}
-                          title="TL/ADET formatını aç-kapat"
-                        >
-                          {it.perAdet ? 'TL/ADET' : 'TL'}
-                        </button>
+                        <span className="gm-adet-badge">{formatPrice(it.fiyat, it.azPorsiyon)}</span>
                         <button className="gm-item-remove" onClick={() => removeItem(key, i)}><X size={13} /></button>
                       </div>
                     ))}
@@ -301,7 +301,7 @@ export default function GununMenusu({ data, onClose }) {
               {pickerResults.map((p) => (
                 <button key={p.id} className="gm-picker-item" onClick={() => addItem(pickerFor, p)}>
                   <span>{turkishTitleCase(p.ad)}</span>
-                  <span className="gm-picker-price">{formatPrice(p.fiyat, false)}</span>
+                  <span className="gm-picker-price">{formatPrice(p.fiyat, p.azPorsiyon)}</span>
                 </button>
               ))}
               {pickerResults.length === 0 && <p className="gm-empty">Ürün bulunamadı.</p>}
