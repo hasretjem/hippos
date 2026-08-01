@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './Settings.css';
 import { TL } from '../../hooks/useHipposData';
 import { supabase } from '../../services/supabase';
+import GununMenusu from './GununMenusu';
 import {
   ListChecks, Calculator, Eye, EyeOff, Share2, Lock, Delete, Search, X,
   Banknote, CreditCard, UtensilsCrossed, BookOpen, ExternalLink, ChevronRight,
-  Undo2, Wifi, WifiOff, Printer, Database, FileSpreadsheet, Triangle,
+  Undo2, Wifi, WifiOff, Printer, Database, FileSpreadsheet, Triangle, Image as ImageIcon,
 } from 'lucide-react';
 
 // Ciro panelini açan PIN — ileride Gelişmiş Ayarlar'dan değiştirilebilir hale gelecek.
@@ -40,6 +41,7 @@ export default function Settings({ data, onNavigate }) {
 
   // ---- Menü Düzenleme ----
   const [menuModalOpen, setMenuModalOpen] = useState(false);
+  const [gununMenusuOpen, setGununMenusuOpen] = useState(false);
   const [menuSearchOpen, setMenuSearchOpen] = useState(false);
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
   const menuSearchRef = useRef(null);
@@ -309,6 +311,11 @@ export default function Settings({ data, onNavigate }) {
               <span className="st-action-ico"><Calculator size={22} /></span>
               <span className="st-action-title">Gün Sonu Al</span>
               <span className="st-action-sub">Kasa kapanış sayfasına git</span>
+            </button>
+            <button className="st-action-card" onClick={() => setGununMenusuOpen(true)}>
+              <span className="st-action-ico"><ImageIcon size={22} /></span>
+              <span className="st-action-title">Günün Menüsü</span>
+              <span className="st-action-sub">Görsel önizleme oluştur (test aşaması)</span>
             </button>
           </div>
 
@@ -619,6 +626,8 @@ export default function Settings({ data, onNavigate }) {
           </div>
         </div>
       )}
+
+      {gununMenusuOpen && <GununMenusu data={data} onClose={() => setGununMenusuOpen(false)} />}
     </div>
   );
 }
