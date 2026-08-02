@@ -198,10 +198,10 @@ export default function Cariler({ data, onNavigate }) {
     const rows = [
       ...cariHareketler
         .filter((h) => h.cariId === cariId && h.ts >= baslangicTs && h.ts <= bitisTs)
-        .map((h) => ({ ts: h.ts, tip: 'siparis', aciklama: h.urunler.map((u) => u.ad).join(', '), tutar: h.toplam })),
+        .map((h) => ({ ts: h.ts, tip: 'siparis', aciklama: 'Sipariş', urunler: h.urunler, tutar: h.toplam })),
       ...cariOdemeler
         .filter((o) => o.cariId === cariId && o.ts >= baslangicTs && o.ts <= bitisTs)
-        .map((o) => ({ ts: o.ts, tip: 'odeme', aciklama: `Ödeme Alındı — ${o.tur}`, tutar: -o.tutar })),
+        .map((o) => ({ ts: o.ts, tip: 'odeme', aciklama: `Ödeme Alındı — ${o.tur}`, urunler: null, tutar: -o.tutar })),
     ].sort((a, b) => a.ts - b.ts);
     setDokumData({ cari: selectedCari, rows, baslangicTs, bitisTs });
     setDokumModalOpen(false);
@@ -619,10 +619,22 @@ export default function Cariler({ data, onNavigate }) {
           <div className="cr-print-rows">
             {dokumData.rows.length === 0 && <p>Bu aralıkta hareket bulunamadı.</p>}
             {dokumData.rows.map((r, i) => (
-              <div key={i} className="cr-print-row">
-                <span>{fmtDate(r.ts)}</span>
-                <span>{r.aciklama}</span>
-                <span>{r.tutar < 0 ? '-' : ''}{TL(Math.abs(r.tutar))}</span>
+              <div key={i} className="cr-print-block">
+                <div className="cr-print-block-head">
+                  <span>{fmtDate(r.ts)}</span>
+                  <span>{r.aciklama}</span>
+                  <strong>{r.tutar < 0 ? '-' : ''}{TL(Math.abs(r.tutar))}</strong>
+                </div>
+                {r.urunler && r.urunler.length > 0 && (
+                  <div className="cr-print-items">
+                    {r.urunler.map((u, ui) => (
+                      <div key={ui} className="cr-print-item-row">
+                        <span>{u.ad}</span>
+                        <span>{TL(u.fiyat)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
