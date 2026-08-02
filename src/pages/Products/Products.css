@@ -207,12 +207,12 @@
 }
 
 .pr-bicak-toggle {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  border: 1.5px solid var(--border);
   background: var(--panel-2);
-  font-size: 14px;
+  font-size: 20px;
   flex-shrink: 0;
   opacity: 0.35;
   filter: grayscale(1);
@@ -222,7 +222,45 @@
   filter: none;
   background: #FDEBD3;
   border-color: #E3A34F;
+  box-shadow: 0 0 0 2px rgba(227, 163, 79, 0.25);
 }
+.pr-ekmek-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  border: 1.5px solid var(--border);
+  background: var(--panel-2);
+  font-size: 20px;
+  flex-shrink: 0;
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+.pr-ekmek-toggle.on {
+  opacity: 1;
+  filter: none;
+  background: #F3E6C8;
+  border-color: #C9A24B;
+  box-shadow: 0 0 0 2px rgba(201, 162, 75, 0.25);
+}
+
+.pr-info-tip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1px solid var(--ink-soft);
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-style: italic;
+  font-family: Georgia, serif;
+  flex-shrink: 0;
+  cursor: help;
+  margin-right: 2px;
+  user-select: none;
+}
+.pr-info-tip:hover { border-color: var(--earth); color: var(--earth); background: #F3EEE0; }
 
 /* ---- Ürün satırı ---- */
 .pr-row {

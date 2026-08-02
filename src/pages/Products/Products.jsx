@@ -366,6 +366,12 @@ function isSandvicUrunu(p) {
   return a.includes('küçük sandviç') || a.includes('büyük sandviç');
 }
 
+// Fare üzerine gelince açıklama gösteren, çekilince kaybolan küçük bilgi ikonu.
+// Tarayıcının kendi "title" davranışını kullanıyor — ekstra state gerekmiyor.
+function InfoTip({ text }) {
+  return <span className="pr-info-tip" title={text}>i</span>;
+}
+
 function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) {
   const [editingAd, setEditingAd] = useState(false);
   const [adDraft, setAdDraft] = useState(p.ad);
@@ -374,6 +380,7 @@ function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) 
   const isActive = p.durum !== 'PASIF';
   const showGununMenusuSecim = GUNUN_MENUSU_ALT_KATEGORILER.includes(p.altKategori);
   const showBicakToggle = isSandvicUrunu(p);
+  const showEkmekToggle = isSandvicUrunu(p);
 
   function saveAd() {
     if (adDraft.trim() && adDraft !== p.ad) onUpdate({ ad: adDraft.trim() });
@@ -395,6 +402,7 @@ function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) 
         ) : (
           <span className="pr-row-name" onClick={() => { setAdDraft(p.ad); setEditingAd(true); }}>{p.ad}</span>
         )}
+        <InfoTip text="Ürünün adı. Tıklayıp yazarak değiştirebilirsin, tüm cihazlarda anında güncellenir." />
         {tag && <span className="pr-row-tag">{tag}</span>}
 
         <input
@@ -405,6 +413,7 @@ function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) 
           onChange={(e) => onUpdate({ fiyat: parseFloat(e.target.value.replace(',', '.')) || 0 })}
         />
         <span className="pr-price-suffix">₺</span>
+        <InfoTip text="Satış fiyatı. Değiştirince tüm satış ekranlarında ve Sheets'e kaydedince orada da anında güncellenir." />
 
         <input
           type="number"
@@ -415,11 +424,13 @@ function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) 
           onChange={(e) => onUpdate({ menuSirasi: parseInt(e.target.value, 10) || 1 })}
           title="Menü Sırası"
         />
+        <InfoTip text="Bu ürünün, aynı alt kategorideki diğer ürünlere göre satış ekranındaki sırasını belirler. Küçük sayı önce/üstte görünür." />
 
         <label className="pr-sabit-check" title="Sabit Ürün">
           <input type="checkbox" checked={p.sabit} onChange={(e) => onUpdate({ sabit: e.target.checked })} />
           <Pin size={12} />
         </label>
+        <InfoTip text="İşaretlenirse bu ürün 'Kategoriyi Toplu Pasife Al' işleminden etkilenmez — her zaman satışta kalır, tek tek kapatman gerekir." />
 
         {showGununMenusuSecim && (
           <>
@@ -440,23 +451,41 @@ function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) 
               placeholder="Sıra"
               value={p.gununMenusuSira ?? ''}
               onChange={(e) => onUpdate({ gununMenusuSira: e.target.value ? parseInt(e.target.value, 10) : null })}
-              title="Günün Menüsü Sıra No — bu bölüm içindeki sırasını belirler"
+              title="Günün Menüsü Sıra No"
             />
+            <InfoTip text="Bu ürünün Günün Menüsü görselinde hangi bölümde (Çorba/Ana Yemek/Yardımcı Yemek/Zeytinyağlı) ve o bölüm içinde kaçıncı sırada görüneceğini belirler. Boş bırakılırsa Günün Menüsü ekranında otomatik seçilmez." />
           </>
         )}
 
         <button className={`pr-toggle ${isActive ? 'on' : ''}`} onClick={onToggle}>
           <span className="pr-toggle-knob" />
         </button>
+        <InfoTip text="Kapatırsan bu ürün satış ekranlarında görünmez, sipariş edilemez. Açık/kapalı durumu tüm cihazlarda anında değişir." />
 
         {showBicakToggle && (
-          <button
-            className={`pr-bicak-toggle ${p.bicakGerekli ? 'on' : ''}`}
-            onClick={() => onUpdate({ bicakGerekli: !p.bicakGerekli })}
-            title="Bıçak gerekli — sipariş ekranında ve fişte uyarı gösterir"
-          >
-            🔪
-          </button>
+          <>
+            <button
+              className={`pr-bicak-toggle ${p.bicakGerekli ? 'on' : ''}`}
+              onClick={() => onUpdate({ bicakGerekli: !p.bicakGerekli })}
+              title="Bıçak gerekli"
+            >
+              🔪
+            </button>
+            <InfoTip text="İşaretlenirse bu ürün sipariş ekranında ve fişte bıçak simgesiyle işaretlenir — mutfağa/tezgaha 'kesilmesi gerekiyor' uyarısı verir." />
+          </>
+        )}
+
+        {showEkmekToggle && (
+          <>
+            <button
+              className={`pr-ekmek-toggle ${p.ekmekGerekli ? 'on' : ''}`}
+              onClick={() => onUpdate({ ekmekGerekli: !p.ekmekGerekli })}
+              title="Ekmek gerekli"
+            >
+              🥖
+            </button>
+            <InfoTip text="İşaretlenirse bu ürün sipariş ekranında ve fişte baget ekmek simgesiyle işaretlenir." />
+          </>
         )}
 
         <button className="pr-delete-btn" onClick={onDelete}><Trash2 size={14} /></button>

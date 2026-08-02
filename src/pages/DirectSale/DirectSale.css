@@ -398,7 +398,8 @@
 .ds-product-card.fav { border-color: var(--earth); }
 .ds-product-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
 .ds-product-name { font-size: 13px; font-weight: 600; line-height: 1.3; }
-.ds-bicak-mark { margin-right: 3px; font-size: 0.95em; }
+.ds-bicak-mark { margin-right: 4px; font-size: 1.35em; vertical-align: -2px; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.15)); }
+.ds-ekmek-mark { margin-right: 4px; font-size: 1.35em; vertical-align: -2px; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.15)); }
 .ds-star { color: var(--earth); flex-shrink: 0; margin-top: 1px; }
 .ds-product-price { font-size: 13px; font-weight: 700; color: var(--olive); }
 .ds-empty { text-align: center; padding: 48px 0; color: var(--ink-soft); font-size: 13px; }
@@ -958,7 +959,8 @@
   .print-meta { display: flex; justify-content: space-between; font-size: 11px; border-bottom: 1px dashed #000; padding-bottom: 6px; margin-bottom: 8px; }
   .print-items { font-size: 12px; line-height: 1.5; margin-bottom: 8px; }
   .print-row { display: flex; justify-content: space-between; }
-  .print-bicak-mark { font-size: 15px; margin-right: 4px; }
+  .print-bicak-mark { font-size: 20px; margin-right: 5px; vertical-align: -3px; }
+  .print-ekmek-mark { font-size: 20px; margin-right: 5px; vertical-align: -3px; }
   .print-total-box { border-top: 1px dashed #000; padding-top: 6px; font-weight: 700; font-size: 13px; }
   .print-row.big { font-size: 15px; margin-top: 4px; }
 }

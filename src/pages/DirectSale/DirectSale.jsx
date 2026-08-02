@@ -186,6 +186,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       selected: false,
       note: product.fiyat === 0,
       bicakGerekli: !!product.bicakGerekli,
+      ekmekGerekli: !!product.ekmekGerekli,
     };
     setDraftItems((prev) => [...prev, newItem]);
   }
@@ -714,6 +715,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                           <div className="ds-product-card-top">
                             <span className="ds-product-name">
                               {product.bicakGerekli && <span className="ds-bicak-mark" title="Bıçak gerekli">🔪</span>}
+                              {product.ekmekGerekli && <span className="ds-ekmek-mark" title="Ekmek gerekli">🥖</span>}
                               {product.ad}
                             </span>
                             {isFav && <Star size={11} className="ds-star" fill="currentColor" />}
@@ -757,6 +759,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   <div className="ds-order-line-mid" onClick={() => toggleSelectItem(item.id)}>
                     <span className="ds-order-line-name">
                       {item.bicakGerekli && <span className="ds-bicak-mark" title="Bıçak gerekli">🔪</span>}
+                      {item.ekmekGerekli && <span className="ds-ekmek-mark" title="Ekmek gerekli">🥖</span>}
                       {item.ad}
                     </span>
                     {item.selected && <span className="ds-tag selected"><Check size={10} /> SEÇİLİ</span>}
@@ -1106,6 +1109,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             <div key={item.id} className="print-row">
               <span>
                 {item.bicakGerekli && <span className="print-bicak-mark">🔪</span>}
+                {item.ekmekGerekli && <span className="print-ekmek-mark">🥖</span>}
                 {item.note ? `• ${item.ad}` : item.ad}
               </span>
               <span>{item.note ? '' : TL(item.fiyat)}</span>
