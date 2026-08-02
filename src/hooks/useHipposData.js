@@ -967,7 +967,25 @@ export default function useHipposData() {
   // Paket kapanınca, o paket adına ait TÜM paketçi teslimat bildirimlerini (onaylı,
   // reddedilmiş, bekleyen — hepsini) temizler. Bu numara ileride tekrar kullanılırsa
   // (Paket 4 kapanıp yeniden açılırsa) yeni sipariş eski geçmişi devralmasın diye.
+  // Paket kapanınca, o paket adına ait TÜM paketçi teslimat bildirimlerini (onaylı,
+  // reddedilmiş, bekleyen — hepsini) VE onlara ait fotoğrafları Storage'dan da siler.
+  // Fotoğrafları saklamak gereksiz yer kapladığı için sadece veritabanı satırını değil,
+  // gerçek dosyayı da kaldırıyoruz. Bu numara ileride tekrar kullanılırsa (Paket 4 kapanıp
+  // yeniden açılırsa) yeni sipariş eski geçmişi/fotoğrafları devralmasın diye.
   function clearPaketTeslimatlariFor(name) {
+    const silinecekler = paketTeslimatlari.filter((p) => p.paketAdi === name);
+    const fotoYollari = silinecekler
+      .map((p) => {
+        if (!p.fotoUrl) return null;
+        const parcalar = p.fotoUrl.split('/teslimat-fotograflari/');
+        return parcalar.length > 1 ? parcalar[1] : null;
+      })
+      .filter(Boolean);
+    if (fotoYollari.length > 0) {
+      supabase.storage.from('teslimat-fotograflari').remove(fotoYollari).then(({ error }) => {
+        if (error) console.error('paket fotoğrafları silinemedi:', error.message);
+      });
+    }
     setPaketTeslimatlari((prev) => prev.filter((p) => p.paketAdi !== name));
     supabase.from('paket_teslimatlari').delete().eq('paket_adi', name).then(({ error }) => {
       if (error) console.error('eski paket bildirimleri temizlenemedi:', error.message);
