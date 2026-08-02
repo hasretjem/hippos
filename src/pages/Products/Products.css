@@ -206,6 +206,24 @@
   flex-shrink: 0;
 }
 
+.pr-bicak-toggle {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  font-size: 14px;
+  flex-shrink: 0;
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+.pr-bicak-toggle.on {
+  opacity: 1;
+  filter: none;
+  background: #FDEBD3;
+  border-color: #E3A34F;
+}
+
 /* ---- Ürün satırı ---- */
 .pr-row {
   border-bottom: 1px solid var(--border-soft);

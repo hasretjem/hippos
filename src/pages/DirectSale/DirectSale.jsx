@@ -185,6 +185,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       altKategori: product.altKategori,
       selected: false,
       note: product.fiyat === 0,
+      bicakGerekli: !!product.bicakGerekli,
     };
     setDraftItems((prev) => [...prev, newItem]);
   }
@@ -711,7 +712,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                           onClick={() => addProductToOrder(product)}
                         >
                           <div className="ds-product-card-top">
-                            <span className="ds-product-name">{product.ad}</span>
+                            <span className="ds-product-name">
+                              {product.bicakGerekli && <span className="ds-bicak-mark" title="Bıçak gerekli">🔪</span>}
+                              {product.ad}
+                            </span>
                             {isFav && <Star size={11} className="ds-star" fill="currentColor" />}
                           </div>
                           <span className="ds-product-price">{TL(product.fiyat)}</span>
@@ -751,7 +755,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 <div key={item.id} className={`ds-order-line ${styleClass}`}>
                   <button className="ds-remove-btn" onClick={() => removeItem(item.id)}><X size={16} /></button>
                   <div className="ds-order-line-mid" onClick={() => toggleSelectItem(item.id)}>
-                    <span className="ds-order-line-name">{item.ad}</span>
+                    <span className="ds-order-line-name">
+                      {item.bicakGerekli && <span className="ds-bicak-mark" title="Bıçak gerekli">🔪</span>}
+                      {item.ad}
+                    </span>
                     {item.selected && <span className="ds-tag selected"><Check size={10} /> SEÇİLİ</span>}
                     {!item.selected && isDup && <span className="ds-tag duplicate"><AlertTriangle size={10} /> İKAZ</span>}
                   </div>
@@ -1097,7 +1104,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
         <div className="print-items">
           {currentOrder.map((item) => (
             <div key={item.id} className="print-row">
-              <span>{item.note ? `• ${item.ad}` : item.ad}</span>
+              <span>
+                {item.bicakGerekli && <span className="print-bicak-mark">🔪</span>}
+                {item.note ? `• ${item.ad}` : item.ad}
+              </span>
               <span>{item.note ? '' : TL(item.fiyat)}</span>
             </div>
           ))}

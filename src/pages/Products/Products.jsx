@@ -359,6 +359,12 @@ const GUNUN_MENUSU_KATEGORILER = [
 // Bu sınıflandırma sadece bu iki alt kategorideki ürünler için anlamlı — Günün Menüsü
 // görsel oluşturma sisteminin hangi ürünü hangi bölüme koyacağını bilmesi için var.
 const GUNUN_MENUSU_ALT_KATEGORILER = ['Ana Yemekler', 'Yoğurt - Z.Yağlı'];
+// Kesin alt kategori adı emin olmadığım için (daha önce Zeytinyağlılar'da da böyle bir
+// uyumsuzluk çıkmıştı) esnek, büyük/küçük harf duyarsız bir eşleştirme kullanıyorum.
+function isSandvicUrunu(p) {
+  const a = (p.altKategori || '').toLocaleLowerCase('tr-TR');
+  return a.includes('küçük sandviç') || a.includes('büyük sandviç');
+}
 
 function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) {
   const [editingAd, setEditingAd] = useState(false);
@@ -367,6 +373,7 @@ function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) 
 
   const isActive = p.durum !== 'PASIF';
   const showGununMenusuSecim = GUNUN_MENUSU_ALT_KATEGORILER.includes(p.altKategori);
+  const showBicakToggle = isSandvicUrunu(p);
 
   function saveAd() {
     if (adDraft.trim() && adDraft !== p.ad) onUpdate({ ad: adDraft.trim() });
@@ -441,6 +448,16 @@ function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) 
         <button className={`pr-toggle ${isActive ? 'on' : ''}`} onClick={onToggle}>
           <span className="pr-toggle-knob" />
         </button>
+
+        {showBicakToggle && (
+          <button
+            className={`pr-bicak-toggle ${p.bicakGerekli ? 'on' : ''}`}
+            onClick={() => onUpdate({ bicakGerekli: !p.bicakGerekli })}
+            title="Bıçak gerekli — sipariş ekranında ve fişte uyarı gösterir"
+          >
+            🔪
+          </button>
+        )}
 
         <button className="pr-delete-btn" onClick={onDelete}><Trash2 size={14} /></button>
       </div>

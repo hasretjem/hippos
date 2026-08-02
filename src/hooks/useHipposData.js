@@ -61,6 +61,7 @@ function rowToProduct(r) {
     isAzVariant: r.is_az_variant,
     gununMenusuKategori: r.gunun_menusu_kategori || null,
     gununMenusuSira: r.gunun_menusu_sira === null || r.gunun_menusu_sira === undefined ? null : Number(r.gunun_menusu_sira),
+    bicakGerekli: !!r.bicak_gerekli,
   };
 }
 function rowToCategory(r) {
@@ -306,6 +307,7 @@ export default function useHipposData() {
     if (patch.altKategori !== undefined) dbPatch.alt_kategori = patch.altKategori;
     if (patch.gununMenusuKategori !== undefined) dbPatch.gunun_menusu_kategori = patch.gununMenusuKategori;
     if (patch.gununMenusuSira !== undefined) dbPatch.gunun_menusu_sira = patch.gununMenusuSira;
+    if (patch.bicakGerekli !== undefined) dbPatch.bicak_gerekli = patch.bicakGerekli;
     if (Object.keys(dbPatch).length === 0) return;
     supabase.from('products').update(dbPatch).eq('id', id).then(({ error }) => {
       if (error) console.error('ürün güncellenemedi:', error.message);
