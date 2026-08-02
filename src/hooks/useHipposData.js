@@ -888,7 +888,14 @@ export default function useHipposData() {
     // Aynı şekilde paket BOŞALINCA da kaydı kaldırılmalı — yoksa (ödeme alındıktan sonra bile)
     // "hayalet" olarak hem Masalar/Paketler panelinde hem Paketçi ekranında görünmeye devam eder.
     if (items.length > 0) registerPackageIfNeeded(table);
-    else if (table.startsWith('Paket ')) removePackageRecord(table);
+    else if (table.startsWith('Paket ')) {
+      removePackageRecord(table);
+      // Paket numaraları artık tekrar kullanılabiliyor (Paket 4 kapanınca bir sonraki
+      // "Yeni Paket" yine Paket 4 olabilir) — bu yüzden eski paketçi teslimat bildirimleri
+      // (onaylı/reddedilmiş/bekleyen) burada temizlenmezse, yeni siparişe "yapışmış" gibi
+      // görünmeye devam ediyordu. Paket kapanınca kendi geçmişini de kapatıyoruz.
+      clearPaketTeslimatlariFor(table);
+    }
     supabase.from('table_state').upsert(patch, { onConflict: 'table_name' }).then(({ error }) => {
       if (error) console.error('masa durumu yazılamadı:', error.message);
     });
@@ -954,6 +961,16 @@ export default function useHipposData() {
     });
     supabase.from('table_state').delete().eq('table_name', name).then(({ error }) => {
       if (error) console.error('paket durumu silinemedi:', error.message);
+    });
+  }
+
+  // Paket kapanınca, o paket adına ait TÜM paketçi teslimat bildirimlerini (onaylı,
+  // reddedilmiş, bekleyen — hepsini) temizler. Bu numara ileride tekrar kullanılırsa
+  // (Paket 4 kapanıp yeniden açılırsa) yeni sipariş eski geçmişi devralmasın diye.
+  function clearPaketTeslimatlariFor(name) {
+    setPaketTeslimatlari((prev) => prev.filter((p) => p.paketAdi !== name));
+    supabase.from('paket_teslimatlari').delete().eq('paket_adi', name).then(({ error }) => {
+      if (error) console.error('eski paket bildirimleri temizlenemedi:', error.message);
     });
   }
 
