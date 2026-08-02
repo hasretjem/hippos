@@ -1,25 +1,25 @@
 .cr-shell {
-  --bg: #F6F2EA;
-  --panel: #FCFAF5;
-  --panel-2: #F1ECE1;
-  --border: #E4DDCC;
-  --border-soft: rgba(58, 53, 44, 0.09);
-  --ink: #2E2A22;
-  --ink-muted: #6B6558;
-  --ink-soft: #8C8574;
-  --olive: #4B5A3E;
-  --olive-dark: #3B4830;
-  --olive-soft: #E7EAE0;
-  --smoke: #3A3630;
-  --earth: #8B6B4A;
-  --danger: #9B4A3A;
-  --danger-soft: #F3E7E1;
+  --bg: #F1FBF6;
+  --panel: #FFFFFF;
+  --panel-2: #E1F6EA;
+  --border: #CDEEDB;
+  --border-soft: rgba(15, 92, 61, 0.10);
+  --ink: #153826;
+  --ink-muted: #4C6B5A;
+  --ink-soft: #7B9D8A;
+  --olive: #0FB870;
+  --olive-dark: #0A8752;
+  --olive-soft: #CFF5E1;
+  --smoke: #0E2F21;
+  --earth: #EFC221;
+  --danger: #E5484D;
+  --danger-soft: #FDE2E2;
   --r-panel: 22px;
   --r-card: 16px;
   --r-btn: 14px;
-  --shadow-1: 0 1px 2px rgba(30, 26, 18, 0.04);
-  --shadow-2: 0 4px 14px rgba(30, 26, 18, 0.06);
-  --shadow-3: 0 10px 28px rgba(30, 26, 18, 0.10);
+  --shadow-1: 0 1px 2px rgba(15, 62, 41, 0.04);
+  --shadow-2: 0 4px 14px rgba(15, 62, 41, 0.06);
+  --shadow-3: 0 10px 28px rgba(15, 62, 41, 0.10);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   height: 100vh;
@@ -301,7 +301,7 @@
     padding: 24px;
   }
   #cr-print-statement h2 { margin: 0 0 4px; font-size: 20px; }
-  .cr-print-range { color: #6B6558; font-size: 13px; margin: 0 0 20px; }
+  .cr-print-range { color: #4C6B5A; font-size: 13px; margin: 0 0 20px; }
   /* Ekranda/kağıtta az yer kaplasın diye 2 sütuna bölünüyor — her hareket bloğu
      (tarih + tutar + ürün listesi) sütun arasında bölünmeden bir arada kalır. */
   .cr-print-rows { column-count: 2; column-gap: 28px; margin-bottom: 16px; }
@@ -310,20 +310,20 @@
     page-break-inside: avoid;
     margin-bottom: 12px;
     padding-bottom: 8px;
-    border-bottom: 1px solid #E4DDCC;
+    border-bottom: 1px solid #CDEEDB;
   }
   .cr-print-block-head {
     display: grid; grid-template-columns: 62px 1fr auto; gap: 8px; align-items: baseline;
     font-size: 11.5px; font-weight: 700; margin-bottom: 3px;
   }
-  .cr-print-block-head span:first-child { color: #6B6558; font-weight: 500; }
+  .cr-print-block-head span:first-child { color: #4C6B5A; font-weight: 500; }
   .cr-print-items { display: flex; flex-direction: column; gap: 1px; padding-left: 62px; }
   .cr-print-item-row {
     display: flex; justify-content: space-between; gap: 8px;
-    font-size: 10.5px; color: #6B6558;
+    font-size: 10.5px; color: #4C6B5A;
   }
   .cr-print-total {
-    display: flex; justify-content: space-between; padding-top: 14px; border-top: 2px solid #2E2A22;
+    display: flex; justify-content: space-between; padding-top: 14px; border-top: 2px solid #153826;
     font-size: 15px; font-weight: 800;
   }
 }
@@ -556,7 +556,7 @@
 .cr-photo-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(30, 26, 18, 0.5);
+  background: rgba(15, 62, 41, 0.5);
   z-index: 400;
   display: flex;
   align-items: center;

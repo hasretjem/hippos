@@ -1,12 +1,12 @@
 .pk-shell {
-  --bg: #F6F2EA;
-  --panel: #FCFAF5;
-  --border: #E4DDCC;
-  --ink: #2E2A22;
-  --ink-muted: #6B6558;
-  --olive: #4B5A3E;
-  --danger: #B44B3E;
-  --warn: #B8863B;
+  --bg: #F1FBF6;
+  --panel: #FFFFFF;
+  --border: #CDEEDB;
+  --ink: #153826;
+  --ink-muted: #4C6B5A;
+  --olive: #0FB870;
+  --danger: #E5484D;
+  --warn: #B8860B;
 
   height: 100vh;
   height: 100dvh;
@@ -78,9 +78,9 @@
   display: inline-flex; align-self: flex-start; font-size: 11px; font-weight: 700; padding: 3px 9px;
   border-radius: 999px; margin-top: 2px;
 }
-.pk-status-tag.wait { background: #F3E7D0; color: var(--warn); }
-.pk-status-tag.reject { background: #F6DEDA; color: var(--danger); }
-.pk-status-tag.ok { background: #E1EADB; color: var(--olive); }
+.pk-status-tag.wait { background: #FDF3D0; color: var(--warn); }
+.pk-status-tag.reject { background: #FDE2E2; color: var(--danger); }
+.pk-status-tag.ok { background: #CFF5E1; color: var(--olive); }
 
 .pk-drink-warning {
   display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
@@ -140,7 +140,7 @@
 }
 
 .pk-modal-overlay {
-  position: fixed; inset: 0; background: rgba(30, 26, 18, 0.45); z-index: 300;
+  position: fixed; inset: 0; background: rgba(15, 62, 41, 0.45); z-index: 300;
   display: flex; align-items: flex-end; justify-content: center;
 }
 .pk-modal {

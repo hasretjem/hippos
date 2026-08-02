@@ -5,23 +5,23 @@
    ===================================================================== */
 .ds-shell {
   /* ---- Renk paleti ---- */
-  --bg: #F6F2EA;
-  --panel: #FCFAF5;
-  --panel-2: #F1ECE1;
-  --border: #E4DDCC;
-  --border-soft: rgba(58, 53, 44, 0.09);
-  --ink: #2E2A22;
-  --ink-muted: #6B6558;
-  --ink-soft: #8C8574;
-  --olive: #4B5A3E;
-  --olive-dark: #3B4830;
-  --olive-soft: #E7EAE0;
-  --smoke: #3A3630;
-  --earth: #8B6B4A;
-  --earth-dark: #6F5439;
+  --bg: #F1FBF6;
+  --panel: #FFFFFF;
+  --panel-2: #E1F6EA;
+  --border: #CDEEDB;
+  --border-soft: rgba(15, 92, 61, 0.10);
+  --ink: #153826;
+  --ink-muted: #4C6B5A;
+  --ink-soft: #7B9D8A;
+  --olive: #0FB870;
+  --olive-dark: #0A8752;
+  --olive-soft: #CFF5E1;
+  --smoke: #0E2F21;
+  --earth: #EFC221;
+  --earth-dark: #C79A0A;
   --beige: #D9CFBB;
-  --danger: #9B4A3A;
-  --danger-soft: #F3E7E1;
+  --danger: #E5484D;
+  --danger-soft: #FDE2E2;
 
   /* ---- Radius sistemi (tutarlı, tek ölçek) ---- */
   --r-panel: 22px;
@@ -31,9 +31,9 @@
   --r-badge: 999px;
 
   /* ---- Gölgeler (çok hafif) ---- */
-  --shadow-1: 0 1px 2px rgba(30, 26, 18, 0.04);
-  --shadow-2: 0 4px 14px rgba(30, 26, 18, 0.06);
-  --shadow-3: 0 10px 28px rgba(30, 26, 18, 0.08);
+  --shadow-1: 0 1px 2px rgba(15, 62, 41, 0.04);
+  --shadow-2: 0 4px 14px rgba(15, 62, 41, 0.06);
+  --shadow-3: 0 10px 28px rgba(15, 62, 41, 0.08);
 
   /* ---- Zamanlama ---- */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -733,9 +733,9 @@
 .ds-courier-tag {
   font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px; flex-shrink: 0;
 }
-.ds-courier-tag.wait, .ds-courier-tag.bekliyor { background: #F3E7D0; color: #B8863B; }
-.ds-courier-tag.onaylandi { background: #E1EADB; color: var(--olive); }
-.ds-courier-tag.reddedildi { background: #F6DEDA; color: var(--danger); }
+.ds-courier-tag.wait, .ds-courier-tag.bekliyor { background: #FDF3D0; color: #B8860B; }
+.ds-courier-tag.onaylandi { background: #CFF5E1; color: var(--olive); }
+.ds-courier-tag.reddedildi { background: #FDE2E2; color: var(--danger); }
 .ds-courier-history-foto {
   font-size: 10px; font-weight: 700; color: var(--olive); background: var(--olive-soft);
   border: none; border-radius: 999px; padding: 2px 8px;
