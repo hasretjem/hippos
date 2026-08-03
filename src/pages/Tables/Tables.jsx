@@ -405,28 +405,38 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
 
   return (
     <div className="tb-shell">
-      <button className="tb-quicksale" onClick={() => openTable(QUICK_SALE)}>
-        <div className="tb-quicksale-track">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <span className="tb-qs-item" key={i}>
-              <svg className="tb-qs-bolt" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <linearGradient id={`boltGrad${i}`} x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#FFE873" />
-                    <stop offset="55%" stopColor="#F7B733" />
-                    <stop offset="100%" stopColor="#D97B1E" />
-                  </linearGradient>
-                </defs>
-                <path fill={`url(#boltGrad${i})`} d="M14.615 1.595a.75.75 0 01.359.852L12.982 9.75h7.268a.75.75 0 01.548 1.262l-10.5 11.25a.75.75 0 01-1.272-.71l1.992-7.302H3.75a.75.75 0 01-.548-1.262l10.5-11.25a.75.75 0 01.913-.143z" />
-              </svg>
-              <span className="tb-qs-text">Hızlı Satış</span>
-            </span>
-          ))}
+      <div className="tb-top-row">
+        <div className="tb-logo-capsule">
+          <img src="/hippos-logo.gif" alt="Hippos" className="tb-logo-gif" />
+          <div className="tb-logo-text-col">
+            <span className="tb-logo-title">Hippos</span>
+            <span className="tb-logo-sub">homemade pos</span>
+          </div>
         </div>
-        {(orders[QUICK_SALE] || []).length > 0 && (
-          <span className="tb-quicksale-amount">{TLKart(getTableTotal(QUICK_SALE))}</span>
-        )}
-      </button>
+
+        <button className="tb-quicksale" onClick={() => openTable(QUICK_SALE)}>
+          <div className="tb-quicksale-track">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <span className="tb-qs-item" key={i}>
+                <svg className="tb-qs-bolt" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id={`boltGrad${i}`} x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="#FFE873" />
+                      <stop offset="55%" stopColor="#F7B733" />
+                      <stop offset="100%" stopColor="#D97B1E" />
+                    </linearGradient>
+                  </defs>
+                  <path fill={`url(#boltGrad${i})`} d="M14.615 1.595a.75.75 0 01.359.852L12.982 9.75h7.268a.75.75 0 01.548 1.262l-10.5 11.25a.75.75 0 01-1.272-.71l1.992-7.302H3.75a.75.75 0 01-.548-1.262l10.5-11.25a.75.75 0 01.913-.143z" />
+                </svg>
+                <span className="tb-qs-text">Hızlı Satış</span>
+              </span>
+            ))}
+          </div>
+          {(orders[QUICK_SALE] || []).length > 0 && (
+            <span className="tb-quicksale-amount">{TLKart(getTableTotal(QUICK_SALE))}</span>
+          )}
+        </button>
+      </div>
 
       <div className="tb-columns">
         <div className="tb-left">
