@@ -92,18 +92,15 @@
   flex-direction: column;
   gap: 16px;
   overflow: hidden;
-  background: var(--panel-dark);
-  border-radius: var(--r-panel);
-  padding: 18px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
 }
 
 /* ---- Üst şerit: başlık + masa seçimi + arama ---- */
 .ds-header {
-  background: none;
+  background: var(--panel-dark);
   border: none;
-  box-shadow: none;
-  padding: 0 4px 4px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  border-radius: var(--r-panel);
+  padding: 12px 20px;
   display: flex;
   flex-direction: row-reverse;
   justify-content: space-between;
@@ -135,7 +132,7 @@
   flex: 1;
   max-width: 280px;
   height: 40px;
-  background: var(--smoke);
+  background: var(--earth);
   color: #fff;
   font-weight: 700;
   font-size: 13px;
@@ -151,7 +148,7 @@
 }
 .ds-table-select-mini span { color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ds-table-select-mini svg { color: #fff; flex-shrink: 0; }
-.ds-table-select-mini:hover { background: var(--olive-dark); }
+.ds-table-select-mini:hover { background: var(--olive); }
 .ds-table-picker-modal { max-width: 380px; max-height: 78vh; display: flex; flex-direction: column; padding-bottom: 12px; }
 .ds-table-picker-list {
   flex: 1;
@@ -281,10 +278,11 @@
 
 /* ---- Favoriler paneli ---- */
 .ds-favorites {
-  background: none;
+  background: var(--panel-dark);
   border: none;
-  box-shadow: none;
-  padding: 4px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  border-radius: var(--r-panel);
+  padding: 14px 20px;
   flex-shrink: 0;
 }
 .ds-favorites-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -346,10 +344,11 @@
 .ds-products {
   flex: 1;
   overflow-y: auto;
-  background: none;
+  background: var(--panel-dark);
   border: none;
-  box-shadow: none;
-  padding: 4px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  border-radius: var(--r-panel);
+  padding: 20px;
 }
 .ds-products-scrollbtns {
   position: absolute;
@@ -401,7 +400,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--ink-soft);
+  color: #E94F37 !important;
   padding-bottom: 8px;
   margin: 0 0 12px;
   border-bottom: 1px solid var(--border-soft);
@@ -543,7 +542,7 @@
   padding: 0 12px;
   border: 1px dashed var(--border);
   background: transparent;
-  color: var(--ink-muted);
+  color: #E94F37 !important;
   font-size: 12px;
   font-weight: 600;
   border-radius: var(--r-btn);
@@ -560,7 +559,7 @@
   border: none;
   font-size: 12px;
   font-weight: 600;
-  color: var(--olive);
+  color: #E94F37 !important;
   cursor: pointer;
   padding: 6px 4px;
 }
