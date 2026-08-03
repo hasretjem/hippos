@@ -38,10 +38,9 @@ export function getElapsedMinutes(openedAt) {
 export function getColorTier(openedAt) {
   if (!openedAt) return -1; // boş masa
   const mins = getElapsedMinutes(openedAt);
-  if (mins < 30) return 0;
-  if (mins < 60) return 1;
-  if (mins < 90) return 2;
-  return 3;
+  if (mins < 30) return 0; // yeşil
+  if (mins < 60) return 1; // turuncu
+  return 2; // kırmızı
 }
 
 // ---- Supabase satırı <-> uygulama nesnesi dönüşümleri ----

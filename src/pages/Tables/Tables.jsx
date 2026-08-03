@@ -219,13 +219,12 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     setDragFrom(null);
   }
 
-  // Zaman kademesini (0-3) sıvı dolum yüzdesi + rengine çevirir — mevcut 4 kademeli
-  // zaman mantığı (getColorTier) hiç değişmedi, sadece görsel karşılığı v9 sıvı diline uyarlandı.
+  // Zaman kademesini (0-2) sıvı dolum yüzdesi + rengine çevirir. Kullanıcının istediği gibi
+  // 3 net kademe: 0-30dk yeşil, 30-60dk turuncu, 60dk+ kırmızı (getColorTier ile birebir uyumlu).
   const TIER_VISUAL = {
-    0: { fill: 20, cssVar: '--tier1' },
-    1: { fill: 50, cssVar: '--tier1' },
-    2: { fill: 75, cssVar: '--tier2' },
-    3: { fill: 100, cssVar: '--tier3' },
+    0: { fill: 35, cssVar: '--tier1' },
+    1: { fill: 70, cssVar: '--tier2' },
+    2: { fill: 100, cssVar: '--tier3' },
   };
 
   function renderTableCard(table, key, compact) {
@@ -288,7 +287,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       </div>
     );
 
-    const cardClass = `tb-card tier-${isEmpty ? 'empty' : tier} ${dragOverTable === table ? 'drag-over' : ''} ${isMenuOpen ? 'menu-open' : ''} ${compact ? 'tb-card-compact' : ''} ${occupiedElsewhere ? 'locked' : ''} ${tier === 3 ? 'full' : ''}`;
+    const cardClass = `tb-card tier-${isEmpty ? 'empty' : tier} ${dragOverTable === table ? 'drag-over' : ''} ${isMenuOpen ? 'menu-open' : ''} ${compact ? 'tb-card-compact' : ''} ${occupiedElsewhere ? 'locked' : ''} ${tier === 2 ? 'full' : ''}`;
     const dragProps = {
       draggable: !isEmpty,
       onDragStart: (e) => handleDragStart(e, table),

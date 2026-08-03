@@ -123,7 +123,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--contour);
+  color: #393E41 !important;
   margin: 0 0 14px;
 }
 
@@ -176,9 +176,9 @@
 @keyframes tbWaveRotate { from { transform: translate(-50%, 0) rotate(0deg); } to { transform: translate(-50%, 0) rotate(360deg); } }
 
 .tb-card-top { position: relative; z-index: 3; padding: 10px 10px 0; display: flex; justify-content: space-between; align-items: flex-start; }
-.tb-card-name { font-weight: 800; font-size: 22px; color: var(--ink); line-height: 1.1; display: flex; align-items: center; gap: 5px; }
-.tb-card.tier-2 .tb-card-name { color: var(--contour); }
-.tb-card.tier-3 .tb-card-name { color: #fff; }
+.tb-card-name { font-weight: 800; font-size: 22px; color: #393E41; line-height: 1.1; display: flex; align-items: center; gap: 5px; }
+.tb-card.tier-1 .tb-card-name { color: var(--contour); }
+.tb-card.tier-2 .tb-card-name { color: #fff; }
 .tb-occupied-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); display: inline-block; flex-shrink: 0; }
 
 .tb-menu-btn {
@@ -194,8 +194,8 @@
   flex-shrink: 0;
 }
 .tb-menu-btn:hover { background: rgba(57, 62, 65, 0.26); }
-.tb-card.tier-2 .tb-menu-btn, .tb-card.tier-3 .tb-menu-btn { color: #fff; background: rgba(0, 0, 0, 0.14); }
-.tb-card.tier-2 .tb-menu-btn:hover, .tb-card.tier-3 .tb-menu-btn:hover { background: rgba(0, 0, 0, 0.26); }
+.tb-card.tier-1 .tb-menu-btn, .tb-card.tier-2 .tb-menu-btn { color: #fff; background: rgba(0, 0, 0, 0.14); }
+.tb-card.tier-1 .tb-menu-btn:hover, .tb-card.tier-2 .tb-menu-btn:hover { background: rgba(0, 0, 0, 0.26); }
 
 /* ---- Paket kartı doğrudan kapatma butonu (kebab yok, taşıma/birleştirme yapılmıyor) ---- */
 .tb-close-btn {
@@ -212,7 +212,7 @@
 }
 .tb-close-btn:hover { background: var(--accent); color: #fff; }
 .tb-close-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-.tb-card-compact.tier-2 .tb-close-btn, .tb-card-compact.tier-3 .tb-close-btn { color: #fff; background: rgba(0, 0, 0, 0.18); }
+.tb-card-compact.tier-1 .tb-close-btn, .tb-card-compact.tier-2 .tb-close-btn { color: #fff; background: rgba(0, 0, 0, 0.18); }
 
 /* Portal ile document.body'ye taşındığı için burada CSS değişkenlerine (.tb-shell içinde
    tanımlı) erişilemiyor — bu yüzden renkler burada SABİT (hex) olarak veriliyor. */
@@ -271,8 +271,8 @@
   color: var(--ink);
   line-height: 1.1;
 }
-.tb-card.tier-2 .tb-card-amount { color: var(--contour); }
-.tb-card.tier-3 .tb-card-amount { color: #fff; }
+.tb-card.tier-1 .tb-card-amount { color: var(--contour); }
+.tb-card.tier-2 .tb-card-amount { color: #fff; }
 
 /* ---- Alt not şeridi (saydam, dalganın üstünden görünür) ---- */
 .tb-card-note {
@@ -303,7 +303,7 @@
 .tb-note-paste {
   flex-shrink: 0; width: 24px; height: 24px;
   border-radius: 50%; border: 1px solid rgba(57, 62, 65, 0.2);
-  background: rgba(57, 62, 65, 0.16); color: var(--ink);
+  background: rgba(57, 62, 65, 0.16); color: #393E41;
   display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
 .tb-note-paste:hover { background: rgba(57, 62, 65, 0.3); }
@@ -382,7 +382,7 @@
   margin: 0 10px 6px; display: inline-block; width: fit-content;
 }
 .tb-delivery-tag.bekliyor, .tb-delivery-tag.onaylandi, .tb-delivery-tag.reddedildi {
-  background: var(--contour); color: var(--panel);
+  background: rgba(57, 62, 65, 0.72); color: var(--panel);
 }
 
 /* ==================== PAKET PANELİ ==================== */
@@ -428,20 +428,20 @@
 .tb-card-compact .tb-liquid::before, .tb-card-compact .tb-liquid::after { display: none; }
 .tb-card-compact .tb-card-top { align-items: center; padding: 0; }
 .tb-card-compact .tb-card-name { font-size: 15px; }
-.tb-card-compact.tier-2 .tb-card-name { color: var(--contour); }
-.tb-card-compact.tier-3 .tb-card-name { color: #fff; }
+.tb-card-compact.tier-1 .tb-card-name { color: var(--contour); }
+.tb-card-compact.tier-2 .tb-card-name { color: #fff; }
 .tb-card-total-inline {
   position: relative; z-index: 3;
   font-size: 19px; font-weight: 800; color: var(--ink);
   margin-left: auto; margin-right: 6px;
 }
-.tb-card-compact.tier-2 .tb-card-total-inline { color: var(--contour); }
-.tb-card-compact.tier-3 .tb-card-total-inline { color: #fff; }
+.tb-card-compact.tier-1 .tb-card-total-inline { color: var(--contour); }
+.tb-card-compact.tier-2 .tb-card-total-inline { color: #fff; }
 .tb-card-subline {
   position: relative; z-index: 3;
   font-size: 11px; color: var(--panel); font-weight: 700;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text;
-  background: var(--contour);
+  background: rgba(57, 62, 65, 0.72);
   border-radius: 8px;
   padding: 5px 9px;
   margin-top: 2px;
@@ -468,7 +468,7 @@
   border: 2px dashed var(--contour);
   border-radius: var(--r-card);
   background: transparent;
-  color: var(--contour);
+  color: #393E41 !important;
   display: flex;
   flex-direction: row;
   align-items: center;
