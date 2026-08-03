@@ -67,7 +67,7 @@
 .tb-logo-capsule {
   flex-shrink: 0;
   height: 72px;
-  overflow: visible;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -78,12 +78,11 @@
   box-shadow: var(--shadow-1);
 }
 .tb-logo-gif {
-  height: 100px;
+  height: 100%;
   width: auto;
   border-radius: 10px;
-  object-fit: cover;
+  object-fit: contain;
   flex-shrink: 0;
-  margin: -14px 0;
 }
 .tb-logo-text-col {
   display: flex;
@@ -96,7 +95,7 @@
   font-weight: normal;
   font-style: normal;
   font-size: 27px;
-  color: #393E41;
+  color: #E94F37;
   white-space: nowrap;
 }
 .tb-logo-sub {
