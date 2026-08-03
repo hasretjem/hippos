@@ -504,6 +504,10 @@
 .ds-remove-btn:active { transform: scale(0.9); }
 .ds-order-line-mid { flex: 1; min-width: 0; cursor: pointer; display: flex; align-items: center; gap: 6px; }
 .ds-order-line-name { display: flex; align-items: center; gap: 5px; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Not satırının arka planı açık krem (#F3EEE0) — üstteki genel kural (beyaz, kırmızı
+   ürün satırları için) burada geçersiz, ikon+yazı görünmez kalıyordu. Kalıcı düzeltme. */
+.ds-order-line.note .ds-order-line-name { color: #E94F37 !important; }
+.ds-order-line.note .ds-order-line-name svg { color: #E94F37 !important; stroke: #E94F37 !important; }
 .ds-tag {
   display: inline-flex;
   align-items: center;
