@@ -72,6 +72,17 @@ export default function Settings({ data, onNavigate }) {
     return groups;
   }, [products, menuSearchQuery]);
 
+  // Sadece "YEMEKLER" en başa alınıyor, geri kalan kategoriler eskisi gibi (ham ürün
+  // listesindeki) sırada kalıyor — Satış sayfasındaki sıralamadan bilerek bağımsız.
+  const sortedMenuGroupEntries = useMemo(() => {
+    const entries = Object.entries(menuGroups);
+    const yemeklerIdx = entries.findIndex(([kategori]) => kategori === 'YEMEKLER');
+    if (yemeklerIdx <= 0) return entries;
+    const yemekler = entries[yemeklerIdx];
+    const rest = entries.filter((_, i) => i !== yemeklerIdx);
+    return [yemekler, ...rest];
+  }, [menuGroups]);
+
   function sortedSubKeys(kategori, subMap) {
     return Object.keys(subMap).sort((a, b) => {
       const sa = subcategories.find((s) => s.kategori === kategori && s.name === a);
@@ -517,7 +528,7 @@ export default function Settings({ data, onNavigate }) {
 
             <div className="st-menu-list">
               {Object.keys(menuGroups).length === 0 && <p className="st-menu-empty">Sonuç bulunamadı</p>}
-              {Object.entries(menuGroups).map(([kategori, subMap]) => (
+              {sortedMenuGroupEntries.map(([kategori, subMap]) => (
                 <div key={kategori} className="st-menu-group">
                   <div className="st-menu-group-head">
                     <span>{kategori}</span>
