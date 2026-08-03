@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import './Tables.css';
 import { SALON_TABLES, ALT_TABLES, TABLE_PAIRS, QUICK_SALE, TL, getElapsedMinutes, getColorTier } from '../../hooks/useHipposData';
 import {
@@ -35,6 +36,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
   }, []);
 
   const [menuFor, setMenuFor] = useState(null);
+  const [menuPos, setMenuPos] = useState(null); // { top, left } — portal ile document.body'de konumlanır
   const [editingNoteFor, setEditingNoteFor] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
   const [pickModal, setPickModal] = useState(null); // { title, options, onPick }
@@ -43,6 +45,28 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [dragFrom, setDragFrom] = useState(null);
   const [dragOverTable, setDragOverTable] = useState(null);
+
+  // Menü dışına tıklayınca kapansın (v9'un kendi demo'sundaki mantıkla aynı)
+  useEffect(() => {
+    if (!menuFor) return;
+    const close = () => setMenuFor(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [menuFor]);
+
+  function toggleMenu(e, table) {
+    e.stopPropagation();
+    if (menuFor === table) {
+      setMenuFor(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuPos({
+      top: window.scrollY + rect.bottom + 6,
+      left: Math.min(window.scrollX + rect.left - 100, window.innerWidth - 176),
+    });
+    setMenuFor(table);
+  }
 
   const allDynamicTargets = [...SALON_TABLES, ...ALT_TABLES, ...packages.map((p) => p.name)];
 
@@ -81,6 +105,21 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       if (text) setNoteDraft((prev) => (prev ? `${prev} ${text}` : text));
     } catch {
       /* pano izni yoksa sessizce geç */
+    }
+  }
+  // Görünüm modundayken yapıştır'a basılırsa: önce düzenleme moduna geçer, sonra pano
+  // içeriğini mevcut nota ekler — eskiden bu buton görünüm modunda görünmüyordu (v9
+  // referansında vardı), ekleyince önce bu işlevsel hale getirilmesi gerekiyordu.
+  async function pasteAndEdit(e, table) {
+    e.stopPropagation();
+    setMenuFor(null);
+    setEditingNoteFor(table);
+    const current = tableNotes[table] || '';
+    try {
+      const text = await navigator.clipboard.readText();
+      setNoteDraft(text ? (current ? `${current} ${text}` : text) : current);
+    } catch {
+      setNoteDraft(current);
     }
   }
 
@@ -216,12 +255,13 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       </div>
     );
 
-    const menu = isMenuOpen && (
-      <div className="tb-menu" onClick={(e) => e.stopPropagation()}>
+    const menu = isMenuOpen && menuPos && createPortal(
+      <div className="tb-menu" style={{ top: menuPos.top, left: menuPos.left }} onClick={(e) => e.stopPropagation()}>
         <button onClick={(e) => askTransfer(e, table)} disabled={isEmpty}><ArrowLeftRight size={13} /> Taşı</button>
         <button onClick={(e) => askMerge(e, table)} disabled={isEmpty}><Link2 size={13} /> Birleştir</button>
         <button className="danger" onClick={(e) => askClose(e, table)} disabled={isEmpty}><XCircle size={13} /> Masayı Kapat</button>
-      </div>
+      </div>,
+      document.body
     );
 
     const deliveryTag = sonTeslimat && (
@@ -276,10 +316,15 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
               {table}
             </span>
             {!isEmpty && <span className="tb-card-total-inline">{TL(total)}</span>}
-            <button className="tb-menu-btn" onClick={(e) => { e.stopPropagation(); setMenuFor(isMenuOpen ? null : table); }}>
-              <MoreVertical size={14} />
+            {/* Paketlerde taşıma/birleştirme yapılmıyor — direkt kapatma butonu yeterli */}
+            <button
+              className="tb-close-btn"
+              onClick={(e) => askClose(e, table)}
+              disabled={isEmpty}
+              title="Paketi Kapat"
+            >
+              <XCircle size={16} />
             </button>
-            {menu}
           </div>
           {isEditing ? (
             noteEditRow
@@ -301,17 +346,19 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
         {!isEmpty && <div className="tb-liquid" style={{ '--fill': `${visual.fill}%`, '--fill-color': `var(${visual.cssVar})` }} />}
         <div className="tb-card-top">
           <span className="tb-card-name">{table}</span>
-          <button className="tb-menu-btn" onClick={(e) => { e.stopPropagation(); setMenuFor(isMenuOpen ? null : table); }}>
+          <button className="tb-menu-btn" onClick={(e) => toggleMenu(e, table)}>
             <MoreVertical size={15} />
           </button>
           {menu}
         </div>
 
         {!isEmpty && (
-          <div className="tb-badges">
-            <span className="tb-badge">{elapsed} dk</span>
-            <span className="tb-badge">{TL(total)}</span>
-          </div>
+          <>
+            <div className="tb-badges">
+              <span className="tb-badge">{elapsed} dk</span>
+            </div>
+            <div className="tb-card-amount">{TL(total)}</div>
+          </>
         )}
 
         {!isEmpty && (
@@ -320,6 +367,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
           ) : (
             <div className="tb-card-note" onClick={(e) => startEditNote(e, table)}>
               {note ? <span className="txt">{note}</span> : <span className="txt placeholder"><Pencil size={11} /> not ekle</span>}
+              <button className="tb-note-paste" onClick={(e) => pasteAndEdit(e, table)} title="Panodan yapıştır"><ClipboardPaste size={12} /></button>
             </div>
           )
         )}
@@ -352,11 +400,23 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
   return (
     <div className="tb-shell">
       <button className="tb-quicksale" onClick={() => openTable(QUICK_SALE)}>
-        <span className="tb-quicksale-ico"><Zap size={18} fill="currentColor" /></span>
-        <span className="tb-quicksale-text">
-          <span className="title">Hızlı Satış</span>
-          <span className="sub">Masa açmadan direkt satış ekranına git</span>
-        </span>
+        <div className="tb-quicksale-track">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <span className="tb-qs-item" key={i}>
+              <svg className="tb-qs-bolt" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id={`boltGrad${i}`} x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#FFE873" />
+                    <stop offset="55%" stopColor="#F7B733" />
+                    <stop offset="100%" stopColor="#D97B1E" />
+                  </linearGradient>
+                </defs>
+                <path fill={`url(#boltGrad${i})`} d="M14.615 1.595a.75.75 0 01.359.852L12.982 9.75h7.268a.75.75 0 01.548 1.262l-10.5 11.25a.75.75 0 01-1.272-.71l1.992-7.302H3.75a.75.75 0 01-.548-1.262l10.5-11.25a.75.75 0 01.913-.143z" />
+              </svg>
+              <span className="tb-qs-text">Hızlı Satış</span>
+            </span>
+          ))}
+        </div>
         {(orders[QUICK_SALE] || []).length > 0 && (
           <span className="tb-quicksale-amount">{TL(getTableTotal(QUICK_SALE))}</span>
         )}
