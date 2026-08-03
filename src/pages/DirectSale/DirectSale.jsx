@@ -42,9 +42,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   // ---- Ekran durumu ----
   const categories = useMemo(() => {
     const sorted = [...rawCategories].sort((a, b) => a.menuSirasi - b.menuSirasi || a.name.localeCompare(b.name, 'tr'));
-    return ['TÜMÜ', ...sorted.map((c) => c.name)];
+    return sorted.map((c) => c.name);
   }, [rawCategories]);
-  const [activeCategory, setActiveCategory] = useState('TÜMÜ');
+  const [activeCategory, setActiveCategory] = useState('');
+  useEffect(() => {
+    // Kategoriler ilk yüklendiğinde (ya da hepsi silinip yeniden geldiğinde) sıradaki
+    // en küçük kategoriyi otomatik seç — artık "TÜMÜ" diye bir seçenek yok.
+    if (!activeCategory && categories.length > 0) setActiveCategory(categories[0]);
+  }, [categories, activeCategory]);
   const [searchQuery, setSearchQuery] = useState('');
   const [payMode, setPayMode] = useState(false);
   const [showChangeCalc, setShowChangeCalc] = useState(false);
@@ -523,9 +528,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     if (q) {
       title = `Arama: "${searchQuery}"`;
       filtered = activeProducts.filter((p) => p.ad.toLowerCase().includes(q));
-    } else if (activeCategory === 'TÜMÜ') {
-      title = 'TÜM ÜRÜNLER';
-      filtered = activeProducts;
     } else {
       title = activeCategory;
       filtered = activeProducts.filter((p) => p.kategori === activeCategory);
