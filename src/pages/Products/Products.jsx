@@ -40,6 +40,34 @@ export default function Products({ data, onNavigate }) {
       const res = await fetch('/api/sheets');
       if (!res.ok) throw new Error('pull failed');
       const json = await res.json();
+
+      // Kategoriler — sıra/sabit bilgisini Sheet'ten uygula (eskiden bu adım hiç yoktu,
+      // bu yüzden Sheet'te kategori sırası değiştirilse bile Çek'e hiç yansımıyordu).
+      (json.categories || []).forEach((c) => {
+        const existing = data.categories.find((dc) => dc.name === c.name);
+        if (existing) {
+          if (existing.menuSirasi !== c.menuSirasi || existing.sabit !== c.sabit) {
+            data.updateCategoryMeta(c.name, { menuSirasi: c.menuSirasi, sabit: c.sabit });
+          }
+        } else {
+          data.addCategory(c.name);
+          data.updateCategoryMeta(c.name, { menuSirasi: c.menuSirasi, sabit: c.sabit });
+        }
+      });
+
+      // Alt kategoriler — aynı şekilde sıra bilgisini uygula.
+      (json.subcategories || []).forEach((s) => {
+        const existing = data.subcategories.find((ds) => ds.kategori === s.kategori && ds.name === s.name);
+        if (existing) {
+          if (existing.menuSirasi !== s.menuSirasi) {
+            data.updateSubcategoryMeta(s.kategori, s.name, { menuSirasi: s.menuSirasi });
+          }
+        } else {
+          data.addSubcategory(s.kategori, s.name);
+          data.updateSubcategoryMeta(s.kategori, s.name, { menuSirasi: s.menuSirasi });
+        }
+      });
+
       const sheetProducts = (json.products || []).filter((p) => !p.isAzVariant);
       sheetProducts.forEach((p) => {
         const existing = data.products.find((dp) => dp.ad === p.ad && dp.kategori === p.kategori);
@@ -50,7 +78,7 @@ export default function Products({ data, onNavigate }) {
           data.addProduct({ kategori: p.kategori, altKategori: p.altKategori, ad: p.ad, fiyat: p.fiyat, menuSirasi: p.menuSirasi });
         }
       });
-      showToast('Sheet\'ten güncellendi (yeni ürünler eklendi, mevcutlar güncellendi)');
+      showToast('Sheet\'ten güncellendi (kategoriler, alt kategoriler ve ürünler)');
     } catch {
       showToast('Sheet\'ten çekilemedi — bağlantıyı kontrol et');
     }
