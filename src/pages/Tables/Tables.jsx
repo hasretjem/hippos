@@ -3,7 +3,7 @@ import './Tables.css';
 import { SALON_TABLES, ALT_TABLES, TABLE_PAIRS, QUICK_SALE, TL, getElapsedMinutes, getColorTier } from '../../hooks/useHipposData';
 import {
   MoreVertical, Plus, ClipboardPaste, ArrowLeftRight, Link2, XCircle,
-  Undo2, Banknote, CreditCard, UtensilsCrossed, BookOpen, X, Check, Pencil, Zap,
+  Undo2, Banknote, CreditCard, UtensilsCrossed, BookOpen, X, Check, Pencil, Zap, Lock,
 } from 'lucide-react';
 
 const PAIR_SECOND = new Set(TABLE_PAIRS.map((p) => p[1]));
@@ -175,6 +175,15 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     setDragFrom(null);
   }
 
+  // Zaman kademesini (0-3) sıvı dolum yüzdesi + rengine çevirir — mevcut 4 kademeli
+  // zaman mantığı (getColorTier) hiç değişmedi, sadece görsel karşılığı v9 sıvı diline uyarlandı.
+  const TIER_VISUAL = {
+    0: { fill: 20, cssVar: '--tier1' },
+    1: { fill: 50, cssVar: '--tier1' },
+    2: { fill: 75, cssVar: '--tier2' },
+    3: { fill: 100, cssVar: '--tier3' },
+  };
+
   function renderTableCard(table, key, compact) {
     const items = orders[table] || [];
     const isEmpty = items.length === 0;
@@ -186,6 +195,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     const isEditing = editingNoteFor === table;
     const isMenuOpen = menuFor === table;
     const occupiedElsewhere = isTableOccupiedElsewhere(table);
+    const visual = TIER_VISUAL[tier] || TIER_VISUAL[0];
     // Paketçi mobil panelinden gelen SON teslimat bildirimi (varsa) — sadece bilgi amaçlı,
     // satış durumunu etkilemez.
     const sonTeslimat = paketTeslimatlari
@@ -214,7 +224,26 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       </div>
     );
 
-    const cardClass = `tb-card tier-${isEmpty ? 'empty' : tier} ${dragOverTable === table ? 'drag-over' : ''} ${isMenuOpen ? 'menu-open' : ''} ${compact ? 'tb-card-compact' : ''}`;
+    const deliveryTag = sonTeslimat && (
+      <div className={`tb-delivery-tag ${sonTeslimat.durum}`}>
+        {sonTeslimat.tip === 'teslim_edildi'
+          ? sonTeslimat.durum === 'onaylandi' ? '✓ Teslim edildi'
+          : sonTeslimat.durum === 'reddedildi' ? '✕ Teslimat reddedildi'
+          : 'Teslim edildi (paketçi bildirdi)'
+          : sonTeslimat.durum === 'onaylandi' ? `✓ Kısmi ödeme onaylandı`
+          : sonTeslimat.durum === 'reddedildi' ? '✕ Kısmi ödeme reddedildi'
+          : 'Kısmi ödeme bildirildi'}
+      </div>
+    );
+
+    const lockedOverlay = occupiedElsewhere && (
+      <div className="tb-locked-overlay">
+        <Lock />
+        <div className="tb-locked-text">Başka cihazda<br />açık</div>
+      </div>
+    );
+
+    const cardClass = `tb-card tier-${isEmpty ? 'empty' : tier} ${dragOverTable === table ? 'drag-over' : ''} ${isMenuOpen ? 'menu-open' : ''} ${compact ? 'tb-card-compact' : ''} ${occupiedElsewhere ? 'locked' : ''} ${tier === 3 ? 'full' : ''}`;
     const dragProps = {
       draggable: !isEmpty,
       onDragStart: (e) => handleDragStart(e, table),
@@ -224,13 +253,27 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       onClick: () => openTable(table),
     };
 
+    // ---- Boş masa: v9'daki "dokun ve aç" kartı — kesikli çerçeve + parlayan (+) ----
+    if (isEmpty && !compact) {
+      return (
+        <div key={key || table} className={`tb-card tier-empty ${occupiedElsewhere ? 'locked' : ''}`} {...dragProps}>
+          <div className="tb-empty-plus-wrap">
+            <div className="tb-empty-plus"><Plus size={20} /></div>
+          </div>
+          <div className="tb-empty-label">{table}</div>
+          <div className="tb-empty-tag">Boş · dokun ve aç</div>
+          {lockedOverlay}
+        </div>
+      );
+    }
+
     if (compact) {
       return (
         <div key={key || table} className={cardClass} {...dragProps}>
+          {!isEmpty && <div className="tb-liquid" style={{ '--fill': `${visual.fill}%`, '--fill-color': `var(${visual.cssVar})` }} />}
           <div className="tb-card-top">
             <span className="tb-card-name">
               {table}
-              {occupiedElsewhere && <span className="tb-occupied-dot" title="Başka cihazda açık" />}
             </span>
             {!isEmpty && <span className="tb-card-total-inline">{TL(total)}</span>}
             <button className="tb-menu-btn" onClick={(e) => { e.stopPropagation(); setMenuFor(isMenuOpen ? null : table); }}>
@@ -247,28 +290,17 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
               </div>
             )
           )}
-          {sonTeslimat && (
-            <div className={`tb-delivery-tag ${sonTeslimat.durum}`}>
-              {sonTeslimat.tip === 'teslim_edildi'
-                ? sonTeslimat.durum === 'onaylandi' ? '✓ Teslim edildi'
-                : sonTeslimat.durum === 'reddedildi' ? '✕ Teslimat reddedildi'
-                : 'Teslim edildi (paketçi bildirdi)'
-                : sonTeslimat.durum === 'onaylandi' ? `✓ Kısmi ödeme onaylandı`
-                : sonTeslimat.durum === 'reddedildi' ? '✕ Kısmi ödeme reddedildi'
-                : 'Kısmi ödeme bildirildi'}
-            </div>
-          )}
+          {deliveryTag}
+          {lockedOverlay}
         </div>
       );
     }
 
     return (
       <div key={key || table} className={cardClass} {...dragProps}>
+        {!isEmpty && <div className="tb-liquid" style={{ '--fill': `${visual.fill}%`, '--fill-color': `var(${visual.cssVar})` }} />}
         <div className="tb-card-top">
-          <span className="tb-card-name">
-            {table}
-            {occupiedElsewhere && <span className="tb-occupied-dot" title="Başka cihazda açık" />}
-          </span>
+          <span className="tb-card-name">{table}</span>
           <button className="tb-menu-btn" onClick={(e) => { e.stopPropagation(); setMenuFor(isMenuOpen ? null : table); }}>
             <MoreVertical size={15} />
           </button>
@@ -276,8 +308,9 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
         </div>
 
         {!isEmpty && (
-          <div className="tb-card-time">
-            {new Date(openedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })} · {elapsed} dk
+          <div className="tb-badges">
+            <span className="tb-badge">{elapsed} dk</span>
+            <span className="tb-badge">{TL(total)}</span>
           </div>
         )}
 
@@ -291,9 +324,8 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
           )
         )}
 
-        <div className="tb-card-bottom">
-          {isEmpty ? <span className="tb-status-empty">Boş</span> : <span className="tb-card-total">{TL(total)}</span>}
-        </div>
+        {deliveryTag}
+        {lockedOverlay}
       </div>
     );
   }
