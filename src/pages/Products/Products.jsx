@@ -396,6 +396,12 @@ function isSandvicUrunu(p) {
 
 // Fare üzerine gelince açıklama gösteren, çekilince kaybolan küçük bilgi ikonu.
 // Tarayıcının kendi "title" davranışını kullanıyor — ekstra state gerekmiyor.
+// Fare üzerine gelince (masaüstü) VEYA dokununca (tablet/telefon) açıklamayı gösterir.
+// Öncesinde sadece tarayıcının "title" davranışına dayanıyordu — bu dokunmatik
+// ekranlarda (kasa tabletleri/telefonlar) hiç çalışmıyordu, çünkü dokunmatik
+// cihazlarda "hover" diye bir şey yok. Şimdi tıklanabilir/dokunulabilir.
+// Fare üzerine gelince açıklama gösteren, çekilince kaybolan bilgi ikonu — sadece
+// masaüstü/fare için, tarayıcının kendi "title" davranışını kullanıyor.
 function InfoTip({ text }) {
   return <span className="pr-info-tip" title={text}>i</span>;
 }
