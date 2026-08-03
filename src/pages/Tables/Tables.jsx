@@ -4,7 +4,7 @@ import './Tables.css';
 import { SALON_TABLES, ALT_TABLES, TABLE_PAIRS, QUICK_SALE, TL, getElapsedMinutes, getColorTier } from '../../hooks/useHipposData';
 import {
   MoreVertical, Plus, ClipboardPaste, ArrowLeftRight, Link2, XCircle,
-  Undo2, Banknote, CreditCard, UtensilsCrossed, BookOpen, X, Check, Pencil, Zap, Lock,
+  Undo2, Banknote, CreditCard, UtensilsCrossed, BookOpen, X, Check, Zap, Lock,
 } from 'lucide-react';
 
 const PAIR_SECOND = new Set(TABLE_PAIRS.map((p) => p[1]));
@@ -366,7 +366,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
             noteEditRow
           ) : (
             <div className="tb-card-note" onClick={(e) => startEditNote(e, table)}>
-              {note ? <span className="txt">{note}</span> : <span className="txt placeholder"><Pencil size={11} /> not ekle</span>}
+              {note ? <span className="txt">{note}</span> : <span className="txt placeholder">not ekle</span>}
               <button className="tb-note-paste" onClick={(e) => pasteAndEdit(e, table)} title="Panodan yapıştır"><ClipboardPaste size={12} /></button>
             </div>
           )
@@ -445,7 +445,9 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
                 openTable(name);
               }}
             >
-              <Plus size={22} />
+              <div className="tb-add-package-plus-wrap">
+                <div className="tb-add-package-plus"><Plus size={18} /></div>
+              </div>
               <span>Yeni Paket</span>
             </button>
           </div>
