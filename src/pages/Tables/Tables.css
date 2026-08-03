@@ -214,47 +214,50 @@
 .tb-close-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .tb-card-compact.tier-2 .tb-close-btn, .tb-card-compact.tier-3 .tb-close-btn { color: #fff; background: rgba(0, 0, 0, 0.18); }
 
+/* Portal ile document.body'ye taşındığı için burada CSS değişkenlerine (.tb-shell içinde
+   tanımlı) erişilemiyor — bu yüzden renkler burada SABİT (hex) olarak veriliyor. */
 .tb-menu {
   position: fixed;
-  background: var(--panel);
-  border: 1px solid rgba(57, 62, 65, 0.2);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-3);
+  background: #F6F7EB;
+  border: 1px solid rgba(57, 62, 65, 0.22);
+  border-radius: 17px;
+  box-shadow: 0 14px 32px rgba(57, 62, 65, 0.32);
   padding: 6px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   z-index: 1000;
-  width: 160px;
+  width: 168px;
 }
 .tb-menu button {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: none;
+  gap: 9px;
+  background: #EDEEDF;
   border: none;
   text-align: left;
-  padding: 9px 10px;
-  border-radius: 10px;
+  padding: 10px 11px;
+  border-radius: 11px;
   font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink);
+  font-weight: 700;
+  color: #3A3530;
   cursor: pointer;
-  transition: background 120ms var(--ease);
+  transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1), filter 120ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.tb-menu button:hover { background: rgba(57, 62, 65, 0.08); }
-.tb-menu button:disabled { opacity: 0.35; cursor: not-allowed; }
-.tb-menu button.danger { color: var(--accent); }
-.tb-menu button.danger:hover { background: var(--danger-soft); }
+.tb-menu button svg { flex-shrink: 0; }
+.tb-menu button:hover { filter: brightness(0.95); }
+.tb-menu button:disabled { opacity: 0.35; cursor: not-allowed; filter: none; }
+.tb-menu button.danger { background: #E94F37; color: #fff; }
+.tb-menu button.danger:hover { background: #D6432C; }
 
 /* ---- Rozetler (saat + tutar) ---- */
 .tb-badges { position: relative; z-index: 3; display: flex; gap: 6px; padding: 4px 10px 0; flex-wrap: wrap; }
 .tb-badge {
   background: rgba(246, 247, 235, 0.85);
   color: var(--contour);
-  font-size: 9.5px;
-  font-weight: 700;
-  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
   border-radius: 999px;
   letter-spacing: 0.01em;
 }
@@ -330,8 +333,8 @@
   background: var(--panel);
 }
 .tb-card.tier-empty:hover {
-  border-style: solid; border-color: var(--tier1);
-  box-shadow: 0 12px 26px rgba(76, 164, 125, 0.3);
+  border-style: solid; border-color: var(--contour);
+  box-shadow: 0 12px 26px rgba(57, 62, 65, 0.35);
 }
 .tb-empty-plus-wrap {
   position: relative; width: 40px; height: 40px; margin-bottom: 8px;
@@ -339,7 +342,7 @@
 }
 .tb-empty-plus-wrap::before {
   content: ""; position: absolute; inset: 0; border-radius: 50%;
-  background: var(--tier1); opacity: 0.35;
+  background: var(--contour); opacity: 0.3;
   animation: tbEmptyGlow 2.2s ease-out infinite;
 }
 .tb-empty-plus {
@@ -348,7 +351,7 @@
   display: flex; align-items: center; justify-content: center;
   transition: background 160ms var(--ease), color 160ms var(--ease);
 }
-.tb-card.tier-empty:hover .tb-empty-plus { background: var(--tier1); color: #fff; }
+.tb-card.tier-empty:hover .tb-empty-plus { background: var(--contour); color: #fff; }
 .tb-empty-label { font-weight: 800; font-size: 17px; color: var(--ink); }
 .tb-empty-tag { font-size: 10.5px; color: var(--ink-muted); margin-top: 2px; }
 @keyframes tbEmptyGlow {
@@ -378,9 +381,9 @@
   font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
   margin: 0 10px 6px; display: inline-block; width: fit-content;
 }
-.tb-delivery-tag.bekliyor { background: #FDF3D0; color: #B8860B; }
-.tb-delivery-tag.onaylandi { background: rgba(76, 164, 125, 0.2); color: var(--tier1); }
-.tb-delivery-tag.reddedildi { background: var(--danger-soft); color: var(--danger); }
+.tb-delivery-tag.bekliyor, .tb-delivery-tag.onaylandi, .tb-delivery-tag.reddedildi {
+  background: var(--contour); color: var(--panel);
+}
 
 /* ==================== PAKET PANELİ ==================== */
 .tb-packages {
@@ -418,7 +421,7 @@
   box-shadow: 0 12px 24px rgba(57, 62, 65, 0.3); transform: translateY(-2px);
 }
 .tb-card-compact .tb-liquid {
-  left: 0; right: 0; top: 0; bottom: 0; height: auto;
+  left: 0; right: auto; top: 0; bottom: 0; height: auto;
   width: var(--fill, 0%);
   background: var(--fill-color, var(--tier1));
 }
@@ -436,16 +439,15 @@
 .tb-card-compact.tier-3 .tb-card-total-inline { color: #fff; }
 .tb-card-subline {
   position: relative; z-index: 3;
-  font-size: 11px; color: var(--ink); font-weight: 700;
+  font-size: 11px; color: var(--panel); font-weight: 700;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text;
-  background: rgba(246, 247, 235, 0.55);
+  background: var(--contour);
   border-radius: 8px;
   padding: 5px 9px;
   margin-top: 2px;
   width: fit-content;
   max-width: 100%;
 }
-.tb-card-compact.tier-2 .tb-card-subline, .tb-card-compact.tier-3 .tb-card-subline { color: #fff; }
 .tb-card-compact .tb-note-edit { margin: 2px 0 0; }
 .tb-card-compact .tb-delivery-tag { margin: 4px 0 0; }
 
@@ -477,7 +479,7 @@
   cursor: pointer;
   transition: border-color 160ms var(--ease), background 160ms var(--ease);
 }
-.tb-add-package:hover { border-style: solid; border-color: var(--tier1); background: rgba(76, 164, 125, 0.08); }
+.tb-add-package:hover { border-style: solid; border-color: var(--contour); background: rgba(57, 62, 65, 0.06); }
 .tb-add-package:active { transform: scale(0.98); }
 .tb-add-package-plus-wrap {
   position: relative; width: 30px; height: 30px;
@@ -485,7 +487,7 @@
 }
 .tb-add-package-plus-wrap::before {
   content: ""; position: absolute; inset: 0; border-radius: 50%;
-  background: var(--tier1); opacity: 0.35;
+  background: var(--contour); opacity: 0.3;
   animation: tbEmptyGlow 2.2s ease-out infinite;
 }
 .tb-add-package-plus {
@@ -494,7 +496,7 @@
   display: flex; align-items: center; justify-content: center;
   transition: background 160ms var(--ease), color 160ms var(--ease);
 }
-.tb-add-package:hover .tb-add-package-plus { background: var(--tier1); color: #fff; }
+.tb-add-package:hover .tb-add-package-plus { background: var(--contour); color: #fff; }
 
 /* ---- Son işlemler / geri al ---- */
 .tb-history-wrap { position: fixed; bottom: 88px; right: 20px; z-index: 40; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
@@ -527,15 +529,16 @@
 }
 .tb-history-panel {
   width: 260px;
-  background: var(--panel);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--contour);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--r-panel);
   box-shadow: var(--shadow-3);
   padding: 12px;
 }
-.tb-history-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
-.tb-history-head button { background: none; border: none; color: var(--ink-muted); cursor: pointer; }
-.tb-history-empty { font-size: 12px; color: var(--ink-muted); font-style: italic; margin: 4px 0; }
+.tb-history-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; margin-bottom: 8px; color: var(--panel); }
+.tb-history-head button { background: none; border: none; color: rgba(246, 247, 235, 0.6); cursor: pointer; }
+.tb-history-head button:hover { color: var(--panel); }
+.tb-history-empty { font-size: 12px; color: rgba(246, 247, 235, 0.55); font-style: italic; margin: 4px 0; }
 .tb-history-item {
   display: flex;
   justify-content: space-between;
@@ -545,14 +548,14 @@
   border-radius: 10px;
   margin-bottom: 4px;
 }
-.tb-history-item.latest { background: var(--olive-soft); }
-.tb-history-item:not(.latest) { opacity: 0.55; }
-.tb-history-item .desc { font-size: 11.5px; font-weight: 600; margin: 0; }
-.tb-history-item .time { font-size: 10px; color: var(--ink-muted); margin: 0; }
+.tb-history-item.latest { background: rgba(233, 79, 55, 0.22); border: 1px solid var(--accent); }
+.tb-history-item:not(.latest) { opacity: 0.5; }
+.tb-history-item .desc { font-size: 11.5px; font-weight: 700; margin: 0; color: var(--panel); }
+.tb-history-item .time { font-size: 10px; color: rgba(246, 247, 235, 0.6); margin: 0; }
 .tb-undo-btn {
   flex-shrink: 0;
   display: flex; align-items: center; gap: 4px;
-  background: var(--tier1);
+  background: var(--accent);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -561,6 +564,7 @@
   font-weight: 700;
   cursor: pointer;
 }
+.tb-undo-btn:hover { background: var(--accent-dark); }
 
 /* ---- Modallar ---- */
 .tb-modal-overlay {

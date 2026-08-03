@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import './Tables.css';
 import { SALON_TABLES, ALT_TABLES, TABLE_PAIRS, QUICK_SALE, TL, getElapsedMinutes, getColorTier } from '../../hooks/useHipposData';
+
+// Masa/paket kartlarında tutar küsuratsız gösterilir (menüde 0,50 ₺ gibi kuruşlu ürün yok) —
+// genel TL() fonksiyonu (fişler, modallar, raporlar) olduğu gibi kalıyor, sadece kart
+// görünümünde bu yerel biçimleyici kullanılıyor.
+const TLKart = (n) => Math.round(n || 0).toLocaleString('tr-TR') + ' ₺';
 import {
   MoreVertical, Plus, ClipboardPaste, ArrowLeftRight, Link2, XCircle,
   Undo2, Banknote, CreditCard, UtensilsCrossed, BookOpen, X, Check, Zap, Lock,
@@ -315,7 +320,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
             <span className="tb-card-name">
               {table}
             </span>
-            {!isEmpty && <span className="tb-card-total-inline">{TL(total)}</span>}
+            {!isEmpty && <span className="tb-card-total-inline">{TLKart(total)}</span>}
             {/* Paketlerde taşıma/birleştirme yapılmıyor — direkt kapatma butonu yeterli */}
             <button
               className="tb-close-btn"
@@ -355,9 +360,11 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
         {!isEmpty && (
           <>
             <div className="tb-badges">
-              <span className="tb-badge">{elapsed} dk</span>
+              <span className="tb-badge">
+                {elapsed} dk · {new Date(openedAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
             </div>
-            <div className="tb-card-amount">{TL(total)}</div>
+            <div className="tb-card-amount">{TLKart(total)}</div>
           </>
         )}
 
@@ -418,7 +425,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
           ))}
         </div>
         {(orders[QUICK_SALE] || []).length > 0 && (
-          <span className="tb-quicksale-amount">{TL(getTableTotal(QUICK_SALE))}</span>
+          <span className="tb-quicksale-amount">{TLKart(getTableTotal(QUICK_SALE))}</span>
         )}
       </button>
 
