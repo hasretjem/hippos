@@ -1107,7 +1107,9 @@
   #print-receipt .print-note { text-align: center; font-size: 12px; font-weight: 700; margin: -2px 0 8px; }
   .print-meta { display: flex; justify-content: space-between; font-size: 11px; border-bottom: 1px dashed #000; padding-bottom: 6px; margin-bottom: 8px; }
   .print-items { font-size: 12px; line-height: 1.5; margin-bottom: 8px; }
-  .print-row { display: flex; justify-content: space-between; }
+  .print-row { display: flex; justify-content: space-between; gap: 8px; }
+  .print-row span:first-child { min-width: 0; overflow-wrap: break-word; word-break: break-word; }
+  .print-row span:last-child { flex-shrink: 0; }
   .print-bicak-mark { font-size: 20px; margin-right: 5px; vertical-align: -3px; }
   .print-ekmek-mark { font-size: 20px; margin-right: 5px; vertical-align: -3px; }
   .print-total-box { border-top: 1px dashed #000; padding-top: 6px; font-weight: 700; font-size: 13px; }
