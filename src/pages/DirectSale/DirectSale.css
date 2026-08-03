@@ -467,6 +467,22 @@
   justify-content: space-between;
   background: #F3EEE0;
 }
+.ds-order-line.note .note-mid { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-note-edit-btn {
+  background: transparent;
+  color: var(--ink-muted);
+  border: 1px solid transparent;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--t-hover) var(--ease);
+}
+.ds-note-edit-btn:hover { background: var(--panel-2); color: var(--ink); }
 .ds-order-line.selected { background: var(--panel-dark-2); box-shadow: inset 0 0 0 2px var(--olive); }
 .ds-order-line.duplicate { background: var(--earth-dark); }
 
@@ -688,6 +704,103 @@
 }
 .ds-pay-modal-total span { font-size: 11px; font-weight: 700; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .ds-pay-modal-total strong { font-size: 22px; font-weight: 800; color: var(--olive); }
+
+/* ---- Para Üstü Hesaplama ---- */
+.ds-change-calc-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  border: 1px dashed var(--border);
+  background: var(--panel-2);
+  color: var(--ink);
+  border-radius: var(--r-btn);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 10px;
+  transition: background var(--t-hover) var(--ease);
+}
+.ds-change-calc-toggle:hover { background: #fff; }
+.ds-change-calc {
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-card);
+  padding: 12px;
+  margin-bottom: 14px;
+}
+.ds-change-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.ds-change-quick-grid button {
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease);
+}
+.ds-change-quick-grid button:hover { border-color: var(--olive); background: var(--olive-soft); }
+.ds-change-manual {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.ds-change-manual span { font-size: 11px; font-weight: 700; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.ds-change-manual-input {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 6px 14px;
+  min-width: 110px;
+  text-align: right;
+}
+.ds-change-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--olive-soft);
+  border-radius: 9px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+.ds-change-result span { font-size: 11px; font-weight: 700; color: var(--olive-dark); text-transform: uppercase; letter-spacing: 0.04em; }
+.ds-change-result strong { font-size: 22px; font-weight: 800; color: var(--olive-dark); }
+.ds-change-numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.ds-change-numpad button {
+  height: 42px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--t-hover) var(--ease);
+}
+.ds-change-numpad button:hover { background: var(--panel-2); }
+.ds-change-numpad button.clear { color: var(--danger); border-color: #E0C3BB; }
+.ds-change-numpad button.clear:hover { background: var(--danger-soft); }
+
 .ds-pay-modal .ds-pay-grid { padding: 0; margin-bottom: 12px; }
 .ds-pay-back-btn {
   display: flex;
@@ -849,7 +962,9 @@
   resize: none;
   margin-bottom: 12px;
   background: var(--panel-2);
+  color: #E94F37 !important;
 }
+.ds-modal textarea::placeholder { color: #C77D6E; opacity: 1; }
 .ds-modal textarea:focus { outline: none; border-color: var(--olive); background: #fff; }
 .ds-modal-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-soft); padding-bottom: 12px; margin-bottom: 12px; }
 .ds-modal-head h3 { margin: 0; }

@@ -4,7 +4,7 @@ import { TL, QUICK_SALE } from '../../hooks/useHipposData';
 import {
   Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
-  Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp, ArrowLeft, Package,
+  Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp, ArrowLeft, Package, Calculator, Delete,
 } from 'lucide-react';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
@@ -47,6 +47,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [activeCategory, setActiveCategory] = useState('TÜMÜ');
   const [searchQuery, setSearchQuery] = useState('');
   const [payMode, setPayMode] = useState(false);
+  const [showChangeCalc, setShowChangeCalc] = useState(false);
+  const [receivedAmount, setReceivedAmount] = useState('');
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
   const [occupiedConfirmTable, setOccupiedConfirmTable] = useState(null);
   const tablePickerListRef = useRef(null);
@@ -251,6 +253,19 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       onConfirm: (text) => {
         if (!text.trim()) return;
         setDraftItems((prev) => [...prev, { id: Date.now() + Math.random(), ad: text.trim(), fiyat: 0, selected: false, note: true }]);
+      },
+    });
+  }
+
+  function editNoteItem(item) {
+    setGenericModal({
+      title: 'Notu Düzenle',
+      placeholder: 'Örn: Acısız olsun / Paket saat 13:00',
+      showInput: true,
+      defaultValue: item.ad,
+      onConfirm: (text) => {
+        if (!text.trim()) return;
+        setDraftItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, ad: text.trim() } : i)));
       },
     });
   }
@@ -790,8 +805,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               if (item.note) {
                 return (
                   <div key={item.id} className="ds-order-line note">
-                    <span className="ds-order-line-name"><StickyNote size={13} /> {item.ad}</span>
                     <button className="ds-remove-btn" onClick={() => removeItem(item.id)}><X size={16} /></button>
+                    <span className="ds-order-line-name note-mid"><StickyNote size={13} /> {item.ad}</span>
+                    <button className="ds-note-edit-btn" onClick={() => editNoteItem(item)} title="Notu Düzenle"><Pencil size={14} /></button>
                   </div>
                 );
               }
@@ -878,7 +894,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
           </div>
 
           <div className="ds-payment-row">
-            <button disabled={isOrderEmpty} className="ds-pay-cta" onClick={() => setPayMode(true)}>
+            <button disabled={isOrderEmpty} className="ds-pay-cta" onClick={() => { setShowChangeCalc(false); setReceivedAmount(''); setPayMode(true); }}>
               <Wallet size={17} /> Ödeme Al
             </button>
             {selectedTable === QUICK_SALE ? (
@@ -1046,6 +1062,42 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               <span>Ödenecek Tutar</span>
               <strong>{TL(selectedItems.length > 0 ? selectedTotal : finalTotal)}</strong>
             </div>
+
+            <button className="ds-change-calc-toggle" onClick={() => setShowChangeCalc((v) => !v)}>
+              <Calculator size={15} /> Para Üstü Hesapla {showChangeCalc ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+
+            {showChangeCalc && (() => {
+              const odenecek = selectedItems.length > 0 ? selectedTotal : finalTotal;
+              const alinan = Number(receivedAmount) || 0;
+              const paraUstu = Math.max(0, alinan - odenecek);
+              return (
+                <div className="ds-change-calc">
+                  <div className="ds-change-quick-grid">
+                    {[50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800].map((amt) => (
+                      <button key={amt} onClick={() => setReceivedAmount(String(amt))}>{amt}</button>
+                    ))}
+                  </div>
+                  <div className="ds-change-manual">
+                    <span>Alınan Tutar</span>
+                    <div className="ds-change-manual-input">{receivedAmount || '0'} ₺</div>
+                  </div>
+                  <div className="ds-change-result">
+                    <span>Para Üstü</span>
+                    <strong>{TL(paraUstu)}</strong>
+                  </div>
+                  <div className="ds-change-numpad">
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((k) => (
+                      <button key={k} onClick={() => setReceivedAmount((prev) => (prev === '0' ? k : prev + k))}>{k}</button>
+                    ))}
+                    <button className="clear" onClick={() => setReceivedAmount('')}><Delete size={16} /></button>
+                    <button onClick={() => setReceivedAmount((prev) => (prev === '0' ? '0' : prev + '0'))}>0</button>
+                    <button className="clear" onClick={() => setReceivedAmount((prev) => prev.slice(0, -1))}>⌫</button>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="ds-pay-grid">
               <button className="cash" onClick={() => handlePay('NAKİT')}>
                 <Banknote size={19} /><span className="lbl">Nakit</span>
@@ -1178,7 +1230,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 }
 
 function GenericModal({ modal, onClose }) {
-  const [inputVal, setInputVal] = useState('');
+  const [inputVal, setInputVal] = useState(modal.defaultValue || '');
   const [selectVal, setSelectVal] = useState(modal.selectOptions?.[0]?.value || '');
 
   function confirm() {
