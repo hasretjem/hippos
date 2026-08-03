@@ -365,6 +365,27 @@
 .ds-products-scrollbtns button:hover { background: var(--panel-2); color: var(--ink); }
 .ds-product-group { margin-bottom: 24px; }
 .ds-product-group:last-child { margin-bottom: 0; }
+
+/* ---- Soğuk Sandviç: Büyük / Küçük iki sütunlu özel görünüm ---- */
+.ds-split-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.ds-split-col { min-width: 0; }
+.ds-split-col-title {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--danger);
+  padding-bottom: 10px;
+  margin: 0 0 14px;
+  border-bottom: 2px solid var(--danger);
+}
+.ds-split-col.küçük .ds-split-col-title { color: var(--olive); border-bottom-color: var(--olive); }
+
 .ds-subcat-label {
   font-size: 11px;
   font-weight: 700;
