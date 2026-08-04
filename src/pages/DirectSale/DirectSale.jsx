@@ -58,6 +58,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [occupiedConfirmTable, setOccupiedConfirmTable] = useState(null);
   const tablePickerListRef = useRef(null);
   const productsScrollRef = useRef(null);
+  const bigColScrollRef = useRef(null);
+  const smallColScrollRef = useRef(null);
 
   // Aşağı/yukarı bastıkça, o an görünen kadarlık bir "sayfa" ileri/geri kayar — yani şu an
   // ekranda duran satırlar tamamen kaybolup hemen altındaki (ya da üstündeki) satırlar gelir.
@@ -740,8 +742,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               {activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery ? (
                 <div className="ds-split-cols">
                   {['büyük', 'küçük'].map((yon) => (
-                    <div className={`ds-split-col ${yon}`} key={yon}>
-                      <h3 className="ds-split-col-title">{yon === 'büyük' ? 'BÜYÜK SANDVİÇ' : 'KÜÇÜK SANDVİÇ'}</h3>
+                    <div className={`ds-split-col ${yon}`} key={yon} ref={yon === 'büyük' ? bigColScrollRef : smallColScrollRef}>
+                      <div className="ds-split-col-head">
+                        <h3 className="ds-split-col-title">{yon === 'büyük' ? 'BÜYÜK SANDVİÇ' : 'KÜÇÜK SANDVİÇ'}</h3>
+                        <div className="ds-split-col-scrollbtns">
+                          <button onClick={() => scrollByPage(yon === 'büyük' ? bigColScrollRef : smallColScrollRef, -1)}><ChevronUp size={14} /></button>
+                          <button onClick={() => scrollByPage(yon === 'büyük' ? bigColScrollRef : smallColScrollRef, 1)}><ChevronDown size={14} /></button>
+                        </div>
+                      </div>
                       {Object.entries(groupedProducts)
                         .filter(([subCat]) => (subCat || '').toLocaleLowerCase('tr-TR').includes(yon))
                         .map(([subCat, items]) => (
@@ -808,10 +816,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 ))
               )}
             </div>
-            <div className="ds-products-scrollbtns">
-              <button onClick={() => scrollByPage(productsScrollRef, -1)}><ChevronUp size={16} /></button>
-              <button onClick={() => scrollByPage(productsScrollRef, 1)}><ChevronDown size={16} /></button>
-            </div>
+            {!(activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery) && (
+              <div className="ds-products-scrollbtns">
+                <button onClick={() => scrollByPage(productsScrollRef, -1)}><ChevronUp size={16} /></button>
+                <button onClick={() => scrollByPage(productsScrollRef, 1)}><ChevronDown size={16} /></button>
+              </div>
+            )}
           </div>
         </main>
 
