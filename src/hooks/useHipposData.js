@@ -1116,7 +1116,7 @@ export default function useHipposData() {
     logSoldItems(payable, table);
     pushHistory(`${table} kapatıldı (${method})`);
     setSalesHistory((prev) => [
-      { id: Date.now(), ts: Date.now(), table, amount: totalPay, method, itemsCount: payable.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table, amount: totalPay, method, itemsCount: payable.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
     writeReceiptToSheets({

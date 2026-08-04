@@ -407,7 +407,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const totalPay = toClose.reduce((s, i) => s + i.fiyat, 0);
 
     setSalesHistory((prev) => [
-      { id: Date.now(), ts: Date.now(), table: selectedTable, amount: totalPay, method, itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedTable, amount: totalPay, method, itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
     logSoldItems(toClose, selectedTable);
@@ -453,7 +453,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const mutfakNotu = currentOrder.filter((i) => i.note).map((i) => i.ad).join(' · ');
 
     setSalesHistory((prev) => [
-      { id: Date.now(), ts: Date.now(), table: selectedTable, amount: totalPay, method: 'CARİ', itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedTable, amount: totalPay, method: 'CARİ', itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
     logSoldItems(toClose, selectedTable);
