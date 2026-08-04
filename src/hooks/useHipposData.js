@@ -403,6 +403,7 @@ export default function useHipposData() {
   // "bildirim/onay" katmanı. Yönetici onaylamadan hiçbir satış/cari kaydını etkilemez.
   const [paketTeslimatlari, setPaketTeslimatlari] = useState([]);
   const [cariTeslimatBildirimleri, setCariTeslimatBildirimleri] = useState([]);
+  const [mutfakHazirNotlar, setMutfakHazirNotlar] = useState([]);
 
   const allTables = useMemo(() => [...FIXED_TABLES, ...packages.map((p) => p.name)], [packages]);
 
@@ -455,7 +456,7 @@ export default function useHipposData() {
     let cancelled = false;
 
     async function loadAll() {
-      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb] = await Promise.all([
+      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn] = await Promise.all([
         supabase.from('table_state').select('*'),
         supabase.from('packages').select('*'),
         supabase.from('package_meta').select('*').eq('id', 1).maybeSingle(),
@@ -472,6 +473,7 @@ export default function useHipposData() {
         supabase.from('subcategories').select('*'),
         supabase.from('paket_teslimatlari').select('*'),
         supabase.from('cari_teslimat_bildirimleri').select('*'),
+        supabase.from('mutfak_hazir_notlar').select('*').order('created_at', { ascending: true }),
       ]);
       if (cancelled) return;
 
@@ -480,6 +482,7 @@ export default function useHipposData() {
       setSubcategories((sub.data || []).map(rowToSubcategory));
       setPaketTeslimatlari((pt.data || []).map(rowToPaketTeslimat).sort((a, b) => b.ts - a.ts));
       setCariTeslimatBildirimleri((ctb.data || []).map(rowToCariTeslimatBildirim).sort((a, b) => b.ts - a.ts));
+      setMutfakHazirNotlar((mhn.data || []).map((r) => ({ id: r.id, metin: r.metin })));
 
       const o = emptyTableMap(FIXED_TABLES, []);
       const n = emptyTableMap(FIXED_TABLES, '');
@@ -626,6 +629,14 @@ export default function useHipposData() {
         setCariTeslimatBildirimleri((prev) =>
           prev.some((c) => c.id === row.id) ? prev.map((c) => (c.id === row.id ? row : c)) : [row, ...prev]
         );
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mutfak_hazir_notlar' }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          setMutfakHazirNotlar((prev) => prev.filter((n) => n.id !== payload.old.id));
+          return;
+        }
+        const row = { id: payload.new.id, metin: payload.new.metin };
+        setMutfakHazirNotlar((prev) => (prev.some((n) => n.id === row.id) ? prev : [...prev, row]));
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') console.log('✅ Hippos canlı senkron bağlandı');
@@ -1344,6 +1355,23 @@ export default function useHipposData() {
     });
   }
 
+  // Mutfağa Not ekranındaki hazır not butonları — tüm cihazlarda görünür.
+  function addMutfakHazirNot(metin) {
+    if (!metin.trim()) return;
+    const id = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+    const row = { id, metin: metin.trim() };
+    setMutfakHazirNotlar((prev) => [...prev, row]);
+    supabase.from('mutfak_hazir_notlar').insert({ id, metin: row.metin }).then(({ error }) => {
+      if (error) console.error('hazır not eklenemedi:', error.message);
+    });
+  }
+  function deleteMutfakHazirNot(id) {
+    setMutfakHazirNotlar((prev) => prev.filter((n) => n.id !== id));
+    supabase.from('mutfak_hazir_notlar').delete().eq('id', id).then(({ error }) => {
+      if (error) console.error('hazır not silinemedi:', error.message);
+    });
+  }
+
   // ---- Yönetici onay/red (ana panelden) ----
   function onaylaPaketTeslimat(id) {
     const onayTs = Date.now();
@@ -1450,6 +1478,9 @@ export default function useHipposData() {
     submitCariTeslimatBildirim,
     deletePaketTeslimat,
     deleteCariTeslimatBildirim,
+    mutfakHazirNotlar,
+    addMutfakHazirNot,
+    deleteMutfakHazirNot,
     onaylaPaketTeslimat,
     reddetPaketTeslimat,
     onaylaCariTeslimatBildirim,

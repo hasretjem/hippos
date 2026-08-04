@@ -160,6 +160,66 @@
   border-radius: 999px;
 }
 
+/* ---- Mutfağa Not butonu ---- */
+.tb-mutfak-not-btn {
+  flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  width: 100px; height: 72px;
+  border-radius: var(--r-btn);
+  border: 1.5px solid rgba(57, 62, 65, 0.35);
+  background: var(--panel);
+  color: var(--contour);
+  cursor: pointer;
+  box-shadow: var(--shadow-1);
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease), border-color 160ms var(--ease);
+}
+.tb-mutfak-not-btn span { font-size: 11px; font-weight: 800; }
+.tb-mutfak-not-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: var(--tier2); }
+.tb-mutfak-not-btn:active { transform: scale(0.97); }
+
+.tb-mutfak-not-modal { max-width: 420px; }
+.tb-mutfak-not-textarea {
+  width: 100%; min-height: 110px; resize: vertical;
+  border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 12px; font-size: 18px; font-weight: 700; color: var(--ink);
+  margin-bottom: 12px; background: var(--panel-2);
+}
+.tb-mutfak-not-textarea:focus { outline: none; border-color: var(--tier2); background: #fff; }
+
+.tb-hazir-notlar-section { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border); }
+.tb-hazir-notlar-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-muted); display: block; margin-bottom: 8px; }
+.tb-hazir-notlar-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 140px; overflow-y: auto; margin-bottom: 10px; }
+.tb-hazir-not-chip {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px;
+  padding: 2px 4px 2px 10px;
+}
+.tb-hazir-not-chip .text { background: none; border: none; font-size: 11.5px; font-weight: 600; color: var(--ink); cursor: pointer; padding: 4px 0; }
+.tb-hazir-not-chip .del { background: none; border: none; color: var(--ink-muted); cursor: pointer; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.tb-hazir-not-chip .del:hover { background: var(--danger-soft); color: var(--danger); }
+.tb-hazir-not-add { display: flex; gap: 6px; }
+.tb-hazir-not-add input { flex: 1; height: 36px; border-radius: 9px; border: 1px solid var(--border); padding: 0 10px; font-size: 12px; }
+.tb-hazir-not-add button { flex-shrink: 0; width: 36px; height: 36px; border-radius: 9px; border: none; background: var(--tier1); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+/* ---- Mutfağa Not yazdırma şablonu ---- */
+#tb-print-mutfak-not { display: none; }
+@media print {
+  @page { size: 80mm auto; margin: 0; }
+  html, body { width: 80mm; margin: 0; padding: 0; }
+  .tb-shell > *:not(#tb-print-mutfak-not) { display: none !important; }
+  #tb-print-mutfak-not { display: block; width: 72mm; margin: 0 auto; padding: 6mm 0; }
+  .tb-print-mutfak-not-text {
+    font-family: "SF Mono", monospace;
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1.4;
+    color: #000 !important;
+    white-space: pre-wrap;
+    word-break: break-word;
+    text-align: center;
+  }
+}
+
 .tb-columns { display: flex; gap: 16px; flex: 1; min-height: 0; }
 .tb-left { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
 
@@ -551,6 +611,53 @@
 
 /* ---- Son işlemler / geri al ---- */
 .tb-history-wrap { position: fixed; bottom: 88px; right: 20px; z-index: 40; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+
+/* ---- Cari Uyarı ---- */
+.tb-cari-uyari-wrap { position: fixed; bottom: 88px; right: 92px; z-index: 40; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.tb-cari-uyari-fab {
+  width: 52px; height: 52px; border-radius: 999px; border: none;
+  display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer;
+  box-shadow: var(--shadow-3); color: #fff; transition: transform 160ms var(--ease);
+}
+.tb-cari-uyari-fab.ok { background: #25D366; }
+.tb-cari-uyari-fab.warn { background: var(--danger); }
+.tb-cari-uyari-fab:hover { transform: translateY(-2px); }
+.tb-cari-uyari-fab:active { transform: scale(0.94); }
+.tb-cari-uyari-panel {
+  width: 320px; max-height: 60vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid rgba(0,0,0,0.08); border-radius: var(--r-panel);
+  box-shadow: var(--shadow-3); padding: 12px;
+}
+.tb-cari-uyari-tabs { display: flex; gap: 4px; margin-bottom: 10px; }
+.tb-cari-uyari-tabs button {
+  flex: 1; height: 32px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--panel-2); color: var(--ink-muted); font-size: 10.5px; font-weight: 700; cursor: pointer;
+}
+.tb-cari-uyari-tabs button.active { background: var(--olive-soft); color: var(--olive-dark); border-color: var(--olive); }
+.tb-cari-uyari-list { display: flex; flex-direction: column; gap: 6px; }
+.tb-cari-uyari-warn { font-size: 11.5px; font-weight: 700; color: var(--danger); margin: 0 0 4px; }
+.tb-cari-uyari-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 10px; border-radius: 10px; background: var(--panel-2);
+}
+.tb-cari-uyari-row .info { display: flex; flex-direction: column; gap: 2px; }
+.tb-cari-uyari-row .ad { font-size: 12px; font-weight: 700; color: var(--ink); }
+.tb-cari-uyari-row .tutar { font-size: 12.5px; font-weight: 800; color: var(--olive-dark); }
+.tb-cari-uyari-wa {
+  flex-shrink: 0; display: flex; align-items: center; gap: 5px;
+  height: 30px; padding: 0 10px; border-radius: 8px; border: none;
+  background: #25D366; color: #fff; font-size: 10.5px; font-weight: 700; cursor: pointer;
+}
+.tb-cari-uyari-wa:disabled { background: var(--border); color: var(--ink-muted); cursor: not-allowed; }
+.tb-cari-uyari-edit-btn {
+  flex-shrink: 0; height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border);
+  background: #fff; color: var(--ink); font-size: 10.5px; font-weight: 700; cursor: pointer;
+}
+.tb-cari-uyari-edit { flex: 1; display: flex; gap: 5px; align-items: center; }
+.tb-cari-uyari-edit input { flex: 1; height: 30px; border-radius: 7px; border: 1px solid var(--border); padding: 0 8px; font-size: 11px; }
+.tb-cari-uyari-edit button { flex-shrink: 0; height: 30px; padding: 0 8px; border-radius: 7px; border: none; font-size: 10px; font-weight: 700; cursor: pointer; background: var(--border); color: var(--ink); }
+.tb-cari-uyari-edit button.save { background: var(--tier1); color: #fff; }
+
 .tb-history-fab {
   width: 52px; height: 52px;
   border-radius: 999px;

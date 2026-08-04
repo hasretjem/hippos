@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import './Tables.css';
 import { SALON_TABLES, ALT_TABLES, TABLE_PAIRS, QUICK_SALE, TL, getElapsedMinutes, getColorTier } from '../../hooks/useHipposData';
@@ -10,6 +10,7 @@ const TLKart = (n) => Math.round(n || 0).toLocaleString('tr-TR') + ' ₺';
 import {
   MoreVertical, Plus, ClipboardPaste, ArrowLeftRight, Link2, XCircle,
   Undo2, Banknote, CreditCard, UtensilsCrossed, BookOpen, X, Check, Zap, Lock,
+  StickyNote, MessageCircle, Trash2, Printer,
 } from 'lucide-react';
 
 const PAIR_SECOND = new Set(TABLE_PAIRS.map((p) => p[1]));
@@ -31,6 +32,12 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     undoLastAction,
     isTableOccupiedElsewhere,
     paketTeslimatlari,
+    cariler,
+    cariHareketler,
+    updateCari,
+    mutfakHazirNotlar,
+    addMutfakHazirNot,
+    deleteMutfakHazirNot,
   } = data;
 
   // Renk-zaman kademesi her 30 dk'da bir değişsin diye periyodik yeniden çizim
@@ -48,6 +55,79 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
   const [confirmModal, setConfirmModal] = useState(null); // { title, onConfirm }
   const [closeModalFor, setCloseModalFor] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+
+  // ---- Cari Uyarı paneli: gün sonu firmalara toplu WhatsApp + numarası eksik bireysel uyarısı ----
+  const [cariUyariOpen, setCariUyariOpen] = useState(false);
+  const [cariUyariTab, setCariUyariTab] = useState('firma'); // 'firma' | 'bireysel'
+  const [cariUyariEditId, setCariUyariEditId] = useState(null);
+  const [cariUyariPhoneDraft, setCariUyariPhoneDraft] = useState('');
+
+  function normalizeTrPhone(phone) {
+    let digits = (phone || '').replace(/[^0-9]/g, '');
+    if (digits.startsWith('0')) digits = digits.slice(1);
+    if (!digits.startsWith('90')) digits = '90' + digits;
+    return digits;
+  }
+  function waShare(text, phone) {
+    const digits = normalizeTrPhone(phone);
+    if (!digits || digits === '90') return;
+    const win = window.open(`https://wa.me/${digits}?text=${encodeURIComponent(text)}`, '_blank');
+    if (!win) alert('Tarayıcı pencereyi engelledi — popup iznini kontrol et');
+  }
+
+  const bugunFirmaListesi = useMemo(() => {
+    const gunBaslangic = new Date();
+    gunBaslangic.setHours(0, 0, 0, 0);
+    const gunBaslangicTs = gunBaslangic.getTime();
+    return (cariler || [])
+      .filter((c) => c.tip === 'firma')
+      .map((c) => {
+        const tutar = (cariHareketler || [])
+          .filter((h) => h.cariId === c.id && h.ts >= gunBaslangicTs)
+          .reduce((s, h) => s + h.toplam, 0);
+        return { cari: c, tutar };
+      })
+      .filter((x) => x.tutar > 0)
+      .sort((a, b) => b.tutar - a.tutar);
+  }, [cariler, cariHareketler]);
+
+  const bireyselNumarasizListesi = useMemo(
+    () => (cariler || []).filter((c) => c.tip === 'bireysel' && !c.telefon),
+    [cariler]
+  );
+
+  function openCariOzetiFromUyari(cari, tutar) {
+    const text = `${cari.ad}\n\nBugünkü Sipariş Tutarı: ${TL(tutar)}\n\nBu tutar cari hesabınıza işlenmiştir.`;
+    waShare(text, cari.telefon);
+  }
+
+  function saveBireyselPhoneFromUyari(cariId) {
+    if (!cariUyariPhoneDraft.trim()) return;
+    updateCari(cariId, { telefon: cariUyariPhoneDraft.trim() });
+    setCariUyariEditId(null);
+    setCariUyariPhoneDraft('');
+  }
+
+  // ---- Mutfağa Not — büyük yazıp yazdırıp mutfağa gönderme + tüm cihazlarda görünen hazır notlar ----
+  const [mutfakNotOpen, setMutfakNotOpen] = useState(false);
+  const [mutfakNotText, setMutfakNotText] = useState('');
+  const [mutfakNotYeniHazir, setMutfakNotYeniHazir] = useState('');
+  const [mutfakNotPrintData, setMutfakNotPrintData] = useState(null);
+
+  function openMutfakNot() {
+    setMutfakNotText('');
+    setMutfakNotOpen(true);
+  }
+  function printMutfakNot() {
+    if (!mutfakNotText.trim()) return;
+    setMutfakNotPrintData(mutfakNotText.trim());
+    setTimeout(() => window.print(), 150);
+  }
+  function addHazirNotAndUse() {
+    if (!mutfakNotYeniHazir.trim()) return;
+    addMutfakHazirNot(mutfakNotYeniHazir.trim());
+    setMutfakNotYeniHazir('');
+  }
   const [dragFrom, setDragFrom] = useState(null);
   const [dragOverTable, setDragOverTable] = useState(null);
 
@@ -436,6 +516,11 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
             <span className="tb-quicksale-amount">{TLKart(getTableTotal(QUICK_SALE))}</span>
           )}
         </button>
+
+        <button className="tb-mutfak-not-btn" onClick={openMutfakNot}>
+          <StickyNote size={20} />
+          <span>Mutfağa Not</span>
+        </button>
       </div>
 
       <div className="tb-columns">
@@ -468,6 +553,74 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
             </button>
           </div>
         </aside>
+      </div>
+
+      {/* Cari Uyarı — gün sonu firmalara toplu WhatsApp + numarası eksik bireysel uyarısı */}
+      <div className="tb-cari-uyari-wrap">
+        {cariUyariOpen && (
+          <div className="tb-cari-uyari-panel">
+            <div className="tb-history-head">
+              <span>Cari Uyarı</span>
+              <button onClick={() => setCariUyariOpen(false)}><X size={14} /></button>
+            </div>
+            <div className="tb-cari-uyari-tabs">
+              <button className={cariUyariTab === 'firma' ? 'active' : ''} onClick={() => setCariUyariTab('firma')}>Firmalar</button>
+              <button className={cariUyariTab === 'bireysel' ? 'active' : ''} onClick={() => setCariUyariTab('bireysel')}>Bireysel (Numara Eksik)</button>
+            </div>
+
+            {cariUyariTab === 'firma' ? (
+              <div className="tb-cari-uyari-list">
+                {bugunFirmaListesi.length === 0 && <p className="tb-history-empty">Bugün cariye giden firma siparişi yok</p>}
+                {bugunFirmaListesi.map(({ cari, tutar }) => (
+                  <div key={cari.id} className="tb-cari-uyari-row">
+                    <div className="info">
+                      <span className="ad">{cari.ad}</span>
+                      <span className="tutar">{TL(tutar)}</span>
+                    </div>
+                    <button className="tb-cari-uyari-wa" onClick={() => openCariOzetiFromUyari(cari, tutar)} disabled={!cari.telefon}>
+                      <MessageCircle size={13} /> {cari.telefon ? 'Cari Özeti Gönder' : 'Numara Yok'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="tb-cari-uyari-list">
+                <p className="tb-cari-uyari-warn">⚠️ {bireyselNumarasizListesi.length} bireysel müşteride telefon eksik</p>
+                {bireyselNumarasizListesi.length === 0 && <p className="tb-history-empty">Hepsinde numara kayıtlı 🎉</p>}
+                {bireyselNumarasizListesi.map((c) => (
+                  <div key={c.id} className="tb-cari-uyari-row">
+                    {cariUyariEditId === c.id ? (
+                      <div className="tb-cari-uyari-edit">
+                        <input
+                          autoFocus
+                          placeholder="0532 123 45 67"
+                          value={cariUyariPhoneDraft}
+                          onChange={(e) => setCariUyariPhoneDraft(e.target.value)}
+                        />
+                        <button onClick={() => setCariUyariEditId(null)}>Vazgeç</button>
+                        <button className="save" onClick={() => saveBireyselPhoneFromUyari(c.id)}>Kaydet</button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="info"><span className="ad">{c.ad}</span></div>
+                        <button className="tb-cari-uyari-edit-btn" onClick={() => { setCariUyariEditId(c.id); setCariUyariPhoneDraft(''); }}>
+                          Düzenle
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <button
+          className={`tb-cari-uyari-fab ${bireyselNumarasizListesi.length > 0 ? 'warn' : 'ok'}`}
+          onClick={() => { setCariUyariTab(bireyselNumarasizListesi.length > 0 ? 'bireysel' : 'firma'); setCariUyariOpen((v) => !v); }}
+        >
+          <MessageCircle size={19} />
+          {bireyselNumarasizListesi.length > 0 && <span className="tb-history-badge">{bireyselNumarasizListesi.length}</span>}
+        </button>
       </div>
 
       {/* Son işlemler / geri al */}
@@ -559,6 +712,57 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
             </div>
             <button className="tb-cancel-link" onClick={() => setCloseModalFor(null)}>İptal</button>
           </div>
+        </div>
+      )}
+
+      {/* Mutfağa Not — büyük yazıp yazdırma + tüm cihazlarda görünen hazır notlar */}
+      {mutfakNotOpen && (
+        <div className="tb-modal-overlay" onClick={() => setMutfakNotOpen(false)}>
+          <div className="tb-modal tb-mutfak-not-modal" onClick={(e) => e.stopPropagation()}>
+            <h3><StickyNote size={16} /> Mutfağa Not</h3>
+            <textarea
+              autoFocus
+              className="tb-mutfak-not-textarea"
+              placeholder="Örn: Tereyağlı Sade Omlet"
+              value={mutfakNotText}
+              onChange={(e) => setMutfakNotText(e.target.value)}
+            />
+            <div className="tb-modal-footer">
+              <button className="tb-secondary" onClick={() => setMutfakNotOpen(false)}><Undo2 size={14} /> Geri</button>
+              <button className="tb-primary" disabled={!mutfakNotText.trim()} onClick={printMutfakNot}><Printer size={14} /> Yazdır</button>
+            </div>
+
+            <div className="tb-hazir-notlar-section">
+              <span className="tb-hazir-notlar-label">Hızlı Notlar</span>
+              <div className="tb-hazir-notlar-list">
+                {mutfakHazirNotlar.map((n) => (
+                  <div key={n.id} className="tb-hazir-not-chip">
+                    <button className="text" onClick={() => setMutfakNotText((prev) => (prev ? `${prev}\n${n.metin}` : n.metin))}>
+                      {n.metin}
+                    </button>
+                    <button className="del" onClick={() => deleteMutfakHazirNot(n.id)}><X size={11} /></button>
+                  </div>
+                ))}
+                {mutfakHazirNotlar.length === 0 && <p className="tb-history-empty">Henüz hazır not yok</p>}
+              </div>
+              <div className="tb-hazir-not-add">
+                <input
+                  placeholder="Yeni hazır not ekle..."
+                  value={mutfakNotYeniHazir}
+                  onChange={(e) => setMutfakNotYeniHazir(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addHazirNotAndUse()}
+                />
+                <button onClick={addHazirNotAndUse}><Plus size={14} /></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mutfağa Not — yazdırma şablonu (sadece @media print'te görünür) */}
+      {mutfakNotPrintData && (
+        <div id="tb-print-mutfak-not">
+          <div className="tb-print-mutfak-not-text">{mutfakNotPrintData}</div>
         </div>
       )}
     </div>
