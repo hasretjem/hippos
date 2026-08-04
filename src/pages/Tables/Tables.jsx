@@ -518,8 +518,8 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
         </button>
 
         <button className="tb-mutfak-not-btn" onClick={openMutfakNot}>
-          <StickyNote size={20} />
-          <span>Mutfağa Not</span>
+          <Printer size={20} />
+          <span>Hızlı Yazdır</span>
         </button>
       </div>
 
@@ -616,7 +616,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
         )}
         <button
           className={`tb-cari-uyari-fab ${bireyselNumarasizListesi.length > 0 ? 'warn' : 'ok'}`}
-          onClick={() => { setCariUyariTab(bireyselNumarasizListesi.length > 0 ? 'bireysel' : 'firma'); setCariUyariOpen((v) => !v); }}
+          onClick={() => { setCariUyariTab('bireysel'); setCariUyariOpen((v) => !v); }}
         >
           <MessageCircle size={19} />
           {bireyselNumarasizListesi.length > 0 && <span className="tb-history-badge">{bireyselNumarasizListesi.length}</span>}

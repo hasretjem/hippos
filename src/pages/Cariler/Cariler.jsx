@@ -329,7 +329,9 @@ export default function Cariler({ data, onNavigate }) {
                       <span className="cr-item-name">{c.ad}</span>
                       <span className="cr-item-balance">{TL(b)}</span>
                     </div>
-                    {c.telefon && <div className="cr-item-phone">{c.telefon}</div>}
+                    {c.telefon
+                      ? <div className="cr-item-phone">{c.telefon}</div>
+                      : c.tip === 'bireysel' && <div className="cr-item-phone missing">📵 Numara yok</div>}
                     <div className="cr-item-bottom">
                       <span className="cr-item-date">{sh ? fmtDateTime(sh.ts) : '—'}</span>
                       {c.not && <span className="cr-item-note">{c.not}</span>}

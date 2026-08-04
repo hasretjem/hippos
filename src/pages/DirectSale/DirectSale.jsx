@@ -5,6 +5,7 @@ import {
   Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
   Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp, ArrowLeft, Package, Calculator, Delete,
+  MessageCircle, Building2, User, MapPin, Phone,
 } from 'lucide-react';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
@@ -36,6 +37,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     presenceMap,
     cariler,
     addCari,
+    updateCari,
     addCariHareket,
   } = data;
 
@@ -435,11 +437,36 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   // ---- Cariye gönder ----
   const [cariPickerOpen, setCariPickerOpen] = useState(false);
   const [cariSearch, setCariSearch] = useState('');
-  const [cariYeniForm, setCariYeniForm] = useState(null); // { ad, telefon }
+  const [cariYeniForm, setCariYeniForm] = useState(null); // { ad, telefon, adres }
+  const [cariConfirm, setCariConfirm] = useState(null); // { cari }
+  const [cariEditRowId, setCariEditRowId] = useState(null); // bireysel listede "Düzenle" açık olan satır
+  const [cariEditDraft, setCariEditDraft] = useState({ telefon: '', adres: '' });
+  const [cariWaPhoneEntry, setCariWaPhoneEntry] = useState(false);
+  const [cariWaPhoneDraft, setCariWaPhoneDraft] = useState('');
+
+  function normalizeTrPhone(phone) {
+    let digits = (phone || '').replace(/[^0-9]/g, '');
+    if (digits.startsWith('0')) digits = digits.slice(1);
+    if (!digits.startsWith('90')) digits = '90' + digits;
+    return digits;
+  }
+  function waShare(text, phone) {
+    const digits = normalizeTrPhone(phone);
+    if (!digits || digits === '90') {
+      showToast('Kayıtlı numara yok');
+      return;
+    }
+    const win = window.open(`https://wa.me/${digits}?text=${encodeURIComponent(text)}`, '_blank');
+    if (!win) showToast('Tarayıcı pencereyi engelledi — popup iznini kontrol et');
+  }
 
   function openCariPicker() {
     setCariSearch('');
     setCariYeniForm(null);
+    setCariConfirm(null);
+    setCariEditRowId(null);
+    setCariWaPhoneEntry(false);
+    setCariWaPhoneDraft('');
     setCariPickerOpen(true);
   }
 
@@ -478,16 +505,78 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     }
     setCariPickerOpen(false);
     setPayMode(false);
+    setCariConfirm(null);
     showToast('Cariye gönderildi');
+    return { toClose, totalPay };
+  }
+
+  // Onayla — sadece cariye işler, WhatsApp'a hiç dokunmaz
+  function confirmSendPlain() {
+    if (!cariConfirm) return;
+    handlePayToCari(cariConfirm.cari.id);
+  }
+
+  // WhatsApp'tan İlet — cariye işler VE müşteriye WhatsApp'tan (hazır mesajla) iletir.
+  // Numara yoksa önce numara girme ekranını açar, kaydedince otomatik gönderir.
+  function confirmSendWithWhatsapp() {
+    if (!cariConfirm) return;
+    const cari = cariConfirm.cari;
+    if (!cari.telefon) {
+      setCariWaPhoneEntry(true);
+      setCariWaPhoneDraft('');
+      return;
+    }
+    const payable = currentOrder.filter((i) => !i.note);
+    const selected = payable.filter((i) => i.selected);
+    const toClose = selected.length > 0 ? selected : payable;
+    const totalPay = toClose.reduce((s, i) => s + i.fiyat, 0);
+    const mesaj = `${cari.ad}\n\n${toClose.map((i) => `${i.ad} .. ${TL(i.fiyat)}`).join('\n')}\n\nToplam: ${TL(totalPay)}`;
+    handlePayToCari(cari.id);
+    waShare(mesaj, cari.telefon);
+  }
+
+  function saveWaPhoneAndSend() {
+    if (!cariConfirm || !cariWaPhoneDraft.trim()) return;
+    const cari = cariConfirm.cari;
+    updateCari(cari.id, { telefon: cariWaPhoneDraft.trim() });
+    const payable = currentOrder.filter((i) => !i.note);
+    const selected = payable.filter((i) => i.selected);
+    const toClose = selected.length > 0 ? selected : payable;
+    const totalPay = toClose.reduce((s, i) => s + i.fiyat, 0);
+    const mesaj = `${cari.ad}\n\n${toClose.map((i) => `${i.ad} .. ${TL(i.fiyat)}`).join('\n')}\n\nToplam: ${TL(totalPay)}`;
+    handlePayToCari(cari.id);
+    waShare(mesaj, cariWaPhoneDraft.trim());
+  }
+
+  async function pasteIntoWaPhoneDraft() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) setCariWaPhoneDraft(text.trim());
+    } catch {
+      /* pano izni yoksa sessizce geç */
+    }
+  }
+
+  function openCariEditRow(c) {
+    setCariEditRowId(c.id);
+    setCariEditDraft({ telefon: c.telefon || '', adres: c.adres || '' });
+  }
+  function saveCariEditRow(cariId) {
+    updateCari(cariId, { telefon: cariEditDraft.telefon, adres: cariEditDraft.adres });
+    setCariEditRowId(null);
+    showToast('Cari bilgileri güncellendi');
   }
 
   function submitYeniCariFromPos() {
     if (!cariYeniForm || !cariYeniForm.ad.trim()) return;
-    const id = addCari({ tip: 'bireysel', ad: cariYeniForm.ad.trim(), telefon: cariYeniForm.telefon || '', adres: '', not: '' });
+    const id = addCari({ tip: 'bireysel', ad: cariYeniForm.ad.trim(), telefon: cariYeniForm.telefon || '', adres: cariYeniForm.adres || '', not: '' });
     handlePayToCari(id);
   }
 
-  const filteredCariler = (cariler || []).filter(
+  const firmaCariler = (cariler || []).filter((c) => c.tip === 'firma').sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
+  const bireyselCariler = (cariler || []).filter((c) => c.tip === 'bireysel');
+  const filteredCariler = bireyselCariler.filter(
+
     (c) => !cariSearch.trim() || c.ad.toLowerCase().includes(cariSearch.trim().toLowerCase())
   );
 
@@ -1153,13 +1242,53 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       {/* CARİ SEÇ MODALI */}
       {cariPickerOpen && (
         <div className="ds-modal-overlay" onClick={() => setCariPickerOpen(false)}>
-          <div className="ds-modal ds-table-picker-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="ds-modal-head">
-              <h3>Cariye Gönder</h3>
-              <button className="ds-modal-x" onClick={() => setCariPickerOpen(false)}><X size={16} /></button>
-            </div>
-            {cariYeniForm ? (
+          <div className="ds-modal ds-table-picker-modal ds-cari-modal" onClick={(e) => e.stopPropagation()}>
+
+            {cariConfirm ? (
               <>
+                <div className="ds-modal-head">
+                  <h3>{cariWaPhoneEntry ? 'Numara Kaydet' : 'Cariye Gönder'}</h3>
+                  <button className="ds-modal-x" onClick={() => { setCariConfirm(null); setCariWaPhoneEntry(false); }}><X size={16} /></button>
+                </div>
+
+                {!cariWaPhoneEntry ? (
+                  <>
+                    <div className="ds-cari-confirm-name">{cariConfirm.cari.ad.toLocaleUpperCase('tr-TR')}</div>
+                    <div className="ds-cari-confirm-actions">
+                      <button className="ds-secondary-btn" onClick={() => setCariConfirm(null)}>İptal</button>
+                      <button className="ds-primary-btn" onClick={confirmSendPlain}>Onayla</button>
+                    </div>
+                    <button className="ds-cari-wa-btn" onClick={confirmSendWithWhatsapp}>
+                      <MessageCircle size={15} />
+                      {cariConfirm.cari.telefon ? 'WhatsApp\'tan İlet' : 'Kayıtlı Numarası Yok'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="ds-cari-confirm-name small">{cariConfirm.cari.ad.toLocaleUpperCase('tr-TR')}</div>
+                    <div className="ds-cari-phone-entry">
+                      <input
+                        autoFocus
+                        type="tel"
+                        placeholder="0532 123 45 67"
+                        value={cariWaPhoneDraft}
+                        onChange={(e) => setCariWaPhoneDraft(e.target.value)}
+                      />
+                      <button onClick={pasteIntoWaPhoneDraft} title="Panodan yapıştır"><ClipboardPaste size={15} /></button>
+                    </div>
+                    <div className="ds-cari-confirm-actions">
+                      <button className="ds-secondary-btn" onClick={() => setCariWaPhoneEntry(false)}>Geri</button>
+                      <button className="ds-primary-btn" disabled={!cariWaPhoneDraft.trim()} onClick={saveWaPhoneAndSend}>Kaydet ve Gönder</button>
+                    </div>
+                  </>
+                )}
+              </>
+            ) : cariYeniForm ? (
+              <>
+                <div className="ds-modal-head">
+                  <h3>Yeni Cari</h3>
+                  <button className="ds-modal-x" onClick={() => setCariPickerOpen(false)}><X size={16} /></button>
+                </div>
                 <input
                   autoFocus
                   className="ds-modal-search"
@@ -1173,6 +1302,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   value={cariYeniForm.telefon}
                   onChange={(e) => setCariYeniForm((f) => ({ ...f, telefon: e.target.value }))}
                 />
+                <input
+                  className="ds-modal-search"
+                  placeholder="Adres (opsiyonel)"
+                  value={cariYeniForm.adres}
+                  onChange={(e) => setCariYeniForm((f) => ({ ...f, adres: e.target.value }))}
+                />
                 <div className="ds-modal-footer two">
                   <button className="ds-secondary-btn" onClick={() => setCariYeniForm(null)}>Geri</button>
                   <button className="ds-primary-btn" onClick={submitYeniCariFromPos}>Oluştur ve Gönder</button>
@@ -1180,19 +1315,61 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               </>
             ) : (
               <>
+                <div className="ds-modal-head">
+                  <h3>Cariye Gönder</h3>
+                  <button className="ds-modal-x" onClick={() => setCariPickerOpen(false)}><X size={16} /></button>
+                </div>
+
+                {firmaCariler.length > 0 && (
+                  <div className="ds-cari-firma-section">
+                    <span className="ds-cari-section-label"><Building2 size={11} /> Firmalar</span>
+                    <div className="ds-cari-firma-grid">
+                      {firmaCariler.map((c) => (
+                        <button key={c.id} className="ds-cari-firma-btn" onClick={() => setCariConfirm({ cari: c })}>
+                          {c.ad}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <span className="ds-cari-section-label"><User size={11} /> Bireysel</span>
                 <input
-                  autoFocus
                   className="ds-modal-search"
                   placeholder="Cari ara..."
                   value={cariSearch}
                   onChange={(e) => setCariSearch(e.target.value)}
                 />
-                <div className="ds-table-picker-list">
+                <div className="ds-table-picker-list ds-cari-bireysel-list">
                   {filteredCariler.map((c) => (
-                    <button key={c.id} onClick={() => handlePayToCari(c.id)}>
-                      <span className="name">{c.ad}</span>
-                      <span className="meta">{c.tip === 'firma' ? 'Firma' : 'Bireysel'}{c.telefon ? ` — ${c.telefon}` : ''}</span>
-                    </button>
+                    <div key={c.id} className="ds-cari-bireysel-row">
+                      {cariEditRowId === c.id ? (
+                        <div className="ds-cari-edit-row">
+                          <input
+                            placeholder="Telefon"
+                            value={cariEditDraft.telefon}
+                            onChange={(e) => setCariEditDraft((d) => ({ ...d, telefon: e.target.value }))}
+                          />
+                          <input
+                            placeholder="Adres"
+                            value={cariEditDraft.adres}
+                            onChange={(e) => setCariEditDraft((d) => ({ ...d, adres: e.target.value }))}
+                          />
+                          <div className="ds-cari-edit-row-actions">
+                            <button onClick={() => setCariEditRowId(null)}>Vazgeç</button>
+                            <button className="save" onClick={() => saveCariEditRow(c.id)}>Kaydet</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <button className="ds-cari-bireysel-main" onClick={() => setCariConfirm({ cari: c })}>
+                            <span className="name">{c.ad}</span>
+                            <span className="meta">{c.telefon || 'Numara yok'}</span>
+                          </button>
+                          <button className="ds-cari-edit-btn" onClick={() => openCariEditRow(c)} title="Düzenle"><Pencil size={13} /></button>
+                        </>
+                      )}
+                    </div>
                   ))}
                   {filteredCariler.length === 0 && (
                     <p style={{ fontSize: '12px', color: 'var(--ink-soft)', fontStyle: 'italic', padding: '8px 4px' }}>
@@ -1200,7 +1377,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                     </p>
                   )}
                 </div>
-                <button className="ds-primary-btn" style={{ width: '100%', marginTop: '10px' }} onClick={() => setCariYeniForm({ ad: '', telefon: '' })}>
+                <button className="ds-primary-btn" style={{ width: '100%', marginTop: '10px' }} onClick={() => setCariYeniForm({ ad: '', telefon: '', adres: '' })}>
                   + Yeni Cari
                 </button>
               </>

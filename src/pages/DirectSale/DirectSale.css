@@ -178,6 +178,75 @@
 .ds-occupied-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); display: inline-block; flex-shrink: 0; }
 .ds-table-picker-list button .meta { font-size: 11.5px; color: var(--ink-muted); }
 .ds-table-picker-scrollbtns { display: flex; gap: 8px; padding-top: 10px; flex-shrink: 0; }
+
+/* ---- Cari modalı — firma butonları / bireysel arama+düzenle / onay ekranı ---- */
+.ds-cari-modal { max-width: 420px; }
+.ds-cari-section-label {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--ink-muted); margin: 10px 0 6px;
+}
+.ds-cari-firma-section { margin-bottom: 4px; }
+.ds-cari-firma-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; max-height: 160px; overflow-y: auto; }
+.ds-cari-firma-btn {
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 10px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease);
+}
+.ds-cari-firma-btn:hover { background: #fff; border-color: var(--olive); }
+
+.ds-cari-bireysel-list { max-height: 220px; }
+.ds-cari-bireysel-row { display: flex; align-items: center; gap: 4px; }
+.ds-cari-bireysel-main {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  background: none; border: none; text-align: left;
+  padding: 9px 10px; border-radius: 10px; cursor: pointer;
+  transition: background 120ms var(--ease);
+}
+.ds-cari-bireysel-main:hover { background: var(--panel-2); }
+.ds-cari-bireysel-main .name { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.ds-cari-bireysel-main .meta { font-size: 11px; color: var(--ink-muted); }
+.ds-cari-edit-btn {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px;
+  border: 1px solid var(--border); background: #fff; color: var(--ink-muted);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.ds-cari-edit-btn:hover { background: var(--panel-2); color: var(--ink); }
+.ds-cari-edit-row { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: var(--panel-2); border-radius: 10px; }
+.ds-cari-edit-row input { height: 34px; border-radius: 8px; border: 1px solid var(--border); padding: 0 10px; font-size: 12.5px; background: #fff; }
+.ds-cari-edit-row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.ds-cari-edit-row-actions button { height: 30px; padding: 0 12px; border-radius: 7px; border: none; font-size: 11.5px; font-weight: 700; cursor: pointer; background: var(--border); color: var(--ink); }
+.ds-cari-edit-row-actions button.save { background: var(--olive); color: #fff; }
+
+.ds-cari-confirm-name {
+  text-align: center; font-size: 20px; font-weight: 800; color: var(--ink);
+  padding: 22px 10px; letter-spacing: 0.01em;
+}
+.ds-cari-confirm-name.small { font-size: 15px; padding: 10px 10px 16px; }
+.ds-cari-confirm-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+.ds-cari-confirm-actions button { flex: 1; height: 46px; border-radius: var(--r-btn); font-size: 13px; font-weight: 700; cursor: pointer; }
+.ds-cari-wa-btn {
+  width: 100%; height: 46px; border-radius: var(--r-btn); border: none;
+  background: #25D366; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.ds-cari-wa-btn:hover { filter: brightness(1.05); }
+.ds-cari-phone-entry { display: flex; gap: 8px; margin-bottom: 12px; }
+.ds-cari-phone-entry input { flex: 1; height: 44px; border-radius: var(--r-btn); border: 1px solid var(--border); padding: 0 14px; font-size: 14px; }
+.ds-cari-phone-entry button { flex-shrink: 0; width: 44px; height: 44px; border-radius: var(--r-btn); border: 1px solid var(--border); background: var(--panel-2); color: var(--ink); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
 .ds-table-picker-scrollbtns button {
   flex: 1;
   height: 38px;

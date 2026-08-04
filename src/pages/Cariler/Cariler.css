@@ -130,6 +130,7 @@
 .cr-item-name { font-size: 13.5px; font-weight: 700; }
 .cr-item-balance { font-size: 13px; font-weight: 800; color: var(--olive); flex-shrink: 0; }
 .cr-item-phone { font-size: 10.5px; color: var(--ink-soft); margin-top: 2px; }
+.cr-item-phone.missing { color: var(--danger); font-weight: 700; }
 .cr-item-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; gap: 6px; }
 .cr-item-date { font-size: 10px; color: var(--ink-soft); }
 .cr-item-note { font-size: 10px; color: var(--earth); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
