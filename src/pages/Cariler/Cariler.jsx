@@ -140,8 +140,17 @@ export default function Cariler({ data, onNavigate }) {
   }
   function whatsappShare(text, phone) {
     const digits = normalizeTrPhone(phone);
+    if (!digits || digits === '90') {
+      showToast('Bu caride kayıtlı telefon numarası yok');
+      return;
+    }
     const url = `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+    const win = window.open(url, '_blank');
+    if (!win) {
+      // Tarayıcı popup'ı sessizce engellemiş olabilir — hiç sekme açılmaz, hata da
+      // fırlatmaz. Bu durumda kullanıcıya açıkça haber veriyoruz.
+      showToast('Tarayıcı pencereyi engelledi — adres çubuğundaki popup ikonundan izin ver');
+    }
   }
   async function copyText(text) {
     try {
