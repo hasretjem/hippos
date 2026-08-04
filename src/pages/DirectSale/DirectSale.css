@@ -401,12 +401,17 @@
   padding: 20px;
 }
 .ds-split-col-head {
+  position: sticky;
+  top: -20px;
+  z-index: 5;
+  background: var(--panel-dark);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  padding-top: 20px;
   padding-bottom: 10px;
-  margin: 0 0 14px;
+  margin: -20px 0 14px;
   border-bottom: 2px solid #E94F37;
 }
 .ds-split-col.küçük .ds-split-col-head { border-bottom-color: var(--olive); }
