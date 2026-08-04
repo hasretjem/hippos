@@ -569,8 +569,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
   function submitYeniCariFromPos() {
     if (!cariYeniForm || !cariYeniForm.ad.trim()) return;
-    const id = addCari({ tip: 'bireysel', ad: cariYeniForm.ad.trim(), telefon: cariYeniForm.telefon || '', adres: cariYeniForm.adres || '', not: '' });
-    handlePayToCari(id);
+    const ad = cariYeniForm.ad.trim();
+    const telefon = cariYeniForm.telefon || '';
+    const adres = cariYeniForm.adres || '';
+    const id = addCari({ tip: 'bireysel', ad, telefon, adres, not: '' });
+    // Yeni oluşturulan cari henüz `cariler` listesine (Supabase senkronu asenkron)
+    // yansımamış olabilir — onay ekranına kendi nesnesini doğrudan veriyoruz.
+    setCariYeniForm(null);
+    setCariConfirm({ cari: { id, ad, telefon, adres, tip: 'bireysel' } });
   }
 
   const firmaCariler = (cariler || []).filter((c) => c.tip === 'firma').sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
@@ -1258,10 +1264,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                       <button className="ds-secondary-btn" onClick={() => setCariConfirm(null)}>İptal</button>
                       <button className="ds-primary-btn" onClick={confirmSendPlain}>Onayla</button>
                     </div>
-                    <button className="ds-cari-wa-btn" onClick={confirmSendWithWhatsapp}>
-                      <MessageCircle size={15} />
-                      {cariConfirm.cari.telefon ? 'WhatsApp\'tan İlet' : 'Kayıtlı Numarası Yok'}
-                    </button>
+                    {cariConfirm.cari.tip === 'bireysel' && (
+                      <button className="ds-cari-wa-btn" onClick={confirmSendWithWhatsapp}>
+                        <MessageCircle size={15} />
+                        {cariConfirm.cari.telefon ? 'WhatsApp\'tan İlet' : 'Kayıtlı Numarası Yok'}
+                      </button>
+                    )}
                   </>
                 ) : (
                   <>
@@ -1310,7 +1318,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 />
                 <div className="ds-modal-footer two">
                   <button className="ds-secondary-btn" onClick={() => setCariYeniForm(null)}>Geri</button>
-                  <button className="ds-primary-btn" onClick={submitYeniCariFromPos}>Oluştur ve Gönder</button>
+                  <button className="ds-primary-btn" onClick={submitYeniCariFromPos}>Oluştur</button>
                 </div>
               </>
             ) : (

@@ -518,8 +518,8 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
         </button>
 
         <button className="tb-mutfak-not-btn" onClick={openMutfakNot}>
-          <Printer size={20} />
-          <span>Hızlı Yazdır</span>
+          <StickyNote size={20} />
+          <span>Mutfağa Not</span>
         </button>
       </div>
 
