@@ -713,7 +713,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
           {/* ÜRÜN GRID */}
           <div className="ds-products-wrap">
-            <div className="ds-products" ref={productsScrollRef}>
+            <div className={`ds-products ${activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery ? 'split-active' : ''}`} ref={productsScrollRef}>
               {Object.keys(groupedProducts).length === 0 && (
                 <div className="ds-empty">Aradığınız kriterde ürün bulunamadı.</div>
               )}
@@ -750,6 +750,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                                       {isFav && <Star size={11} className="ds-star" fill="currentColor" />}
                                     </div>
                                     <span className="ds-product-price">{TL(product.fiyat)}</span>
+                                    {product.isAzVariant && <span className="ds-az-badge">AZ</span>}
                                   </button>
                                 );
                               })}
@@ -781,6 +782,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                             {isFav && <Star size={11} className="ds-star" fill="currentColor" />}
                           </div>
                           <span className="ds-product-price">{TL(product.fiyat)}</span>
+                          {product.isAzVariant && <span className="ds-az-badge">AZ</span>}
                         </button>
                       );
                     })}

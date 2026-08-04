@@ -462,7 +462,33 @@
 }
 .cr-share-actions button.whatsapp { background: #25D366; color: #fff; border: none; }
 .cr-share-actions button.whatsapp:hover { filter: brightness(1.05); }
-.cr-share-actions button:not(.whatsapp):hover { background: #fff; }
+.cr-share-actions button.danger { background: var(--danger); color: #fff; border: none; }
+.cr-share-actions button.danger:hover { filter: brightness(1.05); }
+.cr-share-actions button:not(.whatsapp):not(.danger):hover { background: #fff; }
+
+.cr-delete-warning { font-size: 12.5px; line-height: 1.5; color: var(--ink); margin: 0 0 16px; }
+
+.cr-show-all {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12px; font-weight: 600; color: var(--ink-muted);
+  padding: 6px 4px 12px; cursor: pointer; user-select: none;
+}
+.cr-show-all input { accent-color: var(--olive); width: 15px; height: 15px; }
+
+.cr-delete-cari-btn {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  height: 42px;
+  margin-top: 18px;
+  border-radius: var(--r-btn);
+  border: 1px solid #E0C3BB;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cr-delete-cari-btn:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
 
 .cr-gecmis-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .cr-gecmis-row { display: flex; align-items: center; gap: 12px; padding: 9px 4px; border-bottom: 1px solid var(--border-soft); font-size: 12px; }

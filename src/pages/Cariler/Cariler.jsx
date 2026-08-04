@@ -4,7 +4,7 @@ import { TL } from '../../hooks/useHipposData';
 import {
   Search, Plus, User, Building2, Phone, MapPin, Clock, Wallet,
   Copy, MessageCircle, X, ChevronUp, ChevronDown, FileText, History, Check,
-  Banknote, CreditCard, UtensilsCrossed, Landmark, StickyNote, ArrowLeft, Download,
+  Banknote, CreditCard, UtensilsCrossed, Landmark, StickyNote, ArrowLeft, Download, Trash2,
 } from 'lucide-react';
 
 function fmtDateTime(ts) {
@@ -26,7 +26,7 @@ export default function Cariler({ data, onNavigate }) {
   const {
     cariler, cariHareketler, cariOdemeler, cariFaturalar, cariGecmis,
     getCariBakiye, getCariSonHareket, getCariSonOdeme,
-    addCari, updateCari, addCariOdeme, addCariFatura, getCariFaturalanmamisTutar, archiveCari,
+    addCari, updateCari, deleteCari, addCariOdeme, addCariFatura, getCariFaturalanmamisTutar, archiveCari,
     cariTeslimatBildirimleri, onaylaCariTeslimatBildirim, reddetCariTeslimatBildirim,
   } = data;
 
@@ -54,14 +54,28 @@ export default function Cariler({ data, onNavigate }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const [showAllCariler, setShowAllCariler] = useState(false);
+  const [deleteCariConfirm, setDeleteCariConfirm] = useState(null); // { cari, bakiye }
+
+  function askDeleteCari(cari) {
+    const bakiye = getCariBakiye(cari.id);
+    setDeleteCariConfirm({ cari, bakiye });
+  }
+  function confirmDeleteCari() {
+    if (!deleteCariConfirm) return;
+    deleteCari(deleteCariConfirm.cari.id);
+    setSelectedCariId(null);
+    setDeleteCariConfirm(null);
+    showToast('Cari silindi');
+  }
   const visibleCariler = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return cariler
       .filter((c) => c.tip === activeTab)
-      .filter((c) => getCariBakiye(c.id) > 0) // pasif (borcu sıfır) cariler otomatik gizlenir
+      .filter((c) => showAllCariler || getCariBakiye(c.id) > 0) // "Hepsini Göster" kapalıyken pasif (borcu sıfır) cariler gizlenir
       .filter((c) => !q || c.ad.toLowerCase().includes(q) || (c.telefon || '').includes(q) || (c.not || '').toLowerCase().includes(q))
       .sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
-  }, [cariler, activeTab, searchQuery, cariHareketler, cariOdemeler]);
+  }, [cariler, activeTab, searchQuery, cariHareketler, cariOdemeler, showAllCariler]);
 
   const selectedCari = cariler.find((c) => c.id === selectedCariId) || null;
 
@@ -288,9 +302,14 @@ export default function Cariler({ data, onNavigate }) {
             <input ref={searchRef} type="text" placeholder="Ara..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
 
+          <label className="cr-show-all">
+            <input type="checkbox" checked={showAllCariler} onChange={(e) => setShowAllCariler(e.target.checked)} />
+            Borcu sıfır olanları da göster
+          </label>
+
           <div className="cr-list-wrap">
             <div className="cr-list" ref={listRef}>
-              {visibleCariler.length === 0 && <p className="cr-empty">Aktif borcu olan cari yok</p>}
+              {visibleCariler.length === 0 && <p className="cr-empty">{showAllCariler ? 'Kayıtlı cari yok' : 'Aktif borcu olan cari yok'}</p>}
               {visibleCariler.map((c) => {
                 const b = getCariBakiye(c.id);
                 const sh = getCariSonHareket(c.id);
@@ -444,6 +463,10 @@ export default function Cariler({ data, onNavigate }) {
                         )}
                       </div>
                     )}
+
+                    <button className="cr-delete-cari-btn" onClick={() => askDeleteCari(selectedCari)}>
+                      <Trash2 size={14} /> Cariyi Sil
+                    </button>
                   </div>
                 )}
               </div>
@@ -567,6 +590,34 @@ export default function Cariler({ data, onNavigate }) {
             <div className="cr-share-actions">
               <button onClick={() => copyText(ozetText)}><Copy size={14} /> Kopyala</button>
               <button className="whatsapp" onClick={() => whatsappShare(ozetText, selectedCari.telefon)}><MessageCircle size={14} /> WhatsApp ile Paylaş</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CARİ SİL — ONAY */}
+      {deleteCariConfirm && (
+        <div className="cr-modal-overlay" onClick={() => setDeleteCariConfirm(null)}>
+          <div className="cr-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="cr-modal-head">
+              <h3><Trash2 size={15} /> Cariyi Sil</h3>
+              <button className="cr-modal-x" onClick={() => setDeleteCariConfirm(null)}><X size={16} /></button>
+            </div>
+            {deleteCariConfirm.bakiye > 0 ? (
+              <>
+                <p className="cr-delete-warning">
+                  <strong>{deleteCariConfirm.cari.ad}</strong> adlı carinin ödenmemiş <strong>{TL(deleteCariConfirm.bakiye)}</strong> bakiyesi var.
+                  Önce bu bakiyeyi kapatmadan (ödeme alarak) silmeni önermiyoruz — yine de silmek istiyorsan onaylayabilirsin.
+                </p>
+              </>
+            ) : (
+              <p className="cr-delete-warning">
+                <strong>{deleteCariConfirm.cari.ad}</strong> ve bu cariye ait TÜM hareket/ödeme/fatura geçmişi kalıcı olarak silinecek. Bu işlem geri alınamaz.
+              </p>
+            )}
+            <div className="cr-share-actions">
+              <button onClick={() => setDeleteCariConfirm(null)}>Vazgeç</button>
+              <button className="danger" onClick={confirmDeleteCari}>Evet, Sil</button>
             </div>
           </div>
         </div>

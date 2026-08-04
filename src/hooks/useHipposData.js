@@ -1196,6 +1196,31 @@ export default function useHipposData() {
     });
   }
 
+  // Cariyi ve ona ait TÜM geçmişi (hareket/ödeme/fatura/arşiv) kalıcı olarak siler.
+  // Güvenlik: borcu olan (bakiyesi > 0) bir cari yanlışlıkla silinmesin diye çağıran taraf
+  // (Cariler.jsx) silmeden önce bakiyeyi kontrol edip kullanıcıyı uyarıyor.
+  function deleteCari(id) {
+    setCariler((prev) => prev.filter((c) => c.id !== id));
+    setCariHareketler((prev) => prev.filter((h) => h.cariId !== id));
+    setCariOdemeler((prev) => prev.filter((o) => o.cariId !== id));
+    setCariFaturalar((prev) => prev.filter((f) => f.cariId !== id));
+    supabase.from('cari_hareketler').delete().eq('cari_id', id).then(({ error }) => {
+      if (error) console.error('cari hareketleri silinemedi:', error.message);
+    });
+    supabase.from('cari_odemeler').delete().eq('cari_id', id).then(({ error }) => {
+      if (error) console.error('cari ödemeleri silinemedi:', error.message);
+    });
+    supabase.from('cari_faturalar').delete().eq('cari_id', id).then(({ error }) => {
+      if (error) console.error('cari faturaları silinemedi:', error.message);
+    });
+    supabase.from('cari_gecmis').delete().eq('cari_id', id).then(({ error }) => {
+      if (error) console.error('cari geçmişi silinemedi:', error.message);
+    });
+    supabase.from('cariler').delete().eq('id', id).then(({ error }) => {
+      if (error) console.error('cari silinemedi:', error.message);
+    });
+  }
+
   // Bir siparişi (Masalar/Hızlı Satış'tan) bir cariye hareket olarak işler.
   function addCariHareket(cariId, { urunler, toplam, mutfakNotu }) {
     const id = Date.now() + Math.floor(Math.random() * 1000);
@@ -1412,6 +1437,7 @@ export default function useHipposData() {
     getCariSonOdeme,
     addCari,
     updateCari,
+    deleteCari,
     addCariHareket,
     addCariOdeme,
     addCariFatura,
