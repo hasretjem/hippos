@@ -534,10 +534,27 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     }
     const subOrderMap = new Map(subcategories.map((s) => [`${s.kategori}|${s.name}`, s.menuSirasi]));
     const subOrder = (p) => subOrderMap.get(`${p.kategori}|${p.altKategori}`) ?? 50;
-    const sortKey = (p) => (p.menuSirasi ?? 50) + (p.isAzVariant ? 0.5 : 0);
-    filtered = [...filtered].sort(
-      (a, b) => subOrder(a) - subOrder(b) || sortKey(a) - sortKey(b) || a.ad.localeCompare(b.ad, 'tr')
-    );
+    // "Az X" varyantı, kendi menuSirasi'si ne olursa olsun (Sheet'ten toplu içe aktarımda
+    // parent'la eşleşmemiş olabilir), her zaman PARENT'ının sırasını VE adını kullanır —
+    // böylece normal ürün ve Az'ı her durumda yan yana durur (aynı menuSirasi'yi paylaşan
+    // başka ürün aileleri araya girip karıştırmasın diye isim de sıralamaya katılıyor).
+    const byId = new Map(products.map((p) => [p.id, p]));
+    function effectiveOrder(p) {
+      if (p.isAzVariant && p.parentId != null) {
+        const parent = byId.get(p.parentId);
+        if (parent) return { sirasi: parent.menuSirasi ?? 50, baseAd: parent.ad, isAz: 1 };
+      }
+      return { sirasi: p.menuSirasi ?? 50, baseAd: p.ad, isAz: 0 };
+    }
+    filtered = [...filtered].sort((a, b) => {
+      const oa = effectiveOrder(a);
+      const ob = effectiveOrder(b);
+      return subOrder(a) - subOrder(b)
+        || oa.sirasi - ob.sirasi
+        || oa.baseAd.localeCompare(ob.baseAd, 'tr')
+        || oa.isAz - ob.isAz
+        || a.ad.localeCompare(b.ad, 'tr');
+    });
     const groups = {};
     filtered.forEach((p) => {
       const sub = p.altKategori || p.kategori || 'Genel';
