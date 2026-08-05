@@ -436,6 +436,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   }
 
   function handleSend() {
+    // Not, Hızlı Satış hariç, sipariş gönderilirken otomatik olarak da gönderilir —
+    // ayrı bir "Gönder" butonuna gerek kalmasın diye (yazıp Enter'a basmasan bile gider).
+    if (selectedTable !== QUICK_SALE) sendTableNote();
     onNavigate('tables');
   }
 
@@ -788,7 +791,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 onChange={(e) => setTableNoteDraft(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && sendTableNote()}
               />
-              <button className="ds-note-send-btn" onClick={sendTableNote} title="Notu Gönder"><Send size={13} /></button>
             </div>
           </header>
 
