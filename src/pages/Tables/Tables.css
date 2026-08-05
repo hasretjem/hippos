@@ -180,6 +180,12 @@
 
 .tb-mutfak-ekmek-row { display: flex; gap: 14px; align-items: flex-start; max-height: 90vh; }
 .tb-mutfak-not-modal { max-width: 420px; }
+.tb-mutfak-not-modal h3 {
+  font-family: 'Geom-BlackItalic', sans-serif;
+  font-weight: normal;
+  font-style: normal;
+  font-size: 27px;
+}
 
 /* ---- Ekmek Gönderme ---- */
 .tb-ekmek-modal { max-width: 340px; max-height: 90vh; overflow-y: auto; }
@@ -188,10 +194,23 @@
 .tb-ekmek-label { font-size: 12.5px; font-weight: 700; color: var(--ink); flex: 1; }
 .tb-ekmek-input {
   width: 64px; height: 38px; border-radius: 9px; border: 1px solid var(--border);
-  background: var(--panel-2); text-align: center; font-size: 15px; font-weight: 800; color: var(--ink);
+  background: var(--panel-2); text-align: center; font-size: 15px; font-weight: 800; color: #E94F37 !important;
 }
 .tb-ekmek-input:focus { outline: none; border-color: var(--tier2); background: #fff; }
-.tb-ekmek-print-btn { width: 100%; margin-bottom: 14px; }
+.tb-ekmek-print-btn {
+  width: 100%;
+  height: 44px;
+  border-radius: var(--r-btn);
+  border: none;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
 
 .tb-ekmek-kayitlar { padding-top: 12px; border-top: 1px dashed var(--border); }
 .tb-ekmek-kayit-row {
@@ -201,13 +220,13 @@
 .tb-ekmek-kayit-row .saat { flex-shrink: 0; font-weight: 800; color: var(--contour); }
 .tb-ekmek-kayit-row .ozet { flex: 1; color: var(--ink-muted); }
 .tb-ekmek-duzenle-btn {
-  flex-shrink: 0; height: 26px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--border);
-  background: var(--panel-2); color: var(--ink); font-size: 10px; font-weight: 700; cursor: pointer;
+  flex-shrink: 0; height: 26px; padding: 0 10px; border-radius: 7px; border: 1px solid #E0C3BB;
+  background: var(--danger-soft); color: #E94F37 !important; font-size: 10px; font-weight: 700; cursor: pointer;
 }
-.tb-ekmek-duzenle-btn:hover { background: #fff; }
+.tb-ekmek-duzenle-btn:hover { background: #E94F37 !important; color: #fff !important; }
 .tb-ekmek-edit { display: flex; align-items: center; gap: 5px; flex: 1; flex-wrap: wrap; }
 .tb-ekmek-edit .saat { flex-shrink: 0; font-weight: 800; color: var(--contour); }
-.tb-ekmek-edit input { width: 38px; height: 26px; border-radius: 6px; border: 1px solid var(--border); text-align: center; font-size: 11px; }
+.tb-ekmek-edit input { width: 38px; height: 26px; border-radius: 6px; border: 1px solid var(--border); text-align: center; font-size: 11px; color: #E94F37 !important; }
 .tb-ekmek-edit button { flex-shrink: 0; height: 26px; padding: 0 8px; border-radius: 6px; border: none; font-size: 10px; font-weight: 700; cursor: pointer; }
 .tb-ekmek-edit button.vazgec { background: var(--border); color: var(--ink); }
 .tb-ekmek-edit button.kaydet { background: var(--tier1); color: #fff; }

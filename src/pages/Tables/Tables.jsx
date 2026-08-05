@@ -164,10 +164,11 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
   }
 
   async function printEkmekVeKaydet() {
-    const satirlar = EKMEK_TURLERI
-      .map((t) => ({ ...t, adet: parseInt(ekmekMiktar[t.key], 10) || 0 }))
-      .filter((t) => t.adet > 0);
-    if (satirlar.length === 0) return;
+    // Boş bırakılan alanlar da "0" olarak, aynı sırayla fişte gösterilsin diye artık
+    // filtrelenmiyor — hiç girilmemiş bir ekmek türü fişte "0" yazarak yine de görünür.
+    const satirlar = EKMEK_TURLERI.map((t) => ({ ...t, adet: parseInt(ekmekMiktar[t.key], 10) || 0 }));
+    const enAzBirGirildi = satirlar.some((t) => t.adet > 0);
+    if (!enAzBirGirildi) return;
     setEkmekPrintData(satirlar);
     setTimeout(() => window.print(), 150);
 
