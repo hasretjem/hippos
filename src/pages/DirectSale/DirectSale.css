@@ -314,6 +314,23 @@
 .ds-paste-btn:hover { background: #fff; border-color: var(--ink-soft); transform: translateY(-1px); }
 .ds-paste-btn:active { transform: scale(0.92); transition-duration: var(--t-press); }
 
+.ds-note-send-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  border: none;
+  background: var(--olive);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
+}
+.ds-note-send-btn:hover { background: var(--olive-dark); }
+.ds-note-send-btn:active { transform: scale(0.92); transition-duration: var(--t-press); }
+
 /* ---- Kategori sekmeleri: aktif dolgu, pasif border-only ---- */
 .ds-category-strip {
   display: flex;

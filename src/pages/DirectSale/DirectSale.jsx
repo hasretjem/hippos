@@ -227,17 +227,22 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     return !cur.note && !prev.note && cur.ad === prev.ad;
   }
 
-  // ---- Masa notu (bu hâlâ anında yazılıyor — düşük çakışma riskli, düşük sıklıklı) ----
-  function handleNoteChange(value) {
-    updateTableNote(selectedTable, value);
+  // ---- Masa notu — artık her harfte YAZMIYOR (realtime kotasını boşuna dolduruyordu).
+  // Yerel taslakta tutulup sadece "Gönder" ikonuna ya da Enter'a basınca gönderiliyor.
+  const [tableNoteDraft, setTableNoteDraft] = useState('');
+  useEffect(() => {
+    setTableNoteDraft(tableNotes[selectedTable] || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTable]);
+  function sendTableNote() {
+    updateTableNote(selectedTable, tableNoteDraft);
   }
 
   async function pasteToTableNote() {
     try {
       const text = await navigator.clipboard.readText();
       if (!text) return;
-      const current = tableNotes[selectedTable] || '';
-      updateTableNote(selectedTable, current ? `${current} ${text}` : text);
+      setTableNoteDraft((current) => (current ? `${current} ${text}` : text));
     } catch {
       showToast('Panoya erişilemedi');
     }
@@ -779,9 +784,11 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               <input
                 type="text"
                 placeholder="Masa notu..."
-                value={tableNotes[selectedTable] || ''}
-                onChange={(e) => handleNoteChange(e.target.value)}
+                value={tableNoteDraft}
+                onChange={(e) => setTableNoteDraft(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendTableNote()}
               />
+              <button className="ds-note-send-btn" onClick={sendTableNote} title="Notu Gönder"><Send size={13} /></button>
             </div>
           </header>
 
