@@ -11,15 +11,19 @@ import useHipposData, { QUICK_SALE } from './hooks/useHipposData';
 import { supabase } from './services/supabase';
 
 export default function App() {
-  const data = useHipposData();
-  const [activePage, setActivePage] = useState('tables');
-  const [selectedTable, setSelectedTable] = useState(QUICK_SALE);
-
   // Paketçi kendi telefonundan /paketci adresine girer — ana panelden tamamen ayrı,
   // bağımsız bir mobil sayfa. Aynı Supabase verisini kullanır ama farklı arayüz.
   const isPaketciRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/paketci');
   // Mutfak personeli de kendi telefonundan /mutfak adresine girer — aynı mantık.
   const isMutfakRoute = typeof window !== 'undefined' && window.location.pathname.startsWith('/mutfak');
+
+  // Realtime kotasını gereksiz yere doldurmamak için: paketçinin telefonu ya da mutfak
+  // tableti, ana paneldeki HER tabloyu (cari hareketleri, satış geçmişi, ürün düzenleme
+  // geçmişi vs.) dinlemeye hiç ihtiyaç duymuyor — sadece kendi ekranına lazım olanı dinlesin.
+  const dataScope = isPaketciRoute ? 'paketci' : isMutfakRoute ? 'mutfak' : 'full';
+  const data = useHipposData(dataScope);
+  const [activePage, setActivePage] = useState('tables');
+  const [selectedTable, setSelectedTable] = useState(QUICK_SALE);
 
   useEffect(() => {
     async function testConnection() {

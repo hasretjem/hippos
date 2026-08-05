@@ -132,7 +132,7 @@ function rowToCariTeslimatBildirim(r) {
 //  - Masalar / paketler / siparişler / satış geçmişi / cari: saniyeler içinde değişir,
 //    birden fazla cihaz aynı anda kullanacağı için Supabase'de tutulur ve gerçek
 //    zamanlı (realtime) abonelikle her cihaza anında yansır.
-export default function useHipposData() {
+export default function useHipposData(scope = 'full') {
   // ================== ÜRÜN / KATEGORİ / ALT KATEGORİ (Supabase — tüm cihazlarda ortak) ==================
   // Bunlar artık "ortak işletme verisi" — Supabase tek kaynak, gerçek zamanlı paylaşılıyor.
   // Google Sheets sadece arşiv/toplu düzenleme amaçlı — buradan asla CANLI okuma yapılmıyor.
@@ -512,25 +512,57 @@ export default function useHipposData() {
     }
     loadAll();
 
-    const channel = supabase
-      .channel('hippos-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => {
+    // Realtime kotasını (aylık mesaj sınırı) boşuna doldurmamak için: hangi ekran/cihaz
+    // olduğuna göre SADECE ihtiyacı olan tabloları dinliyoruz. Paketçinin telefonu cari
+    // hareketlerini/satış geçmişini/ürün düzenleme geçmişini hiç bilmesine gerek yok;
+    // mutfak tableti sadece ürünleri bilsin yeter. Ana panel ('full') eskisi gibi her şeyi
+    // dinlemeye devam ediyor — davranışta hiçbir değişiklik yok.
+    const need = (tables) => scope === 'full' || tables.includes(scope);
+    // 'full' => her tablo; 'paketci' => sadece kendi tablosu adı listede geçenler; aynı şekilde 'mutfak'.
+    const wants = {
+      products: need(['paketci', 'mutfak']),
+      categories: need(['paketci', 'mutfak']),
+      subcategories: need(['mutfak']),
+      table_state: need(['paketci']),
+      packages: need(['paketci']),
+      package_meta: need(['paketci']),
+      sales_history: need([]),
+      sold_items: need([]),
+      action_history: need([]),
+      cariler: need(['paketci']),
+      cari_hareketler: need([]),
+      cari_odemeler: need([]),
+      cari_faturalar: need([]),
+      cari_gecmis: need([]),
+      paket_teslimatlari: need(['paketci']),
+      cari_teslimat_bildirimleri: need(['paketci']),
+      mutfak_hazir_notlar: need([]),
+    };
+
+    let channel = supabase.channel('hippos-live');
+
+    if (wants.products) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => {
         if (payload.eventType === 'DELETE') {
           setProducts((prev) => prev.filter((p) => p.id !== payload.old.id));
           return;
         }
         const row = rowToProduct(payload.new);
         setProducts((prev) => (prev.some((p) => p.id === row.id) ? prev.map((p) => (p.id === row.id ? row : p)) : [...prev, row]));
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, (payload) => {
+      });
+    }
+    if (wants.categories) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, (payload) => {
         if (payload.eventType === 'DELETE') {
           setCategories((prev) => prev.filter((c) => c.name !== payload.old.name));
           return;
         }
         const row = rowToCategory(payload.new);
         setCategories((prev) => (prev.some((c) => c.name === row.name) ? prev.map((c) => (c.name === row.name ? row : c)) : [...prev, row]));
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'subcategories' }, (payload) => {
+      });
+    }
+    if (wants.subcategories) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'subcategories' }, (payload) => {
         if (payload.eventType === 'DELETE') {
           setSubcategories((prev) => prev.filter((s) => !(s.kategori === payload.old.kategori && s.name === payload.old.name)));
           return;
@@ -541,20 +573,15 @@ export default function useHipposData() {
             ? prev.map((s) => (s.kategori === row.kategori && s.name === row.name ? row : s))
             : [...prev, row]
         );
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'table_state' }, (payload) => {
+      });
+    }
+    if (wants.table_state) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'table_state' }, (payload) => {
         if (payload.eventType === 'DELETE') return;
         const row = payload.new;
         const t = row.table_name;
-        const itemCount = (row.items || []).length;
         const incomingTs = row.updated_at ? new Date(row.updated_at).getTime() : 0;
         const lastTs = lastAppliedUpdatedAtRef.current[t] || 0;
-        const wouldBeStale = incomingTs < lastTs;
-        console.log(
-          `🟪 [4-POSTGRES_CHANGES GELDİ] masa: "${t}" — ürün sayısı: ${itemCount} — updated_at: ${row.updated_at} — local: ${Date.now()}${wouldBeStale ? '  ⚠️ SIRASI KARIŞIK (daha eski bir güncelleme, daha yeniden SONRA geldi)' : ''}`
-        );
-        // TEŞHİS AMACIYLA GEÇİCİ OLARAK KORUMA UYGULANMIYOR — sıra karışıklığının ekranda
-        // gerçekten neye yol açtığını çıplak gözle görebilmek için (uyarı logu yeterli).
         lastAppliedUpdatedAtRef.current[t] = Math.max(incomingTs, lastTs);
         setOrders((prev) => ({ ...prev, [t]: row.items || [] }));
         setTableNotes((prev) => ({ ...prev, [t]: row.note || '' }));
@@ -565,52 +592,77 @@ export default function useHipposData() {
           else delete next[t];
           return next;
         });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'packages' }, () => {
+      });
+    }
+    if (wants.packages) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'packages' }, () => {
         supabase.from('packages').select('*').then(({ data }) => setPackages((data || []).map((r) => ({ name: r.name, num: r.num }))));
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'package_meta' }, (payload) => {
+      });
+    }
+    if (wants.package_meta) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'package_meta' }, (payload) => {
         if (payload.new) setPackageMeta({ date: payload.new.meta_date, next: payload.new.next_num });
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sales_history' }, (payload) => {
+      });
+    }
+    if (wants.sales_history) {
+      channel = channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sales_history' }, (payload) => {
         setSalesHistory((prev) => (prev.some((s) => s.id === payload.new.id) ? prev : [rowToSale(payload.new), ...prev]));
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sold_items' }, (payload) => {
+      });
+    }
+    if (wants.sold_items) {
+      channel = channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sold_items' }, (payload) => {
         setSoldItems((prev) => (prev.some((s) => s.id === payload.new.id) ? prev : [rowToSoldItem(payload.new), ...prev]));
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'action_history' }, (payload) => {
+      });
+    }
+    if (wants.action_history) {
+      channel = channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'action_history' }, (payload) => {
         setActionHistory((prev) => (prev.some((a) => a.id === payload.new.id) ? prev : [rowToAction(payload.new), ...prev].slice(0, 5)));
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cariler' }, (payload) => {
+      });
+    }
+    if (wants.cariler) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'cariler' }, (payload) => {
         if (payload.eventType === 'DELETE') {
           setCariler((prev) => prev.filter((c) => c.id !== payload.old.id));
           return;
         }
         const row = rowToCari(payload.new);
         setCariler((prev) => (prev.some((c) => c.id === row.id) ? prev.map((c) => (c.id === row.id ? row : c)) : [...prev, row]));
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_hareketler' }, (payload) => {
-        setCariHareketler((prev) => (prev.some((h) => h.id === payload.new.id) ? prev : [...prev, rowToHareket(payload.new)]));
-      })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_hareketler' }, (payload) => {
-        setCariHareketler((prev) => prev.filter((h) => h.id !== payload.old.id));
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_odemeler' }, (payload) => {
-        setCariOdemeler((prev) => (prev.some((o) => o.id === payload.new.id) ? prev : [...prev, rowToOdeme(payload.new)]));
-      })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_odemeler' }, (payload) => {
-        setCariOdemeler((prev) => prev.filter((o) => o.id !== payload.old.id));
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_faturalar' }, (payload) => {
-        setCariFaturalar((prev) => (prev.some((f) => f.id === payload.new.id) ? prev : [...prev, rowToFatura(payload.new)]));
-      })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_faturalar' }, (payload) => {
-        setCariFaturalar((prev) => prev.filter((f) => f.id !== payload.old.id));
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_gecmis' }, (payload) => {
+      });
+    }
+    if (wants.cari_hareketler) {
+      channel = channel
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_hareketler' }, (payload) => {
+          setCariHareketler((prev) => (prev.some((h) => h.id === payload.new.id) ? prev : [...prev, rowToHareket(payload.new)]));
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_hareketler' }, (payload) => {
+          setCariHareketler((prev) => prev.filter((h) => h.id !== payload.old.id));
+        });
+    }
+    if (wants.cari_odemeler) {
+      channel = channel
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_odemeler' }, (payload) => {
+          setCariOdemeler((prev) => (prev.some((o) => o.id === payload.new.id) ? prev : [...prev, rowToOdeme(payload.new)]));
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_odemeler' }, (payload) => {
+          setCariOdemeler((prev) => prev.filter((o) => o.id !== payload.old.id));
+        });
+    }
+    if (wants.cari_faturalar) {
+      channel = channel
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_faturalar' }, (payload) => {
+          setCariFaturalar((prev) => (prev.some((f) => f.id === payload.new.id) ? prev : [...prev, rowToFatura(payload.new)]));
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_faturalar' }, (payload) => {
+          setCariFaturalar((prev) => prev.filter((f) => f.id !== payload.old.id));
+        });
+    }
+    if (wants.cari_gecmis) {
+      channel = channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_gecmis' }, (payload) => {
         setCariGecmis((prev) => (prev.some((g) => g.id === payload.new.id) ? prev : [...prev, rowToGecmis(payload.new)]));
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'paket_teslimatlari' }, (payload) => {
+      });
+    }
+    if (wants.paket_teslimatlari) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'paket_teslimatlari' }, (payload) => {
         if (payload.eventType === 'DELETE') {
           setPaketTeslimatlari((prev) => prev.filter((p) => p.id !== payload.old.id));
           return;
@@ -619,8 +671,10 @@ export default function useHipposData() {
         setPaketTeslimatlari((prev) =>
           prev.some((p) => p.id === row.id) ? prev.map((p) => (p.id === row.id ? row : p)) : [row, ...prev]
         );
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cari_teslimat_bildirimleri' }, (payload) => {
+      });
+    }
+    if (wants.cari_teslimat_bildirimleri) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'cari_teslimat_bildirimleri' }, (payload) => {
         if (payload.eventType === 'DELETE') {
           setCariTeslimatBildirimleri((prev) => prev.filter((c) => c.id !== payload.old.id));
           return;
@@ -629,19 +683,23 @@ export default function useHipposData() {
         setCariTeslimatBildirimleri((prev) =>
           prev.some((c) => c.id === row.id) ? prev.map((c) => (c.id === row.id ? row : c)) : [row, ...prev]
         );
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'mutfak_hazir_notlar' }, (payload) => {
+      });
+    }
+    if (wants.mutfak_hazir_notlar) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'mutfak_hazir_notlar' }, (payload) => {
         if (payload.eventType === 'DELETE') {
           setMutfakHazirNotlar((prev) => prev.filter((n) => n.id !== payload.old.id));
           return;
         }
         const row = { id: payload.new.id, metin: payload.new.metin };
         setMutfakHazirNotlar((prev) => (prev.some((n) => n.id === row.id) ? prev : [...prev, row]));
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') console.log('✅ Hippos canlı senkron bağlandı');
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.error('❌ Hippos canlı senkron bağlanamadı:', status);
       });
+    }
+
+    channel = channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') console.log('✅ Hippos canlı senkron bağlandı');
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.error('❌ Hippos canlı senkron bağlanamadı:', status);
+    });
 
     return () => {
       cancelled = true;
@@ -793,28 +851,36 @@ export default function useHipposData() {
 
   // ---- Masa notu / indirim senkronu — SADECE bu iki alan için (items HARİÇ).
   // "items" (sipariş satırları) artık BURADAN asla yazılmıyor — tek yol RPC fonksiyonları.
-  // Not/indirim düşük çakışma riskli olduğu için (genelde tek kişi girer) bu basit yöntem yeterli.
+  // ÖNEMLİ: bu efekt eskiden HER TUŞ VURUŞUNDA Supabase'e yazıyordu (debounce yoktu) —
+  // bir not yazarken her harf ayrı bir realtime mesajı tetikliyordu (bağlı her cihaza).
+  // Artık yazma durduktan 600ms sonra tek seferde yazıyor — deneyim aynı (hâlâ "neredeyse
+  // anında"), ama mesaj sayısı 10-20 kat azalıyor.
   const prevNoteDiscountRef = useRef({ tableNotes: {}, tableDiscounts: {} });
+  const noteDiscountDebounceRef = useRef(null);
   useEffect(() => {
-    const prev = prevNoteDiscountRef.current;
-    const changed = new Set();
-    allTables.forEach((t) => {
-      if (tableNotes[t] !== prev.tableNotes[t]) changed.add(t);
-      if (tableDiscounts[t] !== prev.tableDiscounts[t]) changed.add(t);
-    });
-    prevNoteDiscountRef.current = { tableNotes, tableDiscounts };
-    if (changed.size === 0) return;
+    if (noteDiscountDebounceRef.current) clearTimeout(noteDiscountDebounceRef.current);
+    noteDiscountDebounceRef.current = setTimeout(() => {
+      const prev = prevNoteDiscountRef.current;
+      const changed = new Set();
+      allTables.forEach((t) => {
+        if (tableNotes[t] !== prev.tableNotes[t]) changed.add(t);
+        if (tableDiscounts[t] !== prev.tableDiscounts[t]) changed.add(t);
+      });
+      prevNoteDiscountRef.current = { tableNotes, tableDiscounts };
+      if (changed.size === 0) return;
 
-    const rows = [...changed].map((t) => ({
-      table_name: t,
-      note: tableNotes[t] || '',
-      discount_type: (tableDiscounts[t] || {}).type ?? null,
-      discount_value: (tableDiscounts[t] || {}).value ?? 0,
-      updated_at: new Date().toISOString(),
-    }));
-    supabase.from('table_state').upsert(rows, { onConflict: 'table_name' }).then(({ error }) => {
-      if (error) console.error('Not/indirim senkronize edilemedi:', error.message);
-    });
+      const rows = [...changed].map((t) => ({
+        table_name: t,
+        note: tableNotes[t] || '',
+        discount_type: (tableDiscounts[t] || {}).type ?? null,
+        discount_value: (tableDiscounts[t] || {}).value ?? 0,
+        updated_at: new Date().toISOString(),
+      }));
+      supabase.from('table_state').upsert(rows, { onConflict: 'table_name' }).then(({ error }) => {
+        if (error) console.error('Not/indirim senkronize edilemedi:', error.message);
+      });
+    }, 600);
+    return () => clearTimeout(noteDiscountDebounceRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableNotes, tableDiscounts, allTables]);
 
@@ -916,8 +982,11 @@ export default function useHipposData() {
   }
 
 
+  // NOT: burada eskiden registerPackageIfNeeded çağrısı vardı — yani sadece NOT yazmak
+  // (hiç ürün eklemeden) paketi Supabase'e kaydedip paketçiye anında görünür yapıyordu.
+  // Bu hem "boş paket sayı tüketmesin" kuralını deliyor hem gereksiz anlık mesaj (realtime)
+  // tüketiyordu. Artık kayıt SADECE gerçek bir ürün eklenince oluşuyor (setOrderItemsRemote).
   function updateTableNote(table, value) {
-    if (value.trim()) registerPackageIfNeeded(table);
     setTableNotes((prev) => ({ ...prev, [table]: value }));
   }
 
