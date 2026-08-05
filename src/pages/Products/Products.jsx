@@ -3,12 +3,16 @@ import './Products.css';
 import { TL } from '../../hooks/useHipposData';
 import {
   ArrowLeft, Search, Plus, Trash2, Pin, ChevronUp, ChevronDown,
-  Check, X, RefreshCw,
+  Check, X, RefreshCw, Save, Lock, Delete,
 } from 'lucide-react';
 
 // Bu sayfadaki her değişiklik ARTIK ANINDA Supabase'e yazılır ve tüm cihazlara
 // gerçek zamanlı yansır — "Kaydet/Vazgeç" ile bekletilen bir taslak kalmadı
 // (Masalar/Cari sayfalarıyla aynı canlı çalışma mantığı).
+// Sheet'ten Çek, Sheet'te toplu değişiklik yapılıp geri aktarılması gereken az sayıda,
+// dikkatli kullanılması gereken bir işlem — yanlışlıkla basılmasın diye PIN korumalı.
+const PULL_PIN = '0594';
+
 export default function Products({ data, onNavigate }) {
   const [toast, setToast] = useState('');
   function showToast(msg) {
@@ -30,8 +34,74 @@ export default function Products({ data, onNavigate }) {
     data.addProduct({ kategori, altKategori: '', ad, fiyat, menuSirasi });
   }
 
+  // ---- Kaydet — o an ekrandaki (Supabase'teki canlı) tüm kategori/alt kategori/ürün
+  // durumunu Google Sheets'e YAZAR. Sheet'i, buradaki her şeyin bir kopyası haline getirir.
+  const [pushLoading, setPushLoading] = useState(false);
+  async function pushToSheets() {
+    setPushLoading(true);
+    try {
+      const res = await fetch('/api/sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          categories: data.categories,
+          subcategories: data.subcategories,
+          products: data.products,
+        }),
+      });
+      if (!res.ok) throw new Error('push failed');
+      showToast('Sheet güncellendi');
+    } catch {
+      showToast('Sheet\'e yazılamadı — bağlantıyı kontrol et');
+    } finally {
+      setPushLoading(false);
+    }
+  }
+
   // ---- Sheet'ten Çek (tek yönlü, manuel — Sheet'te toplu fiyat değiştirdiysen kullan) ----
   const [pullConfirmOpen, setPullConfirmOpen] = useState(false);
+  const [pullPinModalOpen, setPullPinModalOpen] = useState(false);
+  const [pullPinValue, setPullPinValue] = useState('');
+  const [pullPinError, setPullPinError] = useState(false);
+  const pullPinInputRef = useRef(null);
+
+  useEffect(() => {
+    if (pullPinModalOpen) {
+      const t = setTimeout(() => pullPinInputRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [pullPinModalOpen]);
+
+  function openPullPinModal() {
+    setPullPinValue('');
+    setPullPinError(false);
+    setPullPinModalOpen(true);
+  }
+  function checkPullPin(digits) {
+    if (digits === PULL_PIN) {
+      setPullPinModalOpen(false);
+      setPullPinValue('');
+      setPullPinError(false);
+      setPullConfirmOpen(true);
+    } else {
+      setPullPinError(true);
+      setTimeout(() => {
+        setPullPinValue('');
+        setPullPinError(false);
+      }, 550);
+    }
+  }
+  function pressPullPinDigit(d) {
+    setPullPinValue((prev) => {
+      if (prev.length >= 4) return prev;
+      const next = prev + d;
+      if (next.length === 4) setTimeout(() => checkPullPin(next), 100);
+      return next;
+    });
+  }
+  function pullPinBackspace() {
+    setPullPinValue((prev) => prev.slice(0, -1));
+  }
 
   async function confirmPull() {
     setPullConfirmOpen(false);
@@ -297,11 +367,55 @@ export default function Products({ data, onNavigate }) {
         </div>
       </div>
 
-      <button className="pr-pull-btn" onClick={() => setPullConfirmOpen(true)}>
-        <RefreshCw size={14} /> Sheet'ten Bilgi Çek
-      </button>
+      <div className="pr-bottom-actions">
+        <button className="pr-save-btn" onClick={pushToSheets} disabled={pushLoading}>
+          <Save size={14} /> {pushLoading ? 'Kaydediliyor...' : 'Kaydet'}
+        </button>
+        <button className="pr-pull-btn" onClick={openPullPinModal}>
+          <RefreshCw size={14} /> Sheet'ten Bilgi Çek
+        </button>
+      </div>
 
       {toast && <div className="pr-toast">{toast}</div>}
+
+      {/* SHEET'TEN ÇEK — PIN */}
+      {pullPinModalOpen && (
+        <div className="pr-modal-overlay" onClick={() => setPullPinModalOpen(false)}>
+          <div className={`pr-modal pr-pin-modal ${pullPinError ? 'shake' : ''}`} onClick={(e) => e.stopPropagation()}>
+            <div className="pr-modal-head">
+              <h3><Lock size={15} /> Sheet'ten Çek</h3>
+              <button className="pr-modal-x" onClick={() => setPullPinModalOpen(false)}><X size={16} /></button>
+            </div>
+            <div className="pr-pin-dots" onClick={() => pullPinInputRef.current?.focus()}>
+              {[0, 1, 2, 3].map((i) => (
+                <span key={i} className={`pr-pin-dot ${pullPinValue.length > i ? 'filled' : ''}`} />
+              ))}
+              <input
+                ref={pullPinInputRef}
+                className="pr-pin-hidden-input"
+                type="tel"
+                inputMode="numeric"
+                maxLength={4}
+                value={pullPinValue}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
+                  setPullPinValue(digits);
+                  if (digits.length === 4) setTimeout(() => checkPullPin(digits), 100);
+                }}
+              />
+            </div>
+            {pullPinError && <p className="pr-pin-error">Yanlış PIN, tekrar deneyin</p>}
+            <div className="pr-pin-keypad">
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((n) => (
+                <button key={n} onClick={() => pressPullPinDigit(n)}>{n}</button>
+              ))}
+              <div />
+              <button onClick={() => pressPullPinDigit('0')}>0</button>
+              <button onClick={pullPinBackspace}><Delete size={16} /></button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SHEET'TEN ÇEK ONAY */}
       {pullConfirmOpen && (

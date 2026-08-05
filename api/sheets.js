@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     const sheets = google.sheets({ version: 'v4', auth });
 
     if (req.method === 'GET') {
-      const ranges = ['Kategoriler!A2:C', 'Alt Kategoriler!A2:C', 'Ürünler!A2:K'];
+      const ranges = ['Kategoriler!A2:C', 'Alt Kategoriler!A2:C', 'Ürünler!A2:M'];
       const result = await sheets.spreadsheets.values.batchGet({ spreadsheetId: SHEET_ID, ranges });
       const [catRows, subRows, prodRows] = result.data.valueRanges.map((r) => r.values || []);
 
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
       prodRows
         .filter((r) => r[0])
         .forEach((r) => {
-          const [ad, fiyat, kategori, altKategori, menuSirasi, aktif, sabit, azPorsiyon, azFiyat, gununMenusuKategori, gununMenusuSira] = r;
+          const [ad, fiyat, kategori, altKategori, menuSirasi, aktif, sabit, azPorsiyon, azFiyat, gununMenusuKategori, gununMenusuSira, bicakGerekli, ekmekGerekli] = r;
           const id = 900000 + counter++;
           const isAz = toBool(azPorsiyon) && azFiyat !== undefined && azFiyat !== '';
           products.push({
@@ -65,6 +65,8 @@ export default async function handler(req, res) {
             isAzVariant: false,
             gununMenusuKategori: String(gununMenusuKategori || '').trim() || null,
             gununMenusuSira: gununMenusuSira !== undefined && gununMenusuSira !== '' ? toNum(gununMenusuSira, null) : null,
+            bicakGerekli: toBool(bicakGerekli),
+            ekmekGerekli: toBool(ekmekGerekli),
           });
           if (isAz) {
             products.push({
@@ -105,11 +107,13 @@ export default async function handler(req, res) {
         p.azPorsiyon ? p.azFiyat : '',
         p.gununMenusuKategori || '',
         p.gununMenusuSira || '',
+        p.bicakGerekli ? 'TRUE' : 'FALSE',
+        p.ekmekGerekli ? 'TRUE' : 'FALSE',
       ]);
 
       await sheets.spreadsheets.values.batchClear({
         spreadsheetId: SHEET_ID,
-        requestBody: { ranges: ['Kategoriler!A2:C', 'Alt Kategoriler!A2:C', 'Ürünler!A2:K'] },
+        requestBody: { ranges: ['Kategoriler!A2:C', 'Alt Kategoriler!A2:C', 'Ürünler!A2:M'] },
       });
       await sheets.spreadsheets.values.batchUpdate({
         spreadsheetId: SHEET_ID,
