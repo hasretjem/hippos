@@ -178,7 +178,40 @@
 .tb-mutfak-not-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: var(--tier2); }
 .tb-mutfak-not-btn:active { transform: scale(0.97); }
 
+.tb-mutfak-ekmek-row { display: flex; gap: 14px; align-items: flex-start; max-height: 90vh; }
 .tb-mutfak-not-modal { max-width: 420px; }
+
+/* ---- Ekmek Gönderme ---- */
+.tb-ekmek-modal { max-width: 340px; max-height: 90vh; overflow-y: auto; }
+.tb-ekmek-form { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
+.tb-ekmek-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tb-ekmek-label { font-size: 12.5px; font-weight: 700; color: var(--ink); flex: 1; }
+.tb-ekmek-input {
+  width: 64px; height: 38px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--panel-2); text-align: center; font-size: 15px; font-weight: 800; color: var(--ink);
+}
+.tb-ekmek-input:focus { outline: none; border-color: var(--tier2); background: #fff; }
+.tb-ekmek-print-btn { width: 100%; margin-bottom: 14px; }
+
+.tb-ekmek-kayitlar { padding-top: 12px; border-top: 1px dashed var(--border); }
+.tb-ekmek-kayit-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 0; border-bottom: 1px solid var(--border-soft); font-size: 11px;
+}
+.tb-ekmek-kayit-row .saat { flex-shrink: 0; font-weight: 800; color: var(--contour); }
+.tb-ekmek-kayit-row .ozet { flex: 1; color: var(--ink-muted); }
+.tb-ekmek-duzenle-btn {
+  flex-shrink: 0; height: 26px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--border);
+  background: var(--panel-2); color: var(--ink); font-size: 10px; font-weight: 700; cursor: pointer;
+}
+.tb-ekmek-duzenle-btn:hover { background: #fff; }
+.tb-ekmek-edit { display: flex; align-items: center; gap: 5px; flex: 1; flex-wrap: wrap; }
+.tb-ekmek-edit .saat { flex-shrink: 0; font-weight: 800; color: var(--contour); }
+.tb-ekmek-edit input { width: 38px; height: 26px; border-radius: 6px; border: 1px solid var(--border); text-align: center; font-size: 11px; }
+.tb-ekmek-edit button { flex-shrink: 0; height: 26px; padding: 0 8px; border-radius: 6px; border: none; font-size: 10px; font-weight: 700; cursor: pointer; }
+.tb-ekmek-edit button.vazgec { background: var(--border); color: var(--ink); }
+.tb-ekmek-edit button.kaydet { background: var(--tier1); color: #fff; }
+
 .tb-mutfak-not-textarea {
   width: 100%; min-height: 110px; resize: vertical;
   border: 1px solid var(--border); border-radius: var(--r-card);
@@ -202,12 +235,13 @@
 .tb-hazir-not-add input { flex: 1; height: 40px; border-radius: 9px; border: 1px solid var(--border); padding: 0 10px; font-size: 13px; color: #393E41 !important; }
 .tb-hazir-not-add button { flex-shrink: 0; width: 36px; height: 36px; border-radius: 9px; border: none; background: var(--tier1); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 
-/* ---- Mutfağa Not yazdırma şablonu ---- */
+/* ---- Mutfağa Not / Ekmek Gönderme yazdırma şablonları ---- */
 #tb-print-mutfak-not { display: none; }
+#tb-print-ekmek { display: none; }
 @media print {
   @page { size: 80mm auto; margin: 0; }
   html, body { width: 80mm; margin: 0; padding: 0; }
-  .tb-shell > *:not(#tb-print-mutfak-not) { display: none !important; }
+  .tb-shell > *:not(#tb-print-mutfak-not):not(#tb-print-ekmek) { display: none !important; }
   #tb-print-mutfak-not { display: block; width: 72mm; margin: 0 auto; padding: 6mm 0; }
   .tb-print-mutfak-not-text {
     font-family: "SF Mono", monospace;
@@ -219,6 +253,9 @@
     word-break: break-word;
     text-align: center;
   }
+  #tb-print-ekmek { display: block; width: 72mm; margin: 0 auto; padding: 6mm 0; font-family: "SF Mono", monospace; color: #000 !important; }
+  #tb-print-ekmek h2 { text-align: center; font-size: 18px; margin: 0 0 10px; }
+  .tb-print-ekmek-row { display: flex; justify-content: space-between; gap: 10px; font-size: 16px; font-weight: 700; padding: 5px 0; border-bottom: 1px dashed #000; }
 }
 
 .tb-columns { display: flex; gap: 16px; flex: 1; min-height: 0; }

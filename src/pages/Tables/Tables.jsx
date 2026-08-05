@@ -117,6 +117,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
   function openMutfakNot() {
     setMutfakNotText('');
     setMutfakNotOpen(true);
+    fetchEkmekKayitlar();
   }
   function printMutfakNot() {
     if (!mutfakNotText.trim()) return;
@@ -128,6 +129,92 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     addMutfakHazirNot(mutfakNotYeniHazir.trim());
     setMutfakNotYeniHazir('');
   }
+
+  // ---- Ekmek Gönderme — Mutfağa Not'un yanında açılır. 4 sabit ekmek türü + adet,
+  // yazdırınca aynı zamanda Sheets'e ("Ekmek Kayıtları" sekmesi) kaydediyor.
+  const EKMEK_TURLERI = [
+    { key: 'buyukBeyaz', label: 'Büyük Beyaz Ekmeği' },
+    { key: 'kucukBeyaz', label: 'Küçük Beyaz Ekmeği' },
+    { key: 'domatesli', label: 'Domatesli/Fesleğenli Ekmeği' },
+    { key: 'kucukKepek', label: 'Küçük Kepek Ekmeği' },
+  ];
+  const [ekmekMiktar, setEkmekMiktar] = useState({ buyukBeyaz: '', kucukBeyaz: '', domatesli: '', kucukKepek: '' });
+  const [ekmekKayitlar, setEkmekKayitlar] = useState([]);
+  const [ekmekLoading, setEkmekLoading] = useState(false);
+  const [ekmekEditId, setEkmekEditId] = useState(null);
+  const [ekmekEditDraft, setEkmekEditDraft] = useState({ buyukBeyaz: '', kucukBeyaz: '', domatesli: '', kucukKepek: '' });
+  const [ekmekPrintData, setEkmekPrintData] = useState(null);
+  const ekmekInputRefs = useRef({});
+
+  async function fetchEkmekKayitlar() {
+    try {
+      const res = await fetch('/api/ekmek');
+      const json = await res.json();
+      setEkmekKayitlar(json.records || []);
+    } catch {
+      /* sessizce geç, panel açıkken tekrar denenebilir */
+    }
+  }
+
+  function ekmekEnterNext(key) {
+    const idx = EKMEK_TURLERI.findIndex((t) => t.key === key);
+    if (idx === -1 || idx === EKMEK_TURLERI.length - 1) return; // son alanda Enter hiçbir şey yapmasın
+    const nextKey = EKMEK_TURLERI[idx + 1].key;
+    ekmekInputRefs.current[nextKey]?.focus();
+  }
+
+  async function printEkmekVeKaydet() {
+    const satirlar = EKMEK_TURLERI
+      .map((t) => ({ ...t, adet: parseInt(ekmekMiktar[t.key], 10) || 0 }))
+      .filter((t) => t.adet > 0);
+    if (satirlar.length === 0) return;
+    setEkmekPrintData(satirlar);
+    setTimeout(() => window.print(), 150);
+
+    setEkmekLoading(true);
+    try {
+      const res = await fetch('/api/ekmek', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          buyukBeyaz: parseInt(ekmekMiktar.buyukBeyaz, 10) || 0,
+          kucukBeyaz: parseInt(ekmekMiktar.kucukBeyaz, 10) || 0,
+          domatesli: parseInt(ekmekMiktar.domatesli, 10) || 0,
+          kucukKepek: parseInt(ekmekMiktar.kucukKepek, 10) || 0,
+        }),
+      });
+      const json = await res.json();
+      if (json.record) setEkmekKayitlar((prev) => [json.record, ...prev]);
+      setEkmekMiktar({ buyukBeyaz: '', kucukBeyaz: '', domatesli: '', kucukKepek: '' });
+      ekmekInputRefs.current.buyukBeyaz?.focus();
+    } catch {
+      alert('Ekmek kaydı Sheets\'e yazılamadı — bağlantıyı kontrol et');
+    } finally {
+      setEkmekLoading(false);
+    }
+  }
+
+  function openEkmekEdit(rec) {
+    setEkmekEditId(rec.id);
+    setEkmekEditDraft({ buyukBeyaz: rec.buyukBeyaz, kucukBeyaz: rec.kucukBeyaz, domatesli: rec.domatesli, kucukKepek: rec.kucukKepek });
+  }
+  async function saveEkmekEdit() {
+    try {
+      const res = await fetch('/api/ekmek', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: ekmekEditId, ...ekmekEditDraft }),
+      });
+      const json = await res.json();
+      if (json.record) {
+        setEkmekKayitlar((prev) => prev.map((r) => (r.id === ekmekEditId ? json.record : r)));
+      }
+      setEkmekEditId(null);
+    } catch {
+      alert('Kayıt güncellenemedi — bağlantıyı kontrol et');
+    }
+  }
+
   const [dragFrom, setDragFrom] = useState(null);
   const [dragOverTable, setDragOverTable] = useState(null);
 
@@ -718,41 +805,106 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       {/* Mutfağa Not — büyük yazıp yazdırma + tüm cihazlarda görünen hazır notlar */}
       {mutfakNotOpen && (
         <div className="tb-modal-overlay" onClick={() => setMutfakNotOpen(false)}>
-          <div className="tb-modal tb-mutfak-not-modal" onClick={(e) => e.stopPropagation()}>
-            <h3><StickyNote size={16} /> Mutfağa Not</h3>
-            <textarea
-              autoFocus
-              className="tb-mutfak-not-textarea"
-              placeholder="Örn: Tereyağlı Sade Omlet"
-              value={mutfakNotText}
-              onChange={(e) => setMutfakNotText(e.target.value)}
-            />
-            <div className="tb-modal-footer">
-              <button className="tb-secondary" onClick={() => setMutfakNotOpen(false)}><Undo2 size={14} /> Geri</button>
-              <button className="tb-primary" disabled={!mutfakNotText.trim()} onClick={printMutfakNot}><Printer size={14} /> Yazdır</button>
+          <div className="tb-mutfak-ekmek-row" onClick={(e) => e.stopPropagation()}>
+            <div className="tb-modal tb-mutfak-not-modal">
+              <h3><StickyNote size={16} /> Mutfağa Not</h3>
+              <textarea
+                autoFocus
+                className="tb-mutfak-not-textarea"
+                placeholder="Örn: Tereyağlı Sade Omlet"
+                value={mutfakNotText}
+                onChange={(e) => setMutfakNotText(e.target.value)}
+              />
+              <div className="tb-modal-footer">
+                <button className="tb-secondary" onClick={() => setMutfakNotOpen(false)}><Undo2 size={14} /> Geri</button>
+                <button className="tb-primary" disabled={!mutfakNotText.trim()} onClick={printMutfakNot}><Printer size={14} /> Yazdır</button>
+              </div>
+
+              <div className="tb-hazir-notlar-section">
+                <span className="tb-hazir-notlar-label">Hızlı Notlar</span>
+                <div className="tb-hazir-notlar-list">
+                  {mutfakHazirNotlar.map((n) => (
+                    <div key={n.id} className="tb-hazir-not-chip">
+                      <button className="text" onClick={() => setMutfakNotText((prev) => (prev ? `${prev}\n${n.metin}` : n.metin))}>
+                        {n.metin}
+                      </button>
+                      <button className="del" onClick={() => deleteMutfakHazirNot(n.id)}><X size={11} /></button>
+                    </div>
+                  ))}
+                  {mutfakHazirNotlar.length === 0 && <p className="tb-history-empty">Henüz hazır not yok</p>}
+                </div>
+                <div className="tb-hazir-not-add">
+                  <input
+                    placeholder="Yeni hazır not ekle..."
+                    value={mutfakNotYeniHazir}
+                    onChange={(e) => setMutfakNotYeniHazir(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addHazirNotAndUse()}
+                  />
+                  <button onClick={addHazirNotAndUse}><Plus size={14} /></button>
+                </div>
+              </div>
             </div>
 
-            <div className="tb-hazir-notlar-section">
-              <span className="tb-hazir-notlar-label">Hızlı Notlar</span>
-              <div className="tb-hazir-notlar-list">
-                {mutfakHazirNotlar.map((n) => (
-                  <div key={n.id} className="tb-hazir-not-chip">
-                    <button className="text" onClick={() => setMutfakNotText((prev) => (prev ? `${prev}\n${n.metin}` : n.metin))}>
-                      {n.metin}
-                    </button>
-                    <button className="del" onClick={() => deleteMutfakHazirNot(n.id)}><X size={11} /></button>
+            {/* Ekmek Gönderme */}
+            <div className="tb-modal tb-ekmek-modal">
+              <h3><UtensilsCrossed size={16} /> Ekmek Gönderme</h3>
+              <div className="tb-ekmek-form">
+                {EKMEK_TURLERI.map((t) => (
+                  <div key={t.key} className="tb-ekmek-row">
+                    <span className="tb-ekmek-label">{t.label}:</span>
+                    <input
+                      ref={(el) => { ekmekInputRefs.current[t.key] = el; }}
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      className="tb-ekmek-input"
+                      value={ekmekMiktar[t.key]}
+                      onChange={(e) => setEkmekMiktar((prev) => ({ ...prev, [t.key]: e.target.value }))}
+                      onKeyDown={(e) => e.key === 'Enter' && ekmekEnterNext(t.key)}
+                    />
                   </div>
                 ))}
-                {mutfakHazirNotlar.length === 0 && <p className="tb-history-empty">Henüz hazır not yok</p>}
               </div>
-              <div className="tb-hazir-not-add">
-                <input
-                  placeholder="Yeni hazır not ekle..."
-                  value={mutfakNotYeniHazir}
-                  onChange={(e) => setMutfakNotYeniHazir(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addHazirNotAndUse()}
-                />
-                <button onClick={addHazirNotAndUse}><Plus size={14} /></button>
+              <button
+                className="tb-primary tb-ekmek-print-btn"
+                disabled={ekmekLoading || EKMEK_TURLERI.every((t) => !(parseInt(ekmekMiktar[t.key], 10) > 0))}
+                onClick={printEkmekVeKaydet}
+              >
+                <Printer size={14} /> Yazdır
+              </button>
+
+              <div className="tb-ekmek-kayitlar">
+                <span className="tb-hazir-notlar-label">Bugünkü Kayıtlar</span>
+                {ekmekKayitlar.length === 0 && <p className="tb-history-empty">Bugün henüz kayıt yok</p>}
+                {ekmekKayitlar.map((rec) => (
+                  <div key={rec.id} className="tb-ekmek-kayit-row">
+                    {ekmekEditId === rec.id ? (
+                      <div className="tb-ekmek-edit">
+                        <span className="saat">{rec.saat}</span>
+                        {EKMEK_TURLERI.map((t) => (
+                          <input
+                            key={t.key}
+                            type="number"
+                            min={0}
+                            title={t.label}
+                            value={ekmekEditDraft[t.key]}
+                            onChange={(e) => setEkmekEditDraft((d) => ({ ...d, [t.key]: e.target.value }))}
+                          />
+                        ))}
+                        <button className="vazgec" onClick={() => setEkmekEditId(null)}>Vazgeç</button>
+                        <button className="kaydet" onClick={saveEkmekEdit}>Kaydet</button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="saat">{rec.saat}</span>
+                        <span className="ozet">
+                          {EKMEK_TURLERI.filter((t) => rec[t.key] > 0).map((t) => `${t.label.replace(' Ekmeği', '')}: ${rec[t.key]}`).join(' · ')}
+                        </span>
+                        <button className="tb-ekmek-duzenle-btn" onClick={() => openEkmekEdit(rec)}>Düzenle</button>
+                      </>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -763,6 +915,19 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       {mutfakNotPrintData && (
         <div id="tb-print-mutfak-not">
           <div className="tb-print-mutfak-not-text">{mutfakNotPrintData}</div>
+        </div>
+      )}
+
+      {/* Ekmek Gönderme — yazdırma şablonu */}
+      {ekmekPrintData && (
+        <div id="tb-print-ekmek">
+          <h2>Ekmek Siparişi</h2>
+          {ekmekPrintData.map((t) => (
+            <div key={t.key} className="tb-print-ekmek-row">
+              <span>{t.label}</span>
+              <span>{t.adet}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
