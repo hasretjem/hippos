@@ -4,6 +4,7 @@ import Tables from './pages/Tables/Tables';
 import Settings from './pages/Settings/Settings';
 import Products from './pages/Products/Products';
 import Cariler from './pages/Cariler/Cariler';
+import GunSonu from './pages/GunSonu/GunSonu';
 import Paketci from './pages/Paketci/Paketci';
 import MutfakPaneli from './pages/MutfakPaneli/MutfakPaneli';
 import BottomNav from './components/BottomNav/BottomNav';
@@ -48,13 +49,13 @@ export default function App() {
   }
 
   function handleNavigate(page, opts) {
-    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler') {
+    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler' || page === 'endofday') {
       // Sadece alt menüden "Hızlı Satış"a bilerek tıklanınca seçili masa sıfırlanır.
       // Masalar sayfasından bir masaya girerken (opts.resetTable verilmez) buna dokunulmaz.
       if (page === 'pos' && opts?.resetTable) setSelectedTable(QUICK_SALE);
       setActivePage(page);
     } else {
-      // Kasa & Rapor, Gün Sonu sayfaları henüz hazır değil
+      // Kasa & Rapor sayfası henüz hazır değil
       alert('Bu sayfa henüz hazırlanıyor.');
     }
   }
@@ -81,7 +82,10 @@ export default function App() {
       {activePage === 'cariler' && (
         <Cariler data={data} onNavigate={handleNavigate} />
       )}
-      {activePage !== 'products' && activePage !== 'pos' && <BottomNav activePage={activePage} onNavigate={handleNavigate} />}
+      {activePage === 'endofday' && (
+        <GunSonu data={data} onNavigate={handleNavigate} />
+      )}
+      {activePage !== 'products' && activePage !== 'pos' && activePage !== 'endofday' && <BottomNav activePage={activePage} onNavigate={handleNavigate} />}
     </>
   );
 }
