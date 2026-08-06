@@ -101,8 +101,18 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   function flushDraftToSupabase(table, items) {
     if (!table || table === QUICK_SALE) return; // Hızlı Satış hiçbir zaman Supabase'e yazılmaz
     const baseline = orders[table] || [];
-    if (JSON.stringify(baseline) === JSON.stringify(items)) return; // değişiklik yoksa yazma
-    setOrderItemsRemote(table, items, items.length === 0 ? { note: '', discount: { type: null, value: 0 }, openedAt: null } : {});
+    const noteBaseline = tableNotes[table] || '';
+    const discountBaseline = tableDiscounts[table] || { type: null, value: 0 };
+    const itemsChanged = JSON.stringify(baseline) !== JSON.stringify(items);
+    if (!itemsChanged) return; // ürün değişmediyse yazma (not/indirim ayrı, kendi debounce'unda gider)
+    // Not/indirimi de AYNI yazmaya dahil ediyoruz — aksi halde ürün yazması ile ayrı giden
+    // (debounce'lu) not yazması arasında yarış durumu oluşup not "kendiliğinden silinmiş" gibi
+    // görünebiliyordu (biri diğerinin üstüne, eski veriyle yazabiliyordu).
+    setOrderItemsRemote(table, items, {
+      note: noteBaseline,
+      discount: discountBaseline,
+      ...(items.length === 0 ? { openedAt: null } : {}),
+    });
   }
 
   // Masa değişince: ÖNCEKİ masanın taslağını gönder, sonra YENİ masanın güncel halini yükle

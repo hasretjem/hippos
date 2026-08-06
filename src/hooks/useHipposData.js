@@ -853,34 +853,40 @@ export default function useHipposData(scope = 'full') {
   // "items" (sipariş satırları) artık BURADAN asla yazılmıyor — tek yol RPC fonksiyonları.
   // ÖNEMLİ: bu efekt eskiden HER TUŞ VURUŞUNDA Supabase'e yazıyordu (debounce yoktu) —
   // bir not yazarken her harf ayrı bir realtime mesajı tetikliyordu (bağlı her cihaza).
-  // Artık yazma durduktan 600ms sonra tek seferde yazıyor — deneyim aynı (hâlâ "neredeyse
-  // anında"), ama mesaj sayısı 10-20 kat azalıyor.
-  const prevNoteDiscountRef = useRef({ tableNotes: {}, tableDiscounts: {} });
-  const noteDiscountDebounceRef = useRef(null);
+  // 600ms debounce eklenmişti AMA TEK bir ortak zamanlayıcıyla — yani BAŞKA bir masada
+  // herhangi bir hareket olduğunda (ürün eklenmesi, ödeme vs.) SENİN bekleyen not yazman da
+  // sıfırlanıp yeniden başlıyordu; yoğun bir dükkânda bu notun hiç yazılmamasına ya da eski
+  // veriyle üzerine yazılmasına (yani "kendiliğinden silinmesine") yol açıyordu. Artık her
+  // masanın KENDİ ayrı zamanlayıcısı var — başka masalardaki hareket seninkini etkilemiyor.
+  const noteDiscountLastSentRef = useRef({ tableNotes: {}, tableDiscounts: {} });
+  const noteDiscountTimersRef = useRef({});
   useEffect(() => {
-    if (noteDiscountDebounceRef.current) clearTimeout(noteDiscountDebounceRef.current);
-    noteDiscountDebounceRef.current = setTimeout(() => {
-      const prev = prevNoteDiscountRef.current;
-      const changed = new Set();
-      allTables.forEach((t) => {
-        if (tableNotes[t] !== prev.tableNotes[t]) changed.add(t);
-        if (tableDiscounts[t] !== prev.tableDiscounts[t]) changed.add(t);
-      });
-      prevNoteDiscountRef.current = { tableNotes, tableDiscounts };
-      if (changed.size === 0) return;
+    allTables.forEach((t) => {
+      const noteChanged = tableNotes[t] !== noteDiscountLastSentRef.current.tableNotes[t];
+      const discountChanged = tableDiscounts[t] !== noteDiscountLastSentRef.current.tableDiscounts[t];
+      if (!noteChanged && !discountChanged) return;
 
-      const rows = [...changed].map((t) => ({
-        table_name: t,
-        note: tableNotes[t] || '',
-        discount_type: (tableDiscounts[t] || {}).type ?? null,
-        discount_value: (tableDiscounts[t] || {}).value ?? 0,
-        updated_at: new Date().toISOString(),
-      }));
-      supabase.from('table_state').upsert(rows, { onConflict: 'table_name' }).then(({ error }) => {
-        if (error) console.error('Not/indirim senkronize edilemedi:', error.message);
-      });
-    }, 600);
-    return () => clearTimeout(noteDiscountDebounceRef.current);
+      if (noteDiscountTimersRef.current[t]) clearTimeout(noteDiscountTimersRef.current[t]);
+      noteDiscountTimersRef.current[t] = setTimeout(() => {
+        noteDiscountLastSentRef.current.tableNotes[t] = tableNotes[t];
+        noteDiscountLastSentRef.current.tableDiscounts[t] = tableDiscounts[t];
+        supabase
+          .from('table_state')
+          .upsert(
+            [{
+              table_name: t,
+              note: tableNotes[t] || '',
+              discount_type: (tableDiscounts[t] || {}).type ?? null,
+              discount_value: (tableDiscounts[t] || {}).value ?? 0,
+              updated_at: new Date().toISOString(),
+            }],
+            { onConflict: 'table_name' }
+          )
+          .then(({ error }) => {
+            if (error) console.error('Not/indirim senkronize edilemedi:', error.message);
+          });
+      }, 600);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableNotes, tableDiscounts, allTables]);
 
