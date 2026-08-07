@@ -6,7 +6,7 @@ import GununMenusu from './GununMenusu';
 import {
   ListChecks, Calculator, Eye, EyeOff, Share2, Lock, Delete, Search, X,
   Banknote, CreditCard, UtensilsCrossed, BookOpen, ExternalLink, ChevronRight,
-  Undo2, Wifi, WifiOff, Printer, Database, FileSpreadsheet, Triangle, Image as ImageIcon,
+  Undo2, Wifi, WifiOff, Printer, Database, FileSpreadsheet, Triangle, Image as ImageIcon, RefreshCw,
 } from 'lucide-react';
 
 // Ciro panelini açan PIN — ileride Gelişmiş Ayarlar'dan değiştirilebilir hale gelecek.
@@ -209,6 +209,29 @@ export default function Settings({ data, onNavigate }) {
 
   // ---- Anlık Ciro ----
   const [revenueRevealed, setRevenueRevealed] = useState(false);
+  const [usageData, setUsageData] = useState(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+
+  async function fetchUsage() {
+    setUsageLoading(true);
+    try {
+      const res = await fetch('/api/usage');
+      const json = await res.json();
+      setUsageData(json);
+    } catch {
+      setUsageData(null);
+    } finally {
+      setUsageLoading(false);
+    }
+  }
+  // Ciro açıldığında bir kere çek, sonra 30 saniyede bir tazele — düz fetch, Realtime değil,
+  // kotaya hiç dokunmuyor.
+  useEffect(() => {
+    if (!revenueRevealed) return;
+    fetchUsage();
+    const id = setInterval(fetchUsage, 30000);
+    return () => clearInterval(id);
+  }, [revenueRevealed]);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinValue, setPinValue] = useState('');
   const [pinError, setPinError] = useState(false);
@@ -443,6 +466,29 @@ export default function Settings({ data, onNavigate }) {
               <div className="st-revenue-row"><UtensilsCrossed size={15} /><span>Yemek Kartı</span><strong>{TL(totals['YEMEK KARTI'])}</strong></div>
               <div className="st-revenue-row"><BookOpen size={15} /><span>Cari</span><strong>{TL(totals['CARİ'])}</strong></div>
               <div className="st-revenue-total"><span>TOPLAM CİRO</span><strong>{TL(totals.total)}</strong></div>
+
+              {/* Realtime Kullanım Sayacı — bu gösterge kendisi Realtime kotasına hiç
+                  dokunmuyor, düz fetch ile 30sn'de bir tazeleniyor, tahmini bir rakamdır
+                  (Supabase'in kendi resmi rakamıyla birebir aynı olmayabilir). */}
+              <div className="st-usage-panel">
+                <div className="st-usage-head">
+                  <span>Realtime Mesaj Kullanımı (tahmini)</span>
+                  <button onClick={fetchUsage} title="Tazele"><RefreshCw size={12} className={usageLoading ? 'spin' : ''} /></button>
+                </div>
+                {usageData ? (
+                  <>
+                    <div className={`st-usage-bar-wrap ${usageData.buAy >= 2000000 ? 'over' : usageData.buAy >= 1500000 ? 'warn' : 'ok'}`}>
+                      <div className="st-usage-bar" style={{ width: `${Math.min(100, (usageData.buAy / 2000000) * 100)}%` }} />
+                    </div>
+                    <div className="st-usage-numbers">
+                      <span>{usageData.buAy.toLocaleString('tr-TR')} / 2.000.000 (bu ay)</span>
+                      <span className="st-usage-24h">son 24 saat: {usageData.son24Saat.toLocaleString('tr-TR')}</span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="st-usage-empty">{usageLoading ? 'Yükleniyor...' : 'Veri yok'}</p>
+                )}
+              </div>
             </div>
           ) : (
             <button className="st-revenue-masked" onClick={toggleRevenue}>

@@ -159,6 +159,24 @@
 .st-revenue-total span { font-size: 11px; font-weight: 700; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .st-revenue-total strong { font-size: 24px; font-weight: 800; color: var(--olive); }
 
+/* ---- Realtime Kullanım Sayacı ---- */
+.st-usage-panel { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border); }
+.st-usage-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.st-usage-head span { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-muted); }
+.st-usage-head button { background: none; border: none; color: var(--ink-muted); cursor: pointer; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+.st-usage-head button:hover { background: var(--panel-2); }
+.st-usage-head .spin { animation: stUsageSpin 0.8s linear infinite; }
+@keyframes stUsageSpin { to { transform: rotate(360deg); } }
+.st-usage-bar-wrap { height: 8px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
+.st-usage-bar { height: 100%; border-radius: 999px; transition: width 300ms var(--ease); }
+.st-usage-bar-wrap.ok .st-usage-bar { background: var(--olive); }
+.st-usage-bar-wrap.warn .st-usage-bar { background: var(--earth); }
+.st-usage-bar-wrap.over .st-usage-bar { background: var(--danger); }
+.st-usage-numbers { display: flex; justify-content: space-between; margin-top: 6px; }
+.st-usage-numbers span { font-size: 10.5px; font-weight: 600; color: var(--ink-muted); }
+.st-usage-24h { color: var(--ink-soft) !important; }
+.st-usage-empty { font-size: 11px; color: var(--ink-soft); font-style: italic; margin: 0; }
+
 .st-revenue-masked {
   width: 100%;
   border: 1.5px dashed var(--border);

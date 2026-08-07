@@ -412,6 +412,31 @@ export default function useHipposData(scope = 'full') {
   const presenceChannelRef = useRef(null);
   const [presenceMap, setPresenceMap] = useState({}); // { [tableName]: [deviceId, ...] }
 
+  // ---- Realtime Kullanım Sayacı — SADECE Yönetim Paneli'ndeki gösterge için, kendisi
+  // sıfır realtime mesajı tüketiyor (realtime_usage_log tablosuna hiçbir dinleyici abone
+  // değil, o yüzden buraya yazmak Supabase'in kendi tanımıyla "0 dinleyiciye giden mesaj").
+  // Bu client'ın ALDIĞI her postgres_changes olayında bumpUsageCounter() çağrılır; 30 saniyede
+  // bir birikmiş sayı, düz bir INSERT ile (Realtime DEĞİL) veritabanına yazılır.
+  const usageCounterRef = useRef(0);
+  function bumpUsageCounter() {
+    usageCounterRef.current += 1;
+  }
+  useEffect(() => {
+    const id = setInterval(() => {
+      const count = usageCounterRef.current;
+      usageCounterRef.current = 0;
+      if (count === 0) return;
+      supabase.from('realtime_usage_log').insert({
+        id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+        message_count: count,
+        device_id: deviceIdRef.current,
+      }).then(({ error }) => {
+        if (error) console.error('kullanım sayacı yazılamadı:', error.message);
+      });
+    }, 30000);
+    return () => clearInterval(id);
+  }, []);
+
   useEffect(() => {
     const channel = supabase.channel('hippos-presence', {
       config: { presence: { key: deviceIdRef.current } },
@@ -543,6 +568,7 @@ export default function useHipposData(scope = 'full') {
 
     if (wants.products) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => {
+        bumpUsageCounter();
         if (payload.eventType === 'DELETE') {
           setProducts((prev) => prev.filter((p) => p.id !== payload.old.id));
           return;
@@ -553,6 +579,7 @@ export default function useHipposData(scope = 'full') {
     }
     if (wants.categories) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, (payload) => {
+        bumpUsageCounter();
         if (payload.eventType === 'DELETE') {
           setCategories((prev) => prev.filter((c) => c.name !== payload.old.name));
           return;
@@ -563,6 +590,7 @@ export default function useHipposData(scope = 'full') {
     }
     if (wants.subcategories) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'subcategories' }, (payload) => {
+        bumpUsageCounter();
         if (payload.eventType === 'DELETE') {
           setSubcategories((prev) => prev.filter((s) => !(s.kategori === payload.old.kategori && s.name === payload.old.name)));
           return;
@@ -577,6 +605,7 @@ export default function useHipposData(scope = 'full') {
     }
     if (wants.table_state) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'table_state' }, (payload) => {
+        bumpUsageCounter();
         if (payload.eventType === 'DELETE') return;
         const row = payload.new;
         const t = row.table_name;
@@ -601,31 +630,37 @@ export default function useHipposData(scope = 'full') {
     }
     if (wants.packages) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'packages' }, () => {
+        bumpUsageCounter();
         supabase.from('packages').select('*').then(({ data }) => setPackages((data || []).map((r) => ({ name: r.name, num: r.num }))));
       });
     }
     if (wants.package_meta) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'package_meta' }, (payload) => {
+        bumpUsageCounter();
         if (payload.new) setPackageMeta({ date: payload.new.meta_date, next: payload.new.next_num });
       });
     }
     if (wants.sales_history) {
       channel = channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sales_history' }, (payload) => {
+        bumpUsageCounter();
         setSalesHistory((prev) => (prev.some((s) => s.id === payload.new.id) ? prev : [rowToSale(payload.new), ...prev]));
       });
     }
     if (wants.sold_items) {
       channel = channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sold_items' }, (payload) => {
+        bumpUsageCounter();
         setSoldItems((prev) => (prev.some((s) => s.id === payload.new.id) ? prev : [rowToSoldItem(payload.new), ...prev]));
       });
     }
     if (wants.action_history) {
       channel = channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'action_history' }, (payload) => {
+        bumpUsageCounter();
         setActionHistory((prev) => (prev.some((a) => a.id === payload.new.id) ? prev : [rowToAction(payload.new), ...prev].slice(0, 5)));
       });
     }
     if (wants.cariler) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'cariler' }, (payload) => {
+        bumpUsageCounter();
         if (payload.eventType === 'DELETE') {
           setCariler((prev) => prev.filter((c) => c.id !== payload.old.id));
           return;
@@ -637,37 +672,45 @@ export default function useHipposData(scope = 'full') {
     if (wants.cari_hareketler) {
       channel = channel
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_hareketler' }, (payload) => {
+        bumpUsageCounter();
           setCariHareketler((prev) => (prev.some((h) => h.id === payload.new.id) ? prev : [...prev, rowToHareket(payload.new)]));
         })
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_hareketler' }, (payload) => {
+        bumpUsageCounter();
           setCariHareketler((prev) => prev.filter((h) => h.id !== payload.old.id));
         });
     }
     if (wants.cari_odemeler) {
       channel = channel
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_odemeler' }, (payload) => {
+        bumpUsageCounter();
           setCariOdemeler((prev) => (prev.some((o) => o.id === payload.new.id) ? prev : [...prev, rowToOdeme(payload.new)]));
         })
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_odemeler' }, (payload) => {
+        bumpUsageCounter();
           setCariOdemeler((prev) => prev.filter((o) => o.id !== payload.old.id));
         });
     }
     if (wants.cari_faturalar) {
       channel = channel
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_faturalar' }, (payload) => {
+        bumpUsageCounter();
           setCariFaturalar((prev) => (prev.some((f) => f.id === payload.new.id) ? prev : [...prev, rowToFatura(payload.new)]));
         })
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_faturalar' }, (payload) => {
+        bumpUsageCounter();
           setCariFaturalar((prev) => prev.filter((f) => f.id !== payload.old.id));
         });
     }
     if (wants.cari_gecmis) {
       channel = channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_gecmis' }, (payload) => {
+        bumpUsageCounter();
         setCariGecmis((prev) => (prev.some((g) => g.id === payload.new.id) ? prev : [...prev, rowToGecmis(payload.new)]));
       });
     }
     if (wants.paket_teslimatlari) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'paket_teslimatlari' }, (payload) => {
+        bumpUsageCounter();
         if (payload.eventType === 'DELETE') {
           setPaketTeslimatlari((prev) => prev.filter((p) => p.id !== payload.old.id));
           return;
@@ -680,6 +723,7 @@ export default function useHipposData(scope = 'full') {
     }
     if (wants.cari_teslimat_bildirimleri) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'cari_teslimat_bildirimleri' }, (payload) => {
+        bumpUsageCounter();
         if (payload.eventType === 'DELETE') {
           setCariTeslimatBildirimleri((prev) => prev.filter((c) => c.id !== payload.old.id));
           return;
@@ -692,6 +736,7 @@ export default function useHipposData(scope = 'full') {
     }
     if (wants.mutfak_hazir_notlar) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'mutfak_hazir_notlar' }, (payload) => {
+        bumpUsageCounter();
         if (payload.eventType === 'DELETE') {
           setMutfakHazirNotlar((prev) => prev.filter((n) => n.id !== payload.old.id));
           return;
