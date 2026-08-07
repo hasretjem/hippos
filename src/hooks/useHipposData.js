@@ -820,7 +820,26 @@ export default function useHipposData(scope = 'full') {
   const noteDiscountLastSentRef = useRef({ tableNotes: {}, tableDiscounts: {} });
   const noteDiscountTimersRef = useRef({}); // "yazma bekliyor" (600ms debounce) kilidi
   const noteDiscountEchoGuardRef = useRef({}); // "yazma az önce gitti, yankısını görmezden gel" kilidi
+  // ÖNEMLİ: sayfa ilk açıldığında noteDiscountLastSentRef BOŞ ({}) başlıyordu — veriler
+  // Supabase'ten yüklenip tableNotes gerçek değerlerle dolunca, HER masa "boş'tan gerçek
+  // değere değişti" gibi algılanıp gereksiz yere yeniden yazılıyordu (kullanıcı hiçbir şeye
+  // dokunmasa bile, her açılışta TÜM masalara toplu, gerçek bir Supabase yazması gidiyordu —
+  // "18 masa aynı anda değişti" bugının kaynağı buydu). Artık ilk çalıştırmada sadece mevcut
+  // durumu "zaten gönderilmiş" olarak işaretliyoruz, hiçbir şey YAZMIYORUZ — sonraki
+  // çalıştırmalar (gerçek kullanıcı değişiklikleri) normal şekilde yazmaya devam ediyor.
+  const noteDiscountInitializedRef = useRef(false);
   useEffect(() => {
+    if (!dataLoaded) {
+      // Veri henüz Supabase'ten yüklenmedi (tableNotes hâlâ başlangıç değeri boş obje) —
+      // bu durumu "gerçek" kabul edip seed'lemiyoruz, veri gelince tekrar denenecek.
+      noteDiscountLastSentRef.current = { tableNotes: { ...tableNotes }, tableDiscounts: { ...tableDiscounts } };
+      return;
+    }
+    if (!noteDiscountInitializedRef.current) {
+      noteDiscountInitializedRef.current = true;
+      noteDiscountLastSentRef.current = { tableNotes: { ...tableNotes }, tableDiscounts: { ...tableDiscounts } };
+      return;
+    }
     allTables.forEach((t) => {
       const noteChanged = tableNotes[t] !== noteDiscountLastSentRef.current.tableNotes[t];
       const discountChanged = tableDiscounts[t] !== noteDiscountLastSentRef.current.tableDiscounts[t];
@@ -861,7 +880,7 @@ export default function useHipposData(scope = 'full') {
       }, 600);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tableNotes, tableDiscounts, allTables]);
+  }, [tableNotes, tableDiscounts, allTables, dataLoaded]);
 
   // ---- Yeni satış kayıtlarını Supabase'e yaz (DirectSale doğrudan setSalesHistory çağırıyor) ----
   const syncedSaleIdsRef = useRef(new Set()).current;
