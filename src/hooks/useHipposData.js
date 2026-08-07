@@ -584,8 +584,14 @@ export default function useHipposData(scope = 'full') {
         const lastTs = lastAppliedUpdatedAtRef.current[t] || 0;
         lastAppliedUpdatedAtRef.current[t] = Math.max(incomingTs, lastTs);
         setOrders((prev) => ({ ...prev, [t]: row.items || [] }));
-        setTableNotes((prev) => ({ ...prev, [t]: row.note || '' }));
-        setTableDiscounts((prev) => ({ ...prev, [t]: { type: row.discount_type, value: row.discount_value || 0 } }));
+        // ÖNEMLİ: not/indirimde henüz Supabase'e yazılmayı BEKLEYEN bir yerel değişiklik varsa
+        // (debounce süresi dolmadıysa), bu realtime mesajı (başka bir hareketin yan ürünü ya
+        // da eski bir yankı olabilir) o bekleyen değeri EZMESİN — asıl "kendiliğinden silinme"
+        // sorununun büyük kısmı buradaydı; polling'de yaptığım korumanın aynısı burada da gerekli.
+        if (!noteDiscountTimersRef.current[t]) {
+          setTableNotes((prev) => ({ ...prev, [t]: row.note || '' }));
+          setTableDiscounts((prev) => ({ ...prev, [t]: { type: row.discount_type, value: row.discount_value || 0 } }));
+        }
         setTableOpenedAt((prev) => {
           const next = { ...prev };
           if (row.opened_at) next[t] = new Date(row.opened_at).getTime();
@@ -707,141 +713,6 @@ export default function useHipposData(scope = 'full') {
     };
   }, []);
 
-  // ---- Yedek mekanizma: kullanıcı loguyla KANITLANDI ki Realtime bazen bildirim göndermeyi
-  // tamamen atlıyor (RPC hatasız dönüyor ama postgres_changes hiç gelmiyor). Bu artık teorik
-  // bir önlem değil, gözlemlenmiş bir ihtiyaç — bu yüzden tekrar açık ve daha sık.
-  const POLLING_ENABLED = true;
-  useEffect(() => {
-    if (!POLLING_ENABLED) return;
-    const id = setInterval(async () => {
-      const { data, error } = await supabase.from('table_state').select('*');
-      if (error || !data) return;
-
-      setOrders((prev) => {
-        let changed = false;
-        const next = { ...prev };
-        data.forEach((row) => {
-          if (JSON.stringify(prev[row.table_name] || []) !== JSON.stringify(row.items || [])) {
-            next[row.table_name] = row.items || [];
-            changed = true;
-          }
-        });
-        return changed ? next : prev;
-      });
-      // ÖNEMLİ: 5sn'lik anket, henüz yazılmayı BEKLEYEN (debounce süresi dolmamış) yerel bir
-      // not/indirim değişikliğini ASLA eski veritabanı değeriyle EZMESİN — aksi halde bir not
-      // yazılıp "Gönder"e basıldıktan hemen sonra (600ms dolmadan) anket tam o anda çekilirse,
-      // eski (henüz güncellenmemiş) değer yerel state'in üstüne yazılıp not "kendiliğinden
-      // silinmiş" gibi görünüyordu.
-      setTableNotes((prev) => {
-        let changed = false;
-        const next = { ...prev };
-        data.forEach((row) => {
-          if (noteDiscountTimersRef.current[row.table_name]) return; // bekleyen yazma var, dokunma
-          if ((prev[row.table_name] || '') !== (row.note || '')) {
-            next[row.table_name] = row.note || '';
-            changed = true;
-          }
-        });
-        return changed ? next : prev;
-      });
-      setTableDiscounts((prev) => {
-        let changed = false;
-        const next = { ...prev };
-        data.forEach((row) => {
-          if (noteDiscountTimersRef.current[row.table_name]) return; // bekleyen yazma var, dokunma
-          const cur = prev[row.table_name] || { type: null, value: 0 };
-          if (cur.type !== row.discount_type || cur.value !== (row.discount_value || 0)) {
-            next[row.table_name] = { type: row.discount_type, value: row.discount_value || 0 };
-            changed = true;
-          }
-        });
-        return changed ? next : prev;
-      });
-      setTableOpenedAt((prev) => {
-        let changed = false;
-        const next = { ...prev };
-        data.forEach((row) => {
-          const curVal = prev[row.table_name] || null;
-          const newVal = row.opened_at ? new Date(row.opened_at).getTime() : null;
-          if (curVal !== newVal) {
-            if (newVal) next[row.table_name] = newVal;
-            else delete next[row.table_name];
-            changed = true;
-          }
-        });
-        return changed ? next : prev;
-      });
-
-      // Paketçi mobil paneli ile ana panel arasında da AYNI güvenlik ağı gerekiyor —
-      // yeni paket açılması / paketçinin teslim bildirmesi Realtime'ı bazen kaçırabiliyor.
-      // Cari tarafı da aynı şekilde: yeni cari hareketi (bakiye değişimi) veya paketçinin
-      // cari ödeme bildirimi de bu korumaya dahil.
-      const [pkRes, ptRes, ctbRes, crRes, chRes, coRes, cfRes] = await Promise.all([
-        supabase.from('packages').select('*'),
-        supabase.from('paket_teslimatlari').select('*'),
-        supabase.from('cari_teslimat_bildirimleri').select('*'),
-        supabase.from('cariler').select('*'),
-        supabase.from('cari_hareketler').select('*'),
-        supabase.from('cari_odemeler').select('*'),
-        supabase.from('cari_faturalar').select('*'),
-      ]);
-      if (pkRes.data) {
-        setPackages((prev) => {
-          const next = (pkRes.data || []).map((r) => ({ name: r.name, num: r.num }));
-          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
-        });
-      }
-      if (ptRes.data) {
-        setPaketTeslimatlari((prev) => {
-          const next = ptRes.data.map(rowToPaketTeslimat).sort((a, b) => b.ts - a.ts);
-          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
-        });
-      }
-      if (ctbRes.data) {
-        setCariTeslimatBildirimleri((prev) => {
-          const next = ctbRes.data.map(rowToCariTeslimatBildirim).sort((a, b) => b.ts - a.ts);
-          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
-        });
-      }
-      // ÖNEMLİ: polling sonucu asla LOCAL'de olup henüz Supabase'e tam yansımamış (optimistic)
-      // bir kaydı SİLMEZ — sadece "birleştirir" (poll verisi + hâlâ yerelde olan ekstra kayıtlar).
-      // Önceki hâli tam "değiştirme" yapıyordu; bu da yeni eklenen bir cari hareketi tam o anda
-      // 5 saniyelik anket çekilirse (Supabase'e yazma henüz görünür olmadan) SİLİNMİŞ gibi
-      // görünmesine yol açıyordu — cari ödemesinin "gitmediği" hissi buradan geliyordu.
-      function mergeById(prev, pollData) {
-        const pollIds = new Set(pollData.map((r) => r.id));
-        const localOnly = prev.filter((r) => !pollIds.has(r.id));
-        return [...pollData, ...localOnly];
-      }
-
-      if (crRes.data) {
-        setCariler((prev) => {
-          const next = mergeById(prev, crRes.data.map(rowToCari));
-          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
-        });
-      }
-      if (chRes.data) {
-        setCariHareketler((prev) => {
-          const next = mergeById(prev, chRes.data.map(rowToHareket));
-          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
-        });
-      }
-      if (coRes.data) {
-        setCariOdemeler((prev) => {
-          const next = mergeById(prev, coRes.data.map(rowToOdeme));
-          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
-        });
-      }
-      if (cfRes.data) {
-        setCariFaturalar((prev) => {
-          const next = mergeById(prev, cfRes.data.map(rowToFatura));
-          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
-        });
-      }
-    }, 5000);
-    return () => clearInterval(id);
-  }, []);
 
   // ---- TEŞHİS: orders state'i her (referans olarak) değiştiğinde, hangi masa(lar)ın
   // gerçekten değiştiğini ve o anki ürün sayısını logla.
@@ -875,6 +746,7 @@ export default function useHipposData(scope = 'full') {
 
       if (noteDiscountTimersRef.current[t]) clearTimeout(noteDiscountTimersRef.current[t]);
       noteDiscountTimersRef.current[t] = setTimeout(() => {
+        delete noteDiscountTimersRef.current[t]; // yazma tamamlandı — artık "bekleyen" değil
         noteDiscountLastSentRef.current.tableNotes[t] = tableNotes[t];
         noteDiscountLastSentRef.current.tableDiscounts[t] = tableDiscounts[t];
         supabase
@@ -917,11 +789,12 @@ export default function useHipposData(scope = 'full') {
   }, []);
 
   // ================== SİPARİŞ SATIRLARI (items) — TEK YÖNLÜ AKIŞ ==================
-  // KANIT (kullanıcı logu): RPC hatasız dönüyor (veritabanına yazma başarılı) ama bazen
-  // hiçbir postgres_changes bildirimi gelmiyor — yani sorun yarış durumu değil, Supabase
-  // Realtime'ın bazen bildirim göndermeyi atlaması. Bu yüzden hem anında yerel gösterim
-  // (aşağıda) hem de bir güvenlik ağı olarak polling (aşağıda POLLING_ENABLED) gerekli —
-  // ikisi de artık varsayım değil, gözlemlenmiş kanıta dayanıyor.
+  // NOT: Daha önce burada bir polling (5sn'de bir veritabanını tarayan) güvenlik ağı vardı —
+  // bir noktada Realtime'ın bazen bildirim göndermeyi atladığı gözlemlenmişti. Ama bu polling
+  // aynı zamanda henüz yazılmayı bekleyen taze bir yerel değişikliği (özellikle masa notu)
+  // eski veritabanı değeriyle EZEREK "kendiliğinden silinme" hatasına da yol açıyordu. Bu
+  // güvenlik ağının bedeli faydasından ağır bastığı için kaldırıldı — artık tamamen Realtime'a
+  // güveniliyor. Realtime'ın mesaj kaçırdığı fark edilirse, bu notu tekrar gündeme getirin.
   // Yerel setOrders çağrıları hâlâ hiçbir yere GERİ YAZILMIYOR — sadece ekran için.
 
   function addOrderItem(table, item) {
