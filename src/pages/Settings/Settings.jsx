@@ -224,14 +224,13 @@ export default function Settings({ data, onNavigate }) {
       setUsageLoading(false);
     }
   }
-  // Ciro açıldığında bir kere çek, sonra 30 saniyede bir tazele — düz fetch, Realtime değil,
-  // kotaya hiç dokunmuyor.
+  // Sayfa açılır açılmaz bir kere çek, sonra 30 saniyede bir tazele — düz fetch, Realtime
+  // değil, kotaya hiç dokunmuyor. Şifreli ciro bölümünden BAĞIMSIZ, her zaman görünür.
   useEffect(() => {
-    if (!revenueRevealed) return;
     fetchUsage();
     const id = setInterval(fetchUsage, 30000);
     return () => clearInterval(id);
-  }, [revenueRevealed]);
+  }, []);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinValue, setPinValue] = useState('');
   const [pinError, setPinError] = useState(false);
@@ -335,6 +334,57 @@ export default function Settings({ data, onNavigate }) {
     <div className="st-shell">
       <div className="st-columns">
         <div className="st-left">
+
+          {/* Realtime Kullanım Sayacı — şifresiz, sayfaya girer girmez görünür. Kendisi
+              Realtime kotasına hiç dokunmuyor, düz fetch ile 30sn'de bir tazeleniyor,
+              tahmini bir rakamdır (Supabase'in kendi resmi rakamıyla birebir aynı olmayabilir). */}
+          <div className="st-usage-panel standalone">
+            <div className="st-usage-head">
+              <span>Realtime Mesaj Kullanımı (tahmini)</span>
+              <button onClick={fetchUsage} title="Tazele"><RefreshCw size={12} className={usageLoading ? 'spin' : ''} /></button>
+            </div>
+            {usageData ? (
+              <>
+                <div className={`st-usage-bar-wrap ${usageData.buAy >= 2000000 ? 'over' : usageData.buAy >= 1500000 ? 'warn' : 'ok'}`}>
+                  <div className="st-usage-bar" style={{ width: `${Math.min(100, (usageData.buAy / 2000000) * 100)}%` }} />
+                </div>
+                <div className="st-usage-numbers">
+                  <span>{usageData.buAy.toLocaleString('tr-TR')} / 2.000.000 (bu ay)</span>
+                  <span className="st-usage-24h">son 24 saat: {usageData.son24Saat.toLocaleString('tr-TR')}</span>
+                </div>
+
+                {usageData.tabloKirilimi && Object.keys(usageData.tabloKirilimi).length > 0 && (
+                  <div className="st-usage-breakdown">
+                    {Object.entries(usageData.tabloKirilimi)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([table, count]) => (
+                        <div key={table} className="st-usage-breakdown-row">
+                          <span>{table}</span>
+                          <strong>{count}</strong>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                {usageData.sonMesajlar && usageData.sonMesajlar.length > 0 && (
+                  <details className="st-usage-log">
+                    <summary>Son {usageData.sonMesajlar.length} mesaj</summary>
+                    <div className="st-usage-log-list">
+                      {usageData.sonMesajlar.map((ev, i) => (
+                        <div key={i} className="st-usage-log-row">
+                          <span className="table">{ev.table}</span>
+                          <span className="time">{new Date(ev.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </>
+            ) : (
+              <p className="st-usage-empty">{usageLoading ? 'Yükleniyor...' : 'Veri yok'}</p>
+            )}
+          </div>
+
           <div className="st-actions-row">
             <button className="st-action-card" onClick={() => setMenuModalOpen(true)}>
               <span className="st-action-ico"><ListChecks size={22} /></span>
@@ -466,29 +516,6 @@ export default function Settings({ data, onNavigate }) {
               <div className="st-revenue-row"><UtensilsCrossed size={15} /><span>Yemek Kartı</span><strong>{TL(totals['YEMEK KARTI'])}</strong></div>
               <div className="st-revenue-row"><BookOpen size={15} /><span>Cari</span><strong>{TL(totals['CARİ'])}</strong></div>
               <div className="st-revenue-total"><span>TOPLAM CİRO</span><strong>{TL(totals.total)}</strong></div>
-
-              {/* Realtime Kullanım Sayacı — bu gösterge kendisi Realtime kotasına hiç
-                  dokunmuyor, düz fetch ile 30sn'de bir tazeleniyor, tahmini bir rakamdır
-                  (Supabase'in kendi resmi rakamıyla birebir aynı olmayabilir). */}
-              <div className="st-usage-panel">
-                <div className="st-usage-head">
-                  <span>Realtime Mesaj Kullanımı (tahmini)</span>
-                  <button onClick={fetchUsage} title="Tazele"><RefreshCw size={12} className={usageLoading ? 'spin' : ''} /></button>
-                </div>
-                {usageData ? (
-                  <>
-                    <div className={`st-usage-bar-wrap ${usageData.buAy >= 2000000 ? 'over' : usageData.buAy >= 1500000 ? 'warn' : 'ok'}`}>
-                      <div className="st-usage-bar" style={{ width: `${Math.min(100, (usageData.buAy / 2000000) * 100)}%` }} />
-                    </div>
-                    <div className="st-usage-numbers">
-                      <span>{usageData.buAy.toLocaleString('tr-TR')} / 2.000.000 (bu ay)</span>
-                      <span className="st-usage-24h">son 24 saat: {usageData.son24Saat.toLocaleString('tr-TR')}</span>
-                    </div>
-                  </>
-                ) : (
-                  <p className="st-usage-empty">{usageLoading ? 'Yükleniyor...' : 'Veri yok'}</p>
-                )}
-              </div>
             </div>
           ) : (
             <button className="st-revenue-masked" onClick={toggleRevenue}>

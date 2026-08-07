@@ -161,6 +161,15 @@
 
 /* ---- Realtime Kullanım Sayacı ---- */
 .st-usage-panel { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border); }
+.st-usage-panel.standalone {
+  margin: 0 0 16px;
+  padding: 16px 18px;
+  border-top: none;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-panel);
+  box-shadow: var(--shadow-1);
+}
 .st-usage-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .st-usage-head span { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-muted); }
 .st-usage-head button { background: none; border: none; color: var(--ink-muted); cursor: pointer; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
@@ -176,6 +185,24 @@
 .st-usage-numbers span { font-size: 10.5px; font-weight: 600; color: var(--ink-muted); }
 .st-usage-24h { color: var(--ink-soft) !important; }
 .st-usage-empty { font-size: 11px; color: var(--ink-soft); font-style: italic; margin: 0; }
+
+.st-usage-breakdown { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.st-usage-breakdown-row {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--panel-2); border-radius: 999px; padding: 4px 10px 4px 12px;
+}
+.st-usage-breakdown-row span { font-size: 10.5px; font-weight: 600; color: var(--ink-muted); }
+.st-usage-breakdown-row strong { font-size: 11px; font-weight: 800; color: var(--ink); background: #fff; border-radius: 999px; padding: 1px 7px; }
+
+.st-usage-log { margin-top: 12px; }
+.st-usage-log summary { font-size: 11px; font-weight: 700; color: var(--olive-dark); cursor: pointer; }
+.st-usage-log-list { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; max-height: 220px; overflow-y: auto; }
+.st-usage-log-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 10px; border-radius: 8px; background: var(--panel-2); font-size: 11px;
+}
+.st-usage-log-row .table { font-weight: 700; color: var(--ink); }
+.st-usage-log-row .time { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 
 .st-revenue-masked {
   width: 100%;
