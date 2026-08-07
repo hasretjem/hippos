@@ -728,10 +728,16 @@ export default function useHipposData(scope = 'full') {
         });
         return changed ? next : prev;
       });
+      // ÖNEMLİ: 5sn'lik anket, henüz yazılmayı BEKLEYEN (debounce süresi dolmamış) yerel bir
+      // not/indirim değişikliğini ASLA eski veritabanı değeriyle EZMESİN — aksi halde bir not
+      // yazılıp "Gönder"e basıldıktan hemen sonra (600ms dolmadan) anket tam o anda çekilirse,
+      // eski (henüz güncellenmemiş) değer yerel state'in üstüne yazılıp not "kendiliğinden
+      // silinmiş" gibi görünüyordu.
       setTableNotes((prev) => {
         let changed = false;
         const next = { ...prev };
         data.forEach((row) => {
+          if (noteDiscountTimersRef.current[row.table_name]) return; // bekleyen yazma var, dokunma
           if ((prev[row.table_name] || '') !== (row.note || '')) {
             next[row.table_name] = row.note || '';
             changed = true;
@@ -743,6 +749,7 @@ export default function useHipposData(scope = 'full') {
         let changed = false;
         const next = { ...prev };
         data.forEach((row) => {
+          if (noteDiscountTimersRef.current[row.table_name]) return; // bekleyen yazma var, dokunma
           const cur = prev[row.table_name] || { type: null, value: 0 };
           if (cur.type !== row.discount_type || cur.value !== (row.discount_value || 0)) {
             next[row.table_name] = { type: row.discount_type, value: row.discount_value || 0 };
