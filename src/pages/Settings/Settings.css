@@ -200,9 +200,12 @@
 .st-usage-log-row {
   display: flex; justify-content: space-between; align-items: center;
   padding: 5px 10px; border-radius: 8px; background: var(--panel-2); font-size: 11px;
+  gap: 8px;
 }
+.st-usage-log-row .left { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .st-usage-log-row .table { font-weight: 700; color: var(--ink); }
-.st-usage-log-row .time { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.st-usage-log-row .detail { font-size: 10px; color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-usage-log-row .time { flex-shrink: 0; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 
 .st-revenue-masked {
   width: 100%;

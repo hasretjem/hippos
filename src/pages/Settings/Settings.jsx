@@ -372,7 +372,10 @@ export default function Settings({ data, onNavigate }) {
                     <div className="st-usage-log-list">
                       {usageData.sonMesajlar.map((ev, i) => (
                         <div key={i} className="st-usage-log-row">
-                          <span className="table">{ev.table}</span>
+                          <div className="left">
+                            <span className="table">{ev.table}</span>
+                            {ev.detail && <span className="detail">{ev.detail}</span>}
+                          </div>
                           <span className="time">{new Date(ev.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                         </div>
                       ))}
