@@ -584,11 +584,10 @@ export default function useHipposData(scope = 'full') {
         const lastTs = lastAppliedUpdatedAtRef.current[t] || 0;
         lastAppliedUpdatedAtRef.current[t] = Math.max(incomingTs, lastTs);
         setOrders((prev) => ({ ...prev, [t]: row.items || [] }));
-        // ÖNEMLİ: not/indirimde henüz Supabase'e yazılmayı BEKLEYEN bir yerel değişiklik varsa
-        // (debounce süresi dolmadıysa), bu realtime mesajı (başka bir hareketin yan ürünü ya
-        // da eski bir yankı olabilir) o bekleyen değeri EZMESİN — asıl "kendiliğinden silinme"
-        // sorununun büyük kısmı buradaydı; polling'de yaptığım korumanın aynısı burada da gerekli.
-        if (!noteDiscountTimersRef.current[t]) {
+        // ÖNEMLİ: not/indirimde henüz Supabase'e yazılmayı BEKLEYEN (debounce dolmadı) YA DA
+        // az önce yazılıp yankısı hâlâ gelebilecek (echo guard) bir yerel değişiklik varsa,
+        // bu realtime mesajı o değeri EZMESİN — "kendiliğinden silinme" sorununun kaynağı buydu.
+        if (!noteDiscountTimersRef.current[t] && !noteDiscountEchoGuardRef.current[t]) {
           setTableNotes((prev) => ({ ...prev, [t]: row.note || '' }));
           setTableDiscounts((prev) => ({ ...prev, [t]: { type: row.discount_type, value: row.discount_value || 0 } }));
         }
@@ -737,7 +736,8 @@ export default function useHipposData(scope = 'full') {
   // veriyle üzerine yazılmasına (yani "kendiliğinden silinmesine") yol açıyordu. Artık her
   // masanın KENDİ ayrı zamanlayıcısı var — başka masalardaki hareket seninkini etkilemiyor.
   const noteDiscountLastSentRef = useRef({ tableNotes: {}, tableDiscounts: {} });
-  const noteDiscountTimersRef = useRef({});
+  const noteDiscountTimersRef = useRef({}); // "yazma bekliyor" (600ms debounce) kilidi
+  const noteDiscountEchoGuardRef = useRef({}); // "yazma az önce gitti, yankısını görmezden gel" kilidi
   useEffect(() => {
     allTables.forEach((t) => {
       const noteChanged = tableNotes[t] !== noteDiscountLastSentRef.current.tableNotes[t];
@@ -746,9 +746,21 @@ export default function useHipposData(scope = 'full') {
 
       if (noteDiscountTimersRef.current[t]) clearTimeout(noteDiscountTimersRef.current[t]);
       noteDiscountTimersRef.current[t] = setTimeout(() => {
-        delete noteDiscountTimersRef.current[t]; // yazma tamamlandı — artık "bekleyen" değil
+        delete noteDiscountTimersRef.current[t]; // 600ms'lik "yazma bekliyor" kilidi bitti
         noteDiscountLastSentRef.current.tableNotes[t] = tableNotes[t];
         noteDiscountLastSentRef.current.tableDiscounts[t] = tableDiscounts[t];
+
+        // KRİTİK: yazma isteği Supabase'e gidip veritabanına ulaşana kadar geçen sürede
+        // (ağ gecikmesi), o masaya ait EN AZ BİR gecikmeli/yankı realtime mesajı gelebilir —
+        // bu da az önce gönderdiğimiz taze veriyi eski veriyle ezerdi. Bu yüzden "yazma
+        // bekliyor" kilidini kaldırır kaldırmaz hemen değil, yazma isteğini attıktan sonra
+        // da 1.5 saniye daha ayrı bir "yankı koruması" kilidi tutuyoruz — bu süre zarfında
+        // gelen realtime mesajları bu masa için yok sayılıyor.
+        if (noteDiscountEchoGuardRef.current[t]) clearTimeout(noteDiscountEchoGuardRef.current[t]);
+        noteDiscountEchoGuardRef.current[t] = setTimeout(() => {
+          delete noteDiscountEchoGuardRef.current[t];
+        }, 1500);
+
         supabase
           .from('table_state')
           .upsert(
