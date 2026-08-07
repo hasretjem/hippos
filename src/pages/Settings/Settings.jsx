@@ -375,8 +375,13 @@ export default function Settings({ data, onNavigate }) {
                           <div className="left">
                             <span className="table">{ev.table}</span>
                             {ev.detail && <span className="detail">{ev.detail}</span>}
+                            {ev.dbTs && (
+                              <span className="dbts">
+                                DB'de gerçek değişme: {new Date(ev.dbTs).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </span>
+                            )}
                           </div>
-                          <span className="time">{new Date(ev.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                          <span className="time">alındı: {new Date(ev.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                         </div>
                       ))}
                     </div>

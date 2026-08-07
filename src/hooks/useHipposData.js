@@ -419,9 +419,11 @@ export default function useHipposData(scope = 'full') {
   // {tablo, saat} olarak arabelleğe eklenir; bu tabloya yazma HİÇ bir dinleyiciyi tetiklemediği
   // için (kotaya dokunmadığı için) sık sık (10sn'de bir) ve ayrıntılı yazabiliyoruz — "son 30
   // mesaj hangi tablodandı" sorusuna cevap verebilmek için.
-  const usageBufferRef = useRef([]); // [{ table, ts, detail }, ...]
-  function bumpUsageCounter(table, detail) {
-    usageBufferRef.current.push({ table, ts: Date.now(), detail: detail || '' });
+  const usageBufferRef = useRef([]); // [{ table, ts, detail, dbTs }, ...]
+  function bumpUsageCounter(table, info) {
+    const detail = typeof info === 'object' && info ? info.summary : (info || '');
+    const dbTs = typeof info === 'object' && info ? info.dbTs : null;
+    usageBufferRef.current.push({ table, ts: Date.now(), detail, dbTs });
   }
   // Gelen payload'dan (zaten elimizde olan veriden, EK bir sorgu atmadan) "ne oldu" özetini
   // çıkarır — hangi masa, kaç ürün, hangi işlem (INSERT/UPDATE/DELETE) gibi. Sayaç panelindeki
@@ -429,26 +431,31 @@ export default function useHipposData(scope = 'full') {
   function summarizeRealtimePayload(table, payload) {
     const row = payload?.new && Object.keys(payload.new).length > 0 ? payload.new : payload?.old;
     const ev = payload?.eventType || '?';
-    if (!row) return ev;
+    // Veritabanındaki GERÇEK değişme zamanı — bizim aldığımız an (Date.now()) ile karıştırılmasın.
+    // Eğer aynı anda gelen birden fazla mesajın dbTs'leri birbirinden FARKLIYSA, bu bir "aradaki
+    // kaçırılan değişiklikleri toparlama" (reconnect telafisi) demektir — gerçekten aynı anda
+    // olmuş bir şey değildir. dbTs'ler de aynıysa, gerçekten aynı anda bir toplu işlem olmuştur.
+    const dbTs = row?.updated_at || row?.ts || row?.created_at || null;
+    if (!row) return { summary: ev, dbTs };
     if (table === 'table_state') {
       const itemCount = Array.isArray(row.items) ? row.items.length : '?';
-      return `${row.table_name || '?'} — ${ev} — ${itemCount} ürün${row.note ? ' — not var' : ''}`;
+      return { summary: `${row.table_name || '?'} — ${ev} — ${itemCount} ürün${row.note ? ' — not var' : ''}`, dbTs };
     }
-    if (table === 'cariler') return `${row.ad || '?'} — ${ev}`;
-    if (table === 'products') return `${row.ad || '?'} — ${ev}`;
-    if (table === 'categories') return `${row.name || '?'} — ${ev}`;
-    if (table === 'subcategories') return `${row.kategori || ''}/${row.name || '?'} — ${ev}`;
+    if (table === 'cariler') return { summary: `${row.ad || '?'} — ${ev}`, dbTs };
+    if (table === 'products') return { summary: `${row.ad || '?'} — ${ev}`, dbTs };
+    if (table === 'categories') return { summary: `${row.name || '?'} — ${ev}`, dbTs };
+    if (table === 'subcategories') return { summary: `${row.kategori || ''}/${row.name || '?'} — ${ev}`, dbTs };
     if (table === 'cari_hareketler' || table === 'cari_odemeler' || table === 'cari_faturalar') {
-      return `${row.toplam ?? row.tutar ?? '?'} ₺ — ${ev}`;
+      return { summary: `${row.toplam ?? row.tutar ?? '?'} ₺ — ${ev}`, dbTs };
     }
-    if (table === 'cari_gecmis') return `cari:${row.cari_id || '?'} — ${ev}`;
-    if (table === 'paket_teslimatlari') return `${row.paket_adi || '?'} — ${ev}`;
-    if (table === 'cari_teslimat_bildirimleri') return `${row.cari_adi || '?'} — ${ev}`;
-    if (table === 'mutfak_hazir_notlar') return `"${(row.metin || '').slice(0, 24)}" — ${ev}`;
-    if (table === 'sales_history') return `${row.table || '?'} — ${row.amount ?? '?'} ₺`;
-    if (table === 'sold_items') return `${row.ad || '?'}`;
-    if (table === 'action_history') return `${row.description || '?'}`;
-    return ev;
+    if (table === 'cari_gecmis') return { summary: `cari:${row.cari_id || '?'} — ${ev}`, dbTs };
+    if (table === 'paket_teslimatlari') return { summary: `${row.paket_adi || '?'} — ${ev}`, dbTs };
+    if (table === 'cari_teslimat_bildirimleri') return { summary: `${row.cari_adi || '?'} — ${ev}`, dbTs };
+    if (table === 'mutfak_hazir_notlar') return { summary: `"${(row.metin || '').slice(0, 24)}" — ${ev}`, dbTs };
+    if (table === 'sales_history') return { summary: `${row.table || '?'} — ${row.amount ?? '?'} ₺`, dbTs };
+    if (table === 'sold_items') return { summary: `${row.ad || '?'}`, dbTs };
+    if (table === 'action_history') return { summary: `${row.description || '?'}`, dbTs };
+    return { summary: ev, dbTs };
   }
   useEffect(() => {
     const id = setInterval(() => {
