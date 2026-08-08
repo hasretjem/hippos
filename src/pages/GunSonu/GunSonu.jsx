@@ -6,7 +6,7 @@ import { TL } from '../../hooks/useHipposData';
 // tarayıcıya doğrudan yükleniyor (loadHtml2Canvas fonksiyonu, aşağıda).
 import {
   ArrowLeft, Save, Banknote, Calculator, CreditCard, Users, Utensils,
-  Plus, Trash2, AlertTriangle, Check, Lock, Delete, Pencil, Info, Share2,
+  Plus, Trash2, AlertTriangle, Check, Lock, Delete, Pencil, Share2,
 } from 'lucide-react';
 
 const DENOMS = [5, 10, 20, 50, 100, 200];
@@ -434,7 +434,9 @@ export default function GunSonu({ data, onNavigate }) {
               </div>
               <div className="gs-row-total small"><span>Günlük Kasa Toplamı</span><strong>{TL(gunlukKasaToplam)}</strong></div>
             </section>
+          </div>
 
+          <div className="gs-col">
             <section className="gs-card">
               <h2><Utensils size={16} /> Yemek Kartları</h2>
               <div className="gs-yemek-table">
@@ -461,39 +463,6 @@ export default function GunSonu({ data, onNavigate }) {
               <button className="gs-add-row-btn" onClick={addYemekKolon}><Plus size={13} /> Kolon Ekle</button>
               <div className="gs-row-total"><span>Genel Yemek Kartları Toplamı</span><strong>{TL(genelYemekToplami)}</strong></div>
             </section>
-          </div>
-
-          <div className="gs-col">
-            <section className="gs-card">
-              <h2><Info size={16} /> Bilgi <span className="gs-auto-tag">otomatik</span></h2>
-
-              <span className="gs-subhead">Bugünkü Ekmek Çıkışı</span>
-              <div className="gs-ekmek-mini">
-                {EKMEK_TURLERI.map((t) => (
-                  <div key={t.key}><span>{t.label}</span><strong>{ekmekToplam[t.key]}</strong></div>
-                ))}
-                <div className="total"><span>Toplam</span><strong>{EKMEK_TURLERI.reduce((s, t) => s + (ekmekToplam[t.key] || 0), 0)} adet</strong></div>
-              </div>
-
-              <span className="gs-subhead" style={{ marginTop: 12 }}>Ciro Karşılaştırma</span>
-              <div className="gs-ciro-karsilastirma">
-                <div><span>Bu Ay Ciro</span><strong>{TL(ayCiroKarsilastirma.buAy)}</strong></div>
-                <div><span>Geçen Ay Ciro (tam ay)</span><strong>{TL(ayCiroKarsilastirma.gecenAy)}</strong></div>
-                <div className={ayCiroKarsilastirma.farkTamAy >= 0 ? 'pos' : 'neg'}><span>Fark</span><strong>{TL(ayCiroKarsilastirma.farkTamAy)}</strong></div>
-                <div><span>Geçen Ay (aynı güne kadar)</span><strong>{TL(ayCiroKarsilastirma.gecenAyAyniGune)}</strong></div>
-                <div className={ayCiroKarsilastirma.farkAyniGune >= 0 ? 'pos' : 'neg'}><span>Fark</span><strong>{TL(ayCiroKarsilastirma.farkAyniGune)}</strong></div>
-              </div>
-
-              <span className="gs-subhead" style={{ marginTop: 12 }}>Ana Kasa Takibi</span>
-              <div className="gs-anakasa-takip">
-                <div>
-                  <span>Dünden Devir Ana Kasa {!dunkuKayit && <em className="gs-no-record">(kayıt yok)</em>}</span>
-                  <strong>{TL(dundenDevirAnaKasa)}</strong>
-                </div>
-                <div><span>Bugünkü Nakit</span><strong>{TL(bugunkuNakitAnaKasaya)}</strong></div>
-                <div className="total"><span>Yarına Devir Ana Kasa</span><strong>{TL(yarinaDevirAnaKasa)}</strong></div>
-              </div>
-            </section>
 
             <section className="gs-card">
               <h2><Banknote size={16} /> Yarına Bozukluk Hedefi</h2>
@@ -501,7 +470,7 @@ export default function GunSonu({ data, onNavigate }) {
                 <div className="gs-hedef-head"><span>Kupür</span><span>Gereken</span><span>Girilen</span><span>Eksik</span></div>
                 {Object.entries(HEDEF_KUPUR).filter(([, adet]) => adet > 0).map(([d, hedefAdet]) => {
                   const girilen = parseInt(nakitAdet[d], 10) || 0;
-                  const fark = hedefAdet - girilen; // pozitif: eksik, negatif: fazla, 0: tam
+                  const fark = hedefAdet - girilen;
                   let label, cls;
                   if (fark > 0) { label = fark; cls = 'warn'; }
                   else if (fark < 0) { label = `+${-fark}`; cls = 'fazla'; }
@@ -517,6 +486,64 @@ export default function GunSonu({ data, onNavigate }) {
                 })}
               </div>
               <div className="gs-row-total"><span>Hedef Toplam</span><strong>{TL(HEDEF_TOPLAM)}</strong></div>
+            </section>
+          </div>
+
+          {/* SAĞ SÜTUN — Bilgi. En dikkat çekici sütun: büyük tarih/gün başlığı + Hippos'un
+              hesapladığı ciro ile burada girdiklerimiz arasındaki farkı canlı gösteriyor. */}
+          <div className="gs-col">
+            <section className="gs-card gs-bilgi-card">
+              <div className="gs-bilgi-tarih">
+                <span className="gun">{new Date().toLocaleDateString('tr-TR', { weekday: 'long' })}</span>
+                <span className="tarih">{new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+              </div>
+
+              <span className="gs-subhead big">Hippos Cirosu ile Karşılaştırma</span>
+              <div className="gs-canli-karsilastirma">
+                {[
+                  { label: 'Nakit', hippos: ciro['NAKİT'], gs: toplamNakitPara },
+                  { label: 'Kredi Kartı', hippos: ciro['KREDİ KARTI'], gs: posToplam },
+                  { label: 'Yemek Kartı', hippos: ciro['YEMEK KARTI'], gs: genelYemekToplami },
+                  { label: 'Cari', hippos: ciro['CARİ'], gs: cariToplam },
+                ].map((r) => {
+                  const fark = r.gs - r.hippos;
+                  return (
+                    <div key={r.label} className="gs-karsilastirma-row">
+                      <span className="ad">{r.label}</span>
+                      <span className="hp">Hippos: {TL(r.hippos)}</span>
+                      <span className="gsv">Girilen: {TL(r.gs)}</span>
+                      <strong className={Math.abs(fark) > 0.5 ? 'warn' : 'ok'}>Fark: {TL(fark)}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <span className="gs-subhead big" style={{ marginTop: 14 }}>Bugünkü Ekmek Çıkışı</span>
+              <div className="gs-ekmek-mini">
+                {EKMEK_TURLERI.map((t) => (
+                  <div key={t.key}><span>{t.label}</span><strong>{ekmekToplam[t.key]}</strong></div>
+                ))}
+                <div className="total"><span>Toplam</span><strong>{EKMEK_TURLERI.reduce((s, t) => s + (ekmekToplam[t.key] || 0), 0)} adet</strong></div>
+              </div>
+
+              <span className="gs-subhead big" style={{ marginTop: 14 }}>Aylık Ciro Karşılaştırma</span>
+              <div className="gs-ciro-karsilastirma">
+                <div><span>Bu Ay Ciro</span><strong>{TL(ayCiroKarsilastirma.buAy)}</strong></div>
+                <div><span>Geçen Ay Ciro (tam ay)</span><strong>{TL(ayCiroKarsilastirma.gecenAy)}</strong></div>
+                <div className={ayCiroKarsilastirma.farkTamAy >= 0 ? 'pos' : 'neg'}><span>Fark</span><strong>{TL(ayCiroKarsilastirma.farkTamAy)}</strong></div>
+                <div><span>Geçen Ay (aynı güne kadar)</span><strong>{TL(ayCiroKarsilastirma.gecenAyAyniGune)}</strong></div>
+                <div className={ayCiroKarsilastirma.farkAyniGune >= 0 ? 'pos' : 'neg'}><span>Fark</span><strong>{TL(ayCiroKarsilastirma.farkAyniGune)}</strong></div>
+              </div>
+
+              <span className="gs-subhead big" style={{ marginTop: 14 }}>Ana Kasa Takibi</span>
+              <div className="gs-anakasa-takip">
+                <div>
+                  <span>Dünden Devir Ana Kasa {!dunkuKayit && <em className="gs-no-record">(kayıt yok)</em>}</span>
+                  <strong>{TL(dundenDevirAnaKasa)}</strong>
+                </div>
+                <div><span>Bugünkü Nakit</span><strong>{TL(bugunkuNakitAnaKasaya)}</strong></div>
+                <div className="total"><span>Yarına Devir Ana Kasa</span><strong>{TL(yarinaDevirAnaKasa)}</strong></div>
+              </div>
             </section>
           </div>
 
