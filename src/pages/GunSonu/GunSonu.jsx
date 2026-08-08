@@ -2,31 +2,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import './GunSonu.css';
 import { TL } from '../../hooks/useHipposData';
 import {
-  ArrowLeft, Save, Banknote, Calculator, ShoppingBag, Users, Utensils,
-  ChevronDown, ChevronUp, Plus, Trash2, AlertTriangle, Check,
+  ArrowLeft, Save, Banknote, Calculator, CreditCard, Users, Utensils,
+  Plus, Trash2, AlertTriangle, Check, Lock, Delete, Pencil, Info,
 } from 'lucide-react';
 
-// Nakit sayım tablosundaki banknot/madeni para birimleri (büyükten küçüğe, sayarken doğal sıra).
 const DENOMS = [200, 100, 50, 20, 10, 5];
+const HEDEF_KUPUR = { 5: 20, 10: 40, 20: 30, 50: 10, 100: 4, 200: 0 };
+const HEDEF_TOPLAM = Object.entries(HEDEF_KUPUR).reduce((s, [k, v]) => s + Number(k) * v, 0);
 
-// Excel'deki "GİDER KALEMLERİ" sütunuyla aynı kategoriler.
-const GIDER_KATEGORILERI = [
-  'Gıda Alışı',
-  'Kahvaltı Malzeme Alışı',
-  'Tavuk Alışı',
-  'Kırmızı Et Alışı',
-  'İçecek Alışları',
-  'Personel Gideri',
-  'Ambalaj Malzeme Alışı',
-  'Temizlik Malzemesi Alışı',
-  'Fatura Gideri (Elektrik/Su/Doğalgaz/Telefon/İnternet)',
-  'Kira + Aidat + Otopark Gideri',
-  'Vergi + SSK + Diğer Giderler',
-  'Yemek Kartı - Banka Masrafı',
-  'Diğer Giderler',
-];
-
-const YEMEK_KARTLARI = ['edenred', 'sedexco', 'SetCard', 'multinet', 'metropol', 'tokemflex'];
+const YEMEK_KARTLARI = ['Edenred', 'Pluxee', 'Setcard', 'Multinet', 'Metropol', 'Tokenflex'];
 
 const EKMEK_TURLERI = [
   { key: 'buyukBeyaz', label: 'Büyük Beyaz Ekmeği' },
@@ -35,12 +19,16 @@ const EKMEK_TURLERI = [
   { key: 'kucukKepek', label: 'Küçük Kepek Ekmeği' },
 ];
 
+const SABIT_CARILER = ['FG Garanti Sigorta', 'Hukuk Bürosu', 'Murat Bey Marsa No:191', 'Anıl Şahin - Light 212', 'Wow Teknoloji', 'Buhur Mühendislik'];
+
+const KASA_AVANS_PIN = '1234';
+
 function parseNum(v) {
   return parseFloat(String(v ?? '').replace(',', '.')) || 0;
 }
 
 export default function GunSonu({ data, onNavigate }) {
-  const { salesHistory } = data;
+  const { salesHistory, cariler, cariHareketler } = data;
 
   const [toast, setToast] = useState('');
   function showToast(msg) {
@@ -50,7 +38,6 @@ export default function GunSonu({ data, onNavigate }) {
 
   const bugunTarih = useMemo(() => new Date().toLocaleDateString('tr-TR'), []);
 
-  // ---- Bugünkü ciro (Anlık Ciro panelindekiyle AYNI hesap) ----
   const todaysSales = useMemo(() => {
     const todayStr = new Date().toDateString();
     return (salesHistory || []).filter((s) => s.ts && new Date(s.ts).toDateString() === todayStr);
@@ -63,7 +50,26 @@ export default function GunSonu({ data, onNavigate }) {
     return { ...t, total: t['NAKİT'] + t['KREDİ KARTI'] + t['YEMEK KARTI'] + t['CARİ'] };
   }, [todaysSales]);
 
-  // ---- Geçmiş Gün Sonu kayıtları (dünkü devir kasayı otomatik bulmak için) + bugünkü ekmek kayıtları ----
+  const ayCiroKarsilastirma = useMemo(() => {
+    const now = new Date();
+    const buAyBaslangic = new Date(now.getFullYear(), now.getMonth(), 1);
+    const gecenAyBaslangic = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const gecenAyBitis = new Date(now.getFullYear(), now.getMonth(), 0);
+    const gunNo = now.getDate();
+
+    let buAy = 0, gecenAy = 0, gecenAyAyniGune = 0;
+    (salesHistory || []).forEach((s) => {
+      if (!s.ts) return;
+      const d = new Date(s.ts);
+      if (d >= buAyBaslangic) buAy += s.amount;
+      else if (d >= gecenAyBaslangic && d <= gecenAyBitis) {
+        gecenAy += s.amount;
+        if (d.getDate() <= gunNo) gecenAyAyniGune += s.amount;
+      }
+    });
+    return { buAy, gecenAy, gecenAyAyniGune, farkTamAy: buAy - gecenAy, farkAyniGune: buAy - gecenAyAyniGune };
+  }, [salesHistory]);
+
   const [gecmisKayitlar, setGecmisKayitlar] = useState([]);
   const [ekmekToplam, setEkmekToplam] = useState({ buyukBeyaz: 0, kucukBeyaz: 0, domatesli: 0, kucukKepek: 0 });
   const [loading, setLoading] = useState(true);
@@ -75,7 +81,6 @@ export default function GunSonu({ data, onNavigate }) {
         const gsJson = await gsRes.json();
         const ekJson = await ekRes.json();
         setGecmisKayitlar(gsJson.records || []);
-
         const toplam = { buyukBeyaz: 0, kucukBeyaz: 0, domatesli: 0, kucukKepek: 0 };
         (ekJson.records || []).forEach((r) => {
           toplam.buyukBeyaz += r.buyukBeyaz || 0;
@@ -93,70 +98,117 @@ export default function GunSonu({ data, onNavigate }) {
     loadAll();
   }, []);
 
-  // Bugünden ÖNCEKİ en son kaydın "yarına devir"i = bugünün "dünden devir"i.
   const dunkuKayit = useMemo(() => {
     const others = gecmisKayitlar.filter((r) => r.tarih !== bugunTarih);
     return others.length > 0 ? others[others.length - 1] : null;
   }, [gecmisKayitlar, bugunTarih]);
 
-  const [dunDenDevirManuel, setDunDenDevirManuel] = useState('');
-  const dunDenDevir = dunkuKayit ? dunkuKayit.nakitSayilanToplam || 0 : parseNum(dunDenDevirManuel);
-
-  // ---- Nakit sayımı ----
   const [nakitAdet, setNakitAdet] = useState({});
-  const nakitSayilanToplam = DENOMS.reduce((s, d) => s + d * (parseInt(nakitAdet[d], 10) || 0), 0);
+  const sayilanNakitToplami = DENOMS.reduce((s, d) => s + d * (parseInt(nakitAdet[d], 10) || 0), 0);
 
-  // ---- Gider kalemleri ----
-  const [giderler, setGiderler] = useState({});
-  const giderToplam = GIDER_KATEGORILERI.reduce((s, k) => s + parseNum(giderler[k]), 0);
+  const [kasaAvansi, setKasaAvansi] = useState(-2000);
+  const toplamNakitPara = sayilanNakitToplami + kasaAvansi;
 
-  // ---- Cari ödemelerimiz (serbest liste — kime ne kadar ödendiği gün gün değişebiliyor) ----
-  const [cariOdemeler, setCariOdemeler] = useState([{ ad: '', tutar: '' }]);
-  const cariOdemeToplam = cariOdemeler.reduce((s, c) => s + parseNum(c.tutar), 0);
-  function addCariOdemeRow() {
-    setCariOdemeler((prev) => [...prev, { ad: '', tutar: '' }]);
+  const [avansPinOpen, setAvansPinOpen] = useState(false);
+  const [avansPinValue, setAvansPinValue] = useState('');
+  const [avansPinError, setAvansPinError] = useState(false);
+  const [avansDraft, setAvansDraft] = useState('');
+  const [avansStep, setAvansStep] = useState('pin');
+  function openAvansPin() {
+    setAvansPinValue('');
+    setAvansPinError(false);
+    setAvansDraft(String(Math.abs(kasaAvansi)));
+    setAvansStep('pin');
+    setAvansPinOpen(true);
   }
-  function updateCariOdemeRow(idx, field, value) {
-    setCariOdemeler((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r)));
+  function checkAvansPin(digits) {
+    if (digits === KASA_AVANS_PIN) {
+      setAvansStep('edit');
+    } else {
+      setAvansPinError(true);
+      setTimeout(() => { setAvansPinValue(''); setAvansPinError(false); }, 550);
+    }
   }
-  function removeCariOdemeRow(idx) {
-    setCariOdemeler((prev) => prev.filter((_, i) => i !== idx));
+  function pressAvansPinDigit(d) {
+    setAvansPinValue((prev) => {
+      if (prev.length >= 4) return prev;
+      const next = prev + d;
+      if (next.length === 4) setTimeout(() => checkAvansPin(next), 100);
+      return next;
+    });
+  }
+  function saveAvansDraft() {
+    setKasaAvansi(-Math.abs(parseNum(avansDraft)));
+    setAvansPinOpen(false);
   }
 
-  // ---- Yemek kartı dağılımı ----
-  const [yemekKartDagilim, setYemekKartDagilim] = useState({});
-  const yemekKartToplam = YEMEK_KARTLARI.reduce((s, k) => s + parseNum(yemekKartDagilim[k]), 0);
-  const yemekKartFark = yemekKartToplam - ciro['YEMEK KARTI'];
+  const [posTutarlari, setPosTutarlari] = useState([{ label: 'POS 1', tutar: '' }, { label: 'POS 2', tutar: '' }]);
+  const posToplam = posTutarlari.reduce((s, r) => s + parseNum(r.tutar), 0);
+  function addPosRow() { setPosTutarlari((prev) => [...prev, { label: `POS ${prev.length + 1}`, tutar: '' }]); }
+  function updatePosRow(idx, field, value) { setPosTutarlari((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r))); }
+  function removePosRow(idx) { setPosTutarlari((prev) => prev.filter((_, i) => i !== idx)); }
 
-  // ---- Sonuç ----
-  const beklenenNakit = dunDenDevir + ciro['NAKİT'] - giderToplam - cariOdemeToplam;
-  const nakitFark = nakitSayilanToplam - beklenenNakit;
+  const [anaKasaHarcamalar, setAnaKasaHarcamalar] = useState([{ tutar: '' }, { tutar: '' }, { tutar: '' }]);
+  const anaKasaToplam = anaKasaHarcamalar.reduce((s, r) => s + parseNum(r.tutar), 0);
+  const [gunlukKasaHarcamalar, setGunlukKasaHarcamalar] = useState([{ tutar: '' }, { tutar: '' }, { tutar: '' }]);
+  const gunlukKasaToplam = gunlukKasaHarcamalar.reduce((s, r) => s + parseNum(r.tutar), 0);
+  function addRow(setter) { setter((prev) => [...prev, { tutar: '' }]); }
+  function updateRow(setter, idx, value) { setter((prev) => prev.map((r, i) => (i === idx ? { ...r, tutar: value } : r))); }
+  function removeRow(setter, idx) { setter((prev) => prev.filter((_, i) => i !== idx)); }
 
-  const [collapsed, setCollapsed] = useState({});
-  function toggleSection(key) {
-    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+  const [yemekKolonlari, setYemekKolonlari] = useState(['Şirket Telefonu', 'Paket']);
+  const [yemekTutarlari, setYemekTutarlari] = useState({});
+  function addYemekKolon() { setYemekKolonlari((prev) => [...prev, `Ek ${prev.length - 1}`]); }
+  function updateYemekTutar(marka, kolon, value) {
+    setYemekTutarlari((prev) => ({ ...prev, [marka]: { ...(prev[marka] || {}), [kolon]: value } }));
   }
+  function yemekMarkaToplam(marka) {
+    const row = yemekTutarlari[marka] || {};
+    return yemekKolonlari.reduce((s, k) => s + parseNum(row[k]), 0);
+  }
+  const genelYemekToplami = YEMEK_KARTLARI.reduce((s, m) => s + yemekMarkaToplam(m), 0);
+
+  const bugunFirmaTutarlari = useMemo(() => {
+    const gunBaslangic = new Date(); gunBaslangic.setHours(0, 0, 0, 0);
+    const ts0 = gunBaslangic.getTime();
+    const map = {};
+    (cariler || []).forEach((c) => {
+      const tutar = (cariHareketler || []).filter((h) => h.cariId === c.id && h.ts >= ts0).reduce((s, h) => s + h.toplam, 0);
+      map[c.ad] = tutar;
+    });
+    return map;
+  }, [cariler, cariHareketler]);
+
+  const [cariOverrides, setCariOverrides] = useState({});
+  const [cariEditingFor, setCariEditingFor] = useState(null);
+  const [cariEditDraft, setCariEditDraft] = useState('');
+  const [ekstraCariler, setEkstraCariler] = useState([]);
+
+  function cariGosterilenTutar(ad) {
+    return cariOverrides[ad] !== undefined ? cariOverrides[ad] : (bugunFirmaTutarlari[ad] || 0);
+  }
+  function startCariEdit(ad) { setCariEditingFor(ad); setCariEditDraft(String(cariGosterilenTutar(ad))); }
+  function saveCariEdit() { setCariOverrides((prev) => ({ ...prev, [cariEditingFor]: parseNum(cariEditDraft) })); setCariEditingFor(null); }
+  function addEkstraCari() { setEkstraCariler((prev) => [...prev, { ad: '', tutar: '' }]); }
+  function updateEkstraCari(idx, field, value) { setEkstraCariler((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r))); }
+  function removeEkstraCari(idx) { setEkstraCariler((prev) => prev.filter((_, i) => i !== idx)); }
+  const cariToplam = SABIT_CARILER.reduce((s, ad) => s + cariGosterilenTutar(ad), 0) + ekstraCariler.reduce((s, r) => s + parseNum(r.tutar), 0);
+
+  const [dundenDevirManuel, setDundenDevirManuel] = useState('');
+  const dundenDevirAnaKasa = dunkuKayit ? (dunkuKayit.yarinaDevirAnaKasa ?? dunkuKayit.yarinaDevir ?? 0) : parseNum(dundenDevirManuel);
+  const bugunkuNakitAnaKasaya = toplamNakitPara + anaKasaToplam;
+  const yarinaDevirAnaKasa = dundenDevirAnaKasa + bugunkuNakitAnaKasaya;
 
   const [saving, setSaving] = useState(false);
   async function kaydet() {
     setSaving(true);
     try {
       const payload = {
-        tarih: bugunTarih,
-        ciro,
-        nakitAdet,
-        nakitSayilanToplam,
-        dunDenDevir,
-        giderler,
-        giderToplam,
-        cariOdemeler: cariOdemeler.filter((c) => c.ad.trim() || parseNum(c.tutar) > 0),
-        cariOdemeToplam,
-        yemekKartDagilim,
-        yemekKartToplam,
-        ekmekToplam,
-        beklenenNakit,
-        nakitFark,
-        yarinaDevir: nakitSayilanToplam,
+        tarih: bugunTarih, ciro, nakitAdet, sayilanNakitToplami, kasaAvansi, toplamNakitPara,
+        posTutarlari, posToplam, anaKasaHarcamalar, anaKasaToplam, gunlukKasaHarcamalar, gunlukKasaToplam,
+        yemekTutarlari, genelYemekToplami,
+        cariDetay: [...SABIT_CARILER.map((ad) => ({ ad, tutar: cariGosterilenTutar(ad) })), ...ekstraCariler.filter((c) => c.ad.trim())],
+        cariToplam, ekmekToplam, dundenDevirAnaKasa, bugunkuNakitAnaKasaya, yarinaDevirAnaKasa, yarinaDevir: yarinaDevirAnaKasa,
       };
       const res = await fetch('/api/gunsonu', {
         method: 'POST',
@@ -191,172 +243,227 @@ export default function GunSonu({ data, onNavigate }) {
       {loading ? (
         <p className="gs-loading">Yükleniyor...</p>
       ) : (
-        <div className="gs-content">
+        <div className="gs-content-3col">
 
-          {/* BUGÜNKÜ CİRO — otomatik, salt okunur */}
-          <section className="gs-card">
-            <h2><Calculator size={16} /> Bugünkü Ciro <span className="gs-auto-tag">otomatik</span></h2>
-            <div className="gs-ciro-grid">
-              <div className="gs-ciro-item"><span>Nakit</span><strong>{TL(ciro['NAKİT'])}</strong></div>
-              <div className="gs-ciro-item"><span>Kredi Kartı</span><strong>{TL(ciro['KREDİ KARTI'])}</strong></div>
-              <div className="gs-ciro-item"><span>Yemek Kartı</span><strong>{TL(ciro['YEMEK KARTI'])}</strong></div>
-              <div className="gs-ciro-item"><span>Cari</span><strong>{TL(ciro['CARİ'])}</strong></div>
-              <div className="gs-ciro-item total"><span>TOPLAM</span><strong>{TL(ciro.total)}</strong></div>
-            </div>
-          </section>
+          <div className="gs-col">
+            <section className="gs-card">
+              <h2><Banknote size={16} /> Toplam Nakit Para</h2>
+              <div className="gs-nakit-table">
+                <div className="gs-nakit-head"><span>Kupür</span><span>Adet</span><span>Tutar</span></div>
+                {DENOMS.map((d) => (
+                  <div key={d} className="gs-nakit-row">
+                    <span className="gs-nakit-denom">{d} ₺</span>
+                    <input type="number" min={0} value={nakitAdet[d] || ''} onChange={(e) => setNakitAdet((prev) => ({ ...prev, [d]: e.target.value }))} />
+                    <span className="gs-nakit-tutar">{TL(d * (parseInt(nakitAdet[d], 10) || 0))}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="gs-row-total"><span>Sayılan Nakit Toplamı</span><strong>{TL(sayilanNakitToplami)}</strong></div>
 
-          {/* NAKİT SAYIMI */}
-          <section className="gs-card">
-            <h2><Banknote size={16} /> Nakit Sayımı</h2>
-            <div className="gs-nakit-table">
-              <div className="gs-nakit-head"><span>Kupür</span><span>Adet</span><span>Tutar</span></div>
-              {DENOMS.map((d) => (
-                <div key={d} className="gs-nakit-row">
-                  <span className="gs-nakit-denom">{d} ₺</span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={nakitAdet[d] || ''}
-                    onChange={(e) => setNakitAdet((prev) => ({ ...prev, [d]: e.target.value }))}
-                  />
-                  <span className="gs-nakit-tutar">{TL(d * (parseInt(nakitAdet[d], 10) || 0))}</span>
+              <div className="gs-avans-row">
+                <div className="gs-avans-info">
+                  <span>Sabah Kasaya Konan Bozukluk</span>
+                  <strong className="neg">{TL(kasaAvansi)}</strong>
                 </div>
-              ))}
-            </div>
-            <div className="gs-row-total"><span>Sayılan Nakit Toplamı</span><strong>{TL(nakitSayilanToplam)}</strong></div>
-          </section>
-
-          {/* DÜNDEN DEVİR */}
-          <section className="gs-card">
-            <h2><Banknote size={16} /> Dünden Devir Kasa</h2>
-            {dunkuKayit ? (
-              <div className="gs-devir-auto">
-                <span>{dunkuKayit.tarih} tarihli Gün Sonu kaydından otomatik alındı</span>
-                <strong>{TL(dunDenDevir)}</strong>
+                <button className="gs-avans-edit-btn" onClick={openAvansPin}><Lock size={12} /> Değiştir</button>
               </div>
-            ) : (
-              <div className="gs-devir-manuel">
-                <span>Geçmiş kayıt bulunamadı, elle gir:</span>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={dunDenDevirManuel}
-                  onChange={(e) => setDunDenDevirManuel(e.target.value)}
-                />
-              </div>
-            )}
-          </section>
+              <div className="gs-row-total main"><span>TOPLAM NAKİT PARA</span><strong>{TL(toplamNakitPara)}</strong></div>
+            </section>
 
-          {/* GİDER KALEMLERİ */}
-          <section className="gs-card">
-            <h2 className="gs-collapsible" onClick={() => toggleSection('gider')}>
-              <span><ShoppingBag size={16} /> Gider Kalemleri</span>
-              {collapsed.gider ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-            </h2>
-            {!collapsed.gider && (
-              <div className="gs-list-form">
-                {GIDER_KATEGORILERI.map((k) => (
-                  <div key={k} className="gs-list-row">
-                    <span>{k}</span>
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="0"
-                      value={giderler[k] || ''}
-                      onChange={(e) => setGiderler((prev) => ({ ...prev, [k]: e.target.value }))}
-                    />
+            <section className="gs-card">
+              <h2><CreditCard size={16} /> Kart Tutarları</h2>
+              <div className="gs-dynrow-list">
+                {posTutarlari.map((row, idx) => (
+                  <div key={idx} className="gs-dynrow">
+                    <input className="gs-dynrow-label" value={row.label} onChange={(e) => updatePosRow(idx, 'label', e.target.value)} />
+                    <input type="number" placeholder="0" value={row.tutar} onChange={(e) => updatePosRow(idx, 'tutar', e.target.value)} />
+                    {posTutarlari.length > 1 && <button className="gs-row-del" onClick={() => removePosRow(idx)}><Trash2 size={12} /></button>}
+                  </div>
+                ))}
+                <button className="gs-add-row-btn" onClick={addPosRow}><Plus size={13} /> Satır Ekle</button>
+              </div>
+              <div className="gs-row-total"><span>POS Toplamı</span><strong>{TL(posToplam)}</strong></div>
+            </section>
+
+            <section className="gs-card">
+              <h2><Users size={16} /> Cari Müşteriler <span className="gs-auto-tag">otomatik</span></h2>
+              <div className="gs-cari-list">
+                {SABIT_CARILER.map((ad) => (
+                  <div key={ad} className="gs-cari-row">
+                    {cariEditingFor === ad ? (
+                      <>
+                        <span className="ad">{ad}</span>
+                        <input type="number" value={cariEditDraft} onChange={(e) => setCariEditDraft(e.target.value)} />
+                        <button className="gs-cari-save" onClick={saveCariEdit}><Check size={12} /></button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="ad">{ad}</span>
+                        <strong>{TL(cariGosterilenTutar(ad))}</strong>
+                        <button className="gs-cari-edit" onClick={() => startCariEdit(ad)}><Pencil size={11} /></button>
+                      </>
+                    )}
+                  </div>
+                ))}
+                {ekstraCariler.map((row, idx) => (
+                  <div key={idx} className="gs-cari-row extra">
+                    <input className="ad-input" placeholder="Cari adı" value={row.ad} onChange={(e) => updateEkstraCari(idx, 'ad', e.target.value)} />
+                    <input type="number" placeholder="0" value={row.tutar} onChange={(e) => updateEkstraCari(idx, 'tutar', e.target.value)} />
+                    <button className="gs-row-del" onClick={() => removeEkstraCari(idx)}><Trash2 size={12} /></button>
+                  </div>
+                ))}
+                <button className="gs-add-row-btn" onClick={addEkstraCari}><Plus size={13} /> Cari Ekle</button>
+              </div>
+              <div className="gs-row-total"><span>Toplam Cari Tutarı</span><strong>{TL(cariToplam)}</strong></div>
+            </section>
+          </div>
+
+          <div className="gs-col">
+            <section className="gs-card">
+              <h2><Calculator size={16} /> Harcamalar</h2>
+
+              <span className="gs-subhead">Ana Kasadan Harcamalar <span className="gs-hint">(günlük ciroyu etkilemez)</span></span>
+              <div className="gs-dynrow-list">
+                {anaKasaHarcamalar.map((row, idx) => (
+                  <div key={idx} className="gs-dynrow plain">
+                    <input type="number" placeholder="0 (+ / -)" value={row.tutar} onChange={(e) => updateRow(setAnaKasaHarcamalar, idx, e.target.value)} />
+                    {anaKasaHarcamalar.length > 1 && <button className="gs-row-del" onClick={() => removeRow(setAnaKasaHarcamalar, idx)}><Trash2 size={12} /></button>}
+                  </div>
+                ))}
+                <button className="gs-add-row-btn" onClick={() => addRow(setAnaKasaHarcamalar)}><Plus size={13} /> Satır Ekle</button>
+              </div>
+              <div className="gs-row-total small"><span>Ana Kasa Toplamı</span><strong>{TL(anaKasaToplam)}</strong></div>
+
+              <span className="gs-subhead" style={{ marginTop: 14 }}>Günlük Kasadan Harcamalar</span>
+              <div className="gs-dynrow-list">
+                {gunlukKasaHarcamalar.map((row, idx) => (
+                  <div key={idx} className="gs-dynrow plain">
+                    <input type="number" placeholder="0 (+ / -)" value={row.tutar} onChange={(e) => updateRow(setGunlukKasaHarcamalar, idx, e.target.value)} />
+                    {gunlukKasaHarcamalar.length > 1 && <button className="gs-row-del" onClick={() => removeRow(setGunlukKasaHarcamalar, idx)}><Trash2 size={12} /></button>}
+                  </div>
+                ))}
+                <button className="gs-add-row-btn" onClick={() => addRow(setGunlukKasaHarcamalar)}><Plus size={13} /> Satır Ekle</button>
+              </div>
+              <div className="gs-row-total small"><span>Günlük Kasa Toplamı</span><strong>{TL(gunlukKasaToplam)}</strong></div>
+            </section>
+
+            <section className="gs-card">
+              <h2><Utensils size={16} /> Yemek Kartları</h2>
+              <div className="gs-yemek-table">
+                <div className="gs-yemek-head" style={{ gridTemplateColumns: `88px repeat(${yemekKolonlari.length}, 1fr) 70px` }}>
+                  <span></span>
+                  {yemekKolonlari.map((k) => <span key={k}>{k}</span>)}
+                  <span>Toplam</span>
+                </div>
+                {YEMEK_KARTLARI.map((marka) => (
+                  <div key={marka} className="gs-yemek-row" style={{ gridTemplateColumns: `88px repeat(${yemekKolonlari.length}, 1fr) 70px` }}>
+                    <span className="marka">{marka}</span>
+                    {yemekKolonlari.map((k) => (
+                      <input key={k} type="number" placeholder="0" value={(yemekTutarlari[marka] || {})[k] || ''} onChange={(e) => updateYemekTutar(marka, k, e.target.value)} />
+                    ))}
+                    <strong>{TL(yemekMarkaToplam(marka))}</strong>
                   </div>
                 ))}
               </div>
-            )}
-            <div className="gs-row-total"><span>Toplam Gider</span><strong>{TL(giderToplam)}</strong></div>
-          </section>
+              <button className="gs-add-row-btn" onClick={addYemekKolon}><Plus size={13} /> Kolon Ekle</button>
+              <div className="gs-row-total"><span>Genel Yemek Kartları Toplamı</span><strong>{TL(genelYemekToplami)}</strong></div>
+            </section>
+          </div>
 
-          {/* CARİ ÖDEMELERİMİZ */}
-          <section className="gs-card">
-            <h2 className="gs-collapsible" onClick={() => toggleSection('cari')}>
-              <span><Users size={16} /> Cari Ödemelerimiz (biz kimlere ödedik)</span>
-              {collapsed.cari ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-            </h2>
-            {!collapsed.cari && (
-              <div className="gs-list-form">
-                {cariOdemeler.map((row, idx) => (
-                  <div key={idx} className="gs-cari-odeme-row">
-                    <input
-                      placeholder="Kime (örn. Hukuk Bürosu)"
-                      value={row.ad}
-                      onChange={(e) => updateCariOdemeRow(idx, 'ad', e.target.value)}
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="0"
-                      value={row.tutar}
-                      onChange={(e) => updateCariOdemeRow(idx, 'tutar', e.target.value)}
-                    />
-                    <button className="gs-row-del" onClick={() => removeCariOdemeRow(idx)}><Trash2 size={13} /></button>
-                  </div>
+          <div className="gs-col">
+            <section className="gs-card">
+              <h2><Info size={16} /> Bilgi <span className="gs-auto-tag">otomatik</span></h2>
+
+              <span className="gs-subhead">Bugünkü Ekmek Çıkışı</span>
+              <div className="gs-ekmek-mini">
+                {EKMEK_TURLERI.map((t) => (
+                  <div key={t.key}><span>{t.label}</span><strong>{ekmekToplam[t.key]}</strong></div>
                 ))}
-                <button className="gs-add-row-btn" onClick={addCariOdemeRow}><Plus size={13} /> Satır Ekle</button>
+                <div className="total"><span>Toplam</span><strong>{EKMEK_TURLERI.reduce((s, t) => s + (ekmekToplam[t.key] || 0), 0)} adet</strong></div>
               </div>
-            )}
-            <div className="gs-row-total"><span>Toplam Cari Ödeme</span><strong>{TL(cariOdemeToplam)}</strong></div>
-          </section>
 
-          {/* YEMEK KARTI DAĞILIMI */}
-          <section className="gs-card">
-            <h2 className="gs-collapsible" onClick={() => toggleSection('yemek')}>
-              <span><Utensils size={16} /> Yemek Kartı Dağılımı</span>
-              {collapsed.yemek ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-            </h2>
-            {!collapsed.yemek && (
-              <div className="gs-list-form">
-                {YEMEK_KARTLARI.map((k) => (
-                  <div key={k} className="gs-list-row">
-                    <span>{k}</span>
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="0"
-                      value={yemekKartDagilim[k] || ''}
-                      onChange={(e) => setYemekKartDagilim((prev) => ({ ...prev, [k]: e.target.value }))}
-                    />
+              <span className="gs-subhead" style={{ marginTop: 12 }}>Ciro Karşılaştırma</span>
+              <div className="gs-ciro-karsilastirma">
+                <div><span>Bu Ay Ciro</span><strong>{TL(ayCiroKarsilastirma.buAy)}</strong></div>
+                <div><span>Geçen Ay Ciro (tam ay)</span><strong>{TL(ayCiroKarsilastirma.gecenAy)}</strong></div>
+                <div className={ayCiroKarsilastirma.farkTamAy >= 0 ? 'pos' : 'neg'}><span>Fark</span><strong>{TL(ayCiroKarsilastirma.farkTamAy)}</strong></div>
+                <div><span>Geçen Ay (aynı güne kadar)</span><strong>{TL(ayCiroKarsilastirma.gecenAyAyniGune)}</strong></div>
+                <div className={ayCiroKarsilastirma.farkAyniGune >= 0 ? 'pos' : 'neg'}><span>Fark</span><strong>{TL(ayCiroKarsilastirma.farkAyniGune)}</strong></div>
+              </div>
+
+              <span className="gs-subhead" style={{ marginTop: 12 }}>Ana Kasa Takibi</span>
+              <div className="gs-anakasa-takip">
+                {dunkuKayit ? (
+                  <div><span>Dünden Devir Ana Kasa</span><strong>{TL(dundenDevirAnaKasa)}</strong></div>
+                ) : (
+                  <div className="manuel">
+                    <span>Dünden Devir (kayıt yok, elle gir)</span>
+                    <input type="number" placeholder="0" value={dundenDevirManuel} onChange={(e) => setDundenDevirManuel(e.target.value)} />
                   </div>
-                ))}
+                )}
+                <div><span>Bugünkü Nakit</span><strong>{TL(bugunkuNakitAnaKasaya)}</strong></div>
+                <div className="total"><span>Yarına Devir Ana Kasa</span><strong>{TL(yarinaDevirAnaKasa)}</strong></div>
               </div>
-            )}
-            <div className="gs-row-total"><span>Girilen Toplam</span><strong>{TL(yemekKartToplam)}</strong></div>
-            <div className={`gs-mini-hint ${Math.abs(yemekKartFark) > 0.5 ? 'warn' : ''}`}>
-              Sistemdeki Yemek Kartı cirosu: {TL(ciro['YEMEK KARTI'])} — Fark: {TL(yemekKartFark)}
-            </div>
-          </section>
+            </section>
 
-          {/* EKMEK SAYIMI — otomatik, Ekmek Gönderme'den */}
-          <section className="gs-card">
-            <h2><Utensils size={16} /> Bugünkü Ekmek Çıkışı <span className="gs-auto-tag">otomatik</span></h2>
-            <div className="gs-ekmek-grid">
-              {EKMEK_TURLERI.map((t) => (
-                <div key={t.key} className="gs-ekmek-item"><span>{t.label}</span><strong>{ekmekToplam[t.key]} adet</strong></div>
-              ))}
-            </div>
-          </section>
+            <section className="gs-card">
+              <h2><Banknote size={16} /> Yarına Bozukluk Hedefi</h2>
+              <div className="gs-hedef-table">
+                <div className="gs-hedef-head"><span>Kupür</span><span>Gereken</span><span>Girilen</span><span>Eksik</span></div>
+                {Object.entries(HEDEF_KUPUR).filter(([, adet]) => adet > 0).map(([d, hedefAdet]) => {
+                  const girilen = parseInt(nakitAdet[d], 10) || 0;
+                  const eksik = Math.max(0, hedefAdet - girilen);
+                  return (
+                    <div key={d} className="gs-hedef-row">
+                      <span>{d} ₺</span>
+                      <span>{hedefAdet}</span>
+                      <span>{girilen}</span>
+                      <strong className={eksik > 0 ? 'warn' : 'ok'}>{eksik > 0 ? eksik : '✓'}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="gs-row-total"><span>Hedef Toplam</span><strong>{TL(HEDEF_TOPLAM)}</strong></div>
+            </section>
+          </div>
 
-          {/* SONUÇ */}
-          <section className="gs-card gs-summary">
-            <h2><Calculator size={16} /> Gün Sonu Özeti</h2>
-            <div className="gs-summary-row"><span>Dünden Devir</span><strong>{TL(dunDenDevir)}</strong></div>
-            <div className="gs-summary-row"><span>+ Bugünkü Nakit Ciro</span><strong>{TL(ciro['NAKİT'])}</strong></div>
-            <div className="gs-summary-row"><span>− Toplam Gider</span><strong>{TL(giderToplam)}</strong></div>
-            <div className="gs-summary-row"><span>− Cari Ödemelerimiz</span><strong>{TL(cariOdemeToplam)}</strong></div>
-            <div className="gs-summary-row expected"><span>= Beklenen Nakit</span><strong>{TL(beklenenNakit)}</strong></div>
-            <div className="gs-summary-row counted"><span>Sayılan Nakit</span><strong>{TL(nakitSayilanToplam)}</strong></div>
-            <div className={`gs-fark-box ${Math.abs(nakitFark) > 0.5 ? 'warn' : 'ok'}`}>
-              {Math.abs(nakitFark) > 0.5 ? <AlertTriangle size={18} /> : <Check size={18} />}
-              <span>Fark</span>
-              <strong>{TL(nakitFark)}</strong>
-            </div>
-          </section>
+        </div>
+      )}
 
+      {avansPinOpen && (
+        <div className="gs-modal-overlay" onClick={() => setAvansPinOpen(false)}>
+          {avansStep === 'pin' ? (
+            <div className={`gs-modal gs-pin-modal ${avansPinError ? 'shake' : ''}`} onClick={(e) => e.stopPropagation()}>
+              <h3><Lock size={15} /> Kasa Avansını Değiştir</h3>
+              <div className="gs-pin-dots">
+                {[0, 1, 2, 3].map((i) => <span key={i} className={`gs-pin-dot ${avansPinValue.length > i ? 'filled' : ''}`} />)}
+              </div>
+              {avansPinError && <p className="gs-pin-error">Yanlış PIN, tekrar deneyin</p>}
+              <div className="gs-pin-keypad">
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((n) => (
+                  <button key={n} onClick={() => pressAvansPinDigit(n)}>{n}</button>
+                ))}
+                <div />
+                <button onClick={() => pressAvansPinDigit('0')}>0</button>
+                <button onClick={() => setAvansPinValue((p) => p.slice(0, -1))}><Delete size={16} /></button>
+              </div>
+            </div>
+          ) : (
+            <div className="gs-modal" onClick={(e) => e.stopPropagation()}>
+              <h3><Banknote size={15} /> Yeni Tutar</h3>
+              <input
+                autoFocus
+                type="number"
+                className="gs-modal-input"
+                value={avansDraft}
+                onChange={(e) => setAvansDraft(e.target.value)}
+              />
+              <div className="gs-modal-footer two">
+                <button className="gs-secondary-btn" onClick={() => setAvansPinOpen(false)}>Vazgeç</button>
+                <button className="gs-primary-btn" onClick={saveAvansDraft}>Kaydet</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
