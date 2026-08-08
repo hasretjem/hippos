@@ -158,6 +158,7 @@ export default function useHipposData(scope = 'full') {
       supabase.from('products').update({ durum: nextDurum }).in('id', idsToUpdate).then(({ error }) => {
         if (error) console.error('ürün durumu güncellenemedi:', error.message);
       });
+      broadcastMenuChanged();
       return prev.map((p) => (idsToUpdate.includes(p.id) ? { ...p, durum: nextDurum } : p));
     });
   }
@@ -180,6 +181,7 @@ export default function useHipposData(scope = 'full') {
         supabase.from('products').update({ durum }).in('id', affectedIds).then(({ error }) => {
           if (error) console.error('toplu durum güncellenemedi:', error.message);
         });
+        broadcastMenuChanged();
       }
       return next;
     });
@@ -215,6 +217,7 @@ export default function useHipposData(scope = 'full') {
         if (error) console.error('mutfak menüsü (pasif) güncellenemedi:', error.message);
       });
     }
+    if (toActivate.length > 0 || toDeactivate.length > 0) broadcastMenuChanged();
   }
 
   function addCategory(name) {
@@ -227,6 +230,7 @@ export default function useHipposData(scope = 'full') {
       supabase.from('categories').insert({ name: trimmed, menu_sirasi: menuSirasi, sabit: false }).then(({ error }) => {
         if (error) console.error('kategori eklenemedi:', error.message);
       });
+      broadcastMenuChanged();
       return [...prev, { name: trimmed, menuSirasi, sabit: false }];
     });
   }
@@ -240,6 +244,7 @@ export default function useHipposData(scope = 'full') {
     supabase.from('categories').update(dbPatch).eq('name', name).then(({ error }) => {
       if (error) console.error('kategori güncellenemedi:', error.message);
     });
+    broadcastMenuChanged();
   }
 
   // "Sheet'ten Çek" gibi birçok kategoriyi aynı anda etkileyen işlemler için — tek istek.
@@ -258,6 +263,7 @@ export default function useHipposData(scope = 'full') {
     supabase.from('categories').upsert(rows, { onConflict: 'name' }).then(({ error }) => {
       if (error) console.error('toplu kategori güncellenemedi:', error.message);
     });
+    broadcastMenuChanged();
   }
 
   function addSubcategory(kategori, name) {
@@ -271,6 +277,7 @@ export default function useHipposData(scope = 'full') {
       supabase.from('subcategories').insert({ kategori, name: trimmed, menu_sirasi: menuSirasi }).then(({ error }) => {
         if (error) console.error('alt kategori eklenemedi:', error.message);
       });
+      broadcastMenuChanged();
       return [...prev, { kategori, name: trimmed, menuSirasi }];
     });
   }
@@ -284,6 +291,7 @@ export default function useHipposData(scope = 'full') {
       .eq('kategori', kategori)
       .eq('name', name)
       .then(({ error }) => { if (error) console.error('alt kategori güncellenemedi:', error.message); });
+    broadcastMenuChanged();
   }
 
   // "Sheet'ten Çek" gibi birçok alt kategoriyi aynı anda etkileyen işlemler için — tek istek.
@@ -303,6 +311,7 @@ export default function useHipposData(scope = 'full') {
     supabase.from('subcategories').upsert(rows, { onConflict: 'kategori,name' }).then(({ error }) => {
       if (error) console.error('toplu alt kategori güncellenemedi:', error.message);
     });
+    broadcastMenuChanged();
   }
 
   function addProduct(product) {
@@ -330,6 +339,7 @@ export default function useHipposData(scope = 'full') {
         parent_id: null, is_az_variant: false,
       })
       .then(({ error }) => { if (error) console.error('ürün eklenemedi:', error.message); });
+    broadcastMenuChanged();
     return id;
   }
 
@@ -350,6 +360,7 @@ export default function useHipposData(scope = 'full') {
     supabase.from('products').update(dbPatch).eq('id', id).then(({ error }) => {
       if (error) console.error('ürün güncellenemedi:', error.message);
     });
+    broadcastMenuChanged();
   }
 
   // Çok sayıda ürünü TEK seferde günceller (örn. "Sheet'ten Çek" — 200 ürün değiştiyse eskiden
@@ -381,6 +392,7 @@ export default function useHipposData(scope = 'full') {
     supabase.from('products').upsert(rows, { onConflict: 'id' }).then(({ error }) => {
       if (error) console.error('toplu ürün güncellenemedi:', error.message);
     });
+    broadcastMenuChanged();
   }
 
   function deleteProduct(id) {
@@ -388,6 +400,7 @@ export default function useHipposData(scope = 'full') {
     supabase.from('products').delete().or(`id.eq.${id},parent_id.eq.${id}`).then(({ error }) => {
       if (error) console.error('ürün silinemedi:', error.message);
     });
+    broadcastMenuChanged();
   }
 
   function setAzPorsiyon(id, enabled, azFiyat) {
@@ -447,6 +460,7 @@ export default function useHipposData(scope = 'full') {
         .filter((p) => p.parentId !== id)
         .map((p) => (p.id === id ? { ...p, azPorsiyon: false, azFiyat: null } : p));
     });
+    broadcastMenuChanged();
   }
 
   // ================== CANLI VERİ (Supabase + gerçek zamanlı) ==================
@@ -479,6 +493,25 @@ export default function useHipposData(scope = 'full') {
   const deviceIdRef = useRef(Math.random().toString(36).slice(2, 10));
   const presenceChannelRef = useRef(null);
   const [presenceMap, setPresenceMap] = useState({}); // { [tableName]: [deviceId, ...] }
+
+  // ---- products/categories/subcategories artık Broadcast ile senkron ----
+  const liveChannelRef = useRef(null);
+  async function refetchMenuData() {
+    const [pr, cat, sub] = await Promise.all([
+      supabase.from('products').select('*'),
+      supabase.from('categories').select('*'),
+      supabase.from('subcategories').select('*'),
+    ]);
+    setProducts((pr.data || []).map(rowToProduct));
+    setCategories((cat.data || []).map(rowToCategory));
+    setSubcategories((sub.data || []).map(rowToSubcategory));
+  }
+  // Ürün/kategori/alt kategoriyi DEĞİŞTİREN her fonksiyon (tekil ya da toplu, fark etmez),
+  // kendi Supabase yazmasından sonra bunu çağırır. TEK bir broadcast mesajı gönderir — 200
+  // ürün de değişse 1 ürün de değişse, diğer cihazlara giden mesaj sayısı hep 1'dir.
+  function broadcastMenuChanged() {
+    liveChannelRef.current?.send({ type: 'broadcast', event: 'menu_changed', payload: {} });
+  }
 
   // ---- Realtime Kullanım Sayacı — SADECE Yönetim Paneli'ndeki gösterge için, kendisi
   // sıfır realtime mesajı tüketiyor (realtime_usage_log tablosuna hiçbir dinleyici abone
@@ -674,41 +707,18 @@ export default function useHipposData(scope = 'full') {
 
     let channel = supabase.channel('hippos-live');
 
-    if (wants.products) {
-      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => {
-        bumpUsageCounter('products', summarizeRealtimePayload('products', payload));
-        if (payload.eventType === 'DELETE') {
-          setProducts((prev) => prev.filter((p) => p.id !== payload.old.id));
-          return;
-        }
-        const row = rowToProduct(payload.new);
-        setProducts((prev) => (prev.some((p) => p.id === row.id) ? prev.map((p) => (p.id === row.id ? row : p)) : [...prev, row]));
-      });
-    }
-    if (wants.categories) {
-      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, (payload) => {
-        bumpUsageCounter('categories', summarizeRealtimePayload('categories', payload));
-        if (payload.eventType === 'DELETE') {
-          setCategories((prev) => prev.filter((c) => c.name !== payload.old.name));
-          return;
-        }
-        const row = rowToCategory(payload.new);
-        setCategories((prev) => (prev.some((c) => c.name === row.name) ? prev.map((c) => (c.name === row.name ? row : c)) : [...prev, row]));
-      });
-    }
-    if (wants.subcategories) {
-      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'subcategories' }, (payload) => {
-        bumpUsageCounter('subcategories', summarizeRealtimePayload('subcategories', payload));
-        if (payload.eventType === 'DELETE') {
-          setSubcategories((prev) => prev.filter((s) => !(s.kategori === payload.old.kategori && s.name === payload.old.name)));
-          return;
-        }
-        const row = rowToSubcategory(payload.new);
-        setSubcategories((prev) =>
-          prev.some((s) => s.kategori === row.kategori && s.name === row.name)
-            ? prev.map((s) => (s.kategori === row.kategori && s.name === row.name ? row : s))
-            : [...prev, row]
-        );
+    // ÖNEMLİ MİMARİ DEĞİŞİKLİĞİ: products/categories/subcategories artık postgres_changes
+    // (satır bazlı, otomatik) yerine BROADCAST (elle, tek mesajlık) ile senkronize ediliyor.
+    // Sebep: postgres_changes satır bazlı çalıştığı için "200 ürünü toplu pasife al" gibi bir
+    // işlem 200 ayrı realtime mesajı üretiyordu — bunu hiçbir bulk/`.in()` sorgusu azaltamaz,
+    // Postgres'in replikasyon mantığının doğal sonucu. Broadcast ile: bir cihaz ürün/kategori
+    // değiştirdiğinde (tek bir ürün olsun, 200 ürün olsun fark etmez) SADECE "menü değişti"
+    // diye TEK bir mesaj gönderiyor; bunu alan diğer cihazlar normal (Realtime OLMAYAN) bir
+    // sorguyla kendilerini tazeliyor. Sonuç: en büyük toplu işlem bile artık 1 mesaj.
+    if (wants.products || wants.categories || wants.subcategories) {
+      channel = channel.on('broadcast', { event: 'menu_changed' }, () => {
+        bumpUsageCounter('menu_changed (broadcast)', 'toplu/tekil ürün-kategori senkronu');
+        refetchMenuData();
       });
     }
     if (wants.table_state) {
@@ -858,9 +868,11 @@ export default function useHipposData(scope = 'full') {
       if (status === 'SUBSCRIBED') console.log('✅ Hippos canlı senkron bağlandı');
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.error('❌ Hippos canlı senkron bağlanamadı:', status);
     });
+    liveChannelRef.current = channel;
 
     return () => {
       cancelled = true;
+      liveChannelRef.current = null;
       supabase.removeChannel(channel);
     };
   }, []);
