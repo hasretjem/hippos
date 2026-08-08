@@ -78,6 +78,23 @@
 }
 .gs-save-btn:hover { background: var(--olive-dark); }
 .gs-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.gs-share-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: var(--r-btn);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.gs-share-btn:hover { background: var(--panel-2); }
+.gs-share-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .gs-loading { text-align: center; padding: 60px 0; color: var(--ink-soft); font-size: 13px; }
 
@@ -179,7 +196,7 @@
 .gs-dynrow { display: flex; gap: 6px; align-items: center; }
 .gs-dynrow.plain { }
 .gs-dynrow-label {
-  width: 74px; flex-shrink: 0; height: 30px; border-radius: 8px; border: 1px solid var(--border);
+  width: 110px; flex-shrink: 0; height: 30px; border-radius: 8px; border: 1px solid var(--border);
   background: var(--panel-2); padding: 0 8px; font-size: 10.5px; font-weight: 700; color: var(--ink);
 }
 .gs-dynrow input[type="number"] {
@@ -264,6 +281,7 @@
 .gs-anakasa-takip span { color: var(--ink-muted); }
 .gs-anakasa-takip strong { font-weight: 800; color: var(--ink); }
 .gs-anakasa-takip .manuel input { width: 90px; height: 26px; border-radius: 7px; border: 1px solid var(--border); text-align: right; padding: 0 8px; font-size: 11px; }
+.gs-no-record { font-style: normal; font-size: 8.5px; color: var(--ink-soft); }
 .gs-anakasa-takip .total { margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--border); }
 .gs-anakasa-takip .total strong { color: var(--olive-dark); font-size: 13px; }
 

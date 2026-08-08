@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './GunSonu.css';
 import { TL } from '../../hooks/useHipposData';
+import html2canvas from 'html2canvas';
 import {
   ArrowLeft, Save, Banknote, Calculator, CreditCard, Users, Utensils,
-  Plus, Trash2, AlertTriangle, Check, Lock, Delete, Pencil, Info,
+  Plus, Trash2, AlertTriangle, Check, Lock, Delete, Pencil, Info, Share2,
 } from 'lucide-react';
 
 const DENOMS = [5, 10, 20, 50, 100, 200];
@@ -156,12 +157,12 @@ export default function GunSonu({ data, onNavigate }) {
   function updatePosRow(idx, field, value) { setPosTutarlari((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r))); }
   function removePosRow(idx) { setPosTutarlari((prev) => prev.filter((_, i) => i !== idx)); }
 
-  const [anaKasaHarcamalar, setAnaKasaHarcamalar] = useState([{ tutar: '' }, { tutar: '' }, { tutar: '' }]);
+  const [anaKasaHarcamalar, setAnaKasaHarcamalar] = useState([{ ad: '', tutar: '' }, { ad: '', tutar: '' }, { ad: '', tutar: '' }]);
   const anaKasaToplam = anaKasaHarcamalar.reduce((s, r) => s + parseNum(r.tutar), 0);
-  const [gunlukKasaHarcamalar, setGunlukKasaHarcamalar] = useState([{ tutar: '' }, { tutar: '' }, { tutar: '' }]);
+  const [gunlukKasaHarcamalar, setGunlukKasaHarcamalar] = useState([{ ad: '', tutar: '' }, { ad: '', tutar: '' }, { ad: '', tutar: '' }]);
   const gunlukKasaToplam = gunlukKasaHarcamalar.reduce((s, r) => s + parseNum(r.tutar), 0);
-  function addRow(setter) { setter((prev) => [...prev, { tutar: '' }]); }
-  function updateRow(setter, idx, value) { setter((prev) => prev.map((r, i) => (i === idx ? { ...r, tutar: value } : r))); }
+  function addRow(setter) { setter((prev) => [...prev, { ad: '', tutar: '' }]); }
+  function updateRow(setter, idx, field, value) { setter((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r))); }
   function removeRow(setter, idx) { setter((prev) => prev.filter((_, i) => i !== idx)); }
 
   const [yemekKolonlari, setYemekKolonlari] = useState(['Şirket Telefonu', 'Paket']);
@@ -215,8 +216,9 @@ export default function GunSonu({ data, onNavigate }) {
   function removeEkstraCari(idx) { setEkstraCariler((prev) => prev.filter((_, i) => i !== idx)); }
   const cariToplam = SABIT_CARILER.reduce((s, ad) => s + cariGosterilenTutar(ad), 0) + ekstraCariler.reduce((s, r) => s + parseNum(r.tutar), 0);
 
-  const [dundenDevirManuel, setDundenDevirManuel] = useState('');
-  const dundenDevirAnaKasa = dunkuKayit ? (dunkuKayit.yarinaDevirAnaKasa ?? dunkuKayit.yarinaDevir ?? 0) : parseNum(dundenDevirManuel);
+  // Dünden Devir artık HİÇ elle girilemez — sadece bir önceki Gün Sonu kaydından otomatik
+  // gelir (yoksa 0). Düzeltmek gerekirse Sheets'ten yapılmalı, buradan değil.
+  const dundenDevirAnaKasa = dunkuKayit ? (dunkuKayit.yarinaDevirAnaKasa ?? dunkuKayit.yarinaDevir ?? 0) : 0;
   const bugunkuNakitAnaKasaya = toplamNakitPara + anaKasaToplam;
   const yarinaDevirAnaKasa = dundenDevirAnaKasa + bugunkuNakitAnaKasaya;
 
@@ -231,6 +233,28 @@ export default function GunSonu({ data, onNavigate }) {
   }
 
   const [saving, setSaving] = useState(false);
+  const contentRef = useRef(null);
+  const [sharing, setSharing] = useState(false);
+  async function paylasFoto() {
+    if (!contentRef.current) return;
+    setSharing(true);
+    try {
+      const canvas = await html2canvas(contentRef.current, { scale: 2, backgroundColor: '#F1FBF6', useCORS: true });
+      canvas.toBlob(async (blob) => {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          showToast('Fotoğraf kopyalandı — WhatsApp\'a yapıştırabilirsin');
+        } catch {
+          showToast('Kopyalanamadı — tarayıcı izin vermiyor olabilir');
+        }
+        setSharing(false);
+      }, 'image/png');
+    } catch {
+      showToast('Fotoğraf oluşturulamadı');
+      setSharing(false);
+    }
+  }
+
   async function kaydet() {
     setSaving(true);
     try {
@@ -270,6 +294,9 @@ export default function GunSonu({ data, onNavigate }) {
           <h1>Gün Sonu — Kasa Hesaplama</h1>
           <span>{bugunTarih}</span>
         </div>
+        <button className="gs-share-btn" onClick={paylasFoto} disabled={sharing}>
+          <Share2 size={15} /> {sharing ? 'Hazırlanıyor...' : 'Paylaş'}
+        </button>
         <button className="gs-save-btn" onClick={kaydet} disabled={saving}>
           <Save size={16} /> {saving ? 'Kaydediliyor...' : 'Gün Sonu Kaydet'}
         </button>
@@ -278,7 +305,7 @@ export default function GunSonu({ data, onNavigate }) {
       {loading ? (
         <p className="gs-loading">Yükleniyor...</p>
       ) : (
-        <div className="gs-content-3col">
+        <div className="gs-content-3col" ref={contentRef}>
 
           <div className="gs-col">
             <section className="gs-card">
@@ -361,7 +388,8 @@ export default function GunSonu({ data, onNavigate }) {
               <div className="gs-dynrow-list">
                 {anaKasaHarcamalar.map((row, idx) => (
                   <div key={idx} className="gs-dynrow plain">
-                    <input type="number" placeholder="0 (+ / -)" className="gs-tabbable" value={row.tutar} onChange={(e) => updateRow(setAnaKasaHarcamalar, idx, e.target.value)} onKeyDown={handleTabEnter} />
+                    <input placeholder="Ne için (örn. Market)" className="gs-dynrow-label gs-tabbable" value={row.ad} onChange={(e) => updateRow(setAnaKasaHarcamalar, idx, 'ad', e.target.value)} onKeyDown={handleTabEnter} />
+                    <input type="number" placeholder="0 (+ / -)" className="gs-tabbable" value={row.tutar} onChange={(e) => updateRow(setAnaKasaHarcamalar, idx, 'tutar', e.target.value)} onKeyDown={handleTabEnter} />
                     {anaKasaHarcamalar.length > 1 && <button className="gs-row-del" onClick={() => removeRow(setAnaKasaHarcamalar, idx)}><Trash2 size={12} /></button>}
                   </div>
                 ))}
@@ -373,7 +401,8 @@ export default function GunSonu({ data, onNavigate }) {
               <div className="gs-dynrow-list">
                 {gunlukKasaHarcamalar.map((row, idx) => (
                   <div key={idx} className="gs-dynrow plain">
-                    <input type="number" placeholder="0 (+ / -)" className="gs-tabbable" value={row.tutar} onChange={(e) => updateRow(setGunlukKasaHarcamalar, idx, e.target.value)} onKeyDown={handleTabEnter} />
+                    <input placeholder="Ne için (örn. Manav)" className="gs-dynrow-label gs-tabbable" value={row.ad} onChange={(e) => updateRow(setGunlukKasaHarcamalar, idx, 'ad', e.target.value)} onKeyDown={handleTabEnter} />
+                    <input type="number" placeholder="0 (+ / -)" className="gs-tabbable" value={row.tutar} onChange={(e) => updateRow(setGunlukKasaHarcamalar, idx, 'tutar', e.target.value)} onKeyDown={handleTabEnter} />
                     {gunlukKasaHarcamalar.length > 1 && <button className="gs-row-del" onClick={() => removeRow(setGunlukKasaHarcamalar, idx)}><Trash2 size={12} /></button>}
                   </div>
                 ))}
@@ -433,14 +462,10 @@ export default function GunSonu({ data, onNavigate }) {
 
               <span className="gs-subhead" style={{ marginTop: 12 }}>Ana Kasa Takibi</span>
               <div className="gs-anakasa-takip">
-                {dunkuKayit ? (
-                  <div><span>Dünden Devir Ana Kasa</span><strong>{TL(dundenDevirAnaKasa)}</strong></div>
-                ) : (
-                  <div className="manuel">
-                    <span>Dünden Devir (kayıt yok, elle gir)</span>
-                    <input type="number" placeholder="0" className="gs-tabbable" value={dundenDevirManuel} onChange={(e) => setDundenDevirManuel(e.target.value)} onKeyDown={handleTabEnter} />
-                  </div>
-                )}
+                <div>
+                  <span>Dünden Devir Ana Kasa {!dunkuKayit && <em className="gs-no-record">(kayıt yok)</em>}</span>
+                  <strong>{TL(dundenDevirAnaKasa)}</strong>
+                </div>
                 <div><span>Bugünkü Nakit</span><strong>{TL(bugunkuNakitAnaKasaya)}</strong></div>
                 <div className="total"><span>Yarına Devir Ana Kasa</span><strong>{TL(yarinaDevirAnaKasa)}</strong></div>
               </div>

@@ -210,6 +210,26 @@ export default function Settings({ data, onNavigate }) {
   // ---- Anlık Ciro ----
   const [revenueRevealed, setRevenueRevealed] = useState(false);
   const [usageData, setUsageData] = useState(null);
+
+  // Gün Sonu'nda kaydedilen sayımlarla Hippos'un kendi hesapladığı ciroyu karşılaştırmak için
+  // — bugünün Gün Sonu kaydı varsa çekiyoruz. Realtime değil, düz fetch.
+  const [bugunGunSonu, setBugunGunSonu] = useState(null);
+  useEffect(() => {
+    async function fetchGunSonu() {
+      try {
+        const res = await fetch('/api/gunsonu');
+        const json = await res.json();
+        const bugunTarih = new Date().toLocaleDateString('tr-TR');
+        setBugunGunSonu((json.records || []).find((r) => r.tarih === bugunTarih) || null);
+      } catch {
+        setBugunGunSonu(null);
+      }
+    }
+    fetchGunSonu();
+    const id = setInterval(fetchGunSonu, 30000);
+    return () => clearInterval(id);
+  }, []);
+
   const [usageLoading, setUsageLoading] = useState(false);
 
   async function fetchUsage() {
@@ -524,6 +544,32 @@ export default function Settings({ data, onNavigate }) {
               <div className="st-revenue-row"><UtensilsCrossed size={15} /><span>Yemek Kartı</span><strong>{TL(totals['YEMEK KARTI'])}</strong></div>
               <div className="st-revenue-row"><BookOpen size={15} /><span>Cari</span><strong>{TL(totals['CARİ'])}</strong></div>
               <div className="st-revenue-total"><span>TOPLAM CİRO</span><strong>{TL(totals.total)}</strong></div>
+
+              {/* Gün Sonu ile karşılaştırma — bugün Gün Sonu kaydedildiyse, Hippos'un
+                  hesapladığı ciro ile fiilen sayılan/girilen tutarlar arasındaki farkı gösterir. */}
+              <div className="st-gunsonu-compare">
+                <span className="st-usage-head-label">Gün Sonu ile Karşılaştırma</span>
+                {bugunGunSonu ? (
+                  <>
+                    {[
+                      { label: 'Nakit', ciro: totals['NAKİT'], gs: bugunGunSonu.toplamNakitPara || 0 },
+                      { label: 'Kredi Kartı', ciro: totals['KREDİ KARTI'], gs: bugunGunSonu.posToplam || 0 },
+                      { label: 'Yemek Kartı', ciro: totals['YEMEK KARTI'], gs: bugunGunSonu.genelYemekToplami || 0 },
+                      { label: 'Cari', ciro: totals['CARİ'], gs: bugunGunSonu.cariToplam || 0 },
+                    ].map((row) => {
+                      const fark = row.gs - row.ciro;
+                      return (
+                        <div key={row.label} className="st-gunsonu-row">
+                          <span>{row.label}</span>
+                          <span className={Math.abs(fark) > 0.5 ? 'fark warn' : 'fark ok'}>{TL(fark)}</span>
+                        </div>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <p className="st-gunsonu-empty">Bugün için henüz Gün Sonu kaydı yok</p>
+                )}
+              </div>
             </div>
           ) : (
             <button className="st-revenue-masked" onClick={toggleRevenue}>
