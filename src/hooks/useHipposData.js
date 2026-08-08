@@ -924,6 +924,7 @@ export default function useHipposData(scope = 'full') {
       return;
     }
     allTables.forEach((t) => {
+      if (t === QUICK_SALE) return; // Hızlı Satış hiçbir zaman Supabase'e yazılmaz (items ile aynı kural)
       const noteChanged = tableNotes[t] !== noteDiscountLastSentRef.current.tableNotes[t];
       const discountChanged = tableDiscounts[t] !== noteDiscountLastSentRef.current.tableDiscounts[t];
       if (!noteChanged && !discountChanged) return;
@@ -1187,6 +1188,7 @@ export default function useHipposData(scope = 'full') {
         ...Object.keys(s.tableNotes || {}),
         ...Object.keys(s.tableDiscounts || {}),
       ]);
+      allSnapTables.delete(QUICK_SALE); // Hızlı Satış geri alma sırasında da Supabase'e yazılmaz
       const rows = [...allSnapTables].map((t) => ({
         table_name: t,
         items: (s.orders && s.orders[t]) || [],
