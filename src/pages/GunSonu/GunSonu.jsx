@@ -357,21 +357,6 @@ export default function GunSonu({ data, onNavigate }) {
             </section>
 
             <section className="gs-card">
-              <h2><CreditCard size={16} /> Kart Tutarları</h2>
-              <div className="gs-dynrow-list">
-                {posTutarlari.map((row, idx) => (
-                  <div key={idx} className="gs-dynrow">
-                    <input className="gs-dynrow-label gs-tabbable" value={row.label} onChange={(e) => updatePosRow(idx, 'label', e.target.value)} onKeyDown={handleTabEnter} />
-                    <input type="number" placeholder="0" className="gs-tabbable" value={row.tutar} onChange={(e) => updatePosRow(idx, 'tutar', e.target.value)} onKeyDown={handleTabEnter} />
-                    {posTutarlari.length > 1 && <button className="gs-row-del" onClick={() => removePosRow(idx)}><Trash2 size={12} /></button>}
-                  </div>
-                ))}
-                <button className="gs-add-row-btn" onClick={addPosRow}><Plus size={13} /> Satır Ekle</button>
-              </div>
-              <div className="gs-row-total"><span>POS Toplamı</span><strong>{TL(posToplam)}</strong></div>
-            </section>
-
-            <section className="gs-card">
               <h2><Users size={16} /> Cari Müşteriler <span className="gs-auto-tag">otomatik</span></h2>
               <div className="gs-cari-list">
                 {SABIT_CARILER.map((ad) => (
@@ -406,6 +391,50 @@ export default function GunSonu({ data, onNavigate }) {
 
           <div className="gs-col">
             <section className="gs-card">
+              <h2><CreditCard size={16} /> Kart Tutarları</h2>
+              <div className="gs-dynrow-list">
+                {posTutarlari.map((row, idx) => (
+                  <div key={idx} className="gs-dynrow">
+                    <input className="gs-dynrow-label gs-tabbable" value={row.label} onChange={(e) => updatePosRow(idx, 'label', e.target.value)} onKeyDown={handleTabEnter} />
+                    <input type="number" placeholder="0" className="gs-tabbable" value={row.tutar} onChange={(e) => updatePosRow(idx, 'tutar', e.target.value)} onKeyDown={handleTabEnter} />
+                    {posTutarlari.length > 1 && <button className="gs-row-del" onClick={() => removePosRow(idx)}><Trash2 size={12} /></button>}
+                  </div>
+                ))}
+                <button className="gs-add-row-btn" onClick={addPosRow}><Plus size={13} /> Satır Ekle</button>
+              </div>
+              <div className="gs-row-total"><span>POS Toplamı</span><strong>{TL(posToplam)}</strong></div>
+            </section>
+
+            <section className="gs-card">
+              <h2><Utensils size={16} /> Yemek Kartları</h2>
+              <div className="gs-yemek-table">
+                <div className="gs-yemek-head" style={{ gridTemplateColumns: `88px repeat(${yemekKolonlari.length}, 1fr) 76px` }}>
+                  <span></span>
+                  {yemekKolonlari.map((k, i) => (
+                    <span key={k} className="gs-yemek-head-col">
+                      {k}
+                      {i >= 2 && <button className="gs-yemek-kolon-sil" onClick={() => removeYemekKolon(i)}><Trash2 size={10} /></button>}
+                    </span>
+                  ))}
+                  <span>Toplam</span>
+                </div>
+                {YEMEK_KARTLARI.map((marka) => (
+                  <div key={marka} className="gs-yemek-row" style={{ gridTemplateColumns: `88px repeat(${yemekKolonlari.length}, 1fr) 76px` }}>
+                    <span className="marka">{marka}</span>
+                    {yemekKolonlari.map((k) => (
+                      <input key={k} type="number" placeholder="0" className="gs-tabbable" value={(yemekTutarlari[marka] || {})[k] || ''} onChange={(e) => updateYemekTutar(marka, k, e.target.value)} onKeyDown={handleTabEnter} />
+                    ))}
+                    <strong className="gs-yemek-toplam">{TL(yemekMarkaToplam(marka))}</strong>
+                  </div>
+                ))}
+              </div>
+              <button className="gs-add-row-btn" onClick={addYemekKolon}><Plus size={13} /> Kolon Ekle</button>
+              <div className="gs-row-total"><span>Genel Yemek Kartları Toplamı</span><strong>{TL(genelYemekToplami)}</strong></div>
+            </section>
+          </div>
+
+          <div className="gs-col">
+            <section className="gs-card">
               <h2><Calculator size={16} /> Harcamalar</h2>
 
               <span className="gs-subhead">Ana Kasadan Harcamalar <span className="gs-hint">(günlük ciroyu etkilemez)</span></span>
@@ -433,35 +462,6 @@ export default function GunSonu({ data, onNavigate }) {
                 <button className="gs-add-row-btn" onClick={() => addRow(setGunlukKasaHarcamalar)}><Plus size={13} /> Satır Ekle</button>
               </div>
               <div className="gs-row-total small"><span>Günlük Kasa Toplamı</span><strong>{TL(gunlukKasaToplam)}</strong></div>
-            </section>
-          </div>
-
-          <div className="gs-col">
-            <section className="gs-card">
-              <h2><Utensils size={16} /> Yemek Kartları</h2>
-              <div className="gs-yemek-table">
-                <div className="gs-yemek-head" style={{ gridTemplateColumns: `88px repeat(${yemekKolonlari.length}, 1fr) 76px` }}>
-                  <span></span>
-                  {yemekKolonlari.map((k, i) => (
-                    <span key={k} className="gs-yemek-head-col">
-                      {k}
-                      {i >= 2 && <button className="gs-yemek-kolon-sil" onClick={() => removeYemekKolon(i)}><Trash2 size={10} /></button>}
-                    </span>
-                  ))}
-                  <span>Toplam</span>
-                </div>
-                {YEMEK_KARTLARI.map((marka) => (
-                  <div key={marka} className="gs-yemek-row" style={{ gridTemplateColumns: `88px repeat(${yemekKolonlari.length}, 1fr) 76px` }}>
-                    <span className="marka">{marka}</span>
-                    {yemekKolonlari.map((k) => (
-                      <input key={k} type="number" placeholder="0" className="gs-tabbable" value={(yemekTutarlari[marka] || {})[k] || ''} onChange={(e) => updateYemekTutar(marka, k, e.target.value)} onKeyDown={handleTabEnter} />
-                    ))}
-                    <strong className="gs-yemek-toplam">{TL(yemekMarkaToplam(marka))}</strong>
-                  </div>
-                ))}
-              </div>
-              <button className="gs-add-row-btn" onClick={addYemekKolon}><Plus size={13} /> Kolon Ekle</button>
-              <div className="gs-row-total"><span>Genel Yemek Kartları Toplamı</span><strong>{TL(genelYemekToplami)}</strong></div>
             </section>
 
             <section className="gs-card">
@@ -496,9 +496,10 @@ export default function GunSonu({ data, onNavigate }) {
               <div className="gs-bilgi-tarih">
                 <span className="gun">{new Date().toLocaleDateString('tr-TR', { weekday: 'long' })}</span>
                 <span className="tarih">{new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                <div className="gs-bilgi-toplam-ciro"><span>TOPLAM CİRO</span><strong>{TL(ciro.total)}</strong></div>
               </div>
 
-              <span className="gs-subhead big">Hippos Cirosu ile Karşılaştırma</span>
+              <span className="gs-subhead big">Ciro Karşılaştırma</span>
               <div className="gs-canli-karsilastirma">
                 {[
                   { label: 'Nakit', hippos: ciro['NAKİT'], gs: toplamNakitPara },
@@ -510,12 +511,18 @@ export default function GunSonu({ data, onNavigate }) {
                   return (
                     <div key={r.label} className="gs-karsilastirma-row">
                       <span className="ad">{r.label}</span>
-                      <span className="hp">Hippos: {TL(r.hippos)}</span>
-                      <span className="gsv">Girilen: {TL(r.gs)}</span>
-                      <strong className={Math.abs(fark) > 0.5 ? 'warn' : 'ok'}>Fark: {TL(fark)}</strong>
+                      <span className="hp">H: {TL(r.hippos)}</span>
+                      <span className="gsv">G: {TL(r.gs)}</span>
+                      <strong className={Math.abs(fark) > 0.5 ? 'warn' : 'ok'}>{TL(fark)}</strong>
                     </div>
                   );
                 })}
+                <div className="gs-karsilastirma-toplam">
+                  <span>Toplam Fark</span>
+                  <strong className={Math.abs((toplamNakitPara - ciro['NAKİT']) + (posToplam - ciro['KREDİ KARTI']) + (genelYemekToplami - ciro['YEMEK KARTI']) + (cariToplam - ciro['CARİ'])) > 0.5 ? 'warn' : 'ok'}>
+                    {TL((toplamNakitPara - ciro['NAKİT']) + (posToplam - ciro['KREDİ KARTI']) + (genelYemekToplami - ciro['YEMEK KARTI']) + (cariToplam - ciro['CARİ']))}
+                  </strong>
+                </div>
               </div>
 
               <span className="gs-subhead big" style={{ marginTop: 14 }}>Bugünkü Ekmek Çıkışı</span>
