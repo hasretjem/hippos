@@ -222,11 +222,11 @@ export default function GunSonu({ data, onNavigate }) {
   // Dünden Devir artık HİÇ elle girilemez — sadece bir önceki Gün Sonu kaydından otomatik
   // gelir (yoksa 0). Düzeltmek gerekirse Sheets'ten yapılmalı, buradan değil.
   const dundenDevirAnaKasa = dunkuKayit ? (dunkuKayit.yarinaDevirAnaKasa ?? dunkuKayit.yarinaDevir ?? 0) : 0;
-  // Ana Kasadan Harcamalar POZİTİFse ana kasadan para ÇIKMIŞ demektir (harcama) — bu yüzden
-  // Yarına Devir hesabından ÇIKARTILIYOR (eskiden yanlışlıkla toplanıyordu). Negatif girilirse
-  // (ana kasaya para KONMUŞ), çıkartmak otomatik olarak toplama dönüşür.
-  const bugunkuNakitAnaKasaya = toplamNakitPara - anaKasaToplam;
-  const yarinaDevirAnaKasa = dundenDevirAnaKasa + bugunkuNakitAnaKasaya;
+  // "Bugünkü Nakit" satırı SAF (hiçbir şey çıkarılmamış) toplamNakitPara'yı gösterir —
+  // Ana Kasa harcaması AYRI bir satırda gösterilip SADECE Yarına Devir hesabında düşülür.
+  // Böylece ekranda hangi rakamın nereden geldiği (sayılan nakit, ana kasa harcaması,
+  // sonuç) karışmadan ayrı ayrı görülebiliyor.
+  const yarinaDevirAnaKasa = dundenDevirAnaKasa + toplamNakitPara - anaKasaToplam;
 
   // Enter'a basınca fareyle sıradaki alana tıklamayı beklemeden, DOM sırasındaki bir sonraki
   // "gs-tabbable" alanına odaklanır — sayfadaki neredeyse her giriş kutusunda kullanılıyor.
@@ -295,7 +295,7 @@ export default function GunSonu({ data, onNavigate }) {
         gunlukKasaHarcamalar, gunlukKasaToplam,
         cariToplam,
         genelYemekToplami,
-        dundenDevirAnaKasa, bugunkuNakitAnaKasaya, yarinaDevirAnaKasa, yarinaDevir: yarinaDevirAnaKasa,
+        dundenDevirAnaKasa, bugunkuNakit: toplamNakitPara, anaKasaHarcamaToplami: anaKasaToplam, yarinaDevirAnaKasa, yarinaDevir: yarinaDevirAnaKasa,
       };
       const res = await fetch('/api/gunsonu', {
         method: 'POST',
@@ -558,7 +558,8 @@ export default function GunSonu({ data, onNavigate }) {
                   <span>Dünden Devir Ana Kasa {!dunkuKayit && <em className="gs-no-record">(kayıt yok)</em>}</span>
                   <strong>{TL(dundenDevirAnaKasa)}</strong>
                 </div>
-                <div><span>Bugünkü Nakit</span><strong>{TL(bugunkuNakitAnaKasaya)}</strong></div>
+                <div><span>Bugünkü Nakit</span><strong>{TL(toplamNakitPara)}</strong></div>
+                <div><span>Ana Kasa Harcama</span><strong>{TL(-anaKasaToplam)}</strong></div>
                 <div className="total"><span>Yarına Devir Ana Kasa</span><strong>{TL(yarinaDevirAnaKasa)}</strong></div>
               </div>
             </section>
