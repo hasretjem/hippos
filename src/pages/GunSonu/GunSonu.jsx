@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './GunSonu.css';
 import { TL } from '../../hooks/useHipposData';
-import html2canvas from 'html2canvas';
+// NOT: html2canvas npm paketi olarak KURULMUYOR — proje github.dev üzerinden yönetildiği
+// için terminal/npm install her zaman pratik olmuyor. Bunun yerine ihtiyaç anında CDN'den
+// tarayıcıya doğrudan yükleniyor (loadHtml2Canvas fonksiyonu, aşağıda).
 import {
   ArrowLeft, Save, Banknote, Calculator, CreditCard, Users, Utensils,
   Plus, Trash2, AlertTriangle, Check, Lock, Delete, Pencil, Info, Share2,
@@ -235,10 +237,32 @@ export default function GunSonu({ data, onNavigate }) {
   const [saving, setSaving] = useState(false);
   const contentRef = useRef(null);
   const [sharing, setSharing] = useState(false);
+  // html2canvas'ı sadece "Paylaş"a ilk basıldığında, tarayıcıya CDN'den yükler — sayfa hep
+  // yavaşlamasın diye ihtiyaç anına kadar hiç indirilmiyor, bir kere yüklenince tekrar
+  // indirmiyor (window.html2canvas zaten varsa direkt onu kullanır).
+  function loadHtml2Canvas() {
+    return new Promise((resolve, reject) => {
+      if (window.html2canvas) return resolve(window.html2canvas);
+      const existing = document.getElementById('html2canvas-cdn-script');
+      if (existing) {
+        existing.addEventListener('load', () => resolve(window.html2canvas));
+        existing.addEventListener('error', reject);
+        return;
+      }
+      const script = document.createElement('script');
+      script.id = 'html2canvas-cdn-script';
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      script.onload = () => resolve(window.html2canvas);
+      script.onerror = reject;
+      document.body.appendChild(script);
+    });
+  }
+
   async function paylasFoto() {
     if (!contentRef.current) return;
     setSharing(true);
     try {
+      const html2canvas = await loadHtml2Canvas();
       const canvas = await html2canvas(contentRef.current, { scale: 2, backgroundColor: '#F1FBF6', useCORS: true });
       canvas.toBlob(async (blob) => {
         try {
@@ -250,7 +274,7 @@ export default function GunSonu({ data, onNavigate }) {
         setSharing(false);
       }, 'image/png');
     } catch {
-      showToast('Fotoğraf oluşturulamadı');
+      showToast('Fotoğraf oluşturulamadı — bağlantıyı kontrol et');
       setSharing(false);
     }
   }
