@@ -621,3 +621,112 @@
   .st-revenue-panel { width: 100%; position: static; }
   .st-actions-row { flex-direction: column; }
 }
+/* ============================================================
+   EKMEK STOK EKLEME — Settings.css dosyasının SONUNA eklenecek
+   ============================================================ */
+
+.st-ekmek-stok-modal {
+  max-width: 480px;
+  width: 100%;
+}
+
+.st-ekmek-stok-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.st-ekmek-stok-row {
+  border-bottom: 1px solid rgba(57, 62, 65, 0.12);
+  padding: 12px 2px;
+}
+
+.st-ekmek-stok-row:last-child {
+  border-bottom: none;
+}
+
+.st-ekmek-stok-baslik {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.st-ekmek-stok-baslik label {
+  font-weight: 600;
+  color: #393E41;
+  flex: 1;
+  font-size: 14px;
+}
+
+.st-ekmek-stok-input {
+  width: 90px;
+  padding: 8px 10px;
+  border: 2px solid #393E41;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #393E41 !important;
+  background: #fff;
+}
+
+.st-ekmek-stok-mevcut {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #393E41;
+  opacity: 0.75;
+}
+
+.st-ekmek-stok-uyari {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(233, 79, 55, 0.1);
+  border: 1px solid #E94F37;
+  border-radius: 8px;
+  color: #E94F37 !important;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.st-ekmek-siparis-listesi {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.st-ekmek-siparis-satir {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #F6F7EB;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-weight: 400;
+  color: #393E41 !important;
+  font-size: 12px;
+}
+
+.st-ekmek-kopyala-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  background: #393E41;
+  color: #F6F7EB !important;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.st-ekmek-kopyala-btn:hover {
+  background: #E94F37;
+}

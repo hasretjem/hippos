@@ -869,3 +869,12 @@
   .tb-section { padding: 14px; }
   .tb-card { min-height: 128px; }
 }
+/* Tables.css dosyasının SONUNA eklenecek — Ekmek Gönderme panelindeki stok bilgi satırı */
+
+.tb-ekmek-stok-info {
+  font-size: 11.5px;
+  color: #393E41 !important;
+  opacity: 0.8;
+  margin: 6px 0 10px;
+  line-height: 1.5;
+}

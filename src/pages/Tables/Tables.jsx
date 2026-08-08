@@ -38,6 +38,8 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     mutfakHazirNotlar,
     addMutfakHazirNot,
     deleteMutfakHazirNot,
+    ekmekStok,
+    ekmekStoktanDus,
   } = data;
 
   // Renk-zaman kademesi her 30 dk'da bir değişsin diye periyodik yeniden çizim
@@ -131,7 +133,8 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
   }
 
   // ---- Ekmek Gönderme — Mutfağa Not'un yanında açılır. 4 sabit ekmek türü + adet,
-  // yazdırınca aynı zamanda Sheets'e ("Ekmek Kayıtları" sekmesi) kaydediyor.
+  // yazdırınca aynı zamanda Sheets'e ("Ekmek Kayıtları" sekmesi) kaydediyor VE
+  // Yönetim Paneli'ndeki ortak ekmek stoğundan bu adetleri düşüyor.
   const EKMEK_TURLERI = [
     { key: 'buyukBeyaz', label: 'Büyük Beyaz Ekmeği' },
     { key: 'kucukBeyaz', label: 'Küçük Beyaz Ekmeği' },
@@ -171,6 +174,15 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     if (!enAzBirGirildi) return;
     setEkmekPrintData(satirlar);
     setTimeout(() => window.print(), 150);
+
+    // Mutfağa fiilen giden ekmek — ortak stoktan düşülüyor (Yönetim Paneli'ndeki
+    // "Ekmek Stok Ekleme" ile aynı sayaç). Sheets kaydı ile paralel, birbirini beklemiyor.
+    ekmekStoktanDus({
+      buyukBeyaz: parseInt(ekmekMiktar.buyukBeyaz, 10) || 0,
+      kucukBeyaz: parseInt(ekmekMiktar.kucukBeyaz, 10) || 0,
+      domatesli: parseInt(ekmekMiktar.domatesli, 10) || 0,
+      kucukKepek: parseInt(ekmekMiktar.kucukKepek, 10) || 0,
+    });
 
     setEkmekLoading(true);
     try {
@@ -866,6 +878,9 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
                   </div>
                 ))}
               </div>
+              <p className="tb-ekmek-stok-info">
+                Stokta: {EKMEK_TURLERI.map((t) => `${t.label.replace(' Ekmeği', '')}: ${ekmekStok[t.key] ?? 0}`).join(' · ')}
+              </p>
               <button
                 className="tb-primary tb-ekmek-print-btn"
                 disabled={ekmekLoading || EKMEK_TURLERI.every((t) => !(parseInt(ekmekMiktar[t.key], 10) > 0))}

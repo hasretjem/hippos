@@ -1,16 +1,25 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './Settings.css';
-import { TL } from '../../hooks/useHipposData';
+import { TL, EKMEK_TURLERI_STOK } from '../../hooks/useHipposData';
 import { supabase } from '../../services/supabase';
 import GununMenusu from './GununMenusu';
 import {
   ListChecks, Calculator, Eye, EyeOff, Share2, Lock, Delete, Search, X,
   Banknote, CreditCard, UtensilsCrossed, BookOpen, ExternalLink, ChevronRight,
   Undo2, Wifi, WifiOff, Printer, Database, FileSpreadsheet, Triangle, Image as ImageIcon, RefreshCw,
+  Wheat, Copy, Check,
 } from 'lucide-react';
 
 // Ciro panelini açan PIN — ileride Gelişmiş Ayarlar'dan değiştirilebilir hale gelecek.
 const REVENUE_PIN = '1234';
+
+// Ekmek stok kritik seviyeye düşünce önerilecek sipariş listesi (kopyala-yapıştır için)
+const EKMEK_SIPARIS_LISTESI = [
+  { kod: '1027053', metin: '2 Koli 1027053  Don.Baget Fransız  YP 1/2 (40*160 Gr) Ulker Marifet' },
+  { kod: '4400064', metin: '2 Koli 4400064  1/3 Baget Sade 95 Gr. 50/36' },
+  { kod: '1033506', metin: '1 Koli 1033506 1/3 Küçük Tahıl Ekmek (70 Ad )' },
+  { kod: '4400191', metin: '1 Koli 4400191  1/2 Artısan Baget Domates&Fesleğen' },
+];
 
 export default function Settings({ data, onNavigate }) {
   const {
@@ -25,6 +34,8 @@ export default function Settings({ data, onNavigate }) {
     orders,
     actionHistory,
     undoLastAction,
+    ekmekStok,
+    ekmekStokEkle,
   } = data;
 
   const [now, setNow] = useState(new Date());
@@ -115,6 +126,39 @@ export default function Settings({ data, onNavigate }) {
 
   // ---- Son işlemler / geri al (sol alt) ----
   const [historyOpen, setHistoryOpen] = useState(false);
+
+  // ---- Ekmek Stok Ekleme ----
+  const [ekmekModalOpen, setEkmekModalOpen] = useState(false);
+  const [ekmekGirisleri, setEkmekGirisleri] = useState({ buyukBeyaz: '', kucukBeyaz: '', domatesli: '', kucukKepek: '' });
+  const [ekmekKaydediliyor, setEkmekKaydediliyor] = useState(false);
+  const [kopyalananKod, setKopyalananKod] = useState(null);
+
+  function closeEkmekModal() {
+    setEkmekModalOpen(false);
+    setEkmekGirisleri({ buyukBeyaz: '', kucukBeyaz: '', domatesli: '', kucukKepek: '' });
+  }
+
+  async function handleEkmekKaydet() {
+    setEkmekKaydediliyor(true);
+    const sonuc = await ekmekStokEkle(ekmekGirisleri);
+    setEkmekKaydediliyor(false);
+    if (sonuc.success) {
+      closeEkmekModal();
+      showToast('Ekmek stoğu güncellendi');
+    } else {
+      showToast(sonuc.message || 'Kaydedilemedi, tekrar deneyin');
+    }
+  }
+
+  async function kopyalaSiparis(metin, kod) {
+    try {
+      await navigator.clipboard.writeText(metin);
+      setKopyalananKod(kod);
+      setTimeout(() => setKopyalananKod(null), 1500);
+    } catch {
+      showToast('Kopyalanamadı');
+    }
+  }
 
   // ---- Bugün paneli: en çok satanlar + genel istatistik ----
   const [sandwichShowAll, setSandwichShowAll] = useState(false);
@@ -429,6 +473,11 @@ export default function Settings({ data, onNavigate }) {
               <span className="st-action-title">Günün Menüsü</span>
               <span className="st-action-sub">Görsel önizleme oluştur (test aşaması)</span>
             </button>
+            <button className="st-action-card" onClick={() => setEkmekModalOpen(true)}>
+              <span className="st-action-ico"><Wheat size={22} /></span>
+              <span className="st-action-title">Ekmek Stok Ekleme</span>
+              <span className="st-action-sub">Fırından gelen ekmeği stoğa işle</span>
+            </button>
           </div>
 
           {/* BUGÜN PANELİ */}
@@ -721,6 +770,72 @@ export default function Settings({ data, onNavigate }) {
             <div className="st-modal-footer">
               <button className="st-secondary" onClick={() => setEodConfirmOpen(false)}>Vazgeç</button>
               <button className="st-primary" onClick={confirmEod}>Onayla</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EKMEK STOK EKLEME MODALI */}
+      {ekmekModalOpen && (
+        <div className="st-modal-overlay" onClick={closeEkmekModal}>
+          <div className="st-modal st-ekmek-stok-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="st-modal-head">
+              <h3><Wheat size={16} /> Ekmek Stok Ekleme</h3>
+              <button className="st-modal-x" onClick={closeEkmekModal}><X size={16} /></button>
+            </div>
+
+            <div className="st-ekmek-stok-list">
+              {EKMEK_TURLERI_STOK.map((t) => {
+                const mevcutStok = ekmekStok[t.key] || 0;
+                const dusukStok = mevcutStok < t.esik;
+                return (
+                  <div key={t.key} className="st-ekmek-stok-row">
+                    <div className="st-ekmek-stok-baslik">
+                      <label>{t.label}</label>
+                      <input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        value={ekmekGirisleri[t.key]}
+                        onChange={(e) => setEkmekGirisleri((prev) => ({ ...prev, [t.key]: e.target.value }))}
+                        placeholder="Adet"
+                        className="st-ekmek-stok-input"
+                      />
+                    </div>
+
+                    <div className="st-ekmek-stok-mevcut">
+                      Şu an stokta: <strong>{mevcutStok}</strong> adet
+                    </div>
+
+                    {dusukStok && (
+                      <div className="st-ekmek-stok-uyari">
+                        ⚠️ Stok {t.esik}'nin altına düştü, {t.key === 'domatesli' || t.key === 'kucukKepek' ? '1 koli' : '2 koli'} sipariş edelim.
+
+                        <div className="st-ekmek-siparis-listesi">
+                          {EKMEK_SIPARIS_LISTESI.map((s) => (
+                            <div key={s.kod} className="st-ekmek-siparis-satir">
+                              <span>{s.metin}</span>
+                              <button
+                                className="st-ekmek-kopyala-btn"
+                                onClick={() => kopyalaSiparis(s.metin, s.kod)}
+                              >
+                                {kopyalananKod === s.kod ? (<><Check size={12} /> Kopyalandı</>) : (<><Copy size={12} /> Kopyala</>)}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="st-modal-footer">
+              <button className="st-secondary" onClick={closeEkmekModal}>İptal</button>
+              <button className="st-primary" disabled={ekmekKaydediliyor} onClick={handleEkmekKaydet}>
+                {ekmekKaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}
+              </button>
             </div>
           </div>
         </div>
