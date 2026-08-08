@@ -222,7 +222,10 @@ export default function GunSonu({ data, onNavigate }) {
   // Dünden Devir artık HİÇ elle girilemez — sadece bir önceki Gün Sonu kaydından otomatik
   // gelir (yoksa 0). Düzeltmek gerekirse Sheets'ten yapılmalı, buradan değil.
   const dundenDevirAnaKasa = dunkuKayit ? (dunkuKayit.yarinaDevirAnaKasa ?? dunkuKayit.yarinaDevir ?? 0) : 0;
-  const bugunkuNakitAnaKasaya = toplamNakitPara + anaKasaToplam;
+  // Ana Kasadan Harcamalar POZİTİFse ana kasadan para ÇIKMIŞ demektir (harcama) — bu yüzden
+  // Yarına Devir hesabından ÇIKARTILIYOR (eskiden yanlışlıkla toplanıyordu). Negatif girilirse
+  // (ana kasaya para KONMUŞ), çıkartmak otomatik olarak toplama dönüşür.
+  const bugunkuNakitAnaKasaya = toplamNakitPara - anaKasaToplam;
   const yarinaDevirAnaKasa = dundenDevirAnaKasa + bugunkuNakitAnaKasaya;
 
   // Enter'a basınca fareyle sıradaki alana tıklamayı beklemeden, DOM sırasındaki bir sonraki
@@ -503,7 +506,7 @@ export default function GunSonu({ data, onNavigate }) {
               <div className="gs-bilgi-tarih">
                 <span className="gun">{new Date().toLocaleDateString('tr-TR', { weekday: 'long' })}</span>
                 <span className="tarih">{new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
-                <div className="gs-bilgi-toplam-ciro"><span>TOPLAM CİRO</span><strong>{TL(ciro.total)}</strong></div>
+                <div className="gs-bilgi-toplam-ciro"><span>TOPLAM CİRO</span><strong>{TL(toplamNakitPara + cariToplam + posToplam + genelYemekToplami + gunlukKasaToplam)}</strong></div>
               </div>
 
               <span className="gs-subhead big">Ciro Karşılaştırma</span>
