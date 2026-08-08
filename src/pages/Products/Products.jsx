@@ -111,43 +111,51 @@ export default function Products({ data, onNavigate }) {
       if (!res.ok) throw new Error('pull failed');
       const json = await res.json();
 
-      // Kategoriler — sıra/sabit bilgisini Sheet'ten uygula (eskiden bu adım hiç yoktu,
-      // bu yüzden Sheet'te kategori sırası değiştirilse bile Çek'e hiç yansımıyordu).
+      // Kategoriler — sıra/sabit bilgisini Sheet'ten uygula. Değişen kategoriler TEK bir
+      // toplu istekte gönderiliyor (eskiden her biri ayrı bir istekti — 40 kategori değiştiyse
+      // 40 ayrı ağ isteği demekti).
+      const categoryPatches = [];
       (json.categories || []).forEach((c) => {
         const existing = data.categories.find((dc) => dc.name === c.name);
         if (existing) {
           if (existing.menuSirasi !== c.menuSirasi || existing.sabit !== c.sabit) {
-            data.updateCategoryMeta(c.name, { menuSirasi: c.menuSirasi, sabit: c.sabit });
+            categoryPatches.push({ name: c.name, patch: { menuSirasi: c.menuSirasi, sabit: c.sabit } });
           }
         } else {
           data.addCategory(c.name);
-          data.updateCategoryMeta(c.name, { menuSirasi: c.menuSirasi, sabit: c.sabit });
+          categoryPatches.push({ name: c.name, patch: { menuSirasi: c.menuSirasi, sabit: c.sabit } });
         }
       });
+      data.bulkUpdateCategories(categoryPatches);
 
-      // Alt kategoriler — aynı şekilde sıra bilgisini uygula.
+      // Alt kategoriler — aynı şekilde tek toplu istekte.
+      const subcategoryPatches = [];
       (json.subcategories || []).forEach((s) => {
         const existing = data.subcategories.find((ds) => ds.kategori === s.kategori && ds.name === s.name);
         if (existing) {
           if (existing.menuSirasi !== s.menuSirasi) {
-            data.updateSubcategoryMeta(s.kategori, s.name, { menuSirasi: s.menuSirasi });
+            subcategoryPatches.push({ kategori: s.kategori, name: s.name, patch: { menuSirasi: s.menuSirasi } });
           }
         } else {
           data.addSubcategory(s.kategori, s.name);
-          data.updateSubcategoryMeta(s.kategori, s.name, { menuSirasi: s.menuSirasi });
+          subcategoryPatches.push({ kategori: s.kategori, name: s.name, patch: { menuSirasi: s.menuSirasi } });
         }
       });
+      data.bulkUpdateSubcategories(subcategoryPatches);
 
+      // Ürünler — yüzlerce ürün değişmiş olabilir, hepsi TEK toplu istekte gidiyor.
       const sheetProducts = (json.products || []).filter((p) => !p.isAzVariant);
+      const productPatches = [];
       sheetProducts.forEach((p) => {
         const existing = data.products.find((dp) => dp.ad === p.ad && dp.kategori === p.kategori);
         if (existing) {
-          data.updateProduct(existing.id, { fiyat: p.fiyat, durum: p.durum, menuSirasi: p.menuSirasi, sabit: p.sabit });
+          productPatches.push({ id: existing.id, patch: { fiyat: p.fiyat, durum: p.durum, menuSirasi: p.menuSirasi, sabit: p.sabit } });
           if (p.azPorsiyon) data.setAzPorsiyon(existing.id, true, p.azFiyat);
         } else {
           data.addProduct({ kategori: p.kategori, altKategori: p.altKategori, ad: p.ad, fiyat: p.fiyat, menuSirasi: p.menuSirasi });
         }
       });
+      data.bulkUpdateProducts(productPatches);
       showToast('Sheet\'ten güncellendi (kategoriler, alt kategoriler ve ürünler)');
     } catch {
       showToast('Sheet\'ten çekilemedi — bağlantıyı kontrol et');

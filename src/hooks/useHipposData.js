@@ -242,6 +242,24 @@ export default function useHipposData(scope = 'full') {
     });
   }
 
+  // "Sheet'ten Çek" gibi birçok kategoriyi aynı anda etkileyen işlemler için — tek istek.
+  function bulkUpdateCategories(patches) {
+    if (!patches || patches.length === 0) return;
+    setCategories((prev) => {
+      const map = new Map(patches.map((p) => [p.name, p.patch]));
+      return prev.map((c) => (map.has(c.name) ? { ...c, ...map.get(c.name) } : c));
+    });
+    const rows = patches.map(({ name, patch }) => {
+      const row = { name };
+      if (patch.menuSirasi !== undefined) row.menu_sirasi = patch.menuSirasi;
+      if (patch.sabit !== undefined) row.sabit = patch.sabit;
+      return row;
+    });
+    supabase.from('categories').upsert(rows, { onConflict: 'name' }).then(({ error }) => {
+      if (error) console.error('toplu kategori güncellenemedi:', error.message);
+    });
+  }
+
   function addSubcategory(kategori, name) {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -266,6 +284,25 @@ export default function useHipposData(scope = 'full') {
       .eq('kategori', kategori)
       .eq('name', name)
       .then(({ error }) => { if (error) console.error('alt kategori güncellenemedi:', error.message); });
+  }
+
+  // "Sheet'ten Çek" gibi birçok alt kategoriyi aynı anda etkileyen işlemler için — tek istek.
+  function bulkUpdateSubcategories(patches) {
+    if (!patches || patches.length === 0) return;
+    setSubcategories((prev) => {
+      const map = new Map(patches.map((p) => [`${p.kategori}|${p.name}`, p.patch]));
+      return prev.map((s) => {
+        const patch = map.get(`${s.kategori}|${s.name}`);
+        return patch ? { ...s, ...patch } : s;
+      });
+    });
+    const rows = patches
+      .filter(({ patch }) => patch.menuSirasi !== undefined)
+      .map(({ kategori, name, patch }) => ({ kategori, name, menu_sirasi: patch.menuSirasi }));
+    if (rows.length === 0) return;
+    supabase.from('subcategories').upsert(rows, { onConflict: 'kategori,name' }).then(({ error }) => {
+      if (error) console.error('toplu alt kategori güncellenemedi:', error.message);
+    });
   }
 
   function addProduct(product) {
@@ -312,6 +349,37 @@ export default function useHipposData(scope = 'full') {
     if (Object.keys(dbPatch).length === 0) return;
     supabase.from('products').update(dbPatch).eq('id', id).then(({ error }) => {
       if (error) console.error('ürün güncellenemedi:', error.message);
+    });
+  }
+
+  // Çok sayıda ürünü TEK seferde günceller (örn. "Sheet'ten Çek" — 200 ürün değiştiyse eskiden
+  // 200 ayrı .update() isteği atılıyordu, bu da 200 ayrı ağ isteği demekti; artık tek bir
+  // .upsert() isteğiyle gidiyor. NOT: Postgres Realtime satır bazlı çalıştığı için mesaj sayısı
+  // yine değişen satır sayısı kadar olur (bu kaçınılmaz) — buradaki asıl kazanç istek/hız
+  // tarafında, yüzlerce ayrı ağ isteğinin oluşturduğu yavaşlık ve hata riskini ortadan kaldırmak.
+  function bulkUpdateProducts(patches) {
+    if (!patches || patches.length === 0) return;
+    setProducts((prev) => {
+      const map = new Map(patches.map((p) => [p.id, p.patch]));
+      return prev.map((p) => (map.has(p.id) ? { ...p, ...map.get(p.id) } : p));
+    });
+    const rows = patches.map(({ id, patch }) => {
+      const row = { id };
+      if (patch.ad !== undefined) row.ad = patch.ad;
+      if (patch.fiyat !== undefined) row.fiyat = patch.fiyat;
+      if (patch.durum !== undefined) row.durum = patch.durum;
+      if (patch.menuSirasi !== undefined) row.menu_sirasi = patch.menuSirasi;
+      if (patch.sabit !== undefined) row.sabit = patch.sabit;
+      if (patch.kategori !== undefined) row.kategori = patch.kategori;
+      if (patch.altKategori !== undefined) row.alt_kategori = patch.altKategori;
+      if (patch.gununMenusuKategori !== undefined) row.gunun_menusu_kategori = patch.gununMenusuKategori;
+      if (patch.gununMenusuSira !== undefined) row.gunun_menusu_sira = patch.gununMenusuSira;
+      if (patch.bicakGerekli !== undefined) row.bicak_gerekli = patch.bicakGerekli;
+      if (patch.ekmekGerekli !== undefined) row.ekmek_gerekli = patch.ekmekGerekli;
+      return row;
+    });
+    supabase.from('products').upsert(rows, { onConflict: 'id' }).then(({ error }) => {
+      if (error) console.error('toplu ürün güncellenemedi:', error.message);
     });
   }
 
@@ -589,7 +657,10 @@ export default function useHipposData(scope = 'full') {
       packages: need(['paketci']),
       package_meta: need(['paketci']),
       sales_history: need([]),
-      sold_items: need([]),
+      // sold_items: kimse tekil satılan ürünü CANLI izlemiyor (satış verisi zaten Supabase'de
+      // ve Sheets'te güvenle saklanıyor, Yönetim Paneli'ndeki "en çok satılan" listesi sayfa
+      // yenilenince zaten güncel veriyi çeker) — bu yüzden hiçbir scope'ta dinlenmiyor.
+      sold_items: false,
       action_history: need([]),
       cariler: need(['paketci']),
       cari_hareketler: need([]),
@@ -1483,6 +1554,9 @@ export default function useHipposData(scope = 'full') {
     applyMutfakMenusu,
     addProduct,
     updateProduct,
+    bulkUpdateProducts,
+    bulkUpdateCategories,
+    bulkUpdateSubcategories,
     deleteProduct,
     setAzPorsiyon,
     categories,
