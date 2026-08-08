@@ -34,32 +34,30 @@
 }
 .gs-shell * { box-sizing: border-box; }
 
-.gs-header {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 20px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border-soft);
+.gs-float-back {
+  position: fixed; top: 10px; left: 10px; z-index: 50;
+  width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--ink); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; box-shadow: var(--shadow-2); opacity: 0.85;
 }
-.gs-back-btn {
-  flex-shrink: 0;
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
-  border: 1px solid var(--border);
-  background: var(--panel-2);
-  color: var(--ink);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
+.gs-float-back:hover { opacity: 1; background: #fff; }
+
+.gs-float-menu-wrap { position: fixed; top: 10px; right: 10px; z-index: 50; }
+.gs-float-menu-btn {
+  width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--ink); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; box-shadow: var(--shadow-2); opacity: 0.85;
 }
-.gs-back-btn:hover { background: #fff; }
-.gs-header-title { flex: 1; display: flex; flex-direction: column; }
-.gs-header-title h1 { font-size: 16px; font-weight: 800; margin: 0; }
-.gs-header-title span { font-size: 11px; color: var(--ink-muted); font-weight: 600; }
+.gs-float-menu-btn:hover { opacity: 1; background: #fff; }
+.gs-float-menu-backdrop { position: fixed; inset: 0; z-index: 49; }
+.gs-float-menu-dropdown {
+  position: absolute; top: 38px; right: 0; z-index: 51;
+  background: var(--panel); border: 1px solid var(--border-soft); border-radius: var(--r-panel);
+  box-shadow: var(--shadow-3); padding: 12px; width: 190px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.gs-float-menu-tarih { font-size: 11px; font-weight: 700; color: var(--ink-muted); text-align: center; padding-bottom: 4px; border-bottom: 1px dashed var(--border); }
+.gs-float-menu-dropdown .gs-share-btn, .gs-float-menu-dropdown .gs-save-btn { width: 100%; justify-content: center; }
 .gs-save-btn {
   flex-shrink: 0;
   display: flex;
@@ -105,7 +103,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr;
   gap: 10px;
-  padding: 10px;
+  padding: 48px 10px 10px;
 }
 .gs-col {
   min-height: 0;
@@ -189,7 +187,7 @@
 .gs-bilgi-card .gs-ciro-karsilastirma .pos strong { color: #6EE7B7; }
 .gs-bilgi-card .gs-ciro-karsilastirma .neg strong { color: #FCA5A5; }
 .gs-bilgi-card .gs-no-record { color: rgba(255,255,255,0.5); }
-.gs-bilgi-card .gs-ekmek-mini > div, .gs-bilgi-card .gs-ciro-karsilastirma > div, .gs-bilgi-card .gs-anakasa-takip > div { padding: 1px 0; }
+.gs-bilgi-card .gs-ekmek-mini > div, .gs-bilgi-card .gs-ciro-karsilastirma > div, .gs-bilgi-card .gs-anakasa-takip > div { padding: 0; line-height: 1.5; }
 
 /* ---- Nakit sayımı ---- */
 .gs-nakit-table { display: flex; flex-direction: column; gap: 4px; }
@@ -241,6 +239,11 @@
   background: var(--panel-2); padding: 0 10px; font-size: 12px; font-weight: 700; color: var(--ink); text-align: right;
 }
 .gs-dynrow input:focus { outline: none; border-color: var(--olive); background: #fff; }
+/* Harcamalar satırlarında (POS'tan farklı olarak) isim alanı geniş, tutar dar olsun —
+   uzun harcama isimleri (örn. "Temizlik Malzemesi Alışı") kesilmesin, ekran görüntüsünde
+   de görünsün diye. */
+.gs-dynrow.plain .gs-dynrow-label { width: auto; flex: 1; }
+.gs-dynrow.plain input[type="number"] { flex: none; width: 92px; }
 .gs-row-del {
   flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px; border: 1px solid #F3C6C8;
   background: var(--danger-soft); color: var(--danger); display: flex; align-items: center; justify-content: center; cursor: pointer;
@@ -297,7 +300,7 @@
 }
 
 /* ---- Ekmek mini özet ---- */
-.gs-ekmek-mini { display: flex; flex-direction: column; gap: 3px; }
+.gs-ekmek-mini { display: flex; flex-direction: column; gap: 0; }
 .gs-ekmek-mini > div { display: flex; justify-content: space-between; font-size: 10.5px; }
 .gs-ekmek-mini span { color: var(--ink-muted); }
 .gs-ekmek-mini strong { font-weight: 800; color: var(--ink); }
@@ -305,7 +308,7 @@
 .gs-ekmek-mini .total strong { color: var(--olive-dark); }
 
 /* ---- Ciro karşılaştırma ---- */
-.gs-ciro-karsilastirma { display: flex; flex-direction: column; gap: 3px; }
+.gs-ciro-karsilastirma { display: flex; flex-direction: column; gap: 0; }
 .gs-ciro-karsilastirma > div { display: flex; justify-content: space-between; font-size: 10.5px; }
 .gs-ciro-karsilastirma span { color: var(--ink-muted); }
 .gs-ciro-karsilastirma strong { font-weight: 800; color: var(--ink); }
@@ -313,7 +316,7 @@
 .gs-ciro-karsilastirma .neg strong { color: var(--danger); }
 
 /* ---- Ana kasa takibi ---- */
-.gs-anakasa-takip { display: flex; flex-direction: column; gap: 3px; }
+.gs-anakasa-takip { display: flex; flex-direction: column; gap: 0; }
 .gs-anakasa-takip > div { display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; }
 .gs-anakasa-takip span { color: var(--ink-muted); }
 .gs-anakasa-takip strong { font-weight: 800; color: var(--ink); }

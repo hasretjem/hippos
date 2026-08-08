@@ -6,7 +6,7 @@ import { TL } from '../../hooks/useHipposData';
 // tarayıcıya doğrudan yükleniyor (loadHtml2Canvas fonksiyonu, aşağıda).
 import {
   ArrowLeft, Save, Banknote, Calculator, CreditCard, Users, Utensils,
-  Plus, Trash2, AlertTriangle, Check, Lock, Delete, Pencil, Share2,
+  Plus, Trash2, AlertTriangle, Check, Lock, Delete, Pencil, Share2, MoreVertical,
 } from 'lucide-react';
 
 const DENOMS = [5, 10, 20, 50, 100, 200];
@@ -34,6 +34,7 @@ export default function GunSonu({ data, onNavigate }) {
   const { salesHistory, cariler, cariHareketler } = data;
 
   const [toast, setToast] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
   function showToast(msg) {
     setToast(msg);
     setTimeout(() => setToast(''), 2200);
@@ -312,19 +313,25 @@ export default function GunSonu({ data, onNavigate }) {
 
   return (
     <div className="gs-shell">
-      <header className="gs-header">
-        <button className="gs-back-btn" onClick={() => onNavigate('settings')}><ArrowLeft size={18} /></button>
-        <div className="gs-header-title">
-          <h1>Gün Sonu — Kasa Hesaplama</h1>
-          <span>{bugunTarih}</span>
-        </div>
-        <button className="gs-share-btn" onClick={paylasFoto} disabled={sharing}>
-          <Share2 size={15} /> {sharing ? 'Hazırlanıyor...' : 'Paylaş'}
-        </button>
-        <button className="gs-save-btn" onClick={kaydet} disabled={saving}>
-          <Save size={16} /> {saving ? 'Kaydediliyor...' : 'Gün Sonu Kaydet'}
-        </button>
-      </header>
+      <button className="gs-float-back" onClick={() => onNavigate('settings')}><ArrowLeft size={16} /></button>
+
+      <div className="gs-float-menu-wrap">
+        <button className="gs-float-menu-btn" onClick={() => setMenuOpen((v) => !v)}><MoreVertical size={18} /></button>
+        {menuOpen && (
+          <>
+            <div className="gs-float-menu-backdrop" onClick={() => setMenuOpen(false)} />
+            <div className="gs-float-menu-dropdown">
+              <div className="gs-float-menu-tarih">{bugunTarih}</div>
+              <button className="gs-share-btn" onClick={() => { paylasFoto(); setMenuOpen(false); }} disabled={sharing}>
+                <Share2 size={15} /> {sharing ? 'Hazırlanıyor...' : 'Paylaş'}
+              </button>
+              <button className="gs-save-btn" onClick={() => { kaydet(); setMenuOpen(false); }} disabled={saving}>
+                <Save size={16} /> {saving ? 'Kaydediliyor...' : 'Gün Sonu Kaydet'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
 
       {loading ? (
         <p className="gs-loading">Yükleniyor...</p>
@@ -385,7 +392,7 @@ export default function GunSonu({ data, onNavigate }) {
                 ))}
                 <button className="gs-add-row-btn" onClick={addEkstraCari}><Plus size={13} /> Cari Ekle</button>
               </div>
-              <div className="gs-row-total"><span>Toplam Cari Tutarı</span><strong>{TL(cariToplam)}</strong></div>
+              <div className="gs-row-total main"><span>TOPLAM CARİ TUTARI</span><strong>{TL(cariToplam)}</strong></div>
             </section>
           </div>
 
@@ -402,7 +409,7 @@ export default function GunSonu({ data, onNavigate }) {
                 ))}
                 <button className="gs-add-row-btn" onClick={addPosRow}><Plus size={13} /> Satır Ekle</button>
               </div>
-              <div className="gs-row-total"><span>POS Toplamı</span><strong>{TL(posToplam)}</strong></div>
+              <div className="gs-row-total main"><span>POS TOPLAMI</span><strong>{TL(posToplam)}</strong></div>
             </section>
 
             <section className="gs-card">
@@ -429,7 +436,7 @@ export default function GunSonu({ data, onNavigate }) {
                 ))}
               </div>
               <button className="gs-add-row-btn" onClick={addYemekKolon}><Plus size={13} /> Kolon Ekle</button>
-              <div className="gs-row-total"><span>Genel Yemek Kartları Toplamı</span><strong>{TL(genelYemekToplami)}</strong></div>
+              <div className="gs-row-total main"><span>GENEL YEMEK KARTLARI TOPLAMI</span><strong>{TL(genelYemekToplami)}</strong></div>
             </section>
           </div>
 
@@ -448,7 +455,7 @@ export default function GunSonu({ data, onNavigate }) {
                 ))}
                 <button className="gs-add-row-btn" onClick={() => addRow(setAnaKasaHarcamalar)}><Plus size={13} /> Satır Ekle</button>
               </div>
-              <div className="gs-row-total small"><span>Ana Kasa Toplamı</span><strong>{TL(anaKasaToplam)}</strong></div>
+              <div className="gs-row-total main"><span>ANA KASA TOPLAMI</span><strong>{TL(anaKasaToplam)}</strong></div>
 
               <span className="gs-subhead" style={{ marginTop: 14 }}>Günlük Kasadan Harcamalar</span>
               <div className="gs-dynrow-list">
@@ -461,7 +468,7 @@ export default function GunSonu({ data, onNavigate }) {
                 ))}
                 <button className="gs-add-row-btn" onClick={() => addRow(setGunlukKasaHarcamalar)}><Plus size={13} /> Satır Ekle</button>
               </div>
-              <div className="gs-row-total small"><span>Günlük Kasa Toplamı</span><strong>{TL(gunlukKasaToplam)}</strong></div>
+              <div className="gs-row-total main"><span>GÜNLÜK KASA TOPLAMI</span><strong>{TL(gunlukKasaToplam)}</strong></div>
             </section>
 
             <section className="gs-card">
