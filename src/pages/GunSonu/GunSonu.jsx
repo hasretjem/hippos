@@ -6,7 +6,7 @@ import {
   Plus, Trash2, AlertTriangle, Check, Lock, Delete, Pencil, Info,
 } from 'lucide-react';
 
-const DENOMS = [200, 100, 50, 20, 10, 5];
+const DENOMS = [5, 10, 20, 50, 100, 200];
 const HEDEF_KUPUR = { 5: 20, 10: 40, 20: 30, 50: 10, 100: 4, 200: 0 };
 const HEDEF_TOPLAM = Object.entries(HEDEF_KUPUR).reduce((s, [k, v]) => s + Number(k) * v, 0);
 
@@ -98,9 +98,17 @@ export default function GunSonu({ data, onNavigate }) {
     loadAll();
   }, []);
 
+  // Sheets'teki satır sırasına güvenmiyoruz (elle düzenlenmiş/yeniden sıralanmış olabilir) —
+  // "Tarih" alanını (GG.AA.YYYY) gerçek tarihe çevirip en son güne göre buluyoruz. Bu sayede
+  // Sheet'te bir gün sonu kaydını sonradan elle düzeltirsen, o değişiklik burada da yansır.
+  function parseTrTarih(t) {
+    const [g, a, y] = (t || '').split('.').map(Number);
+    return new Date(y, (a || 1) - 1, g || 1).getTime();
+  }
   const dunkuKayit = useMemo(() => {
     const others = gecmisKayitlar.filter((r) => r.tarih !== bugunTarih);
-    return others.length > 0 ? others[others.length - 1] : null;
+    if (others.length === 0) return null;
+    return [...others].sort((a, b) => parseTrTarih(b.tarih) - parseTrTarih(a.tarih))[0];
   }, [gecmisKayitlar, bugunTarih]);
 
   const [nakitAdet, setNakitAdet] = useState({});
@@ -159,6 +167,19 @@ export default function GunSonu({ data, onNavigate }) {
   const [yemekKolonlari, setYemekKolonlari] = useState(['Şirket Telefonu', 'Paket']);
   const [yemekTutarlari, setYemekTutarlari] = useState({});
   function addYemekKolon() { setYemekKolonlari((prev) => [...prev, `Ek ${prev.length - 1}`]); }
+  function removeYemekKolon(idx) {
+    if (idx < 2) return; // ilk iki kolon (Şirket Telefonu/Paket) sabit, silinemez
+    const kolonAdi = yemekKolonlari[idx];
+    setYemekKolonlari((prev) => prev.filter((_, i) => i !== idx));
+    setYemekTutarlari((prev) => {
+      const next = {};
+      Object.entries(prev).forEach(([marka, row]) => {
+        const { [kolonAdi]: _drop, ...rest } = row;
+        next[marka] = rest;
+      });
+      return next;
+    });
+  }
   function updateYemekTutar(marka, kolon, value) {
     setYemekTutarlari((prev) => ({ ...prev, [marka]: { ...(prev[marka] || {}), [kolon]: value } }));
   }
@@ -199,16 +220,30 @@ export default function GunSonu({ data, onNavigate }) {
   const bugunkuNakitAnaKasaya = toplamNakitPara + anaKasaToplam;
   const yarinaDevirAnaKasa = dundenDevirAnaKasa + bugunkuNakitAnaKasaya;
 
+  // Enter'a basınca fareyle sıradaki alana tıklamayı beklemeden, DOM sırasındaki bir sonraki
+  // "gs-tabbable" alanına odaklanır — sayfadaki neredeyse her giriş kutusunda kullanılıyor.
+  function handleTabEnter(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const all = Array.from(document.querySelectorAll('.gs-tabbable'));
+    const idx = all.indexOf(e.target);
+    if (idx !== -1 && idx < all.length - 1) all[idx + 1].focus();
+  }
+
   const [saving, setSaving] = useState(false);
   async function kaydet() {
     setSaving(true);
     try {
       const payload = {
-        tarih: bugunTarih, ciro, nakitAdet, sayilanNakitToplami, kasaAvansi, toplamNakitPara,
-        posTutarlari, posToplam, anaKasaHarcamalar, anaKasaToplam, gunlukKasaHarcamalar, gunlukKasaToplam,
-        yemekTutarlari, genelYemekToplami,
-        cariDetay: [...SABIT_CARILER.map((ad) => ({ ad, tutar: cariGosterilenTutar(ad) })), ...ekstraCariler.filter((c) => c.ad.trim())],
-        cariToplam, ekmekToplam, dundenDevirAnaKasa, bugunkuNakitAnaKasaya, yarinaDevirAnaKasa, yarinaDevir: yarinaDevirAnaKasa,
+        tarih: bugunTarih,
+        ciro,
+        toplamNakitPara,
+        posToplam,
+        anaKasaHarcamalar, anaKasaToplam,
+        gunlukKasaHarcamalar, gunlukKasaToplam,
+        cariToplam,
+        genelYemekToplami,
+        dundenDevirAnaKasa, bugunkuNakitAnaKasaya, yarinaDevirAnaKasa, yarinaDevir: yarinaDevirAnaKasa,
       };
       const res = await fetch('/api/gunsonu', {
         method: 'POST',
@@ -253,7 +288,7 @@ export default function GunSonu({ data, onNavigate }) {
                 {DENOMS.map((d) => (
                   <div key={d} className="gs-nakit-row">
                     <span className="gs-nakit-denom">{d} ₺</span>
-                    <input type="number" min={0} value={nakitAdet[d] || ''} onChange={(e) => setNakitAdet((prev) => ({ ...prev, [d]: e.target.value }))} />
+                    <input type="number" min={0} className="gs-tabbable" value={nakitAdet[d] || ''} onChange={(e) => setNakitAdet((prev) => ({ ...prev, [d]: e.target.value }))} onKeyDown={handleTabEnter} />
                     <span className="gs-nakit-tutar">{TL(d * (parseInt(nakitAdet[d], 10) || 0))}</span>
                   </div>
                 ))}
@@ -275,8 +310,8 @@ export default function GunSonu({ data, onNavigate }) {
               <div className="gs-dynrow-list">
                 {posTutarlari.map((row, idx) => (
                   <div key={idx} className="gs-dynrow">
-                    <input className="gs-dynrow-label" value={row.label} onChange={(e) => updatePosRow(idx, 'label', e.target.value)} />
-                    <input type="number" placeholder="0" value={row.tutar} onChange={(e) => updatePosRow(idx, 'tutar', e.target.value)} />
+                    <input className="gs-dynrow-label gs-tabbable" value={row.label} onChange={(e) => updatePosRow(idx, 'label', e.target.value)} onKeyDown={handleTabEnter} />
+                    <input type="number" placeholder="0" className="gs-tabbable" value={row.tutar} onChange={(e) => updatePosRow(idx, 'tutar', e.target.value)} onKeyDown={handleTabEnter} />
                     {posTutarlari.length > 1 && <button className="gs-row-del" onClick={() => removePosRow(idx)}><Trash2 size={12} /></button>}
                   </div>
                 ))}
@@ -293,7 +328,7 @@ export default function GunSonu({ data, onNavigate }) {
                     {cariEditingFor === ad ? (
                       <>
                         <span className="ad">{ad}</span>
-                        <input type="number" value={cariEditDraft} onChange={(e) => setCariEditDraft(e.target.value)} />
+                        <input type="number" autoFocus value={cariEditDraft} onChange={(e) => setCariEditDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveCariEdit()} />
                         <button className="gs-cari-save" onClick={saveCariEdit}><Check size={12} /></button>
                       </>
                     ) : (
@@ -307,8 +342,8 @@ export default function GunSonu({ data, onNavigate }) {
                 ))}
                 {ekstraCariler.map((row, idx) => (
                   <div key={idx} className="gs-cari-row extra">
-                    <input className="ad-input" placeholder="Cari adı" value={row.ad} onChange={(e) => updateEkstraCari(idx, 'ad', e.target.value)} />
-                    <input type="number" placeholder="0" value={row.tutar} onChange={(e) => updateEkstraCari(idx, 'tutar', e.target.value)} />
+                    <input className="ad-input gs-tabbable" placeholder="Cari adı" value={row.ad} onChange={(e) => updateEkstraCari(idx, 'ad', e.target.value)} onKeyDown={handleTabEnter} />
+                    <input type="number" placeholder="0" className="gs-tabbable" value={row.tutar} onChange={(e) => updateEkstraCari(idx, 'tutar', e.target.value)} onKeyDown={handleTabEnter} />
                     <button className="gs-row-del" onClick={() => removeEkstraCari(idx)}><Trash2 size={12} /></button>
                   </div>
                 ))}
@@ -326,7 +361,7 @@ export default function GunSonu({ data, onNavigate }) {
               <div className="gs-dynrow-list">
                 {anaKasaHarcamalar.map((row, idx) => (
                   <div key={idx} className="gs-dynrow plain">
-                    <input type="number" placeholder="0 (+ / -)" value={row.tutar} onChange={(e) => updateRow(setAnaKasaHarcamalar, idx, e.target.value)} />
+                    <input type="number" placeholder="0 (+ / -)" className="gs-tabbable" value={row.tutar} onChange={(e) => updateRow(setAnaKasaHarcamalar, idx, e.target.value)} onKeyDown={handleTabEnter} />
                     {anaKasaHarcamalar.length > 1 && <button className="gs-row-del" onClick={() => removeRow(setAnaKasaHarcamalar, idx)}><Trash2 size={12} /></button>}
                   </div>
                 ))}
@@ -338,7 +373,7 @@ export default function GunSonu({ data, onNavigate }) {
               <div className="gs-dynrow-list">
                 {gunlukKasaHarcamalar.map((row, idx) => (
                   <div key={idx} className="gs-dynrow plain">
-                    <input type="number" placeholder="0 (+ / -)" value={row.tutar} onChange={(e) => updateRow(setGunlukKasaHarcamalar, idx, e.target.value)} />
+                    <input type="number" placeholder="0 (+ / -)" className="gs-tabbable" value={row.tutar} onChange={(e) => updateRow(setGunlukKasaHarcamalar, idx, e.target.value)} onKeyDown={handleTabEnter} />
                     {gunlukKasaHarcamalar.length > 1 && <button className="gs-row-del" onClick={() => removeRow(setGunlukKasaHarcamalar, idx)}><Trash2 size={12} /></button>}
                   </div>
                 ))}
@@ -350,18 +385,23 @@ export default function GunSonu({ data, onNavigate }) {
             <section className="gs-card">
               <h2><Utensils size={16} /> Yemek Kartları</h2>
               <div className="gs-yemek-table">
-                <div className="gs-yemek-head" style={{ gridTemplateColumns: `88px repeat(${yemekKolonlari.length}, 1fr) 70px` }}>
+                <div className="gs-yemek-head" style={{ gridTemplateColumns: `88px repeat(${yemekKolonlari.length}, 1fr) 76px` }}>
                   <span></span>
-                  {yemekKolonlari.map((k) => <span key={k}>{k}</span>)}
+                  {yemekKolonlari.map((k, i) => (
+                    <span key={k} className="gs-yemek-head-col">
+                      {k}
+                      {i >= 2 && <button className="gs-yemek-kolon-sil" onClick={() => removeYemekKolon(i)}><Trash2 size={10} /></button>}
+                    </span>
+                  ))}
                   <span>Toplam</span>
                 </div>
                 {YEMEK_KARTLARI.map((marka) => (
-                  <div key={marka} className="gs-yemek-row" style={{ gridTemplateColumns: `88px repeat(${yemekKolonlari.length}, 1fr) 70px` }}>
+                  <div key={marka} className="gs-yemek-row" style={{ gridTemplateColumns: `88px repeat(${yemekKolonlari.length}, 1fr) 76px` }}>
                     <span className="marka">{marka}</span>
                     {yemekKolonlari.map((k) => (
-                      <input key={k} type="number" placeholder="0" value={(yemekTutarlari[marka] || {})[k] || ''} onChange={(e) => updateYemekTutar(marka, k, e.target.value)} />
+                      <input key={k} type="number" placeholder="0" className="gs-tabbable" value={(yemekTutarlari[marka] || {})[k] || ''} onChange={(e) => updateYemekTutar(marka, k, e.target.value)} onKeyDown={handleTabEnter} />
                     ))}
-                    <strong>{TL(yemekMarkaToplam(marka))}</strong>
+                    <strong className="gs-yemek-toplam">{TL(yemekMarkaToplam(marka))}</strong>
                   </div>
                 ))}
               </div>
@@ -398,7 +438,7 @@ export default function GunSonu({ data, onNavigate }) {
                 ) : (
                   <div className="manuel">
                     <span>Dünden Devir (kayıt yok, elle gir)</span>
-                    <input type="number" placeholder="0" value={dundenDevirManuel} onChange={(e) => setDundenDevirManuel(e.target.value)} />
+                    <input type="number" placeholder="0" className="gs-tabbable" value={dundenDevirManuel} onChange={(e) => setDundenDevirManuel(e.target.value)} onKeyDown={handleTabEnter} />
                   </div>
                 )}
                 <div><span>Bugünkü Nakit</span><strong>{TL(bugunkuNakitAnaKasaya)}</strong></div>
@@ -412,13 +452,17 @@ export default function GunSonu({ data, onNavigate }) {
                 <div className="gs-hedef-head"><span>Kupür</span><span>Gereken</span><span>Girilen</span><span>Eksik</span></div>
                 {Object.entries(HEDEF_KUPUR).filter(([, adet]) => adet > 0).map(([d, hedefAdet]) => {
                   const girilen = parseInt(nakitAdet[d], 10) || 0;
-                  const eksik = Math.max(0, hedefAdet - girilen);
+                  const fark = hedefAdet - girilen; // pozitif: eksik, negatif: fazla, 0: tam
+                  let label, cls;
+                  if (fark > 0) { label = fark; cls = 'warn'; }
+                  else if (fark < 0) { label = `+${-fark}`; cls = 'fazla'; }
+                  else { label = '✓'; cls = 'ok'; }
                   return (
                     <div key={d} className="gs-hedef-row">
                       <span>{d} ₺</span>
                       <span>{hedefAdet}</span>
                       <span>{girilen}</span>
-                      <strong className={eksik > 0 ? 'warn' : 'ok'}>{eksik > 0 ? eksik : '✓'}</strong>
+                      <strong className={cls}>{label}</strong>
                     </div>
                   );
                 })}

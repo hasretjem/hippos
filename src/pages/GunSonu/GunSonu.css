@@ -223,14 +223,24 @@
 .gs-yemek-table { display: flex; flex-direction: column; gap: 4px; }
 .gs-yemek-head { display: grid; gap: 4px; align-items: center; }
 .gs-yemek-head span { font-size: 9px; font-weight: 700; text-transform: uppercase; color: var(--ink-soft); text-align: center; }
+.gs-yemek-head-col { display: flex; align-items: center; justify-content: center; gap: 3px; position: relative; }
+.gs-yemek-kolon-sil {
+  width: 14px; height: 14px; border-radius: 50%; border: none; background: var(--danger-soft);
+  color: var(--danger); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+}
+.gs-yemek-kolon-sil:hover { background: var(--danger); color: #fff; }
 .gs-yemek-row { display: grid; gap: 4px; align-items: center; }
 .gs-yemek-row .marka { font-size: 10.5px; font-weight: 700; color: var(--ink); }
 .gs-yemek-row input {
   height: 28px; border-radius: 7px; border: 1px solid var(--border);
   background: var(--panel-2); text-align: center; font-size: 11px; font-weight: 700; color: var(--ink);
+  min-width: 0;
 }
 .gs-yemek-row input:focus { outline: none; border-color: var(--olive); background: #fff; }
-.gs-yemek-row strong { font-size: 11px; font-weight: 800; color: var(--olive-dark); text-align: right; }
+.gs-yemek-toplam {
+  font-size: 11px; font-weight: 800; color: var(--olive-dark) !important; text-align: right;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
+}
 
 /* ---- Ekmek mini özet ---- */
 .gs-ekmek-mini { display: flex; flex-direction: column; gap: 3px; }
@@ -259,12 +269,13 @@
 
 /* ---- Bozukluk hedefi ---- */
 .gs-hedef-table { display: flex; flex-direction: column; gap: 3px; }
-.gs-hedef-head, .gs-hedef-row { display: grid; grid-template-columns: 44px 1fr 1fr 1fr; align-items: center; gap: 4px; }
-.gs-hedef-head span { font-size: 8.5px; font-weight: 700; text-transform: uppercase; color: var(--ink-soft); }
-.gs-hedef-row span { font-size: 11px; font-weight: 700; color: var(--ink); }
-.gs-hedef-row strong { font-size: 11px; font-weight: 800; text-align: right; }
+.gs-hedef-head, .gs-hedef-row { display: grid; grid-template-columns: 44px 1fr 1fr 1fr; align-items: center; gap: 4px; text-align: center; }
+.gs-hedef-head span { font-size: 8.5px; font-weight: 700; text-transform: uppercase; color: var(--ink-soft); text-align: center; }
+.gs-hedef-row span { font-size: 11px; font-weight: 700; color: var(--ink); text-align: center; }
+.gs-hedef-row strong { font-size: 11px; font-weight: 800; text-align: center; }
 .gs-hedef-row strong.warn { color: var(--danger); }
 .gs-hedef-row strong.ok { color: var(--olive-dark); }
+.gs-hedef-row strong.fazla { color: var(--earth-dark); }
 
 /* ---- Modallar ---- */
 .gs-modal-overlay {
