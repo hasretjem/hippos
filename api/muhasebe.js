@@ -14,69 +14,120 @@ const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const BELGE_TIPLERI = {
   alisFaturasi: {
     tab: 'Alış Faturası',
-    headers: ['Tarih', 'Saat', 'Tedarikçi/Firma', 'Fatura No', 'Fatura Tarihi', 'Tutar', 'KDV Oranı', 'Ödeme Durumu', 'Açıklama'],
+    headers: ['ID', 'Tarih', 'Saat', 'Tedarikçi/Firma', 'Fatura No', 'Fatura Tarihi', 'Tutar', 'KDV Oranı', 'Ödeme Durumu', 'Açıklama'],
     fields: ['firma', 'faturaNo', 'faturaTarihi', 'tutar', 'kdvOrani', 'odemeDurumu', 'aciklama'],
   },
   satisFaturasi: {
     tab: 'Satış Faturası',
-    headers: ['Tarih', 'Saat', 'Cari/Müşteri Firma', 'Fatura No', 'Fatura Tarihi', 'Toplam Tutar', 'KDV Oranı', 'Tahsilat Durumu', 'Açıklama'],
+    headers: ['ID', 'Tarih', 'Saat', 'Cari/Müşteri Firma', 'Fatura No', 'Fatura Tarihi', 'Toplam Tutar', 'KDV Oranı', 'Tahsilat Durumu', 'Açıklama'],
     fields: ['firma', 'faturaNo', 'faturaTarihi', 'tutar', 'kdvOrani', 'tahsilatDurumu', 'aciklama'],
   },
   alisMakbuzu: {
     tab: 'Alış Makbuzu',
-    headers: ['Tarih', 'Saat', 'Ödeme Yapılan Firma/Kişi', 'İşlem/Dekont No', 'Ödenen Tutar', 'Ödeme Yöntemi', 'Açıklama'],
+    headers: ['ID', 'Tarih', 'Saat', 'Ödeme Yapılan Firma/Kişi', 'İşlem/Dekont No', 'Ödenen Tutar', 'Ödeme Yöntemi', 'Açıklama'],
     fields: ['firma', 'dekontNo', 'tutar', 'odemeYontemi', 'aciklama'],
   },
   satisMakbuzu: {
     tab: 'Satış Makbuzu',
-    headers: ['Tarih', 'Saat', 'Cari/Müşteri', 'Alınan Tutar', 'Tahsilat Yöntemi', 'Açıklama'],
+    headers: ['ID', 'Tarih', 'Saat', 'Cari/Müşteri', 'Alınan Tutar', 'Tahsilat Yöntemi', 'Açıklama'],
     fields: ['firma', 'tutar', 'tahsilatYontemi', 'aciklama'],
   },
 };
 
-async function ensureTab(sheets, tipConfig) {
+// Fatura Detaylı Giriş — bir Alış Faturası kaydına bağlı, kalem kalem ürün satırları.
+// Her kalem kendi satırında: hangi faturaya ait (faturaId), ürün adı, adet, birim fiyat,
+// KDV oranı, iskonto oranı. Fiyat farkı raporlaması ileride bu tablodan beslenecek.
+const DETAY_TAB = 'Fatura Detaylı Giriş';
+const DETAY_HEADERS = ['ID', 'FaturaID', 'Tedarikçi/Firma', 'Fatura No', 'Tarih', 'Saat', 'Ürün Adı', 'Adet', 'Birim Fiyat', 'KDV Oranı', 'İskonto Oranı', 'Satır Tutarı'];
+const DETAY_LAST_COL = 'L';
+
+async function ensureTab(sheets, tab, headers) {
   const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-  const exists = meta.data.sheets.some((s) => s.properties.title === tipConfig.tab);
+  const exists = meta.data.sheets.some((s) => s.properties.title === tab);
   if (!exists) {
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: SHEET_ID,
-      requestBody: { requests: [{ addSheet: { properties: { title: tipConfig.tab } } }] },
+      requestBody: { requests: [{ addSheet: { properties: { title: tab } } }] },
     });
     await sheets.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
-      range: `${tipConfig.tab}!A1`,
+      range: `${tab}!A1`,
       valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [tipConfig.headers] },
+      requestBody: { values: [headers] },
     });
   }
 }
 
 function lastCol(headers) {
-  // A=1 ... basit harf üretici, 26 sütunu aşmayacağımız için yeterli.
   return String.fromCharCode(64 + headers.length);
+}
+
+function rowToDetay(r) {
+  return {
+    id: r[0], faturaId: r[1], firma: r[2], faturaNo: r[3], tarih: r[4], saat: r[5],
+    urunAdi: r[6] || '', adet: Number(r[7]) || 0, birimFiyat: Number(r[8]) || 0,
+    kdvOrani: r[9] || '', iskontoOrani: r[10] || '', satirTutari: Number(r[11]) || 0,
+  };
 }
 
 export default async function handler(req, res) {
   try {
+    const auth = getAuth();
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    const resource = req.method === 'GET' ? req.query.resource : (req.body || {}).resource;
+
+    // ---- Fatura Detaylı Giriş (kalem bazlı) ----
+    if (resource === 'detay') {
+      await ensureTab(sheets, DETAY_TAB, DETAY_HEADERS);
+
+      if (req.method === 'GET') {
+        const result = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${DETAY_TAB}!A2:${DETAY_LAST_COL}` });
+        const rows = result.data.values || [];
+        let records = rows.filter((r) => r[0]).map(rowToDetay);
+        if (req.query.faturaId) records = records.filter((r) => r.faturaId === req.query.faturaId);
+        return res.status(200).json({ records });
+      }
+
+      if (req.method === 'POST') {
+        const { faturaId, firma, faturaNo, urunAdi, adet, birimFiyat, kdvOrani, iskontoOrani } = req.body || {};
+        if (!faturaId || !urunAdi) return res.status(400).json({ error: 'faturaId ve urunAdi gerekli' });
+        const id = String(Date.now());
+        const now = new Date();
+        const tarih = now.toLocaleDateString('tr-TR');
+        const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+        const adetNum = Number(adet) || 0;
+        const fiyatNum = Number(birimFiyat) || 0;
+        const iskNum = parseFloat(String(iskontoOrani).replace('%', '')) || 0;
+        const satirTutari = adetNum * fiyatNum * (1 - iskNum / 100);
+        const rowValues = [id, faturaId, firma || '', faturaNo || '', tarih, saat, urunAdi, adetNum, fiyatNum, kdvOrani || '', iskontoOrani || '', Math.round(satirTutari * 100) / 100];
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID, range: `${DETAY_TAB}!A2`, valueInputOption: 'USER_ENTERED',
+          insertDataOption: 'INSERT_ROWS', requestBody: { values: [rowValues] },
+        });
+        return res.status(200).json({ ok: true, record: rowToDetay(rowValues) });
+      }
+
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // ---- Fatura/Makbuz (4 tip) ----
     const tip = req.method === 'GET' ? req.query.tip : (req.body || {}).tip;
     if (!tip || !BELGE_TIPLERI[tip]) {
-      return res.status(400).json({ error: 'geçersiz belge tipi (alisFaturasi/satisFaturasi/alisMakbuzu/satisMakbuzu)' });
+      return res.status(400).json({ error: 'geçersiz belge tipi (alisFaturasi/satisFaturasi/alisMakbuzu/satisMakbuzu) ya da resource=detay' });
     }
     const tipConfig = BELGE_TIPLERI[tip];
     const col = lastCol(tipConfig.headers);
-
-    const auth = getAuth();
-    const sheets = google.sheets({ version: 'v4', auth });
-    await ensureTab(sheets, tipConfig);
+    await ensureTab(sheets, tipConfig.tab, tipConfig.headers);
 
     if (req.method === 'GET') {
       const result = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${tipConfig.tab}!A2:${col}` });
       const rows = result.data.values || [];
       const records = rows
         .filter((r) => r[0])
-        .map((r, i) => {
-          const rec = { id: i, tarih: r[0], saat: r[1] };
-          tipConfig.fields.forEach((f, idx) => { rec[f] = r[idx + 2] ?? ''; });
+        .map((r) => {
+          const rec = { id: r[0], tarih: r[1], saat: r[2] };
+          tipConfig.fields.forEach((f, idx) => { rec[f] = r[idx + 3] ?? ''; });
           return rec;
         });
       return res.status(200).json({ records });
@@ -86,7 +137,8 @@ export default async function handler(req, res) {
       const now = new Date();
       const tarih = now.toLocaleDateString('tr-TR');
       const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-      const rowValues = [tarih, saat, ...tipConfig.fields.map((f) => req.body[f] ?? '')];
+      const id = String(Date.now());
+      const rowValues = [id, tarih, saat, ...tipConfig.fields.map((f) => req.body[f] ?? '')];
 
       await sheets.spreadsheets.values.append({
         spreadsheetId: SHEET_ID,
@@ -95,7 +147,7 @@ export default async function handler(req, res) {
         insertDataOption: 'INSERT_ROWS',
         requestBody: { values: [rowValues] },
       });
-      return res.status(200).json({ ok: true, tarih, saat });
+      return res.status(200).json({ ok: true, id, tarih, saat });
     }
 
     res.status(405).json({ error: 'Method not allowed' });

@@ -7,6 +7,7 @@ import Cariler from './pages/Cariler/Cariler';
 import GunSonu from './pages/GunSonu/GunSonu';
 import Paketci from './pages/Paketci/Paketci';
 import MutfakPaneli from './pages/MutfakPaneli/MutfakPaneli';
+import Muhasebe from './pages/Muhasebe/Muhasebe';
 import BottomNav from './components/BottomNav/BottomNav';
 import useHipposData, { QUICK_SALE } from './hooks/useHipposData';
 import { supabase } from './services/supabase';
@@ -49,7 +50,7 @@ export default function App() {
   }
 
   function handleNavigate(page, opts) {
-    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler' || page === 'endofday') {
+    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler' || page === 'endofday' || page === 'muhasebe') {
       // Sadece alt menüden "Hızlı Satış"a bilerek tıklanınca seçili masa sıfırlanır.
       // Masalar sayfasından bir masaya girerken (opts.resetTable verilmez) buna dokunulmaz.
       if (page === 'pos' && opts?.resetTable) setSelectedTable(QUICK_SALE);
@@ -85,7 +86,10 @@ export default function App() {
       {activePage === 'endofday' && (
         <GunSonu data={data} onNavigate={handleNavigate} />
       )}
-      {activePage !== 'products' && activePage !== 'pos' && activePage !== 'endofday' && <BottomNav activePage={activePage} onNavigate={handleNavigate} />}
+      {activePage === 'muhasebe' && (
+        <Muhasebe onNavigate={handleNavigate} />
+      )}
+      {activePage !== 'products' && activePage !== 'pos' && activePage !== 'endofday' && activePage !== 'muhasebe' && <BottomNav activePage={activePage} onNavigate={handleNavigate} />}
     </>
   );
 }
