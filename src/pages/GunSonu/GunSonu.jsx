@@ -221,7 +221,10 @@ export default function GunSonu({ data, onNavigate }) {
 
   // Dünden Devir artık HİÇ elle girilemez — sadece bir önceki Gün Sonu kaydından otomatik
   // gelir (yoksa 0). Düzeltmek gerekirse Sheets'ten yapılmalı, buradan değil.
-  const dundenDevirAnaKasa = dunkuKayit ? (dunkuKayit.yarinaDevirAnaKasa ?? dunkuKayit.yarinaDevir ?? 0) : 0;
+  // Yeni Sheet yapısında bu değer anaKasaTakibi.yarinaDevir altında geliyor — api/gunsonu.js
+  // eski (3 sütunlu) kayıtları da aynı şekle çevirip döndürdüğü için burada tek bir okuma
+  // yeterli, format farkını düşünmeye gerek yok.
+  const dundenDevirAnaKasa = dunkuKayit ? (dunkuKayit.anaKasaTakibi?.yarinaDevir ?? dunkuKayit.yarinaDevirAnaKasa ?? dunkuKayit.yarinaDevir ?? 0) : 0;
   // "Bugünkü Nakit" satırı SAF (hiçbir şey çıkarılmamış) toplamNakitPara'yı gösterir —
   // Ana Kasa harcaması AYRI bir satırda gösterilip SADECE Yarına Devir hesabında düşülür.
   // Böylece ekranda hangi rakamın nereden geldiği (sayılan nakit, ana kasa harcaması,
@@ -286,16 +289,55 @@ export default function GunSonu({ data, onNavigate }) {
   async function kaydet() {
     setSaving(true);
     try {
+      // ARTIK sayfada girilen HER ŞEY ayrı ayrı gönderiliyor — api/gunsonu.js bunları
+      // Sheet'te ayrı sütunlara yazıyor (listeler kendi hücrelerinde JSON, toplamlar düz
+      // sayı). Önceki sürümde sadece özet toplamlar gidiyordu; nakit kupür kırılımı, POS
+      // satırları, harcama satırları, cari override/ekstra detayları ve yemek kartı kolon
+      // bazlı dökümü hiç kaydedilmiyordu.
       const payload = {
         tarih: bugunTarih,
-        ciro,
+
         toplamNakitPara,
+        nakitKupurDetayi: nakitAdet, // { "5": "3", "10": "2", ... } — girilmemişler zaten yok
+        kasaAvansi,
+
         posToplam,
-        anaKasaHarcamalar, anaKasaToplam,
-        gunlukKasaHarcamalar, gunlukKasaToplam,
+        posTutarlari, // [{ label, tutar }]
+
+        anaKasaToplam,
+        anaKasaHarcamalar, // [{ ad, tutar }]
+
+        gunlukKasaToplam,
+        gunlukKasaHarcamalar, // [{ ad, tutar }]
+
         cariToplam,
+        cariDetay: {
+          sabitler: SABIT_CARILER.reduce((acc, ad) => {
+            acc[ad] = cariGosterilenTutar(ad);
+            return acc;
+          }, {}),
+          ekstra: ekstraCariler, // [{ ad, tutar }]
+        },
+
         genelYemekToplami,
-        dundenDevirAnaKasa, bugunkuNakit: toplamNakitPara, anaKasaHarcamaToplami: anaKasaToplam, yarinaDevirAnaKasa, yarinaDevir: yarinaDevirAnaKasa,
+        yemekDetay: {
+          kolonlar: yemekKolonlari,
+          tutarlar: yemekTutarlari, // { marka: { kolon: tutar } }
+        },
+
+        ciro: {
+          nakit: ciro['NAKİT'],
+          kart: ciro['KREDİ KARTI'],
+          yemek: ciro['YEMEK KARTI'],
+          cari: ciro['CARİ'],
+        },
+
+        anaKasaTakibi: {
+          dundenDevir: dundenDevirAnaKasa,
+          bugunkuNakit: toplamNakitPara,
+          anaKasaHarcama: anaKasaToplam,
+          yarinaDevir: yarinaDevirAnaKasa,
+        },
       };
       const res = await fetch('/api/gunsonu', {
         method: 'POST',
