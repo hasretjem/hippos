@@ -48,7 +48,7 @@
 .tb-shell button, .tb-shell input { color: inherit; font-family: inherit; }
 .tb-shell h1, .tb-shell h2, .tb-shell h3 { color: inherit; }
 
-/* ---- Hızlı Satış — kayan (marquee) şimşek + yazı, v9 birebir ---- */
+/* ---- Hızlı Satış — artık SABİT yazı, kayan (marquee) animasyon kaldırıldı (performans) ---- */
 @font-face {
   font-family: 'Geom-BlackItalic';
   src: url('/fonts/Geom-BlackItalic.ttf') format('truetype');
@@ -108,12 +108,15 @@
   white-space: nowrap;
 }
 
+/* Hızlı Satış butonu: hover/transition YOK, kayan track YOK. Şimşek+yazı artık ortalı
+   sabit bir grup olarak duruyor (tb-qs-item'lardan sadece ilki gösteriliyor gibi davranır
+   — track'i olduğu gibi bırakıp animasyonu durdurmak yerine, kartı sadeleştirip tek bir
+   statik satır haline getirdik). */
 .tb-quicksale {
   flex: 1;
   min-width: 0;
   position: relative;
-  overflow-x: hidden;
-  overflow-y: visible;
+  overflow: hidden;
   width: 100%;
   height: 72px;
   background-color: var(--accent);
@@ -122,31 +125,29 @@
   cursor: pointer;
   box-shadow: var(--shadow-1);
   padding: 0;
-  transition: background-color 220ms var(--ease), border-color 180ms var(--ease), box-shadow 180ms var(--ease), transform 160ms var(--ease), border-width 180ms var(--ease);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.tb-quicksale:hover {
-  background-color: var(--tier2);
-  border-width: 2.5px;
-  border-color: var(--panel);
-  box-shadow: 0 12px 28px rgba(246, 247, 235, 0.4);
-  transform: translateY(-2px);
-}
-.tb-quicksale:active { transform: scale(0.99); }
 .tb-quicksale-track {
-  position: absolute; top: 0; left: 0; height: 100%;
-  display: flex; align-items: center;
+  position: static;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
   white-space: nowrap;
-  animation: tbQsScroll 24s linear infinite;
-  will-change: transform;
+  animation: none;
 }
-@keyframes tbQsScroll { from { transform: translateX(-50%); } to { transform: translateX(0%); } }
-.tb-qs-item { display: inline-flex; align-items: center; gap: 12px; padding: 0 20px; flex-shrink: 0; }
+/* Tekrarlanan tb-qs-item'lardan sadece ilkini göster — track artık kaymadığı için
+   geri kalanları göstermek gereksiz tekrar üretirdi. */
+.tb-qs-item { display: none; align-items: center; gap: 12px; padding: 0 20px; flex-shrink: 0; }
+.tb-qs-item:first-child { display: inline-flex; }
 .tb-qs-text {
   font-family: 'Poppins', sans-serif;
   font-weight: 900;
   font-size: 27px;
   color: var(--panel);
-  transform: skewX(-8deg);
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
@@ -160,7 +161,7 @@
   border-radius: 999px;
 }
 
-/* ---- Mutfağa Not butonu ---- */
+/* ---- Mutfağa Not butonu — hover animasyonu kaldırıldı ---- */
 .tb-mutfak-not-btn {
   flex-shrink: 0;
   display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 10px;
@@ -173,7 +174,6 @@
   color: #E94F37 !important;
   cursor: pointer;
   box-shadow: var(--shadow-1);
-  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease), border-color 160ms var(--ease);
 }
 .tb-mutfak-not-btn svg { color: #E94F37 !important; stroke: #E94F37 !important; flex-shrink: 0; }
 .tb-mutfak-not-btn span {
@@ -184,8 +184,6 @@
   color: #E94F37 !important;
   white-space: nowrap;
 }
-.tb-mutfak-not-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: var(--tier2); }
-.tb-mutfak-not-btn:active { transform: scale(0.97); }
 
 .tb-mutfak-ekmek-row { display: flex; gap: 14px; align-items: flex-start; max-height: 90vh; }
 .tb-mutfak-not-modal { max-width: 420px; }
@@ -197,7 +195,23 @@
 }
 
 /* ---- Ekmek Gönderme ---- */
-.tb-ekmek-modal { max-width: 340px; max-height: 90vh; overflow-y: auto; }
+.tb-ekmek-modal {
+  min-width: 520px;
+  max-width: 640px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.tb-ekmek-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 640px) {
+  .tb-ekmek-modal { min-width: 0; }
+  .tb-ekmek-cols { grid-template-columns: 1fr; }
+}
+.tb-ekmek-col-left { display: flex; flex-direction: column; }
 .tb-ekmek-form { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
 .tb-ekmek-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .tb-ekmek-label { font-size: 12.5px; font-weight: 700; color: var(--ink); flex: 1; }
@@ -221,6 +235,14 @@
   margin-bottom: 14px;
 }
 
+.tb-ekmek-stok-info {
+  font-size: 11.5px;
+  color: #393E41 !important;
+  opacity: 0.8;
+  margin: 6px 0 10px;
+  line-height: 1.5;
+}
+
 .tb-ekmek-kayitlar { padding-top: 12px; border-top: 1px dashed var(--border); }
 .tb-ekmek-kayit-row {
   display: flex; align-items: center; gap: 8px;
@@ -232,13 +254,76 @@
   flex-shrink: 0; height: 26px; padding: 0 10px; border-radius: 7px; border: 1px solid #E0C3BB;
   background: var(--danger-soft); color: #E94F37 !important; font-size: 10px; font-weight: 700; cursor: pointer;
 }
-.tb-ekmek-duzenle-btn:hover { background: #E94F37 !important; color: #fff !important; }
 .tb-ekmek-edit { display: flex; align-items: center; gap: 5px; flex: 1; flex-wrap: wrap; }
 .tb-ekmek-edit .saat { flex-shrink: 0; font-weight: 800; color: var(--contour); }
 .tb-ekmek-edit input { width: 38px; height: 26px; border-radius: 6px; border: 1px solid var(--border); text-align: center; font-size: 11px; color: #E94F37 !important; }
 .tb-ekmek-edit button { flex-shrink: 0; height: 26px; padding: 0 8px; border-radius: 6px; border: none; font-size: 10px; font-weight: 700; cursor: pointer; }
 .tb-ekmek-edit button.vazgec { background: var(--border); color: var(--ink); }
 .tb-ekmek-edit button.kaydet { background: var(--tier1); color: #fff; }
+
+/* ---- SAĞ KOLON: sadece ikaz + sipariş kopyalama ---- */
+.tb-ekmek-col-right {
+  background: #F6F7EB;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-self: stretch;
+}
+.tb-ekmek-stok-ok {
+  color: #393E41 !important;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+.tb-ekmek-uyari-baslik,
+.tb-ekmek-siparis-baslik {
+  font-size: 11px;
+  font-weight: 700;
+  color: #393E41 !important;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-top: 4px;
+}
+.tb-ekmek-uyari-satir {
+  padding: 6px 8px;
+  background: rgba(233, 79, 55, 0.1);
+  border: 1px solid #E94F37;
+  border-radius: 8px;
+  color: #E94F37 !important;
+  font-weight: 600;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+.tb-ekmek-siparis-satir {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #fff;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-weight: 400;
+  color: #393E41 !important;
+  font-size: 11px;
+}
+.tb-ekmek-siparis-kopyala-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  background: #393E41;
+  color: #F6F7EB !important;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
 
 .tb-mutfak-not-textarea {
   width: 100%; min-height: 110px; resize: vertical;
@@ -311,6 +396,8 @@
 .tb-pair { display: flex; gap: 5px; }
 
 /* ==================== MASA KARTI ==================== */
+/* Hover'da büyüme/gölge animasyonu YOK, transition YOK — eski donanımda kasmasın diye
+   sabit kenarlık + sabit gölge kullanılıyor. */
 .tb-card {
   width: 158px;
   min-height: 140px;
@@ -324,36 +411,17 @@
   flex-direction: column;
   justify-content: space-between;
   cursor: pointer;
-  transition: border-color 160ms var(--ease), border-width 160ms var(--ease), box-shadow 160ms var(--ease), transform 160ms var(--ease);
 }
-.tb-card:hover {
-  border-width: 2.5px;
-  border-color: var(--contour);
-  box-shadow: 0 12px 26px rgba(57, 62, 65, 0.38);
-  transform: translateY(-2px);
-}
-.tb-card:active { transform: scale(0.98); }
 .tb-card.menu-open { z-index: 30; }
 .tb-card.drag-over { border-color: var(--tier1); box-shadow: 0 0 0 3px var(--olive-soft); }
 
-/* ---- Sıvı dolum (zaman kademesi) ---- */
+/* ---- Zaman kademesi: artık dalga/animasyon YOK — kartın tabanı doğrudan kademe rengine
+   boyanıyor (fill yüzdesi hâlâ kullanılıyor, sadece dönen dalga deseni kaldırıldı). ---- */
 .tb-liquid {
-  position: absolute; left: -25%; right: -25%; bottom: 0; z-index: 1;
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 1;
   height: var(--fill, 20%);
   background: var(--fill-color, var(--tier1));
-  transition: height 700ms var(--ease), background 700ms var(--ease);
 }
-.tb-liquid::before, .tb-liquid::after {
-  content: ""; position: absolute; top: -38%; left: 50%;
-  width: 180%; padding-bottom: 180%;
-  background: var(--fill-color, var(--tier1));
-  border-radius: 44%;
-  transform: translate(-50%, 0) rotate(0deg);
-  animation: tbWaveRotate 7s linear infinite;
-}
-.tb-liquid::after { animation-duration: 11s; opacity: 0.55; }
-.tb-card.full .tb-liquid::before, .tb-card.full .tb-liquid::after { animation-play-state: paused; opacity: 0; }
-@keyframes tbWaveRotate { from { transform: translate(-50%, 0) rotate(0deg); } to { transform: translate(-50%, 0) rotate(360deg); } }
 
 .tb-card-top { position: relative; z-index: 3; padding: 10px 10px 0; display: flex; justify-content: space-between; align-items: flex-start; }
 .tb-card-name { font-weight: 800; font-size: 22px; color: #393E41; line-height: 1.1; display: flex; align-items: center; gap: 5px; }
@@ -370,12 +438,9 @@
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  transition: background 160ms var(--ease);
   flex-shrink: 0;
 }
-.tb-menu-btn:hover { background: rgba(57, 62, 65, 0.26); }
 .tb-card.tier-1 .tb-menu-btn, .tb-card.tier-2 .tb-menu-btn { color: #fff; background: rgba(0, 0, 0, 0.14); }
-.tb-card.tier-1 .tb-menu-btn:hover, .tb-card.tier-2 .tb-menu-btn:hover { background: rgba(0, 0, 0, 0.26); }
 
 /* ---- Paket kartı doğrudan kapatma butonu (kebab yok, taşıma/birleştirme yapılmıyor) ---- */
 .tb-close-btn {
@@ -387,10 +452,8 @@
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  transition: background 160ms var(--ease), color 160ms var(--ease);
   flex-shrink: 0;
 }
-.tb-close-btn:hover { background: #E94F37 !important; color: #fff !important; }
 .tb-close-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .tb-card-compact.tier-1 .tb-close-btn, .tb-card-compact.tier-2 .tb-close-btn { color: #E94F37 !important; background: rgba(255, 255, 255, 0.55); }
 
@@ -422,13 +485,10 @@
   font-weight: 700;
   color: #3A3530;
   cursor: pointer;
-  transition: background 120ms cubic-bezier(0.22, 1, 0.36, 1), filter 120ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .tb-menu button svg { flex-shrink: 0; }
-.tb-menu button:hover { filter: brightness(0.95); }
-.tb-menu button:disabled { opacity: 0.35; cursor: not-allowed; filter: none; }
+.tb-menu button:disabled { opacity: 0.35; cursor: not-allowed; }
 .tb-menu button.danger { background: #E94F37; color: #fff; }
-.tb-menu button.danger:hover { background: #D6432C; }
 
 /* ---- Rozetler (saat + tutar) ---- */
 .tb-badges { position: relative; z-index: 3; display: flex; gap: 6px; padding: 4px 10px 0; flex-wrap: wrap; }
@@ -454,7 +514,7 @@
 .tb-card.tier-1 .tb-card-amount { color: var(--contour); }
 .tb-card.tier-2 .tb-card-amount { color: #fff; }
 
-/* ---- Alt not şeridi (saydam, dalganın üstünden görünür) ---- */
+/* ---- Alt not şeridi (saydam, dolum renginin üstünden görünür) ---- */
 .tb-card-note {
   position: relative; z-index: 3;
   display: flex; align-items: center; gap: 5px;
@@ -486,7 +546,6 @@
   background: rgba(57, 62, 65, 0.16); color: #393E41 !important;
   display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
-.tb-note-paste:hover { background: rgba(57, 62, 65, 0.3); }
 
 .tb-note-edit { position: relative; z-index: 3; flex: 1; display: flex; align-items: center; gap: 4px; margin: 4px 8px 8px; }
 .tb-note-edit input {
@@ -508,37 +567,23 @@
 .tb-card-total { display: none; }
 
 /* ==================== BOŞ MASA KARTI ==================== */
+/* (+) ikonundaki nabız/glow animasyonu kaldırıldı — artık sabit, hafif arkaplanlı ikon. */
 .tb-card.tier-empty {
   border-style: dashed; border-width: 2px; border-color: var(--contour);
   align-items: center; justify-content: center;
   background: var(--panel);
 }
-.tb-card.tier-empty:hover {
-  border-style: solid; border-color: var(--contour);
-  box-shadow: 0 12px 26px rgba(57, 62, 65, 0.35);
-}
 .tb-empty-plus-wrap {
   position: relative; width: 40px; height: 40px; margin-bottom: 8px;
   display: flex; align-items: center; justify-content: center;
-}
-.tb-empty-plus-wrap::before {
-  content: ""; position: absolute; inset: 0; border-radius: 50%;
-  background: var(--contour); opacity: 0.3;
-  animation: tbEmptyGlow 2.2s ease-out infinite;
 }
 .tb-empty-plus {
   position: relative; width: 40px; height: 40px; border-radius: 50%;
   background: rgba(57, 62, 65, 0.06); color: var(--ink-muted);
   display: flex; align-items: center; justify-content: center;
-  transition: background 160ms var(--ease), color 160ms var(--ease);
 }
-.tb-card.tier-empty:hover .tb-empty-plus { background: var(--contour); color: #fff; }
 .tb-empty-label { font-weight: 800; font-size: 17px; color: var(--ink); }
 .tb-empty-tag { font-size: 10.5px; color: var(--ink-muted); margin-top: 2px; }
-@keyframes tbEmptyGlow {
-  0% { transform: scale(1); opacity: 0.4; }
-  100% { transform: scale(1.9); opacity: 0; }
-}
 
 /* ==================== KİLİTLİ MASA (başka cihazda açık) ==================== */
 .tb-card.locked { cursor: not-allowed; }
@@ -580,7 +625,7 @@
 }
 .tb-package-list { display: flex; flex-direction: column; gap: 10px; }
 
-/* ---- Paket kartı — yatay, sağdan sola dolum ---- */
+/* ---- Paket kartı — yatay, sağdan sola dolum (animasyonsuz) ---- */
 .tb-card-compact {
   position: relative; overflow: hidden;
   width: 100%; min-height: 68px;
@@ -591,18 +636,12 @@
   cursor: pointer;
   display: flex; flex-direction: column; justify-content: center; gap: 4px;
   box-shadow: 0 6px 16px rgba(57, 62, 65, 0.16);
-  transition: border-color 160ms var(--ease), border-width 160ms var(--ease), box-shadow 160ms var(--ease), transform 160ms var(--ease);
-}
-.tb-card-compact:hover {
-  border-width: 2.5px; border-color: var(--contour);
-  box-shadow: 0 12px 24px rgba(57, 62, 65, 0.3); transform: translateY(-2px);
 }
 .tb-card-compact .tb-liquid {
   left: 0; right: auto; top: 0; bottom: 0; height: auto;
   width: var(--fill, 0%);
   background: var(--fill-color, var(--tier1));
 }
-.tb-card-compact .tb-liquid::before, .tb-card-compact .tb-liquid::after { display: none; }
 .tb-card-compact .tb-card-top { align-items: center; padding: 0; }
 .tb-card-compact .tb-card-name { font-size: 15px; }
 .tb-card-compact.tier-1 .tb-card-name { color: var(--contour); }
@@ -654,26 +693,16 @@
   font-size: 14px;
   font-weight: 800;
   cursor: pointer;
-  transition: border-color 160ms var(--ease), background 160ms var(--ease);
 }
-.tb-add-package:hover { border-style: solid; border-color: var(--contour); background: rgba(57, 62, 65, 0.06); }
-.tb-add-package:active { transform: scale(0.98); }
 .tb-add-package-plus-wrap {
   position: relative; width: 30px; height: 30px;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-}
-.tb-add-package-plus-wrap::before {
-  content: ""; position: absolute; inset: 0; border-radius: 50%;
-  background: var(--contour); opacity: 0.3;
-  animation: tbEmptyGlow 2.2s ease-out infinite;
 }
 .tb-add-package-plus {
   position: relative; width: 30px; height: 30px; border-radius: 50%;
   background: rgba(57, 62, 65, 0.08); color: var(--ink-muted);
   display: flex; align-items: center; justify-content: center;
-  transition: background 160ms var(--ease), color 160ms var(--ease);
 }
-.tb-add-package:hover .tb-add-package-plus { background: var(--contour); color: #fff; }
 
 /* ---- Son işlemler / geri al ---- */
 .tb-history-wrap { position: fixed; bottom: 88px; right: 20px; z-index: 40; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
@@ -683,12 +712,10 @@
 .tb-cari-uyari-fab {
   width: 52px; height: 52px; border-radius: 999px; border: none;
   display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer;
-  box-shadow: var(--shadow-3); color: #fff; transition: transform 160ms var(--ease);
+  box-shadow: var(--shadow-3); color: #fff;
 }
 .tb-cari-uyari-fab.ok { background: #25D366; }
 .tb-cari-uyari-fab.warn { background: var(--danger); }
-.tb-cari-uyari-fab:hover { transform: translateY(-2px); }
-.tb-cari-uyari-fab:active { transform: scale(0.94); }
 .tb-cari-uyari-panel {
   width: 320px; max-height: 60vh; overflow-y: auto;
   background: var(--panel); border: 1px solid rgba(0,0,0,0.08); border-radius: var(--r-panel);
@@ -734,11 +761,8 @@
   position: relative;
   cursor: pointer;
   box-shadow: var(--shadow-3);
-  transition: transform 160ms var(--ease);
 }
 .tb-history-fab svg { color: #fff; stroke: #fff; }
-.tb-history-fab:hover { transform: translateY(-2px); }
-.tb-history-fab:active { transform: scale(0.94); }
 .tb-history-badge {
   position: absolute;
   top: -4px; right: -4px;
@@ -761,7 +785,6 @@
 }
 .tb-history-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; margin-bottom: 8px; color: var(--panel); }
 .tb-history-head button { background: none; border: none; color: rgba(246, 247, 235, 0.6); cursor: pointer; }
-.tb-history-head button:hover { color: var(--panel); }
 .tb-history-empty { font-size: 12px; color: rgba(246, 247, 235, 0.55); font-style: italic; margin: 4px 0; }
 .tb-history-item {
   display: flex;
@@ -788,7 +811,6 @@
   font-weight: 700;
   cursor: pointer;
 }
-.tb-undo-btn:hover { background: var(--accent-dark); }
 
 /* ---- Modallar ---- */
 .tb-modal-overlay {
@@ -820,9 +842,7 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 160ms var(--ease), border-color 160ms var(--ease);
 }
-.tb-modal-options button:hover { background: #fff; border-color: var(--tier1); }
 .tb-cancel-link {
   width: 100%;
   background: none;
@@ -834,12 +854,10 @@
   padding: 8px;
   cursor: pointer;
 }
-.tb-cancel-link:hover { text-decoration: underline; }
 .tb-modal-footer { display: flex; gap: 8px; }
 .tb-modal-footer button { flex: 1; height: 44px; border-radius: var(--r-btn); border: none; font-size: 13px; font-weight: 700; cursor: pointer; }
 .tb-secondary { background: var(--panel-2); color: #393E41 !important; border: 1px solid var(--border); }
 .tb-primary { background: var(--accent); color: #fff; }
-.tb-primary:hover { background: var(--accent-dark); }
 
 .tb-pay-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
 .tb-pay-options button {
@@ -851,9 +869,7 @@
   font-size: 12.5px;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 160ms var(--ease), filter 160ms var(--ease);
 }
-.tb-pay-options button:hover { transform: translateY(-1px); filter: brightness(1.06); }
 .tb-pay-options .cash { background: var(--tier1); }
 .tb-pay-options .card { background: var(--contour); }
 .tb-pay-options .meal { background: var(--tier2); }
@@ -868,123 +884,4 @@
   .tb-left { gap: 10px; }
   .tb-section { padding: 14px; }
   .tb-card { min-height: 128px; }
-}
-/* Tables.css dosyasının SONUNA eklenecek — Ekmek Gönderme panelindeki stok bilgi satırı */
-
-.tb-ekmek-stok-info {
-  font-size: 11.5px;
-  color: #393E41 !important;
-  opacity: 0.8;
-  margin: 6px 0 10px;
-  line-height: 1.5;
-}
-/* ============================================================
-   EKMEK GÖNDERME — 2 KOLONLU (sol: giriş, sağ: ikaz/sipariş)
-   Bu blok Tables.css dosyasının SONUNA eklenecek.
-   ÖNEMLİ: bir önceki turda eklediysen .tb-ekmek-uyari-yatay,
-   .tb-ekmek-uyari-pill, .tb-ekmek-siparis-yatay,
-   .tb-ekmek-siparis-kopyala-btn class'larını (yatay pill sürümü)
-   BUNUNLA DEĞİŞTİR / SİL — artık kullanılmıyorlar, yerlerine bu
-   yeni 2-kolon stilleri geçti. .tb-ekmek-stok-info aynen kalıyor.
-   ============================================================ */
-
-/* Ekmek Gönderme modalı artık daha geniş — 2 kolonu rahat taşısın diye */
-.tb-ekmek-modal {
-  min-width: 520px;
-  max-width: 640px;
-}
-
-.tb-ekmek-cols {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
-  align-items: start;
-}
-
-@media (max-width: 640px) {
-  .tb-ekmek-modal {
-    min-width: 0;
-  }
-  .tb-ekmek-cols {
-    grid-template-columns: 1fr;
-  }
-}
-
-.tb-ekmek-col-left {
-  display: flex;
-  flex-direction: column;
-}
-
-/* ---- SAĞ KOLON: sadece ikaz + sipariş kopyalama ---- */
-
-.tb-ekmek-col-right {
-  background: #F6F7EB;
-  border-radius: 10px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-self: stretch;
-}
-
-.tb-ekmek-stok-ok {
-  color: #393E41 !important;
-  font-size: 13px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.tb-ekmek-uyari-baslik,
-.tb-ekmek-siparis-baslik {
-  font-size: 11px;
-  font-weight: 700;
-  color: #393E41 !important;
-  opacity: 0.7;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  margin-top: 4px;
-}
-
-.tb-ekmek-uyari-satir {
-  padding: 6px 8px;
-  background: rgba(233, 79, 55, 0.1);
-  border: 1px solid #E94F37;
-  border-radius: 8px;
-  color: #E94F37 !important;
-  font-weight: 600;
-  font-size: 11.5px;
-  line-height: 1.4;
-}
-
-.tb-ekmek-siparis-satir {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  background: #fff;
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-weight: 400;
-  color: #393E41 !important;
-  font-size: 11px;
-}
-
-.tb-ekmek-siparis-kopyala-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  background: #393E41;
-  color: #F6F7EB !important;
-  border: none;
-  border-radius: 6px;
-  padding: 5px 9px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.tb-ekmek-siparis-kopyala-btn:hover {
-  background: #E94F37;
 }
