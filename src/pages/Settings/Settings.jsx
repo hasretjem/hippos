@@ -7,7 +7,7 @@ import {
   ListChecks, Calculator, Eye, EyeOff, Share2, Lock, Delete, Search, X,
   Banknote, CreditCard, UtensilsCrossed, BookOpen, ExternalLink, ChevronRight,
   Undo2, Wifi, WifiOff, Printer, Database, FileSpreadsheet, Triangle, Image as ImageIcon, RefreshCw,
-  Wheat, Copy, Check,
+  Wheat, Copy, Check, Receipt, MessageCircle,
 } from 'lucide-react';
 
 // Ciro panelini açan PIN — ileride Gelişmiş Ayarlar'dan değiştirilebilir hale gelecek.
@@ -19,6 +19,68 @@ const EKMEK_SIPARIS_LISTESI = [
   { kod: '4400064', metin: '2 Koli 4400064  1/3 Baget Sade 95 Gr. 50/36' },
   { kod: '1033506', metin: '1 Koli 1033506 1/3 Küçük Tahıl Ekmek (70 Ad )' },
   { kod: '4400191', metin: '1 Koli 4400191  1/2 Artısan Baget Domates&Fesleğen' },
+];
+
+// ================== MUHASEBE — 4 belge türü ==================
+// Her sekmenin: form alanları (key + label + tip) + hangi api/muhasebe.js "tip"ine gittiği
+// + önizleme metnini üreten fonksiyon burada tanımlı. Yeni bir belge türü eklemek istenirse
+// tek yapılması gereken bu listeye bir eleman eklemek.
+const MUHASEBE_SEKMELERI = [
+  {
+    key: 'alisFaturasi',
+    label: 'Alış Faturası',
+    fields: [
+      { key: 'firma', label: 'Tedarikçi / Firma Adı', type: 'text' },
+      { key: 'faturaNo', label: 'Fatura No', type: 'text' },
+      { key: 'faturaTarihi', label: 'Fatura Tarihi', type: 'date' },
+      { key: 'tutar', label: 'Tutar (TL)', type: 'number' },
+      { key: 'kdvOrani', label: 'KDV Oranı', type: 'select', options: ['%1', '%10', '%20'] },
+      { key: 'odemeDurumu', label: 'Ödeme Durumu', type: 'select', options: ['Ödendi', 'Açık Hesap - Vadeli'] },
+      { key: 'aciklama', label: 'Açıklama / Kalem Detayı', type: 'textarea' },
+    ],
+    preview: (f) =>
+      `🧾 *ALIŞ FATURASI KAYDI*\n🏢 Firma: ${f.firma || '-'}\n📄 Fatura No: ${f.faturaNo || '-'} | 📅 Tarih: ${f.faturaTarihi || '-'}\n💰 Tutar: ${f.tutar || '0'} TL (KDV Dahil)\n📌 Durum: ${f.odemeDurumu || '-'}\n📝 Açıklama: ${f.aciklama || '-'}`,
+  },
+  {
+    key: 'satisFaturasi',
+    label: 'Satış Faturası',
+    fields: [
+      { key: 'firma', label: 'Cari / Müşteri Firma Adı', type: 'text' },
+      { key: 'faturaNo', label: 'Fatura No', type: 'text' },
+      { key: 'faturaTarihi', label: 'Fatura Tarihi', type: 'date' },
+      { key: 'tutar', label: 'Toplam Tutar (TL)', type: 'number' },
+      { key: 'kdvOrani', label: 'KDV Oranı', type: 'select', options: ['%1', '%10', '%20'] },
+      { key: 'tahsilatDurumu', label: 'Tahsilat Durumu', type: 'select', options: ['Tahsil Edildi', 'Müşteri Borcuna İşlendi'] },
+      { key: 'aciklama', label: 'Hizmet / Ürün Açıklaması', type: 'textarea' },
+    ],
+    preview: (f) =>
+      `🧾 *SATIŞ FATURASI BİLGİSİ*\n🏢 Müşteri/Cari: ${f.firma || '-'}\n📄 Fatura No: ${f.faturaNo || '-'} | 📅 Tarih: ${f.faturaTarihi || '-'}\n💰 Toplam Tutar: ${f.tutar || '0'} TL\n📌 Açıklama: ${f.aciklama || '-'}`,
+  },
+  {
+    key: 'alisMakbuzu',
+    label: 'Alış Makbuzu',
+    fields: [
+      { key: 'firma', label: 'Ödeme Yapılan Firma/Kişi', type: 'text' },
+      { key: 'dekontNo', label: 'İşlem / Dekont No', type: 'text' },
+      { key: 'tutar', label: 'Ödenen Tutar (TL)', type: 'number' },
+      { key: 'odemeYontemi', label: 'Ödeme Yöntemi', type: 'select', options: ['Nakit', 'Havale-EFT', 'Kredi Kartı'] },
+      { key: 'aciklama', label: 'Ödeme Açıklaması', type: 'textarea' },
+    ],
+    preview: (f) =>
+      `💸 *ÖDEME (TEDİYE) MAKBUZU*\n👤 Ödeme Yapılan: ${f.firma || '-'}\n💳 Yöntem: ${f.odemeYontemi || '-'}\n💵 Ödenen Tutar: ${f.tutar || '0'} TL\n📝 Açıklama: ${f.aciklama || '-'}`,
+  },
+  {
+    key: 'satisMakbuzu',
+    label: 'Satış Makbuzu',
+    fields: [
+      { key: 'firma', label: 'Tahsilat Yapılan Cari / Müşteri', type: 'text' },
+      { key: 'tutar', label: 'Alınan Tutar (TL)', type: 'number' },
+      { key: 'tahsilatYontemi', label: 'Tahsilat Yöntemi', type: 'select', options: ['Nakit', 'Havale', 'POS'] },
+      { key: 'aciklama', label: 'Açıklama', type: 'textarea' },
+    ],
+    preview: (f) =>
+      `📥 *TAHSİLAT MAKBUZU*\n👤 Cari/Müşteri: ${f.firma || '-'}\n💳 Yöntem: ${f.tahsilatYontemi || '-'}\n💵 Tahsil Edilen Tutar: ${f.tutar || '0'} TL\n📝 Açıklama: ${f.aciklama || '-'}`,
+  },
 ];
 
 export default function Settings({ data, onNavigate }) {
@@ -175,6 +237,73 @@ export default function Settings({ data, onNavigate }) {
     () => EKMEK_TURLERI_STOK.filter((t) => (ekmekStok[t.key] || 0) < t.esik),
     [ekmekStok]
   );
+
+  // ================== MUHASEBE ==================
+  const [muhasebeModalOpen, setMuhasebeModalOpen] = useState(false);
+  const [muhasebeTab, setMuhasebeTab] = useState('alisFaturasi');
+  const [muhasebeForm, setMuhasebeForm] = useState({});
+  const [muhasebeKaydediliyor, setMuhasebeKaydediliyor] = useState(false);
+  const [muhasebeWaNumara, setMuhasebeWaNumara] = useState('');
+
+  const aktifMuhasebeSekme = MUHASEBE_SEKMELERI.find((s) => s.key === muhasebeTab);
+  const aktifMuhasebeForm = muhasebeForm[muhasebeTab] || {};
+  const aktifMuhasebeOnizleme = aktifMuhasebeSekme.preview(aktifMuhasebeForm);
+
+  function updateMuhasebeField(fieldKey, value) {
+    setMuhasebeForm((prev) => ({
+      ...prev,
+      [muhasebeTab]: { ...(prev[muhasebeTab] || {}), [fieldKey]: value },
+    }));
+  }
+
+  function closeMuhasebeModal() {
+    setMuhasebeModalOpen(false);
+  }
+
+  async function handleMuhasebeKaydet() {
+    setMuhasebeKaydediliyor(true);
+    try {
+      const res = await fetch('/api/muhasebe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tip: muhasebeTab, ...aktifMuhasebeForm }),
+      });
+      if (!res.ok) throw new Error('save failed');
+      showToast(`${aktifMuhasebeSekme.label} kaydedildi`);
+      // Bu sekmenin formunu temizle, diğer sekmelerdeki taslaklara dokunma.
+      setMuhasebeForm((prev) => ({ ...prev, [muhasebeTab]: {} }));
+    } catch {
+      showToast('Kaydedilemedi — bağlantıyı kontrol et');
+    } finally {
+      setMuhasebeKaydediliyor(false);
+    }
+  }
+
+  async function muhasebeKopyalaMetin() {
+    try {
+      await navigator.clipboard.writeText(aktifMuhasebeOnizleme);
+      showToast('Metin kopyalandı, WhatsApp\'a yapıştırabilirsiniz');
+    } catch {
+      showToast('Kopyalanamadı');
+    }
+  }
+
+  function normalizeTrPhoneMuhasebe(phone) {
+    let digits = (phone || '').replace(/[^0-9]/g, '');
+    if (digits.startsWith('0')) digits = digits.slice(1);
+    if (!digits.startsWith('90')) digits = '90' + digits;
+    return digits;
+  }
+
+  function muhasebeWhatsappAc() {
+    const digits = normalizeTrPhoneMuhasebe(muhasebeWaNumara);
+    if (!digits || digits === '90') {
+      showToast('Önce bir telefon numarası gir');
+      return;
+    }
+    const win = window.open(`https://wa.me/${digits}?text=${encodeURIComponent(aktifMuhasebeOnizleme)}`, '_blank');
+    if (!win) showToast('Tarayıcı pencereyi engelledi — popup iznini kontrol et');
+  }
 
   // ---- Bugün paneli: en çok satanlar + genel istatistik ----
   const [sandwichShowAll, setSandwichShowAll] = useState(false);
@@ -493,6 +622,11 @@ export default function Settings({ data, onNavigate }) {
               <span className="st-action-ico"><Wheat size={22} /></span>
               <span className="st-action-title">Ekmek Stok Ekleme</span>
               <span className="st-action-sub">Fırından gelen ekmeği stoğa işle</span>
+            </button>
+            <button className="st-action-card" onClick={() => setMuhasebeModalOpen(true)}>
+              <span className="st-action-ico"><Receipt size={22} /></span>
+              <span className="st-action-title">Muhasebe</span>
+              <span className="st-action-sub">Fatura / makbuz kaydı ve paylaşımı</span>
             </button>
           </div>
 
@@ -858,6 +992,93 @@ export default function Settings({ data, onNavigate }) {
               <button className="st-secondary" onClick={closeEkmekModal}>İptal</button>
               <button className="st-primary" disabled={ekmekKaydediliyor} onClick={handleEkmekKaydet}>
                 {ekmekKaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MUHASEBE MODALI — 4 sekme, her sekme 2 kolonlu (sol form, sağ önizleme+paylaşım) */}
+      {muhasebeModalOpen && (
+        <div className="st-modal-overlay" onClick={closeMuhasebeModal}>
+          <div className="st-modal st-muhasebe-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="st-modal-head">
+              <h3><Receipt size={16} /> Muhasebe</h3>
+              <button className="st-modal-x" onClick={closeMuhasebeModal}><X size={16} /></button>
+            </div>
+
+            <div className="st-muhasebe-tabs">
+              {MUHASEBE_SEKMELERI.map((s) => (
+                <button
+                  key={s.key}
+                  className={muhasebeTab === s.key ? 'active' : ''}
+                  onClick={() => setMuhasebeTab(s.key)}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="st-muhasebe-cols">
+              {/* SOL KOLON — form alanları */}
+              <div className="st-muhasebe-col-left">
+                {aktifMuhasebeSekme.fields.map((f) => (
+                  <div key={f.key} className="st-muhasebe-field">
+                    <label>{f.label}</label>
+                    {f.type === 'select' ? (
+                      <select
+                        value={aktifMuhasebeForm[f.key] || ''}
+                        onChange={(e) => updateMuhasebeField(f.key, e.target.value)}
+                      >
+                        <option value="">Seç...</option>
+                        {f.options.map((o) => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
+                    ) : f.type === 'textarea' ? (
+                      <textarea
+                        value={aktifMuhasebeForm[f.key] || ''}
+                        onChange={(e) => updateMuhasebeField(f.key, e.target.value)}
+                        rows={2}
+                      />
+                    ) : (
+                      <input
+                        type={f.type}
+                        value={aktifMuhasebeForm[f.key] || ''}
+                        onChange={(e) => updateMuhasebeField(f.key, e.target.value)}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* SAĞ KOLON — canlı önizleme + kopyala + WhatsApp aç */}
+              <div className="st-muhasebe-col-right">
+                <span className="st-muhasebe-onizleme-baslik">Önizleme</span>
+                <pre className="st-muhasebe-onizleme">{aktifMuhasebeOnizleme}</pre>
+
+                <button className="st-muhasebe-kopyala-btn" onClick={muhasebeKopyalaMetin}>
+                  <Copy size={13} /> Metni Kopyala
+                </button>
+
+                <div className="st-muhasebe-wa-row">
+                  <input
+                    type="tel"
+                    placeholder="0532 123 45 67 (opsiyonel)"
+                    value={muhasebeWaNumara}
+                    onChange={(e) => setMuhasebeWaNumara(e.target.value)}
+                  />
+                  <button className="st-muhasebe-wa-btn" onClick={muhasebeWhatsappAc}>
+                    <MessageCircle size={13} /> WhatsApp'ta Aç
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="st-modal-footer">
+              <button className="st-secondary" onClick={closeMuhasebeModal}>Kapat</button>
+              <button className="st-primary" disabled={muhasebeKaydediliyor} onClick={handleMuhasebeKaydet}>
+                {muhasebeKaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}
               </button>
             </div>
           </div>

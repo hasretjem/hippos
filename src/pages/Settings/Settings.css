@@ -781,3 +781,190 @@
 .st-ekmek-kopyala-btn:hover {
   background: #E94F37;
 }
+/* ============================================================
+   MUHASEBE — Settings.css dosyasının SONUNA eklenecek
+   4 sekmeli, 2 kolonlu (sol form, sağ önizleme+paylaşım) modal
+   ============================================================ */
+
+.st-muhasebe-modal {
+  max-width: 760px;
+  width: 100%;
+}
+
+.st-muhasebe-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  overflow-x: auto;
+}
+
+.st-muhasebe-tabs button {
+  flex: 1;
+  min-width: 120px;
+  height: 36px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: #393E41 !important;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.st-muhasebe-tabs button.active {
+  background: #E94F37;
+  color: #fff !important;
+  border-color: #E94F37;
+}
+
+.st-muhasebe-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+  .st-muhasebe-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- SOL KOLON: form ---- */
+
+.st-muhasebe-col-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.st-muhasebe-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.st-muhasebe-field label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #393E41 !important;
+  opacity: 0.8;
+}
+
+.st-muhasebe-field input,
+.st-muhasebe-field select,
+.st-muhasebe-field textarea {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #393E41 !important;
+  background: #fff;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.st-muhasebe-field input:focus,
+.st-muhasebe-field select:focus,
+.st-muhasebe-field textarea:focus {
+  outline: none;
+  border-color: #E94F37;
+}
+
+/* ---- SAĞ KOLON: canlı önizleme + paylaşım ---- */
+
+.st-muhasebe-col-right {
+  background: #F6F7EB;
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-self: stretch;
+}
+
+.st-muhasebe-onizleme-baslik {
+  font-size: 11px;
+  font-weight: 700;
+  color: #393E41 !important;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.st-muhasebe-onizleme {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #393E41 !important;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  min-height: 140px;
+}
+
+.st-muhasebe-kopyala-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  border-radius: 8px;
+  border: none;
+  background: #393E41;
+  color: #F6F7EB !important;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.st-muhasebe-kopyala-btn:hover {
+  background: #4a5054;
+}
+
+.st-muhasebe-wa-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.st-muhasebe-wa-row input {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  color: #393E41 !important;
+  background: #fff;
+}
+
+.st-muhasebe-wa-row input:focus {
+  outline: none;
+  border-color: #25D366;
+}
+
+.st-muhasebe-wa-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  border-radius: 8px;
+  border: none;
+  background: #25D366;
+  color: #fff !important;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.st-muhasebe-wa-btn:hover {
+  background: #1fb356;
+}
