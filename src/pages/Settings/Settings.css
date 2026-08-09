@@ -623,93 +623,143 @@
 }
 /* ============================================================
    EKMEK STOK EKLEME — Settings.css dosyasının SONUNA eklenecek
+   (Bir önceki turda eklediysen, bu blok onun YERİNE geçmeli —
+   aşağıdaki class isimleri aynı ama içerikleri değişti: 2 kolonlu
+   yatay yerleşim + genişlemiş modal genişliği)
    ============================================================ */
 
 .st-ekmek-stok-modal {
-  max-width: 480px;
+  max-width: 760px;
   width: 100%;
 }
 
-.st-ekmek-stok-list {
+.st-ekmek-stok-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .st-ekmek-stok-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- SOL KOLON: sade giriş listesi ---- */
+
+.st-ekmek-stok-col-left {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 60vh;
-  overflow-y: auto;
+  gap: 2px;
 }
 
 .st-ekmek-stok-row {
   border-bottom: 1px solid rgba(57, 62, 65, 0.12);
-  padding: 12px 2px;
+  padding: 10px 2px;
 }
 
 .st-ekmek-stok-row:last-child {
   border-bottom: none;
 }
 
-.st-ekmek-stok-baslik {
+.st-ekmek-stok-row label {
+  display: block;
+  font-weight: 600;
+  color: #393E41 !important;
+  font-size: 13.5px;
+  margin-bottom: 6px;
+}
+
+.st-ekmek-stok-row-inputs {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-}
-
-.st-ekmek-stok-baslik label {
-  font-weight: 600;
-  color: #393E41;
-  flex: 1;
-  font-size: 14px;
-}
-
-.st-ekmek-stok-input {
-  width: 90px;
-  padding: 8px 10px;
-  border: 2px solid #393E41;
-  border-radius: 8px;
-  text-align: center;
-  font-size: 16px;
-  font-weight: 600;
-  color: #393E41 !important;
-  background: #fff;
+  gap: 10px;
 }
 
 .st-ekmek-stok-mevcut {
-  margin-top: 6px;
-  font-size: 13px;
-  color: #393E41;
+  font-size: 12.5px;
+  color: #393E41 !important;
   opacity: 0.75;
+  white-space: nowrap;
+}
+
+.st-ekmek-stok-mevcut strong {
+  color: #393E41 !important;
+  opacity: 1;
+}
+
+.st-ekmek-stok-input {
+  width: 84px;
+  padding: 7px 8px;
+  border: 2px solid #393E41;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: #393E41 !important;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+/* ---- SAĞ KOLON: sadece ikaz + sipariş kopyalama ---- */
+
+.st-ekmek-stok-col-right {
+  background: #F6F7EB;
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 100%;
+}
+
+.st-ekmek-stok-ok {
+  color: #393E41 !important;
+  font-size: 13.5px;
+  font-weight: 600;
+  margin: 0;
 }
 
 .st-ekmek-stok-uyari {
-  margin-top: 10px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: rgba(233, 79, 55, 0.1);
   border: 1px solid #E94F37;
   border-radius: 8px;
   color: #E94F37 !important;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 1.4;
 }
 
 .st-ekmek-siparis-listesi {
-  margin-top: 8px;
+  margin-top: 4px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.st-ekmek-siparis-baslik {
+  font-size: 12px;
+  font-weight: 700;
+  color: #393E41 !important;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .st-ekmek-siparis-satir {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  background: #F6F7EB;
+  gap: 8px;
+  background: #fff;
   border-radius: 6px;
   padding: 6px 8px;
   font-weight: 400;
   color: #393E41 !important;
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
 .st-ekmek-kopyala-btn {
@@ -721,10 +771,11 @@
   color: #F6F7EB !important;
   border: none;
   border-radius: 6px;
-  padding: 5px 10px;
-  font-size: 12px;
+  padding: 5px 9px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .st-ekmek-kopyala-btn:hover {

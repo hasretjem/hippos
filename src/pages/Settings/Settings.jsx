@@ -160,6 +160,13 @@ export default function Settings({ data, onNavigate }) {
     }
   }
 
+  // Sağ kolonda gösterilecek, kritiğin altına düşmüş ekmek türleri — modal her açıldığında/
+  // stok her değiştiğinde otomatik hesaplanır.
+  const dusukStoklar = useMemo(
+    () => EKMEK_TURLERI_STOK.filter((t) => (ekmekStok[t.key] || 0) < t.esik),
+    [ekmekStok]
+  );
+
   // ---- Bugün paneli: en çok satanlar + genel istatistik ----
   const [sandwichShowAll, setSandwichShowAll] = useState(false);
   const [mealShowAll, setMealShowAll] = useState(false);
@@ -775,7 +782,7 @@ export default function Settings({ data, onNavigate }) {
         </div>
       )}
 
-      {/* EKMEK STOK EKLEME MODALI */}
+      {/* EKMEK STOK EKLEME MODALI — yatay 2 kolonlu: sol giriş listesi, sağ ikaz/sipariş */}
       {ekmekModalOpen && (
         <div className="st-modal-overlay" onClick={closeEkmekModal}>
           <div className="st-modal st-ekmek-stok-modal" onClick={(e) => e.stopPropagation()}>
@@ -784,14 +791,14 @@ export default function Settings({ data, onNavigate }) {
               <button className="st-modal-x" onClick={closeEkmekModal}><X size={16} /></button>
             </div>
 
-            <div className="st-ekmek-stok-list">
-              {EKMEK_TURLERI_STOK.map((t) => {
-                const mevcutStok = ekmekStok[t.key] || 0;
-                const dusukStok = mevcutStok < t.esik;
-                return (
+            <div className="st-ekmek-stok-cols">
+              {/* SOL KOLON — sade giriş listesi, ikaz/sipariş içermez */}
+              <div className="st-ekmek-stok-col-left">
+                {EKMEK_TURLERI_STOK.map((t) => (
                   <div key={t.key} className="st-ekmek-stok-row">
-                    <div className="st-ekmek-stok-baslik">
-                      <label>{t.label}</label>
+                    <label>{t.label}</label>
+                    <div className="st-ekmek-stok-row-inputs">
+                      <span className="st-ekmek-stok-mevcut">Stok: <strong>{ekmekStok[t.key] || 0}</strong></span>
                       <input
                         type="number"
                         min="0"
@@ -802,33 +809,38 @@ export default function Settings({ data, onNavigate }) {
                         className="st-ekmek-stok-input"
                       />
                     </div>
-
-                    <div className="st-ekmek-stok-mevcut">
-                      Şu an stokta: <strong>{mevcutStok}</strong> adet
-                    </div>
-
-                    {dusukStok && (
-                      <div className="st-ekmek-stok-uyari">
-                        ⚠️ Stok {t.esik}'nin altına düştü, {t.key === 'domatesli' || t.key === 'kucukKepek' ? '1 koli' : '2 koli'} sipariş edelim.
-
-                        <div className="st-ekmek-siparis-listesi">
-                          {EKMEK_SIPARIS_LISTESI.map((s) => (
-                            <div key={s.kod} className="st-ekmek-siparis-satir">
-                              <span>{s.metin}</span>
-                              <button
-                                className="st-ekmek-kopyala-btn"
-                                onClick={() => kopyalaSiparis(s.metin, s.kod)}
-                              >
-                                {kopyalananKod === s.kod ? (<><Check size={12} /> Kopyalandı</>) : (<><Copy size={12} /> Kopyala</>)}
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
-                );
-              })}
+                ))}
+              </div>
+
+              {/* SAĞ KOLON — sadece stok ikazı + sipariş kopyalama, giriş alanı içermez */}
+              <div className="st-ekmek-stok-col-right">
+                {dusukStoklar.length === 0 ? (
+                  <p className="st-ekmek-stok-ok">✅ Tüm ekmek stokları yeterli seviyede</p>
+                ) : (
+                  <>
+                    {dusukStoklar.map((t) => (
+                      <div key={t.key} className="st-ekmek-stok-uyari">
+                        ⚠️ {t.label} stoğu {t.esik}'nin altına düştü ({ekmekStok[t.key] || 0} adet kaldı).
+                      </div>
+                    ))}
+                    <div className="st-ekmek-siparis-listesi">
+                      <span className="st-ekmek-siparis-baslik">Sipariş edilecekler:</span>
+                      {EKMEK_SIPARIS_LISTESI.map((s) => (
+                        <div key={s.kod} className="st-ekmek-siparis-satir">
+                          <span>{s.metin}</span>
+                          <button
+                            className="st-ekmek-kopyala-btn"
+                            onClick={() => kopyalaSiparis(s.metin, s.kod)}
+                          >
+                            {kopyalananKod === s.kod ? (<><Check size={12} /> Kopyalandı</>) : (<><Copy size={12} /> Kopyala</>)}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="st-modal-footer">
