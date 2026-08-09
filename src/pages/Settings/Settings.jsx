@@ -132,6 +132,15 @@ export default function Settings({ data, onNavigate }) {
   const [ekmekGirisleri, setEkmekGirisleri] = useState({ buyukBeyaz: '', kucukBeyaz: '', domatesli: '', kucukKepek: '' });
   const [ekmekKaydediliyor, setEkmekKaydediliyor] = useState(false);
   const [kopyalananKod, setKopyalananKod] = useState(null);
+  // Enter'a basınca sıradaki adet kutusuna geçebilmek için her input'un ref'i burada tutuluyor.
+  const ekmekStokInputRefs = useRef({});
+
+  function ekmekStokEnterNext(key) {
+    const idx = EKMEK_TURLERI_STOK.findIndex((t) => t.key === key);
+    if (idx === -1 || idx === EKMEK_TURLERI_STOK.length - 1) return; // son alanda Enter hiçbir şey yapmasın
+    const nextKey = EKMEK_TURLERI_STOK[idx + 1].key;
+    ekmekStokInputRefs.current[nextKey]?.focus();
+  }
 
   function closeEkmekModal() {
     setEkmekModalOpen(false);
@@ -800,11 +809,13 @@ export default function Settings({ data, onNavigate }) {
                     <div className="st-ekmek-stok-row-inputs">
                       <span className="st-ekmek-stok-mevcut">Stok: <strong>{ekmekStok[t.key] || 0}</strong></span>
                       <input
+                        ref={(el) => { ekmekStokInputRefs.current[t.key] = el; }}
                         type="number"
                         min="0"
                         inputMode="numeric"
                         value={ekmekGirisleri[t.key]}
                         onChange={(e) => setEkmekGirisleri((prev) => ({ ...prev, [t.key]: e.target.value }))}
+                        onKeyDown={(e) => e.key === 'Enter' && ekmekStokEnterNext(t.key)}
                         placeholder="Adet"
                         className="st-ekmek-stok-input"
                       />

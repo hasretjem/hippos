@@ -878,3 +878,57 @@
   margin: 6px 0 10px;
   line-height: 1.5;
 }
+/* Tables.css dosyasının SONUNA eklenecek — Ekmek Gönderme panelindeki YATAY stok ikazı
+   (bir önceki turda eklediysen .tb-ekmek-stok-info zaten var, ona dokunmuyoruz — bu blok yeni) */
+
+.tb-ekmek-uyari-yatay {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 10px;
+  padding: 8px 10px;
+  background: rgba(233, 79, 55, 0.08);
+  border: 1px solid #E94F37;
+  border-radius: 8px;
+}
+
+.tb-ekmek-uyari-pill {
+  background: #E94F37;
+  color: #fff !important;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.tb-ekmek-siparis-yatay {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.tb-ekmek-siparis-kopyala-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #393E41;
+  color: #F6F7EB !important;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tb-ekmek-siparis-kopyala-btn:hover {
+  background: #E94F37;
+}

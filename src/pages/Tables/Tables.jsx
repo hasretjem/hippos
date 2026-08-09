@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import './Tables.css';
-import { SALON_TABLES, ALT_TABLES, TABLE_PAIRS, QUICK_SALE, TL, getElapsedMinutes, getColorTier } from '../../hooks/useHipposData';
+import { SALON_TABLES, ALT_TABLES, TABLE_PAIRS, QUICK_SALE, TL, getElapsedMinutes, getColorTier, EKMEK_TURLERI_STOK } from '../../hooks/useHipposData';
 
 // Masa/paket kartlarında tutar küsuratsız gösterilir (menüde 0,50 ₺ gibi kuruşlu ürün yok) —
 // genel TL() fonksiyonu (fişler, modallar, raporlar) olduğu gibi kalıyor, sadece kart
@@ -10,8 +10,17 @@ const TLKart = (n) => Math.round(n || 0).toLocaleString('tr-TR') + ' ₺';
 import {
   MoreVertical, Plus, ClipboardPaste, ArrowLeftRight, Link2, XCircle,
   Undo2, Banknote, CreditCard, UtensilsCrossed, BookOpen, X, Check, Zap, Lock,
-  StickyNote, MessageCircle, Trash2, Printer,
+  StickyNote, MessageCircle, Trash2, Printer, Copy,
 } from 'lucide-react';
+
+// Ekmek stok kritik seviyeye düşünce önerilecek sipariş listesi (kopyala-yapıştır için) —
+// Settings.jsx'teki Ekmek Stok Ekleme modalıyla aynı liste, burada da yatay gösteriliyor.
+const EKMEK_SIPARIS_LISTESI = [
+  { kod: '1027053', metin: '2 Koli 1027053  Don.Baget Fransız  YP 1/2 (40*160 Gr) Ulker Marifet' },
+  { kod: '4400064', metin: '2 Koli 4400064  1/3 Baget Sade 95 Gr. 50/36' },
+  { kod: '1033506', metin: '1 Koli 1033506 1/3 Küçük Tahıl Ekmek (70 Ad )' },
+  { kod: '4400191', metin: '1 Koli 4400191  1/2 Artısan Baget Domates&Fesleğen' },
+];
 
 const PAIR_SECOND = new Set(TABLE_PAIRS.map((p) => p[1]));
 const PAIR_FIRST = new Map(TABLE_PAIRS.map((p) => [p[0], p[1]]));
@@ -147,7 +156,25 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
   const [ekmekEditId, setEkmekEditId] = useState(null);
   const [ekmekEditDraft, setEkmekEditDraft] = useState({ buyukBeyaz: '', kucukBeyaz: '', domatesli: '', kucukKepek: '' });
   const [ekmekPrintData, setEkmekPrintData] = useState(null);
+  const [ekmekKopyalananKod, setEkmekKopyalananKod] = useState(null);
   const ekmekInputRefs = useRef({});
+
+  // Bu panelde de aynı eşik mantığı — Ayarlar'daki Ekmek Stok Ekleme ile aynı kaynak
+  // (EKMEK_TURLERI_STOK), stok her değiştiğinde otomatik yeniden hesaplanır.
+  const ekmekDusukStoklar = useMemo(
+    () => EKMEK_TURLERI_STOK.filter((t) => (ekmekStok[t.key] || 0) < t.esik),
+    [ekmekStok]
+  );
+
+  async function ekmekKopyalaSiparis(metin, kod) {
+    try {
+      await navigator.clipboard.writeText(metin);
+      setEkmekKopyalananKod(kod);
+      setTimeout(() => setEkmekKopyalananKod(null), 1500);
+    } catch {
+      /* pano izni yoksa sessizce geç */
+    }
+  }
 
   async function fetchEkmekKayitlar() {
     try {
@@ -881,6 +908,30 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
               <p className="tb-ekmek-stok-info">
                 Stokta: {EKMEK_TURLERI.map((t) => `${t.label.replace(' Ekmeği', '')}: ${ekmekStok[t.key] ?? 0}`).join(' · ')}
               </p>
+
+              {/* Stok ikazı — Ayarlar'daki Ekmek Stok Ekleme ile aynı eşikler, burada YATAY */}
+              {ekmekDusukStoklar.length > 0 && (
+                <div className="tb-ekmek-uyari-yatay">
+                  {ekmekDusukStoklar.map((t) => (
+                    <span key={t.key} className="tb-ekmek-uyari-pill">
+                      ⚠️ {t.label} &lt; {t.esik}
+                    </span>
+                  ))}
+                  <div className="tb-ekmek-siparis-yatay">
+                    {EKMEK_SIPARIS_LISTESI.map((s) => (
+                      <button
+                        key={s.kod}
+                        className="tb-ekmek-siparis-kopyala-btn"
+                        onClick={() => ekmekKopyalaSiparis(s.metin, s.kod)}
+                        title={s.metin}
+                      >
+                        {ekmekKopyalananKod === s.kod ? (<><Check size={11} /> Kopyalandı</>) : (<><Copy size={11} /> {s.metin.split('  ')[1] || s.metin}</>)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <button
                 className="tb-primary tb-ekmek-print-btn"
                 disabled={ekmekLoading || EKMEK_TURLERI.every((t) => !(parseInt(ekmekMiktar[t.key], 10) > 0))}
@@ -948,4 +999,4 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       )}
     </div>
   );
-}
+} 
