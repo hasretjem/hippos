@@ -462,18 +462,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   }
 
   function handleSend() {
-    // Not, Hızlı Satış hariç, sipariş gönderilirken otomatik olarak da gönderilir —
-    // ayrı bir "Gönder" butonuna gerek kalmasın diye (yazıp Enter'a basmasan bile gider).
-    //
-    // MADDE 1 DÜZELTMESİ: "Gönder"e basınca ürünler masadan gidiyordu ama not KALIYORDU
-    // (bir sonraki müşteri masaya oturunca önceki müşterinin notu hâlâ görünüyordu).
-    // İstenen davranış: not sipariş gönderilince silinsin, Sheets'e ayrıca kaydedilmesine
-    // gerek yok (zaten hiç kaydedilmiyordu, sadece görünürde kalıyordu). Hızlı Satış'ta
-    // not kavramı yok, oraya dokunmuyoruz.
-    if (selectedTable !== QUICK_SALE) {
-      setTableNoteDraft('');
-      updateTableNote(selectedTable, '');
-    }
+  // Not artık gönderilmiyor, tam tersine temizleniyor — sipariş gönderilince
+  // ekrandaki ve sistemdeki not sıfırlanır (Hızlı Satış hariç).
+  if (selectedTable !== QUICK_SALE) {
+    setTableNoteDraft('');
+    updateTableNote(selectedTable, '');
+  }
+
+  onNavigate('tables');
+}
     onNavigate('tables');
   }
 
