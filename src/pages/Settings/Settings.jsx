@@ -55,6 +55,23 @@ export default function Settings({ data, onNavigate }) {
   const [gununMenusuOpen, setGununMenusuOpen] = useState(false);
   const [menuSearchOpen, setMenuSearchOpen] = useState(false);
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
+    
+  useEffect(() => {
+  if (!menuModalOpen) return;
+  function handleKeyDown(e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (e.key.length === 1 && /[a-zçğıöşüA-ZÇĞİÖŞÜ0-9]/.test(e.key)) {
+      setMenuSearchOpen(true);
+      setMenuSearchQuery((q) => q + e.key);
+    } else if (e.key === 'Backspace') {
+      setMenuSearchQuery((q) => q.slice(0, -1));
+    }
+  }
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+}, [menuModalOpen]);
   const menuSearchRef = useRef(null);
 
   useEffect(() => {

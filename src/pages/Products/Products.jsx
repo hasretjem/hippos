@@ -4,7 +4,19 @@ import { TL } from '../../hooks/useHipposData';
 import {
   ArrowLeft, Search, Plus, Trash2, Pin, ChevronUp, ChevronDown,
   Check, X, RefreshCw, Save, Lock, Delete,
-} from 'lucide-react';
+} 
+from 'lucide-react';
+// Türkçe karakter duyarsız arama için normalize eder (İ/I, ı/i, ş/s, ğ/g, ü/u, ö/o, ç/c)
+function normalizeTr(s) {
+  return (s || '')
+    .toLocaleLowerCase('tr-TR')
+    .replace(/ı/g, 'i')
+    .replace(/ş/g, 's')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c');
+}
 
 // Bu sayfadaki her değişiklik ARTIK ANINDA Supabase'e yazılır ve tüm cihazlara
 // gerçek zamanlı yansır — "Kaydet/Vazgeç" ile bekletilen bir taslak kalmadı
@@ -204,12 +216,13 @@ export default function Products({ data, onNavigate }) {
   }, []);
 
   const searchResults = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = searchQuery.trim();
     if (!q) return null;
-    const matches = data.products.filter((p) => !p.isAzVariant && p.ad.toLowerCase().includes(q));
-    matches.sort((a, b) => {
-      const aStarts = a.ad.toLowerCase().startsWith(q) ? 0 : 1;
-      const bStarts = b.ad.toLowerCase().startsWith(q) ? 0 : 1;
+    const matches = data.products.filter((p) => !p.isAzVariant && normalizeTr(p.ad).includes(normalizeTr(q)));
+matches.sort((a, b) => {
+  const nq = normalizeTr(q);
+  const aStarts = normalizeTr(a.ad).startsWith(nq) ? 0 : 1;
+  const bStarts = normalizeTr(b.ad).startsWith(nq) ? 0 : 1;
       if (aStarts !== bStarts) return aStarts - bStarts;
       return a.ad.localeCompare(b.ad, 'tr');
     });

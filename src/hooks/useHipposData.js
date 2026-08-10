@@ -897,6 +897,64 @@ export default function useHipposData(scope = 'full') {
     };
   }, []);
 
+  // ---- GÜVENLİK AĞI: sekme/pencere tekrar görünür/odaklı hale gelince, o an bekleyen bir
+  // yerel yazma YOKSA masaların not/indirim/sipariş durumunu sessizce Supabase'ten tazeler.
+  // Realtime bazen (belgelenmiş, geçmişte gözlemlenmiş) mesaj kaçırabiliyor — bir cihazda
+  // yazılan masa notu diğer cihaza hiç ulaşmayabiliyordu. Bu, kullanıcı ekrana her
+  // döndüğünde (masa değiştirme, sekme geçişi, PC'ler arası bakış) veriyi gerçek kaynakla
+  // hizalayan ucuz (tek seferlik SELECT, Realtime mesajı değil) bir düzeltme katmanıdır.
+  useEffect(() => {
+    async function resyncTableState() {
+      const { data, error } = await supabase.from('table_state').select('*');
+      if (error || !data) return;
+      setOrders((prev) => {
+        const next = { ...prev };
+        data.forEach((row) => { next[row.table_name] = row.items || []; });
+        return next;
+      });
+      setTableNotes((prev) => {
+        const next = { ...prev };
+        data.forEach((row) => {
+          const t = row.table_name;
+          // Bekleyen yerel bir yazma varsa (henüz debounce dolmadı ya da yankı koruması
+          // sürüyor) o masayı ATLA — yarım kalmış kendi değişikliğimizi ezmeyelim.
+          if (noteDiscountTimersRef.current[t] || noteDiscountEchoGuardRef.current[t]) return;
+          next[t] = row.note || '';
+        });
+        return next;
+      });
+      setTableDiscounts((prev) => {
+        const next = { ...prev };
+        data.forEach((row) => {
+          const t = row.table_name;
+          if (noteDiscountTimersRef.current[t] || noteDiscountEchoGuardRef.current[t]) return;
+          next[t] = { type: row.discount_type, value: row.discount_value || 0 };
+        });
+        return next;
+      });
+      setTableOpenedAt((prev) => {
+        const next = { ...prev };
+        data.forEach((row) => {
+          const t = row.table_name;
+          if (row.opened_at) next[t] = new Date(row.opened_at).getTime();
+          else delete next[t];
+        });
+        return next;
+      });
+    }
+
+    function handleVisibility() {
+      if (document.visibilityState === 'visible') resyncTableState();
+    }
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', resyncTableState);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', resyncTableState);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   // ---- TEŞHİS: orders state'i her (referans olarak) değiştiğinde, hangi masa(lar)ın
   // gerçekten değiştiğini ve o anki ürün sayısını logla.
