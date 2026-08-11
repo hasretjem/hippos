@@ -24,6 +24,12 @@ export default function App() {
   // geçmişi vs.) dinlemeye hiç ihtiyaç duymuyor — sadece kendi ekranına lazım olanı dinlesin.
   const dataScope = isPaketciRoute ? 'paketci' : isMutfakRoute ? 'mutfak' : 'full';
   const data = useHipposData(dataScope);
+  // Bazı eski/değişken veri kapsamlarında ekmek stoğu henüz dönmeyebilir.
+  // Sayfaların `ekmekStok[key]` erişimi uygulamanın tamamını düşürmesin.
+  const safeData = {
+    ...data,
+    ekmekStok: data.ekmekStok || {},
+  };
   const [activePage, setActivePage] = useState('tables');
   const [selectedTable, setSelectedTable] = useState(QUICK_SALE);
 
@@ -43,10 +49,10 @@ export default function App() {
   }, []);
 
   if (isPaketciRoute) {
-    return <Paketci data={data} />;
+    return <Paketci data={safeData} />;
   }
   if (isMutfakRoute) {
-    return <MutfakPaneli data={data} />;
+    return <MutfakPaneli data={safeData} />;
   }
 
   function handleNavigate(page, opts) {
@@ -65,26 +71,26 @@ export default function App() {
     <>
       {activePage === 'pos' && (
         <DirectSale
-          data={data}
+          data={safeData}
           selectedTable={selectedTable}
           setSelectedTable={setSelectedTable}
           onNavigate={handleNavigate}
         />
       )}
       {activePage === 'tables' && (
-        <Tables data={data} setSelectedTable={setSelectedTable} onNavigate={handleNavigate} />
+        <Tables data={safeData} setSelectedTable={setSelectedTable} onNavigate={handleNavigate} />
       )}
       {activePage === 'settings' && (
-        <Settings data={data} onNavigate={handleNavigate} />
+        <Settings data={safeData} onNavigate={handleNavigate} />
       )}
       {activePage === 'products' && (
-        <Products data={data} onNavigate={handleNavigate} />
+        <Products data={safeData} onNavigate={handleNavigate} />
       )}
       {activePage === 'cariler' && (
-        <Cariler data={data} onNavigate={handleNavigate} />
+        <Cariler data={safeData} onNavigate={handleNavigate} />
       )}
       {activePage === 'endofday' && (
-        <GunSonu data={data} onNavigate={handleNavigate} />
+        <GunSonu data={safeData} onNavigate={handleNavigate} />
       )}
       {activePage === 'muhasebe' && (
         <Muhasebe onNavigate={handleNavigate} />
