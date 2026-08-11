@@ -39,8 +39,7 @@ jobs:
           end_marker = '\n      {/* CARİ SEÇ MODALI */}'
           start = text.index(start_marker)
           end = text.index(end_marker, start)
-          block = text[start:end]
-          block = block.split('\n', 1)[1]
+          block = text[start:end].split('\n', 1)[1]
 
           component = '''import {
             Banknote,
@@ -70,7 +69,9 @@ jobs:
             TL,
           }) {
             return (
+              <>
           ''' + block + '''
+              </>
             );
           }
           '''
