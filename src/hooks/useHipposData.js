@@ -177,16 +177,14 @@ export default function useHipposData(scope = 'full') {
   const [favorites, setFavorites] = useState(() => loadLS('hippos_favorites', [104, 101, 105]));
   useEffect(() => localStorage.setItem('hippos_favorites', JSON.stringify(favorites)), [favorites]);
 
-  // Ekmek stoğu için ortak Supabase tablosu henüz bulunmadığından, en azından
-  // uygulamanın açılışını ve aynı cihazdaki stok takibini güvenli tutuyoruz.
-  const [ekmekStok, setEkmekStok] = useState(() => ({
+  // Ekmek stoğunun tek kaynağı Google Sheets'teki "Ekmek Kayıtları" sekmesidir.
+  // API, geçmiş stok girişlerinden mutfağa çıkışları düşerek güncel toplamı döndürür.
+  const [ekmekStok, setEkmekStok] = useState({
     buyukBeyaz: 0,
     kucukBeyaz: 0,
     domatesli: 0,
     kucukKepek: 0,
-    ...loadLS('hippos_ekmek_stok', {}),
-  }));
-  useEffect(() => localStorage.setItem('hippos_ekmek_stok', JSON.stringify(ekmekStok)), [ekmekStok]);
+  });
 
   function normalizeEkmekMiktarlari(miktarlar) {
     return EKMEK_TURLERI_STOK.reduce((next, { key }) => {
@@ -195,21 +193,47 @@ export default function useHipposData(scope = 'full') {
     }, {});
   }
 
-  async function ekmekStokEkle(miktarlar) {
-    const eklenecekler = normalizeEkmekMiktarlari(miktarlar);
-    setEkmekStok((prev) => EKMEK_TURLERI_STOK.reduce((next, { key }) => {
-      next[key] = (Number(prev?.[key]) || 0) + eklenecekler[key];
-      return next;
-    }, {}));
-    return { success: true };
+  async function ekmekHareketiKaydet(miktarlar, islemTuru) {
+    const normalized = normalizeEkmekMiktarlari(miktarlar);
+    try {
+      const response = await fetch('/api/ekmek', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...normalized, islemTuru }),
+      });
+      const result = await response.json();
+      if (!response.ok) return { success: false, message: result.error || 'Ekmek kaydı yazılamadı' };
+
+      setEkmekStok((prev) => EKMEK_TURLERI_STOK.reduce((next, { key }) => {
+        const current = Number(prev?.[key]) || 0;
+        next[key] = islemTuru === 'stok_girisi'
+          ? current + normalized[key]
+          : current - normalized[key];
+        return next;
+      }, {}));
+      return { success: true, record: result.record };
+    } catch {
+      return { success: false, message: 'Ekmek kaydı yazılamadı' };
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/ekmek')
+      .then((response) => response.ok ? response.json() : null)
+      .then((result) => {
+        if (!cancelled && result?.stok) setEkmekStok(result.stok);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  function ekmekStokEkle(miktarlar) {
+    return ekmekHareketiKaydet(miktarlar, 'stok_girisi');
   }
 
   function ekmekStoktanDus(miktarlar) {
-    const dusulecekler = normalizeEkmekMiktarlari(miktarlar);
-    setEkmekStok((prev) => EKMEK_TURLERI_STOK.reduce((next, { key }) => {
-      next[key] = Math.max(0, (Number(prev?.[key]) || 0) - dusulecekler[key]);
-      return next;
-    }, {}));
+    return ekmekHareketiKaydet(miktarlar, 'mutfaga_cikis');
   }
 
   function toggleFavorite(id) {
