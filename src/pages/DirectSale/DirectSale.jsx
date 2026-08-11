@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import './DirectSale.css';
+import ProductGrid from './components/ProductGrid';
+import GenericModal from './components/GenericModal';
 import { TL, QUICK_SALE } from '../../hooks/useHipposData';
 import {
   Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
@@ -850,98 +852,18 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
           </section>
 
           {/* ÜRÜN GRID */}
-          <div className="ds-products-wrap">
-            <div className={`ds-products ${activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery ? 'split-active' : ''}`} ref={productsScrollRef}>
-              {Object.keys(groupedProducts).length === 0 && (
-                <div className="ds-empty">Aradığınız kriterde ürün bulunamadı.</div>
-              )}
-
-              {/* SOĞUK SANDVİÇ: Büyük/Küçük alt kategorileri (ve "Menü Sandviç Büyük/Küçük" gibi
-                  isminde büyük/küçük geçen her alt kategori) sol/sağ iki ayrı panelde gösterilir. */}
-              {activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery ? (
-                <div className="ds-split-cols">
-                  {['büyük', 'küçük'].map((yon) => (
-                    <div className={`ds-split-col ${yon}`} key={yon} ref={yon === 'büyük' ? bigColScrollRef : smallColScrollRef}>
-                      <div className="ds-split-col-head">
-                        <h3 className="ds-split-col-title">{yon === 'büyük' ? 'BÜYÜK SANDVİÇ' : 'KÜÇÜK SANDVİÇ'}</h3>
-                        <div className="ds-split-col-scrollbtns">
-                          <button onClick={() => scrollByPage(yon === 'büyük' ? bigColScrollRef : smallColScrollRef, -1)}><ChevronUp size={14} /></button>
-                          <button onClick={() => scrollByPage(yon === 'büyük' ? bigColScrollRef : smallColScrollRef, 1)}><ChevronDown size={14} /></button>
-                        </div>
-                      </div>
-                      {Object.entries(groupedProducts)
-                        .filter(([subCat]) => (subCat || '').toLocaleLowerCase('tr-TR').includes(yon))
-                        .map(([subCat, items]) => (
-                          <div key={subCat} className="ds-product-group">
-                            {subCat.toLocaleLowerCase('tr-TR') !== `${yon} sandviç` && (
-                              <h3 className="ds-subcat-label">{subCat}</h3>
-                            )}
-                            <div className="ds-product-grid">
-                              {items.map((product) => {
-                                const isFav = favorites.includes(product.id);
-                                return (
-                                  <button
-                                    key={product.id}
-                                    className={`ds-product-card ${isFav ? 'fav' : ''}`}
-                                    onClick={() => addProductToOrder(product)}
-                                  >
-                                    <div className="ds-product-card-top">
-                                      <span className="ds-product-name">
-                                        {product.bicakGerekli && <span className="ds-bicak-mark" title="Bıçak gerekli">🔪</span>}
-                                        {product.ekmekGerekli && <span className="ds-ekmek-mark" title="Ekmek gerekli">🥖</span>}
-                                        {product.ad}
-                                      </span>
-                                      {isFav && <Star size={11} className="ds-star" fill="currentColor" />}
-                                    </div>
-                                    <span className="ds-product-price">{TL(product.fiyat)}</span>
-                                    {product.isAzVariant && <span className="ds-az-badge">AZ</span>}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                Object.entries(groupedProducts).map(([subCat, items]) => (
-                <div key={subCat} className="ds-product-group">
-                  {subCat && subCat !== 'Genel' && <h3 className="ds-subcat-label">{subCat}</h3>}
-                  <div className="ds-product-grid">
-                    {items.map((product) => {
-                      const isFav = favorites.includes(product.id);
-                      return (
-                        <button
-                          key={product.id}
-                          className={`ds-product-card ${isFav ? 'fav' : ''}`}
-                          onClick={() => addProductToOrder(product)}
-                        >
-                          <div className="ds-product-card-top">
-                            <span className="ds-product-name">
-                              {product.bicakGerekli && <span className="ds-bicak-mark" title="Bıçak gerekli">🔪</span>}
-                              {product.ekmekGerekli && <span className="ds-ekmek-mark" title="Ekmek gerekli">🥖</span>}
-                              {product.ad}
-                            </span>
-                            {isFav && <Star size={11} className="ds-star" fill="currentColor" />}
-                          </div>
-                          <span className="ds-product-price">{TL(product.fiyat)}</span>
-                          {product.isAzVariant && <span className="ds-az-badge">AZ</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                ))
-              )}
-            </div>
-            {!(activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery) && (
-              <div className="ds-products-scrollbtns">
-                <button onClick={() => scrollByPage(productsScrollRef, -1)}><ChevronUp size={16} /></button>
-                <button onClick={() => scrollByPage(productsScrollRef, 1)}><ChevronDown size={16} /></button>
-              </div>
-            )}
-          </div>
+          <ProductGrid
+  activeCategory={activeCategory}
+  searchQuery={searchQuery}
+  groupedProducts={groupedProducts}
+  favorites={favorites}
+  addProductToOrder={addProductToOrder}
+  productsScrollRef={productsScrollRef}
+  bigColScrollRef={bigColScrollRef}
+  smallColScrollRef={smallColScrollRef}
+  scrollByPage={scrollByPage}
+  TL={TL}
+/>
         </main>
 
         {/* SİPARİŞ / SEPET PANELİ */}
@@ -1469,49 +1391,3 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   );
 }
 
-function GenericModal({ modal, onClose }) {
-  const [inputVal, setInputVal] = useState(modal.defaultValue || '');
-  const [selectVal, setSelectVal] = useState(modal.selectOptions?.[0]?.value || '');
-
-  function confirm() {
-    if (modal.onConfirm) modal.onConfirm(inputVal, selectVal);
-    onClose();
-  }
-
-  return (
-    <div className="ds-modal-overlay" onClick={onClose}>
-      <div className="ds-modal ds-generic-modal" onClick={(e) => e.stopPropagation()}>
-        <h3>{modal.title}</h3>
-        {modal.showInput && (
-          <textarea
-            autoFocus
-            rows={2}
-            placeholder={modal.placeholder || 'Metin yazın...'}
-            value={inputVal}
-            onChange={(e) => setInputVal(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                confirm();
-              }
-            }}
-          />
-        )}
-        {modal.showSelect && (
-          <div className="ds-modal-select-wrap">
-            <label>Hedef Masa Seçin:</label>
-            <select value={selectVal} onChange={(e) => setSelectVal(e.target.value)}>
-              {modal.selectOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-        )}
-        <div className="ds-modal-footer two">
-          <button className="ds-secondary-btn" onClick={onClose}>Vazgeç</button>
-          <button className="ds-primary-btn" onClick={confirm}>Onayla</button>
-        </div>
-      </div>
-    </div>
-  );
-}
