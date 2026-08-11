@@ -177,6 +177,41 @@ export default function useHipposData(scope = 'full') {
   const [favorites, setFavorites] = useState(() => loadLS('hippos_favorites', [104, 101, 105]));
   useEffect(() => localStorage.setItem('hippos_favorites', JSON.stringify(favorites)), [favorites]);
 
+  // Ekmek stoğu için ortak Supabase tablosu henüz bulunmadığından, en azından
+  // uygulamanın açılışını ve aynı cihazdaki stok takibini güvenli tutuyoruz.
+  const [ekmekStok, setEkmekStok] = useState(() => ({
+    buyukBeyaz: 0,
+    kucukBeyaz: 0,
+    domatesli: 0,
+    kucukKepek: 0,
+    ...loadLS('hippos_ekmek_stok', {}),
+  }));
+  useEffect(() => localStorage.setItem('hippos_ekmek_stok', JSON.stringify(ekmekStok)), [ekmekStok]);
+
+  function normalizeEkmekMiktarlari(miktarlar) {
+    return EKMEK_TURLERI_STOK.reduce((next, { key }) => {
+      next[key] = Math.max(0, Number.parseInt(miktarlar?.[key], 10) || 0);
+      return next;
+    }, {});
+  }
+
+  async function ekmekStokEkle(miktarlar) {
+    const eklenecekler = normalizeEkmekMiktarlari(miktarlar);
+    setEkmekStok((prev) => EKMEK_TURLERI_STOK.reduce((next, { key }) => {
+      next[key] = (Number(prev?.[key]) || 0) + eklenecekler[key];
+      return next;
+    }, {}));
+    return { success: true };
+  }
+
+  function ekmekStoktanDus(miktarlar) {
+    const dusulecekler = normalizeEkmekMiktarlari(miktarlar);
+    setEkmekStok((prev) => EKMEK_TURLERI_STOK.reduce((next, { key }) => {
+      next[key] = Math.max(0, (Number(prev?.[key]) || 0) - dusulecekler[key]);
+      return next;
+    }, {}));
+  }
+
   function toggleFavorite(id) {
     setFavorites((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]));
   }
@@ -1676,5 +1711,8 @@ export default function useHipposData(scope = 'full') {
     reddetPaketTeslimat,
     onaylaCariTeslimatBildirim,
     reddetCariTeslimatBildirim,
+    ekmekStok,
+    ekmekStokEkle,
+    ekmekStoktanDus,
   };
 }
