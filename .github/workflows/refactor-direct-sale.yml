@@ -81,7 +81,11 @@ jobs:
 
           generic_start_marker = '\nfunction GenericModal({ modal, onClose }) {'
           generic_start = text.index(generic_start_marker)
-          generic_block = text[generic_start + 1:]
+          generic_block = text[generic_start + 1:].replace(
+              'function GenericModal({ modal, onClose }) {',
+              'export default function GenericModal({ modal, onClose }) {',
+              1,
+          )
           generic_path = Path('src/pages/DirectSale/components/GenericModal.jsx')
           generic_path.write_text(
               "import React, { useState } from 'react';\n\n" + generic_block + "\n",
