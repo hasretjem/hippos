@@ -440,37 +440,19 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     setDraftItems(remaining);
     if (remaining.length === 0) {
       setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
-    }
-    // ÖNEMLİ DÜZELTME (paket "geri geliyor" bugı): önceden bu fonksiyon ödeme sonrası
-    // kalan sepeti SADECE yerel taslakta (draftItems) tutuyordu — Supabase'e hiç
-    // yazmıyordu, o iş masadan ÇIKARKEN çalışan flushDraftToSupabase'e bırakılmıştı.
-    // Paket tamamen kapandığında (remaining.length === 0) kullanıcı genelde hemen
-    // "Yeni Paket" açıyor ve o AYNI ekranda kalıyor — yani "masadan çıkış" hiç
-    // tetiklenmiyor, kapanan paket Supabase'de hâlâ eski (dolu) haliyle duruyor.
-    // Az sonra başka bir cihaz (ya da bu cihaz kendisi) o paket numarasını yeniden
-    // kullanınca "eski sipariş geri geldi" gibi görünüyordu. Ödeme sonrası artık
-    // BURADA, anında Supabase'e yazıyoruz — masadan çıkmayı beklemiyoruz.
-    if (selectedTable !== QUICK_SALE) {
-      setOrderItemsRemote(selectedTable, remaining, {
-        note: remaining.length === 0 ? '' : (tableNotes[selectedTable] || ''),
-        discount: remaining.length === 0 ? { type: null, value: 0 } : (tableDiscounts[selectedTable] || { type: null, value: 0 }),
-        ...(remaining.length === 0 ? { openedAt: null } : {}),
-      });
+      // KRİTİK: paket tamamen ödenip boşaldıysa, "packages" kaydı da silinmezse paket
+      // "açık" görünmeye devam ediyor — yeni bir sipariş için tekrar açıldığında eski
+      // (aslında ödenmiş) kayıt hâlâ orada olduğu için geri geliyormuş gibi görünüyordu.
+      if (selectedTable.startsWith('Paket ')) data.removePackageRecord(selectedTable);
     }
     showToast(`${method} ile ödeme alındı`);
     setPayMode(false);
   }
 
   function handleSend() {
-  // Not artık gönderilmiyor, tam tersine temizleniyor — sipariş gönderilince
-  // ekrandaki ve sistemdeki not sıfırlanır (Hızlı Satış hariç).
-  if (selectedTable !== QUICK_SALE) {
-    setTableNoteDraft('');
-    updateTableNote(selectedTable, '');
-  }
-
-  onNavigate('tables');
-}
+    // Not, Hızlı Satış hariç, sipariş gönderilirken otomatik olarak da gönderilir —
+    // ayrı bir "Gönder" butonuna gerek kalmasın diye (yazıp Enter'a basmasan bile gider).
+    if (selectedTable !== QUICK_SALE) sendTableNote();
     onNavigate('tables');
   }
 
@@ -542,15 +524,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     setDraftItems(remaining);
     if (remaining.length === 0) {
       setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
-    }
-    // Aynı düzeltme (Madde 4) — cariye gönderme de bir ödeme kapanışı, kalan (genelde boş)
-    // sepeti anında Supabase'e yazıyoruz, masadan çıkışı beklemiyoruz.
-    if (selectedTable !== QUICK_SALE) {
-      setOrderItemsRemote(selectedTable, remaining, {
-        note: remaining.length === 0 ? '' : (tableNotes[selectedTable] || ''),
-        discount: remaining.length === 0 ? { type: null, value: 0 } : (tableDiscounts[selectedTable] || { type: null, value: 0 }),
-        ...(remaining.length === 0 ? { openedAt: null } : {}),
-      });
+      if (selectedTable.startsWith('Paket ')) data.removePackageRecord(selectedTable);
     }
     setCariPickerOpen(false);
     setPayMode(false);

@@ -9,14 +9,6 @@ export const ALT_TABLES = ['Alt Masa 1', 'Alt Masa 2', 'Alt Masa 3', 'Alt Masa 4
 export const TABLE_PAIRS = [['Masa 3', 'Masa 4'], ['Masa 10', 'Masa 11']];
 const FIXED_TABLES = [QUICK_SALE, ...SALON_TABLES, ...ALT_TABLES];
 
-// ---- Ekmek Stok Takibi — Tables.jsx'teki "Ekmek Gönderme" panelinin key isimleriyle birebir uyumlu ----
-export const EKMEK_TURLERI_STOK = [
-  { key: 'buyukBeyaz', label: 'Büyük Beyaz Ekmek', esik: 120 },
-  { key: 'kucukBeyaz', label: 'Küçük Beyaz Ekmek', esik: 100 },
-  { key: 'domatesli', label: 'Domatesli/Fesleğenli Ekmek', esik: 50 },
-  { key: 'kucukKepek', label: 'Küçük Kepek Ekmeği', esik: 75 },
-];
-
 export const TL = (n) => (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 }) + ' ₺';
 
 function loadLS(key, fallback) {
@@ -495,11 +487,6 @@ export default function useHipposData(scope = 'full') {
   const [cariTeslimatBildirimleri, setCariTeslimatBildirimleri] = useState([]);
   const [mutfakHazirNotlar, setMutfakHazirNotlar] = useState([]);
 
-  // ---- Ekmek Stok Takibi — Yönetim Paneli'ndeki "Ekmek Stok Ekleme" + Masalar'daki
-  // "Ekmek Gönderme" panelinin ORTAK sayacı. key isimleri Tables.jsx'teki EKMEK_TURLERI
-  // ile birebir aynı: buyukBeyaz, kucukBeyaz, domatesli, kucukKepek.
-  const [ekmekStok, setEkmekStok] = useState({ buyukBeyaz: 0, kucukBeyaz: 0, domatesli: 0, kucukKepek: 0 });
-
   const allTables = useMemo(() => [...FIXED_TABLES, ...packages.map((p) => p.name)], [packages]);
 
   // ================== "Kim nerede" — aynı masaya iki cihazın aynı anda girmesini uyarmak için ==================
@@ -632,7 +619,7 @@ export default function useHipposData(scope = 'full') {
     let cancelled = false;
 
     async function loadAll() {
-      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn, ek] = await Promise.all([
+      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn] = await Promise.all([
         supabase.from('table_state').select('*'),
         supabase.from('packages').select('*'),
         supabase.from('package_meta').select('*').eq('id', 1).maybeSingle(),
@@ -650,7 +637,6 @@ export default function useHipposData(scope = 'full') {
         supabase.from('paket_teslimatlari').select('*'),
         supabase.from('cari_teslimat_bildirimleri').select('*'),
         supabase.from('mutfak_hazir_notlar').select('*').order('created_at', { ascending: true }),
-        supabase.from('ekmek_stok').select('*'),
       ]);
       if (cancelled) return;
 
@@ -660,12 +646,6 @@ export default function useHipposData(scope = 'full') {
       setPaketTeslimatlari((pt.data || []).map(rowToPaketTeslimat).sort((a, b) => b.ts - a.ts));
       setCariTeslimatBildirimleri((ctb.data || []).map(rowToCariTeslimatBildirim).sort((a, b) => b.ts - a.ts));
       setMutfakHazirNotlar((mhn.data || []).map((r) => ({ id: r.id, metin: r.metin })));
-
-      if (ek.data && ek.data.length > 0) {
-        const stokObj = {};
-        ek.data.forEach((row) => { stokObj[row.key] = row.adet; });
-        setEkmekStok((prev) => ({ ...prev, ...stokObj }));
-      }
 
       const o = emptyTableMap(FIXED_TABLES, []);
       const n = emptyTableMap(FIXED_TABLES, '');
@@ -895,64 +875,6 @@ export default function useHipposData(scope = 'full') {
       liveChannelRef.current = null;
       supabase.removeChannel(channel);
     };
-  }, []);
-
-  // ---- GÜVENLİK AĞI: sekme/pencere tekrar görünür/odaklı hale gelince, o an bekleyen bir
-  // yerel yazma YOKSA masaların not/indirim/sipariş durumunu sessizce Supabase'ten tazeler.
-  // Realtime bazen (belgelenmiş, geçmişte gözlemlenmiş) mesaj kaçırabiliyor — bir cihazda
-  // yazılan masa notu diğer cihaza hiç ulaşmayabiliyordu. Bu, kullanıcı ekrana her
-  // döndüğünde (masa değiştirme, sekme geçişi, PC'ler arası bakış) veriyi gerçek kaynakla
-  // hizalayan ucuz (tek seferlik SELECT, Realtime mesajı değil) bir düzeltme katmanıdır.
-  useEffect(() => {
-    async function resyncTableState() {
-      const { data, error } = await supabase.from('table_state').select('*');
-      if (error || !data) return;
-      setOrders((prev) => {
-        const next = { ...prev };
-        data.forEach((row) => { next[row.table_name] = row.items || []; });
-        return next;
-      });
-      setTableNotes((prev) => {
-        const next = { ...prev };
-        data.forEach((row) => {
-          const t = row.table_name;
-          // Bekleyen yerel bir yazma varsa (henüz debounce dolmadı ya da yankı koruması
-          // sürüyor) o masayı ATLA — yarım kalmış kendi değişikliğimizi ezmeyelim.
-          if (noteDiscountTimersRef.current[t] || noteDiscountEchoGuardRef.current[t]) return;
-          next[t] = row.note || '';
-        });
-        return next;
-      });
-      setTableDiscounts((prev) => {
-        const next = { ...prev };
-        data.forEach((row) => {
-          const t = row.table_name;
-          if (noteDiscountTimersRef.current[t] || noteDiscountEchoGuardRef.current[t]) return;
-          next[t] = { type: row.discount_type, value: row.discount_value || 0 };
-        });
-        return next;
-      });
-      setTableOpenedAt((prev) => {
-        const next = { ...prev };
-        data.forEach((row) => {
-          const t = row.table_name;
-          if (row.opened_at) next[t] = new Date(row.opened_at).getTime();
-          else delete next[t];
-        });
-        return next;
-      });
-    }
-
-    function handleVisibility() {
-      if (document.visibilityState === 'visible') resyncTableState();
-    }
-    document.addEventListener('visibilitychange', handleVisibility);
-    window.addEventListener('focus', resyncTableState);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('focus', resyncTableState);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
@@ -1396,80 +1318,6 @@ export default function useHipposData(scope = 'full') {
       .then(({ error }) => { if (error) console.error('satılan ürün kaydedilemedi:', error.message); });
   }
 
-  // ================== EKMEK STOK TAKİBİ ==================
-  // Ortak sayaç: Yönetim Paneli (Settings.jsx) "Ekmek Stok Ekleme" ile ÜSTÜNE EKLER,
-  // Masalar (Tables.jsx) "Ekmek Gönderme" (Yazdır) ile STOKTAN DÜŞER. Her ikisi de
-  // aynı ekmekStok state'ini ve ekmek_stok tablosunu kullanır, key isimleri ortak.
-
-  // Yönetim Paneli'nden çağrılır. girisler: { buyukBeyaz: 20, kucukBeyaz: 0, ... }
-  // (fırından o an gelen parti) — mevcut stoğun ÜSTÜNE eklenir, asla sıfırlanmaz/üzerine yazılmaz.
-  async function ekmekStokEkle(girisler) {
-    const guncellenecekler = Object.entries(girisler).filter(([_, adet]) => Number(adet) > 0);
-    if (guncellenecekler.length === 0) return { success: false, message: 'Girilen adet yok' };
-
-    const yeniStoklar = {};
-    guncellenecekler.forEach(([key, adet]) => {
-      yeniStoklar[key] = (ekmekStok[key] || 0) + Number(adet);
-    });
-
-    const rows = Object.entries(yeniStoklar).map(([key, adet]) => {
-      const meta = EKMEK_TURLERI_STOK.find((t) => t.key === key);
-      return { key, urun_adi: meta ? meta.label : key, adet, guncellenme_zamani: new Date().toISOString() };
-    });
-    const { error } = await supabase.from('ekmek_stok').upsert(rows, { onConflict: 'key' });
-    if (error) {
-      console.error('ekmek stok güncellenemedi:', error.message);
-      return { success: false, message: 'Stok güncellenemedi, tekrar deneyin' };
-    }
-
-    // Ekranı anında güncelle
-    setEkmekStok((prev) => ({ ...prev, ...yeniStoklar }));
-
-    // Sheets'e log — mevcut "Ekmek Kayıtları" sekmesine, mevcut api/ekmek.js POST akışıyla
-    // (Tables.jsx'in kullandığı formatla birebir aynı: buyukBeyaz/kucukBeyaz/domatesli/kucukKepek
-    // adetleri). Girilmeyenler 0 gidiyor, mevcut endpoint zaten bu formatı bekliyor.
-    try {
-      await fetch('/api/ekmek', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          buyukBeyaz: Number(girisler.buyukBeyaz) || 0,
-          kucukBeyaz: Number(girisler.kucukBeyaz) || 0,
-          domatesli: Number(girisler.domatesli) || 0,
-          kucukKepek: Number(girisler.kucukKepek) || 0,
-          tip: 'giris', // Sheet tarafında pozitif stok girişi olarak ayırt edilebilsin
-        }),
-      });
-    } catch (e) {
-      console.error('ekmek stok girişi Sheets\'e yazılamadı:', e.message);
-      // Sheets loglaması başarısız olsa da Supabase güncellemesi zaten yapıldı.
-    }
-
-    return { success: true, yeniStoklar };
-  }
-
-  // Tables.jsx'teki "Ekmek Gönderme" (mutfağa gönderilen/yazdırılan) panelinden çağrılır.
-  // Stoktan DÜŞER. Negatif stoğu engellemez (sayım farkı varsa fark edilsin diye bilinçli).
-  async function ekmekStoktanDus(gonderilenler) {
-    const dusulecekler = Object.entries(gonderilenler).filter(([_, adet]) => Number(adet) > 0);
-    if (dusulecekler.length === 0) return { success: true };
-
-    const yeniStoklar = {};
-    dusulecekler.forEach(([key, adet]) => {
-      yeniStoklar[key] = (ekmekStok[key] || 0) - Number(adet);
-    });
-
-    const rows = Object.entries(yeniStoklar).map(([key, adet]) => {
-      const meta = EKMEK_TURLERI_STOK.find((t) => t.key === key);
-      return { key, urun_adi: meta ? meta.label : key, adet, guncellenme_zamani: new Date().toISOString() };
-    });
-    const { error } = await supabase.from('ekmek_stok').upsert(rows, { onConflict: 'key' });
-    if (error) console.error('ekmek stoktan düşülemedi:', error.message);
-
-    setEkmekStok((prev) => ({ ...prev, ...yeniStoklar }));
-    return { success: true, yeniStoklar };
-  }
-
   // ================== CARİ YÖNETİMİ ==================
   function getCariBakiye(cariId) {
     const borc = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
@@ -1735,6 +1583,7 @@ export default function useHipposData(scope = 'full') {
     toggleFavorite,
     allTables,
     packages,
+    removePackageRecord,
     openPackage,
     orders,
     addOrderItem,
@@ -1793,8 +1642,5 @@ export default function useHipposData(scope = 'full') {
     reddetPaketTeslimat,
     onaylaCariTeslimatBildirim,
     reddetCariTeslimatBildirim,
-    ekmekStok,
-    ekmekStokEkle,
-    ekmekStoktanDus,
   };
 }
