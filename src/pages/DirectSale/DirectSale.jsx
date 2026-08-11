@@ -436,13 +436,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
     });
 
-    const remaining = currentOrder.filter((i) => !closedIds.has(i.id));
+    const remaining = currentOrder.filter((i) => !closedIds.has(i.id) && !i.note);
     setDraftItems(remaining);
     if (remaining.length === 0) {
       setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
-      // KRİTİK: paket tamamen ödenip boşaldıysa, "packages" kaydı da silinmezse paket
-      // "açık" görünmeye devam ediyor — yeni bir sipariş için tekrar açıldığında eski
-      // (aslında ödenmiş) kayıt hâlâ orada olduğu için geri geliyormuş gibi görünüyordu.
       if (selectedTable.startsWith('Paket ')) data.removePackageRecord(selectedTable);
     }
     showToast(`${method} ile ödeme alındı`);
@@ -520,7 +517,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
     });
 
-    const remaining = currentOrder.filter((i) => !closedIds.has(i.id));
+    const remaining = currentOrder.filter((i) => !closedIds.has(i.id) && !i.note);
     setDraftItems(remaining);
     if (remaining.length === 0) {
       setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
