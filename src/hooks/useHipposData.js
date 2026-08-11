@@ -524,6 +524,11 @@ export default function useHipposData(scope = 'full') {
   // Mutfağa Not > Ekmek Gönderme'de mutfağa fiilen giden miktar kadar düşülür. Supabase'de
   // satır bazlı (her tür kendi satırında: key/urun_adi/adet/guncellenme_zamani),
   // increment_ekmek_stok RPC'siyle atomik güncellenir.
+  // Ekmek Stok — Google Sheets tek kaynak ("Ekmek Stok" sekmesi, api/ekmekstok.js).
+  // Yönetim Paneli'nde elle eklenir (Ekmek Stok Ekleme), Masalar'daki Mutfağa Not >
+  // Ekmek Gönderme'de mutfağa fiilen giden miktar kadar düşülür. Her hareket Sheets'e
+  // ayrı bir satır olarak yazılır (tarih/saat/tür/değişim/kaynak), güncel stok bu
+  // hareketlerin toplamından hesaplanır — Supabase'e hiç dokunmaz.
   const [ekmekStok, setEkmekStok] = useState({ buyukBeyaz: 0, kucukBeyaz: 0, domatesli: 0, kucukKepek: 0 });
 
   const allTables = useMemo(() => [...FIXED_TABLES, ...packages.map((p) => p.name)], [packages]);
@@ -552,50 +557,48 @@ export default function useHipposData(scope = 'full') {
     liveChannelRef.current?.send({ type: 'broadcast', event: 'menu_changed', payload: {} });
   }
 
-  // ---- Ekmek Stok — menu_changed ile aynı desen: postgres_changes DEĞİL, broadcast.
+  // ---- Ekmek Stok — Google Sheets tek kaynak, Supabase kullanılmıyor.
   async function refetchEkmekStok() {
-    const { data } = await supabase.from('ekmek_stok').select('*');
-    if (data) {
-      const next = { buyukBeyaz: 0, kucukBeyaz: 0, domatesli: 0, kucukKepek: 0 };
-      data.forEach((row) => { next[row.key] = row.adet || 0; });
-      setEkmekStok(next);
+    try {
+      const res = await fetch('/api/ekmekstok');
+      const json = await res.json();
+      if (json.stok) setEkmekStok(json.stok);
+    } catch (err) {
+      console.error('ekmek stoğu okunamadı:', err.message);
     }
   }
-  function broadcastEkmekStokChanged() {
-    liveChannelRef.current?.send({ type: 'broadcast', event: 'ekmek_stok_changed', payload: {} });
-  }
-  // delta: { buyukBeyaz, kucukBeyaz, domatesli, kucukKepek } — pozitif değerler stoğa EKLER.
-  // Her tür kendi satırında olduğu için (key bazlı), 4 ayrı RPC çağrısı paralel yapılıyor.
-  async function ekmekStokEkle(delta) {
-    const girisler = Object.entries(delta).filter(([, v]) => Number(v) !== 0);
-    if (girisler.length === 0) return { success: true };
+  async function ekmekStokHareketYaz(delta, kaynak) {
+    const hareketler = Object.entries(delta)
+      .filter(([, v]) => Number(v) !== 0)
+      .map(([tur, v]) => ({ tur, degisim: Number(v), kaynak }));
+    if (hareketler.length === 0) return { success: true };
     try {
-      const sonuclar = await Promise.all(
-        girisler.map(([key, v]) =>
-          supabase.rpc('increment_ekmek_stok', { p_key: key, p_delta: Number(v) || 0 })
-        )
-      );
-      const hata = sonuclar.find((s) => s.error);
-      if (hata) return { success: false, message: hata.error.message };
-      setEkmekStok((prev) => {
-        const next = { ...prev };
-        sonuclar.forEach((s) => { if (s.data) next[s.data.key] = s.data.adet || 0; });
-        return next;
+      const res = await fetch('/api/ekmekstok', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hareketler }),
       });
-      broadcastEkmekStokChanged();
+      const json = await res.json();
+      if (!res.ok) return { success: false, message: json.error || 'Kaydedilemedi' };
+      if (json.stok) setEkmekStok(json.stok);
       return { success: true };
     } catch (err) {
       return { success: false, message: err.message };
     }
   }
-  // Mutfağa fiilen giden ekmek kadar stoktan düşer — Ekmek Gönderme panelinden çağrılır.
+  async function ekmekStokEkle(delta) {
+    return ekmekStokHareketYaz(delta, 'Stok Ekleme');
+  }
   async function ekmekStoktanDus(miktar) {
-    return ekmekStokEkle({
-      buyukBeyaz: -(Number(miktar.buyukBeyaz) || 0),
-      kucukBeyaz: -(Number(miktar.kucukBeyaz) || 0),
-      domatesli: -(Number(miktar.domatesli) || 0),
-      kucukKepek: -(Number(miktar.kucukKepek) || 0),
-    });
+    return ekmekStokHareketYaz(
+      {
+        buyukBeyaz: -(Number(miktar.buyukBeyaz) || 0),
+        kucukBeyaz: -(Number(miktar.kucukBeyaz) || 0),
+        domatesli: -(Number(miktar.domatesli) || 0),
+        kucukKepek: -(Number(miktar.kucukKepek) || 0),
+      },
+      'Mutfağa Gönderim'
+    );
   }
 
   // ---- Realtime Kullanım Sayacı — SADECE Yönetim Paneli'ndeki gösterge için, kendisi
@@ -704,7 +707,7 @@ export default function useHipposData(scope = 'full') {
     let cancelled = false;
 
     async function loadAll() {
-      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn, es] = await Promise.all([
+      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn] = await Promise.all([
         supabase.from('table_state').select('*'),
         supabase.from('packages').select('*'),
         supabase.from('package_meta').select('*').eq('id', 1).maybeSingle(),
@@ -722,7 +725,6 @@ export default function useHipposData(scope = 'full') {
         supabase.from('paket_teslimatlari').select('*'),
         supabase.from('cari_teslimat_bildirimleri').select('*'),
         supabase.from('mutfak_hazir_notlar').select('*').order('created_at', { ascending: true }),
-        supabase.from('ekmek_stok').select('*'),
       ]);
       if (cancelled) return;
 
@@ -732,11 +734,7 @@ export default function useHipposData(scope = 'full') {
       setPaketTeslimatlari((pt.data || []).map(rowToPaketTeslimat).sort((a, b) => b.ts - a.ts));
       setCariTeslimatBildirimleri((ctb.data || []).map(rowToCariTeslimatBildirim).sort((a, b) => b.ts - a.ts));
       setMutfakHazirNotlar((mhn.data || []).map((r) => ({ id: r.id, metin: r.metin })));
-      if (es.data) {
-        const next = { buyukBeyaz: 0, kucukBeyaz: 0, domatesli: 0, kucukKepek: 0 };
-        es.data.forEach((row) => { next[row.key] = row.adet || 0; });
-        setEkmekStok(next);
-      }
+      refetchEkmekStok(); // Sheets'ten — Supabase'in loadAll'ından bağımsız.
 
       const o = emptyTableMap(FIXED_TABLES, []);
       const n = emptyTableMap(FIXED_TABLES, '');
@@ -794,7 +792,12 @@ export default function useHipposData(scope = 'full') {
       paket_teslimatlari: need(['paketci']),
       cari_teslimat_bildirimleri: need(['paketci']),
       mutfak_hazir_notlar: need([]),
-      ekmek_stok: need(['paketci']),
+      if (wants.ekmek_stok) {
+      channel = channel.on('broadcast', { event: 'ekmek_stok_changed' }, () => {
+        bumpUsageCounter('ekmek_stok_changed (broadcast)', 'ekmek stok güncellemesi');
+        refetchEkmekStok();
+      });
+    }
     };
 
     let channel = supabase.channel('hippos-live');
