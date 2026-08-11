@@ -10,7 +10,7 @@ function getAuth() {
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const TAB = 'Ekmek Kayıtları';
-const HEADERS = ['ID', 'Tarih', 'Saat', 'Büyük Beyaz Ekmeği', 'Küçük Beyaz Ekmeği', 'Domatesli/Fesleğenli Ekmeği', 'Küçük Kepek Ekmeği'];
+const HEADERS = ['ID', 'Tarih', 'Saat', 'Büyük Beyaz Ekmeği', 'Küçük Beyaz Ekmeği', 'Domatesli/Fesleğenli Ekmeği', 'Küçük Kepek Ekmeği', 'İşlem Türü'];
 
 async function ensureTab(sheets) {
   const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
@@ -26,7 +26,16 @@ async function ensureTab(sheets) {
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [HEADERS] },
     });
+    return;
   }
+
+  // Eski kayıtlar 7 sütunla tutuluyordu; geçmişteki satırlar çıkış kabul edilir.
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `${TAB}!H1`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [['İşlem Türü']] },
+  });
 }
 
 function rowToRecord(row) {
@@ -38,7 +47,19 @@ function rowToRecord(row) {
     kucukBeyaz: parseInt(row[4], 10) || 0,
     domatesli: parseInt(row[5], 10) || 0,
     kucukKepek: parseInt(row[6], 10) || 0,
+    islemTuru: row[7] || 'mutfaga_cikis',
   };
+}
+
+function calculateStok(records) {
+  return records.reduce((stok, record) => {
+    const factor = record.islemTuru === 'stok_girisi' ? 1 : -1;
+    stok.buyukBeyaz += factor * record.buyukBeyaz;
+    stok.kucukBeyaz += factor * record.kucukBeyaz;
+    stok.domatesli += factor * record.domatesli;
+    stok.kucukKepek += factor * record.kucukKepek;
+    return stok;
+  }, { buyukBeyaz: 0, kucukBeyaz: 0, domatesli: 0, kucukKepek: 0 });
 }
 
 export default async function handler(req, res) {
@@ -48,15 +69,15 @@ export default async function handler(req, res) {
     await ensureTab(sheets);
 
     if (req.method === 'GET') {
-      const result = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${TAB}!A2:G` });
-      const rows = result.data.values || [];
+      const result = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${TAB}!A2:H` });
+      const allRecords = (result.data.values || []).filter((r) => r[0]).map(rowToRecord);
       const bugun = new Date().toLocaleDateString('tr-TR');
-      const records = rows.filter((r) => r[0] && r[1] === bugun).map(rowToRecord).reverse();
-      return res.status(200).json({ records });
-    }
-
-    if (req.method === 'POST') {
-      const { buyukBeyaz = 0, kucukBeyaz = 0, domatesli = 0, kucukKepek = 0 } = req.body || {};
+      const records = allRecords.filter((r) => r.tarih === bugun).reverse();
+      return res.status(20    if (req.method === 'POST') {
+      const { buyukBeyaz = 0, kucukBeyaz = 0, domatesli = 0, kucukKepek = 0, islemTuru = 'mutfaga_cikis' } = req.body || {};
+      if (!['stok_girisi', 'mutfaga_cikis'].includes(islemTuru)) {
+        return res.status(400).json({ error: 'geçersiz işlem türü' });
+      }
       const now = new Date();
       const id = String(Date.now());
       const tarih = now.toLocaleDateString('tr-TR');
@@ -66,9 +87,9 @@ export default async function handler(req, res) {
         range: `${TAB}!A2`,
         valueInputOption: 'USER_ENTERED',
         insertDataOption: 'INSERT_ROWS',
-        requestBody: { values: [[id, tarih, saat, buyukBeyaz, kucukBeyaz, domatesli, kucukKepek]] },
+        requestBody: { values: [[id, tarih, saat, buyukBeyaz, kucukBeyaz, domatesli, kucukKepek, islemTuru]] },
       });
-      return res.status(200).json({ record: { id, tarih, saat, buyukBeyaz, kucukBeyaz, domatesli, kucukKepek } });
+      return res.status(200).json({ record: { id, tarih, saat, buyukBeyaz, kucukBeyaz, domatesli, kucukKepek, islemTuru } });
     }
 
     if (req.method === 'PUT') {
