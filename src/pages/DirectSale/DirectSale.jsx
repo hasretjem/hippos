@@ -1511,4 +1511,4 @@ function GenericModal({ modal, onClose }) {
       </div>
     </div>
   );
-} 
+}
