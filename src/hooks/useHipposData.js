@@ -792,19 +792,6 @@ export default function useHipposData(scope = 'full') {
       paket_teslimatlari: need(['paketci']),
       cari_teslimat_bildirimleri: need(['paketci']),
       mutfak_hazir_notlar: need([]),
-      if (wants.products || wants.categories || wants.subcategories) {
-      channel = channel.on('broadcast', { event: 'menu_changed' }, () => {
-        bumpUsageCounter('menu_changed (broadcast)', 'toplu/tekil ürün-kategori senkronu');
-        refetchMenuData();
-      });
-    }
-    if (wants.ekmek_stok) {              👈 bu satırdan
-      channel = channel.on('broadcast', { event: 'ekmek_stok_changed' }, () => {
-        bumpUsageCounter('ekmek_stok_changed (broadcast)', 'ekmek stok güncellemesi');
-        refetchEkmekStok();
-      });
-    }                                     👈 buraya kadar hepsini sil
-    if (wants.table_state) {
     };
 
     let channel = supabase.channel('hippos-live');
