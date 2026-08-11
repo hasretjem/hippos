@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   refactor:
-    if: ${{ !contains(github.event.head_commit.message, 'refactor: extract DirectSale components') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -33,7 +32,8 @@ jobs:
           text = path.read_text(encoding='utf-8')
 
           if "./components/ProductGrid" in text:
-              raise SystemExit('ProductGrid extraction already exists; refusing to run twice.')
+              print('Extraction already present; nothing to do.')
+              raise SystemExit(0)
 
           product_start_marker = '          <div className="ds-products-wrap">'
           product_start = text.index(product_start_marker)
@@ -61,7 +61,6 @@ jobs:
           }
           '''
 
-          # The extracted JSX intentionally keeps the original markup unchanged.
           component_path = Path('src/pages/DirectSale/components/ProductGrid.jsx')
           component_path.parent.mkdir(parents=True, exist_ok=True)
           component_path.write_text(product_component, encoding='utf-8')
