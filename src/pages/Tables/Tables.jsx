@@ -202,37 +202,23 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     setEkmekPrintData(satirlar);
     setTimeout(() => window.print(), 150);
 
-    // Mutfağa fiilen giden ekmek — ortak stoktan düşülüyor (Yönetim Paneli'ndeki
-    // "Ekmek Stok Ekleme" ile aynı sayaç). Sheets kaydı ile paralel, birbirini beklemiyor.
-    ekmekStoktanDus({
+    // Mutfağa giden ekmek, tek kaynak olan Google Sheets'teki "Ekmek Kayıtları"
+    // sekmesine "mutfaga_cikis" olarak yazılır; hook stok toplamını aynı kayıttan günceller.
+    setEkmekLoading(true);
+    const sonuc = await ekmekStoktanDus({
       buyukBeyaz: parseInt(ekmekMiktar.buyukBeyaz, 10) || 0,
       kucukBeyaz: parseInt(ekmekMiktar.kucukBeyaz, 10) || 0,
       domatesli: parseInt(ekmekMiktar.domatesli, 10) || 0,
       kucukKepek: parseInt(ekmekMiktar.kucukKepek, 10) || 0,
     });
-
-    setEkmekLoading(true);
-    try {
-      const res = await fetch('/api/ekmek', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          buyukBeyaz: parseInt(ekmekMiktar.buyukBeyaz, 10) || 0,
-          kucukBeyaz: parseInt(ekmekMiktar.kucukBeyaz, 10) || 0,
-          domatesli: parseInt(ekmekMiktar.domatesli, 10) || 0,
-          kucukKepek: parseInt(ekmekMiktar.kucukKepek, 10) || 0,
-        }),
-      });
-      const json = await res.json();
-      if (json.record) setEkmekKayitlar((prev) => [json.record, ...prev]);
+    if (sonuc.success) {
+      if (sonuc.record) setEkmekKayitlar((prev) => [sonuc.record, ...prev]);
       setEkmekMiktar({ buyukBeyaz: '', kucukBeyaz: '', domatesli: '', kucukKepek: '' });
       ekmekInputRefs.current.buyukBeyaz?.focus();
-    } catch {
-      alert('Ekmek kaydı Sheets\'e yazılamadı — bağlantıyı kontrol et');
-    } finally {
-      setEkmekLoading(false);
+    } else {
+      alert(sonuc.message || 'Ekmek kaydı Sheets\\'e yazılamadı — bağlantıyı kontrol et');
     }
-  }
+    setEkmekLoading(false);
 
   function openEkmekEdit(rec) {
     setEkmekEditId(rec.id);
