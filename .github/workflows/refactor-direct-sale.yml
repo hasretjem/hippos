@@ -1,0 +1,114 @@
+name: DirectSale refactor runner
+
+on:
+  push:
+    branches:
+      - refactor/data-layer
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: ${{ !contains(github.event.head_commit.message, 'refactor: extract DirectSale components') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Extract DirectSale components
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('src/pages/DirectSale/DirectSale.jsx')
+          text = path.read_text(encoding='utf-8')
+
+          if "./components/ProductGrid" in text:
+              raise SystemExit('ProductGrid extraction already exists; refusing to run twice.')
+
+          product_start_marker = '          <div className="ds-products-wrap">'
+          product_start = text.index(product_start_marker)
+          product_end_marker = '\n        </main>'
+          product_end = text.index(product_end_marker, product_start)
+          product_block = text[product_start:product_end]
+
+          product_component = '''import { ChevronUp, ChevronDown, Star } from 'lucide-react';
+
+          export default function ProductGrid({
+            activeCategory,
+            searchQuery,
+            groupedProducts,
+            favorites,
+            addProductToOrder,
+            productsScrollRef,
+            bigColScrollRef,
+            smallColScrollRef,
+            scrollByPage,
+            TL,
+          }) {
+            return (
+          ''' + product_block + '''
+            );
+          }
+          '''
+
+          # The extracted JSX intentionally keeps the original markup unchanged.
+          component_path = Path('src/pages/DirectSale/components/ProductGrid.jsx')
+          component_path.parent.mkdir(parents=True, exist_ok=True)
+          component_path.write_text(product_component, encoding='utf-8')
+
+          replacement = '''          <ProductGrid
+            activeCategory={activeCategory}
+            searchQuery={searchQuery}
+            groupedProducts={groupedProducts}
+            favorites={favorites}
+            addProductToOrder={addProductToOrder}
+            productsScrollRef={productsScrollRef}
+            bigColScrollRef={bigColScrollRef}
+            smallColScrollRef={smallColScrollRef}
+            scrollByPage={scrollByPage}
+            TL={TL}
+          />'''
+          text = text[:product_start] + replacement + text[product_end:]
+
+          generic_start_marker = '\nfunction GenericModal({ modal, onClose }) {'
+          generic_start = text.index(generic_start_marker)
+          generic_block = text[generic_start + 1:]
+          generic_path = Path('src/pages/DirectSale/components/GenericModal.jsx')
+          generic_path.write_text(
+              "import React, { useState } from 'react';\n\n" + generic_block + "\n",
+              encoding='utf-8',
+          )
+          text = text[:generic_start] + '\n'
+
+          import_anchor = "import './DirectSale.css';\n"
+          text = text.replace(
+              import_anchor,
+              import_anchor + "import ProductGrid from './components/ProductGrid';\nimport GenericModal from './components/GenericModal';\n",
+              1,
+          )
+
+          path.write_text(text, encoding='utf-8')
+          print('Extracted ProductGrid and GenericModal.')
+          PY
+
+      - name: Build
+        run: npm run build
+
+      - name: Remove temporary workflow and commit
+        run: |
+          rm .github/workflows/refactor-direct-sale.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/DirectSale/DirectSale.jsx src/pages/DirectSale/components/ProductGrid.jsx src/pages/DirectSale/components/GenericModal.jsx .github/workflows/refactor-direct-sale.yml
+          git commit -m "refactor: extract DirectSale components"
+          git push
