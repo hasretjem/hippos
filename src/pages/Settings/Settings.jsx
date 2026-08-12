@@ -711,85 +711,13 @@ export default function Settings({ data, onNavigate }) {
             )}
           </aside>
 
-          {/* HARCAMALAR PANELİ — Ciro Panelinin ALTINDA (aynı şifreli görünürlük) */}
-          {revenueRevealed && (
-            <aside className="st-harcama-panel">
-              <div className="st-harcama-head"><Calculator size={15} /><span>Harcamalar</span></div>
-              <div className="st-harcama-hint">Buraya girdiklerin Gün Sonu Al sayfasına otomatik gelir</div>
-
-              <span className="st-subhead">Günlük Kasadan Harcamalar</span>
-              <div className="st-harcama-rows">
-                {gunlukKasaDraft.map((row, idx) => (
-                  <div key={idx} className="st-harcama-row">
-                    <input placeholder="Ne için" value={row.ad} onChange={(e) => updateHarcamaRow('gunluk', idx, 'ad', e.target.value)} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false" />
-                    <input type="number" placeholder="0" value={row.tutar} onChange={(e) => updateHarcamaRow('gunluk', idx, 'tutar', e.target.value)} />
-                    {gunlukKasaDraft.length > 1 && <button className="st-harcama-row-del" onClick={() => removeHarcamaRow('gunluk', idx)}><X size={12} /></button>}
-                  </div>
-                ))}
-                <button className="st-harcama-add-btn" onClick={() => addHarcamaRow('gunluk')}>+ Satır Ekle</button>
-              </div>
-
-              <span className="st-subhead" style={{ marginTop: 12 }}>Ana Kasadan Harcamalar</span>
-              <div className="st-harcama-rows">
-                {anaKasaDraft.map((row, idx) => (
-                  <div key={idx} className="st-harcama-row">
-                    <input placeholder="Ne için" value={row.ad} onChange={(e) => updateHarcamaRow('ana', idx, 'ad', e.target.value)} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false" />
-                    <input type="number" placeholder="0" value={row.tutar} onChange={(e) => updateHarcamaRow('ana', idx, 'tutar', e.target.value)} />
-                    {anaKasaDraft.length > 1 && <button className="st-harcama-row-del" onClick={() => removeHarcamaRow('ana',</div>
-
-              {/* Gün Sonu ile karşılaştırma — bugün Gün Sonu kaydedildiyse, Hippos'un
-                  hesapladığı ciro ile fiilen sayılan/girilen tutarlar arasındaki farkı gösterir. */}
-              <div className="st-gunsonu-compare">
-                <span className="st-usage-head-label">Gün Sonu ile Karşılaştırma</span>
-                {bugunGunSonu ? (
-                  <>
-                    {[
-                      { label: 'Nakit', ciro: totals['NAKİT'], gs: bugunGunSonu.toplamNakitPara || 0 },
-                      { label: 'Kredi Kartı', ciro: totals['KREDİ KARTI'], gs: bugunGunSonu.posToplam || 0 },
-                      { label: 'Yemek Kartı', ciro: totals['YEMEK KARTI'], gs: bugunGunSonu.genelYemekToplami || 0 },
-                      { label: 'Cari', ciro: totals['CARİ'], gs: bugunGunSonu.cariToplam || 0 },
-                    ].map((row) => {
-                      const fark = row.gs - row.ciro;
-                      return (
-                        <div key={row.label} className="st-gunsonu-row">
-                          <span>{row.label}</span>
-                          <span className={Math.abs(fark) > 0.5 ? 'fark warn' : 'fark ok'}>{TL(fark)}</span>
-                        </div>
-                      );
-                    })}
-                  </>
-                ) : (
-                  <p className="st-gunsonu-empty">Bugün için henüz Gün Sonu kaydı yok</p>
-                )}
-              </div>
-            </div>
-          ) : (
-            <button className="st-revenue-masked" onClick={toggleRevenue}>
-              <Lock size={20} />
-              <span className="masked-amount">•••• ₺</span>
-              <span className="hint">Görmek için dokun</span>
-            </button>
-          )}
-        </aside>
-
-        {revenueRevealed && (
+          {/* HARCAMALAR PANELİ — Ciro Panelinin ALTINDA, ama şifreye bağlı DEĞİL —
+              herkes (şifresiz) buraya harcama yazabilsin diye her zaman görünür. */}
           <aside className="st-harcama-panel">
             <div className="st-harcama-head"><Calculator size={15} /><span>Harcamalar</span></div>
             <div className="st-harcama-hint">Buraya girdiklerin Gün Sonu Al sayfasına otomatik gelir</div>
 
-            <span className="st-subhead">Ana Kasadan Harcamalar</span>
-            <div className="st-harcama-rows">
-              {anaKasaDraft.map((row, idx) => (
-                <div key={idx} className="st-harcama-row">
-                  <input placeholder="Ne için" value={row.ad} onChange={(e) => updateHarcamaRow('ana', idx, 'ad', e.target.value)} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false" />
-                  <input type="number" placeholder="0" value={row.tutar} onChange={(e) => updateHarcamaRow('ana', idx, 'tutar', e.target.value)} />
-                  {anaKasaDraft.length > 1 && <button className="st-harcama-row-del" onClick={() => removeHarcamaRow('ana', idx)}><X size={12} /></button>}
-                </div>
-              ))}
-              <button className="st-harcama-add-btn" onClick={() => addHarcamaRow('ana')}>+ Satır Ekle</button>
-            </div>
-
-            <span className="st-subhead" style={{ marginTop: 12 }}>Günlük Kasadan Harcamalar</span>
+            <span className="st-subhead">Günlük Kasadan Harcamalar</span>
             <div className="st-harcama-rows">
               {gunlukKasaDraft.map((row, idx) => (
                 <div key={idx} className="st-harcama-row">
@@ -800,8 +728,20 @@ export default function Settings({ data, onNavigate }) {
               ))}
               <button className="st-harcama-add-btn" onClick={() => addHarcamaRow('gunluk')}>+ Satır Ekle</button>
             </div>
+
+            <span className="st-subhead" style={{ marginTop: 12 }}>Ana Kasadan Harcamalar</span>
+            <div className="st-harcama-rows">
+              {anaKasaDraft.map((row, idx) => (
+                <div key={idx} className="st-harcama-row">
+                  <input placeholder="Ne için" value={row.ad} onChange={(e) => updateHarcamaRow('ana', idx, 'ad', e.target.value)} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false" />
+                  <input type="number" placeholder="0" value={row.tutar} onChange={(e) => updateHarcamaRow('ana', idx, 'tutar', e.target.value)} />
+                  {anaKasaDraft.length > 1 && <button className="st-harcama-row-del" onClick={() => removeHarcamaRow('ana', idx)}><X size={12} /></button>}
+                </div>
+              ))}
+              <button className="st-harcama-add-btn" onClick={() => addHarcamaRow('ana')}>+ Satır Ekle</button>
+            </div>
           </aside>
-        )}
+        </div>
       </div>
 
       {toast && <div className="st-toast">{toast}</div>}
