@@ -1018,7 +1018,8 @@ export default function useHipposData(scope = 'full') {
       noteDiscountLastSentRef.current = { tableNotes: { ...tableNotes }, tableDiscounts: { ...tableDiscounts } };
       return;
     }
-    allTables.forEach((t) => {
+    const tablesToCheck = new Set([...allTables, ...Object.keys(tableNotes), ...Object.keys(tableDiscounts)]);
+    tablesToCheck.forEach((t) => {
       if (t === QUICK_SALE) return; // Hızlı Satış hiçbir zaman Supabase'e yazılmaz (items ile aynı kural)
       const noteChanged = tableNotes[t] !== noteDiscountLastSentRef.current.tableNotes[t];
       const discountChanged = tableDiscounts[t] !== noteDiscountLastSentRef.current.tableDiscounts[t];

@@ -633,7 +633,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
   function handlePrint() {
     if (currentOrder.length === 0) return;
-    window.print();
+    if (selectedTable !== QUICK_SALE) sendTableNote();
+    setTimeout(() => window.print(), 0);
   }
 
   // ---- Ürün listesi filtreleme ----
