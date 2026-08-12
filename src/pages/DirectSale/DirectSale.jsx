@@ -1259,20 +1259,20 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
             <div className="ds-pay-grid">
               <button className="cash" onClick={() => handlePay('NAKİT')}>
-                <Banknote size={19} /><span className="lbl">Nakit</span>
+                <Banknote size={38} /><span className="lbl">Nakit</span>
               </button>
               <button className="card" onClick={() => handlePay('KREDİ KARTI')}>
-                <CreditCard size={19} /><span className="lbl">Kredi K.</span>
+                <CreditCard size={38} /><span className="lbl">Kredi K.</span>
               </button>
               <button className="meal" onClick={() => handlePay('YEMEK KARTI')}>
-                <UtensilsCrossed size={19} /><span className="lbl">Yemek K.</span>
+                <UtensilsCrossed size={38} /><span className="lbl">Yemek K.</span>
               </button>
               <button className="credit" onClick={openCariPicker}>
-                <BookOpen size={19} /><span className="lbl">Cari</span>
+                <BookOpen size={38} /><span className="lbl">Cari</span>
               </button>
             </div>
             <button className="ds-pay-back-btn" onClick={() => setPayMode(false)}>
-              <Undo2 size={14} /> Geri
+              <Undo2 size={28} /> Geri
             </button>
           </div>
         </div>
