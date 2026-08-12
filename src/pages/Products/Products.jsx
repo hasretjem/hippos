@@ -283,6 +283,10 @@ matches.sort((a, b) => {
             placeholder="Ürün ara..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            lang="tr"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
           />
           {searchQuery && (
             <button className="pr-search-clear" onClick={() => setSearchQuery('')}><X size={13} /></button>
@@ -466,6 +470,10 @@ matches.sort((a, b) => {
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && (localAddCategory(newCategoryName), setNewCategoryModal(false))}
+              lang="tr"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck="false"
             />
             <div className="pr-modal-footer">
               <button className="pr-secondary" onClick={() => setNewCategoryModal(false)}>Vazgeç</button>
@@ -486,6 +494,10 @@ matches.sort((a, b) => {
               placeholder="Ürün adı..."
               value={newProductForm.ad}
               onChange={(e) => setNewProductForm((f) => ({ ...f, ad: e.target.value }))}
+              lang="tr"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck="false"
             />
             <input
               className="pr-modal-input"
@@ -559,6 +571,7 @@ function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) 
   return (
     <div className={`pr-row ${isActive ? '' : 'inactive'}`}>
       <div className="pr-row-main">
+        {!isActive && <span className="pr-pasif-tag">Pasif</span>}
         {editingAd ? (
           <input
             autoFocus
@@ -567,6 +580,10 @@ function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) 
             onChange={(e) => setAdDraft(e.target.value)}
             onBlur={saveAd}
             onKeyDown={(e) => e.key === 'Enter' && saveAd()}
+            lang="tr"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
           />
         ) : (
           <span className="pr-row-name" onClick={() => { setAdDraft(p.ad); setEditingAd(true); }}>{p.ad}</span>

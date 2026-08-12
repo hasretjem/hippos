@@ -737,6 +737,10 @@ export default function Settings({ data, onNavigate }) {
                 placeholder="Ürün ara..."
                 value={menuSearchQuery}
                 onChange={(e) => setMenuSearchQuery(e.target.value)}
+                lang="tr"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
               />
             )}
 
@@ -775,7 +779,10 @@ export default function Settings({ data, onNavigate }) {
                           const isActive = p.durum !== 'PASIF';
                           return (
                             <div key={p.id} className="st-menu-item">
-                              <span className={isActive ? '' : 'inactive'}>{p.ad}</span>
+                              <span className={isActive ? '' : 'inactive'}>
+                                {!isActive && <span className="st-menu-pasif-tag">Pasif</span>}
+                                {p.ad}
+                              </span>
                               <button
                                 className={`st-toggle ${isActive ? 'on' : ''}`}
                                 onClick={() => toggleProductStatus(p.id)}
