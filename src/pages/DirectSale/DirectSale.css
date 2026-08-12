@@ -823,11 +823,14 @@
 .ds-send-btn { background: var(--panel-dark-2); border: 1.5px solid rgba(255,255,255,0.18); }
 .ds-send-btn:hover { transform: translateY(-1px); filter: brightness(1.15); box-shadow: var(--shadow-2); }
 .ds-pay-cta, .ds-pay-cta *, .ds-send-btn, .ds-send-btn * { color: #fff !important; stroke: #fff; }
+.ds-pay-modal-wrap { display: flex; gap: 16px; align-items: flex-start; }
 .ds-pay-modal { max-width: 640px; }
 .ds-pay-modal .ds-modal-head { padding-bottom: 20px; margin-bottom: 20px; }
 .ds-pay-modal .ds-modal-head h3 { font-size: 26px; }
 .ds-pay-modal .ds-modal-x { width: 40px; height: 40px; }
 .ds-pay-modal .ds-modal-x svg { width: 26px !important; height: 26px !important; }
+.ds-change-calc-panel { width: 320px; flex-shrink: 0; animation: ds-rise var(--t-panel) var(--ease); }
+.ds-change-calc-panel .ds-change-calc { margin-bottom: 0; }
 .ds-pay-modal-total {
   display: flex;
   justify-content: space-between;
@@ -1269,7 +1272,11 @@
   .ds-order-tools { padding: 6px 12px; }
   .ds-total-row span:last-child { font-size: 19px; }
   .ds-pay-grid { padding: 2px 12px 6px; }
-  .ds-pay-grid button { height: 46px; }
+  .ds-pay-grid button { height: 92px; }
   .ds-bottom-actions { padding: 0 12px 10px; }
   .ds-bottom-actions button { height: 34px; }
+}
+@media (max-width: 1000px) {
+  .ds-pay-modal-wrap { flex-direction: column; }
+  .ds-change-calc-panel { width: 100%; }
 }
