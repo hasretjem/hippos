@@ -824,7 +824,7 @@
 .ds-send-btn:hover { transform: translateY(-1px); filter: brightness(1.15); box-shadow: var(--shadow-2); }
 .ds-pay-cta, .ds-pay-cta *, .ds-send-btn, .ds-send-btn * { color: #fff !important; stroke: #fff; }
 .ds-pay-modal-wrap { display: flex; gap: 24px; align-items: flex-start; }
-.ds-pay-modal { width: 900px; max-width: 1080px; padding: 36px; }
+.ds-modal.ds-pay-modal { width: 920px; max-width: 96vw; padding: 36px; }
 .ds-pay-modal .ds-modal-head { padding-bottom: 20px; margin-bottom: 24px; }
 .ds-pay-modal .ds-modal-head h3 { font-size: 26px; }
 .ds-pay-modal .ds-modal-x { width: 40px; height: 40px; }
