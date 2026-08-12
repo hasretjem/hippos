@@ -214,9 +214,9 @@ export default function GunSonu({ data, onNavigate }) {
     const gunBaslangic = new Date(); gunBaslangic.setHours(0, 0, 0, 0);
     const ts0 = gunBaslangic.getTime();
     const map = {};
-    (cariler || []).forEach((c) => {
+    (cariler || []).filter((c) => c.tip === 'firma').forEach((c) => {
       const tutar = (cariHareketler || []).filter((h) => h.cariId === c.id && h.ts >= ts0).reduce((s, h) => s + h.toplam, 0);
-      map[c.ad] = tutar;
+      map[c.ad] = (map[c.ad] || 0) + tutar;
     });
     return map;
   }, [cariler, cariHareketler]);
