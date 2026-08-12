@@ -160,10 +160,27 @@ export default function GunSonu({ data, onNavigate }) {
   function updatePosRow(idx, field, value) { setPosTutarlari((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r))); }
   function removePosRow(idx) { setPosTutarlari((prev) => prev.filter((_, i) => i !== idx)); }
 
-  const [anaKasaHarcamalar, setAnaKasaHarcamalar] = useState([{ ad: '', tutar: '' }, { ad: '', tutar: '' }, { ad: '', tutar: '' }]);
+  const harcamaTaslagi = data.harcamaTaslagi || { anaKasa: [], gunlukKasa: [] };
+  const [anaKasaHarcamalar, setAnaKasaHarcamalar] = useState(() =>
+    harcamaTaslagi.anaKasa.length ? harcamaTaslagi.anaKasa : [{ ad: '', tutar: '' }, { ad: '', tutar: '' }, { ad: '', tutar: '' }]
+  );
   const anaKasaToplam = anaKasaHarcamalar.reduce((s, r) => s + parseNum(r.tutar), 0);
-  const [gunlukKasaHarcamalar, setGunlukKasaHarcamalar] = useState([{ ad: '', tutar: '' }, { ad: '', tutar: '' }, { ad: '', tutar: '' }]);
+  const [gunlukKasaHarcamalar, setGunlukKasaHarcamalar] = useState(() =>
+    harcamaTaslagi.gunlukKasa.length ? harcamaTaslagi.gunlukKasa : [{ ad: '', tutar: '' }, { ad: '', tutar: '' }, { ad: '', tutar: '' }]
+  );
   const gunlukKasaToplam = gunlukKasaHarcamalar.reduce((s, r) => s + parseNum(r.tutar), 0);
+  const harcamaSeedRef = useRef(false);
+  useEffect(() => {
+    if (harcamaSeedRef.current) return;
+    if (!harcamaTaslagi.anaKasa.length && !harcamaTaslagi.gunlukKasa.length) return;
+    const anaBos = anaKasaHarcamalar.every((r) => !r.ad.trim() && !r.tutar);
+    const gunlukBos = gunlukKasaHarcamalar.every((r) => !r.ad.trim() && !r.tutar);
+    if (!anaBos || !gunlukBos) { harcamaSeedRef.current = true; return; }
+    harcamaSeedRef.current = true;
+    if (harcamaTaslagi.anaKasa.length) setAnaKasaHarcamalar(harcamaTaslagi.anaKasa);
+    if (harcamaTaslagi.gunlukKasa.length) setGunlukKasaHarcamalar(harcamaTaslagi.gunlukKasa);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [harcamaTaslagi]);
   function addRow(setter) { setter((prev) => [...prev, { ad: '', tutar: '' }]); }
   function updateRow(setter, idx, field, value) { setter((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r))); }
   function removeRow(setter, idx) { setter((prev) => prev.filter((_, i) => i !== idx)); }
@@ -346,6 +363,7 @@ export default function GunSonu({ data, onNavigate }) {
       });
       if (!res.ok) throw new Error('save failed');
       showToast('Gün sonu kaydedildi');
+      if (data.clearHarcamaTaslagi) data.clearHarcamaTaslagi();
       const gsRes = await fetch('/api/gunsonu');
       const gsJson = await gsRes.json();
       setGecmisKayitlar(gsJson.records || []);

@@ -440,6 +440,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     setDraftItems(remaining);
     if (remaining.length === 0) {
       setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
+      updateTableNote(selectedTable, '');
+      setTableNoteDraft('');
       if (selectedTable.startsWith('Paket ')) data.removePackageRecord(selectedTable);
     }
     showToast(`${method} ile ödeme alındı`);
@@ -521,6 +523,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     setDraftItems(remaining);
     if (remaining.length === 0) {
       setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
+      updateTableNote(selectedTable, '');
+      setTableNoteDraft('');
       if (selectedTable.startsWith('Paket ')) data.removePackageRecord(selectedTable);
     }
     setCariPickerOpen(false);

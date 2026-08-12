@@ -36,6 +36,8 @@ export default function Settings({ data, onNavigate }) {
     undoLastAction,
     ekmekStok,
     ekmekStokEkle,
+    harcamaTaslagi,
+    saveHarcamaTaslagi,
   } = data;
 
   const [now, setNow] = useState(new Date());
@@ -48,6 +50,48 @@ export default function Settings({ data, onNavigate }) {
   function showToast(msg) {
     setToast(msg);
     setTimeout(() => setToast(''), 1500);
+  }
+
+  const [anaKasaDraft, setAnaKasaDraft] = useState(harcamaTaslagi.anaKasa.length ? harcamaTaslagi.anaKasa : [{ ad: '', tutar: '' }]);
+  const [gunlukKasaDraft, setGunlukKasaDraft] = useState(harcamaTaslagi.gunlukKasa.length ? harcamaTaslagi.gunlukKasa : [{ ad: '', tutar: '' }]);
+  const harcamaSeedRef = useRef(false);
+  useEffect(() => {
+    if (harcamaSeedRef.current) return;
+    if (harcamaTaslagi.anaKasa.length || harcamaTaslagi.gunlukKasa.length) {
+      harcamaSeedRef.current = true;
+      setAnaKasaDraft(harcamaTaslagi.anaKasa.length ? harcamaTaslagi.anaKasa : [{ ad: '', tutar: '' }]);
+      setGunlukKasaDraft(harcamaTaslagi.gunlukKasa.length ? harcamaTaslagi.gunlukKasa : [{ ad: '', tutar: '' }]);
+    }
+  }, [harcamaTaslagi]);
+  const harcamaSaveTimerRef = useRef(null);
+  function scheduleHarcamaSave(nextAna, nextGunluk) {
+    if (harcamaSaveTimerRef.current) clearTimeout(harcamaSaveTimerRef.current);
+    harcamaSaveTimerRef.current = setTimeout(() => {
+      saveHarcamaTaslagi({
+        anaKasa: nextAna.filter((r) => r.ad.trim() || r.tutar),
+        gunlukKasa: nextGunluk.filter((r) => r.ad.trim() || r.tutar),
+      });
+    }, 600);
+  }
+  function updateHarcamaRow(which, idx, field, value) {
+    const setter = which === 'ana' ? setAnaKasaDraft : setGunlukKasaDraft;
+    setter((prev) => {
+      const next = prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r));
+      scheduleHarcamaSave(which === 'ana' ? next : anaKasaDraft, which === 'gunluk' ? next : gunlukKasaDraft);
+      return next;
+    });
+  }
+  function addHarcamaRow(which) {
+    const setter = which === 'ana' ? setAnaKasaDraft : setGunlukKasaDraft;
+    setter((prev) => [...prev, { ad: '', tutar: '' }]);
+  }
+  function removeHarcamaRow(which, idx) {
+    const setter = which === 'ana' ? setAnaKasaDraft : setGunlukKasaDraft;
+    setter((prev) => {
+      const next = prev.length > 1 ? prev.filter((_, i) => i !== idx) : [{ ad: '', tutar: '' }];
+      scheduleHarcamaSave(which === 'ana' ? next : anaKasaDraft, which === 'gunluk' ? next : gunlukKasaDraft);
+      return next;
+    });
   }
 
   // ---- Menü Düzenleme ----
@@ -666,6 +710,37 @@ export default function Settings({ data, onNavigate }) {
             </button>
           )}
         </aside>
+
+        {revenueRevealed && (
+          <aside className="st-harcama-panel">
+            <div className="st-harcama-head"><Calculator size={15} /><span>Harcamalar</span></div>
+            <div className="st-harcama-hint">Buraya girdiklerin Gün Sonu Al sayfasına otomatik gelir</div>
+
+            <span className="st-subhead">Ana Kasadan Harcamalar</span>
+            <div className="st-harcama-rows">
+              {anaKasaDraft.map((row, idx) => (
+                <div key={idx} className="st-harcama-row">
+                  <input placeholder="Ne için" value={row.ad} onChange={(e) => updateHarcamaRow('ana', idx, 'ad', e.target.value)} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false" />
+                  <input type="number" placeholder="0" value={row.tutar} onChange={(e) => updateHarcamaRow('ana', idx, 'tutar', e.target.value)} />
+                  {anaKasaDraft.length > 1 && <button className="st-harcama-row-del" onClick={() => removeHarcamaRow('ana', idx)}><X size={12} /></button>}
+                </div>
+              ))}
+              <button className="st-harcama-add-btn" onClick={() => addHarcamaRow('ana')}>+ Satır Ekle</button>
+            </div>
+
+            <span className="st-subhead" style={{ marginTop: 12 }}>Günlük Kasadan Harcamalar</span>
+            <div className="st-harcama-rows">
+              {gunlukKasaDraft.map((row, idx) => (
+                <div key={idx} className="st-harcama-row">
+                  <input placeholder="Ne için" value={row.ad} onChange={(e) => updateHarcamaRow('gunluk', idx, 'ad', e.target.value)} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false" />
+                  <input type="number" placeholder="0" value={row.tutar} onChange={(e) => updateHarcamaRow('gunluk', idx, 'tutar', e.target.value)} />
+                  {gunlukKasaDraft.length > 1 && <button className="st-harcama-row-del" onClick={() => removeHarcamaRow('gunluk', idx)}><X size={12} /></button>}
+                </div>
+              ))}
+              <button className="st-harcama-add-btn" onClick={() => addHarcamaRow('gunluk')}>+ Satır Ekle</button>
+            </div>
+          </aside>
+        )}
       </div>
 
       {toast && <div className="st-toast">{toast}</div>}

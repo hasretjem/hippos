@@ -121,6 +121,51 @@
   padding: 20px;
 }
 .st-revenue-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+
+/* ---- Harcamalar paneli (Ciro Panelinin altında, ayrı panel) ---- */
+.st-harcama-panel {
+  width: 320px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-panel);
+  box-shadow: var(--shadow-3);
+  padding: 18px 20px;
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+}
+.st-harcama-head {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 14px; font-weight: 700; color: var(--ink-muted);
+  margin-bottom: 4px;
+}
+.st-harcama-hint { font-size: 11px; color: var(--ink-soft); margin-bottom: 12px; }
+.st-harcama-panel .st-subhead {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--ink-soft); margin-bottom: 6px; display: block;
+}
+.st-harcama-rows { display: flex; flex-direction: column; gap: 6px; }
+.st-harcama-row { display: flex; gap: 6px; align-items: center; }
+.st-harcama-row input:first-child {
+  flex: 1; min-width: 0; height: 32px; border: 1px solid var(--border);
+  border-radius: 8px; padding: 0 8px; font-size: 12.5px; background: var(--panel-2);
+}
+.st-harcama-row input[type="number"] {
+  width: 72px; height: 32px; border: 1px solid var(--border);
+  border-radius: 8px; padding: 0 8px; font-size: 12.5px; background: var(--panel-2); text-align: right;
+}
+.st-harcama-row input:focus { outline: none; border-color: var(--olive); background: #fff; }
+.st-harcama-row-del {
+  width: 24px; height: 24px; border-radius: 6px; border: none;
+  background: var(--panel-2); color: var(--ink-soft); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.st-harcama-row-del:hover { background: #f3d9d9; color: #b23; }
+.st-harcama-add-btn {
+  align-self: flex-start; font-size: 11px; font-weight: 700; color: var(--olive);
+  background: none; border: none; cursor: pointer; padding: 4px 0; margin-top: 2px;
+}
 .st-revenue-datetime { display: flex; flex-direction: column; gap: 2px; }
 .st-revenue-datetime .date { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .st-revenue-datetime .time { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }

@@ -530,6 +530,7 @@ export default function useHipposData(scope = 'full') {
   // ayrı bir satır olarak yazılır (tarih/saat/tür/değişim/kaynak), güncel stok bu
   // hareketlerin toplamından hesaplanır — Supabase'e hiç dokunmaz.
   const [ekmekStok, setEkmekStok] = useState({ buyukBeyaz: 0, kucukBeyaz: 0, domatesli: 0, kucukKepek: 0 });
+  const [harcamaTaslagi, setHarcamaTaslagi] = useState({ anaKasa: [], gunlukKasa: [] });
 
   const allTables = useMemo(() => [...FIXED_TABLES, ...packages.map((p) => p.name)], [packages]);
   
@@ -599,6 +600,30 @@ export default function useHipposData(scope = 'full') {
       },
       'Mutfağa Gönderim'
     );
+  }
+
+  async function refetchHarcamaTaslagi() {
+    const { data } = await supabase.from('gunluk_harcama_taslak').select('*').eq('id', 1).maybeSingle();
+    if (data) {
+      setHarcamaTaslagi({
+        anaKasa: Array.isArray(data.ana_kasa) ? data.ana_kasa : [],
+        gunlukKasa: Array.isArray(data.gunluk_kasa) ? data.gunluk_kasa : [],
+      });
+    }
+  }
+  async function saveHarcamaTaslagi(taslak) {
+    setHarcamaTaslagi(taslak);
+    const { error } = await supabase
+      .from('gunluk_harcama_taslak')
+      .upsert([{ id: 1, ana_kasa: taslak.anaKasa, gunluk_kasa: taslak.gunlukKasa, updated_at: new Date().toISOString() }], { onConflict: 'id' });
+    if (error) console.error('Harcama taslağı kaydedilemedi:', error.message);
+  }
+  async function clearHarcamaTaslagi() {
+    setHarcamaTaslagi({ anaKasa: [], gunlukKasa: [] });
+    const { error } = await supabase
+      .from('gunluk_harcama_taslak')
+      .upsert([{ id: 1, ana_kasa: [], gunluk_kasa: [], updated_at: new Date().toISOString() }], { onConflict: 'id' });
+    if (error) console.error('Harcama taslağı temizlenemedi:', error.message);
   }
 
   // ---- Realtime Kullanım Sayacı — SADECE Yönetim Paneli'ndeki gösterge için, kendisi
@@ -735,6 +760,7 @@ export default function useHipposData(scope = 'full') {
       setCariTeslimatBildirimleri((ctb.data || []).map(rowToCariTeslimatBildirim).sort((a, b) => b.ts - a.ts));
       setMutfakHazirNotlar((mhn.data || []).map((r) => ({ id: r.id, metin: r.metin })));
       refetchEkmekStok(); // Sheets'ten — Supabase'in loadAll'ından bağımsız.
+      refetchHarcamaTaslagi(); // Supabase'ten — kendi bağımsız fetch'i.
 
       const o = emptyTableMap(FIXED_TABLES, []);
       const n = emptyTableMap(FIXED_TABLES, '');
@@ -1737,6 +1763,9 @@ export default function useHipposData(scope = 'full') {
     ekmekStok,
     ekmekStokEkle,
     ekmekStoktanDus,
+    harcamaTaslagi,
+    saveHarcamaTaslagi,
+    clearHarcamaTaslagi,
     onaylaPaketTeslimat,
     reddetPaketTeslimat,
     onaylaCariTeslimatBildirim,
