@@ -824,7 +824,7 @@
 .ds-send-btn:hover { transform: translateY(-1px); filter: brightness(1.15); box-shadow: var(--shadow-2); }
 .ds-pay-cta, .ds-pay-cta *, .ds-send-btn, .ds-send-btn * { color: #fff !important; stroke: #fff; }
 .ds-pay-modal-wrap { display: flex; gap: 16px; align-items: flex-start; }
-.ds-pay-modal { max-width: 640px; }
+.ds-pay-modal { max-width: 760px; }
 .ds-pay-modal .ds-modal-head { padding-bottom: 20px; margin-bottom: 20px; }
 .ds-pay-modal .ds-modal-head h3 { font-size: 26px; }
 .ds-pay-modal .ds-modal-x { width: 40px; height: 40px; }
@@ -834,15 +834,15 @@
 .ds-pay-modal-total {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   background: var(--bg);
   border: 1px solid var(--border-soft);
   border-radius: var(--r-card);
-  padding: 24px 32px;
+  padding: 28px 36px;
   margin-bottom: 28px;
 }
 .ds-pay-modal-total span { font-size: 22px; font-weight: 700; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.ds-pay-modal-total strong { font-size: 44px; font-weight: 800; color: var(--olive); }
+.ds-pay-modal-total strong { font-size: 48px; font-weight: 800; color: var(--olive); line-height: 1; white-space: nowrap; }
 
 /* ---- Para Üstü Hesaplama ---- */
 .ds-change-calc-toggle {
@@ -959,16 +959,18 @@
 }
 .ds-pay-back-btn:hover { background: #fff; }
 
-.ds-pay-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 4px 16px 8px; }
+.ds-pay-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; padding: 4px 16px 8px; }
 .ds-pay-grid button {
   border: none;
   border-radius: var(--r-btn);
-  height: 112px;
+  height: 128px;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   color: #fff;
   cursor: pointer;
   transition: transform var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease), filter var(--t-hover) var(--ease);
@@ -976,11 +978,13 @@
 .ds-pay-grid button:not(:disabled):hover { transform: translateY(-2px); box-shadow: var(--shadow-2); filter: brightness(1.06); }
 .ds-pay-grid button:not(:disabled):active { transform: scale(0.94); transition-duration: var(--t-press); }
 .ds-pay-grid button:disabled { opacity: 0.35; cursor: not-allowed; }
-.ds-pay-grid button .lbl { font-size: 20px; font-weight: 700; line-height: 1; white-space: nowrap; }
-.ds-pay-grid .cash { background: var(--olive); }
-.ds-pay-grid .card { background: var(--smoke); }
-.ds-pay-grid .meal { background: var(--earth); }
-.ds-pay-grid .credit { background: var(--earth-dark); }
+.ds-pay-grid button .lbl { font-size: 19px; font-weight: 600; letter-spacing: 0.02em; line-height: 1.2; text-align: center; white-space: normal; }
+.ds-pay-grid .cash { background: #D3F527; }
+.ds-pay-grid .card { background: #27D3F5; }
+.ds-pay-grid .meal { background: #F54927; }
+.ds-pay-grid .credit { background: #4927F5; }
+.ds-pay-grid .cash, .ds-pay-grid .cash * { color: #2b2b06 !important; stroke: #2b2b06; }
+.ds-pay-grid .card, .ds-pay-grid .card * { color: #06303a !important; stroke: #06303a; }
 
 .ds-bottom-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 0 16px 16px; }
 
@@ -1271,8 +1275,8 @@
   .ds-products { padding: 12px; }
   .ds-order-tools { padding: 6px 12px; }
   .ds-total-row span:last-child { font-size: 19px; }
-  .ds-pay-grid { padding: 2px 12px 6px; }
-  .ds-pay-grid button { height: 92px; }
+  .ds-pay-grid { padding: 2px 12px 6px; gap: 14px; }
+  .ds-pay-grid button { height: 100px; }
   .ds-bottom-actions { padding: 0 12px 10px; }
   .ds-bottom-actions button { height: 34px; }
 }
