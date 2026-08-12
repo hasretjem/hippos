@@ -221,6 +221,13 @@ export default function GunSonu({ data, onNavigate }) {
     return map;
   }, [cariler, cariHareketler]);
 
+  const otomatikCariListesi = useMemo(() => {
+    const digerCariler = Object.keys(bugunFirmaTutarlari).filter(
+      (ad) => !SABIT_CARILER.includes(ad) && bugunFirmaTutarlari[ad] > 0
+    );
+    return [...SABIT_CARILER, ...digerCariler];
+  }, [bugunFirmaTutarlari]);
+
   const [cariOverrides, setCariOverrides] = useState({});
   const [cariEditingFor, setCariEditingFor] = useState(null);
   const [cariEditDraft, setCariEditDraft] = useState('');
@@ -234,7 +241,7 @@ export default function GunSonu({ data, onNavigate }) {
   function addEkstraCari() { setEkstraCariler((prev) => [...prev, { ad: '', tutar: '' }]); }
   function updateEkstraCari(idx, field, value) { setEkstraCariler((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r))); }
   function removeEkstraCari(idx) { setEkstraCariler((prev) => prev.filter((_, i) => i !== idx)); }
-  const cariToplam = SABIT_CARILER.reduce((s, ad) => s + cariGosterilenTutar(ad), 0) + ekstraCariler.reduce((s, r) => s + parseNum(r.tutar), 0);
+  const cariToplam = otomatikCariListesi.reduce((s, ad) => s + cariGosterilenTutar(ad), 0) + ekstraCariler.reduce((s, r) => s + parseNum(r.tutar), 0);
 
   // Dünden Devir artık HİÇ elle girilemez — sadece bir önceki Gün Sonu kaydından otomatik
   // gelir (yoksa 0). Düzeltmek gerekirse Sheets'ten yapılmalı, buradan değil.
@@ -329,7 +336,7 @@ export default function GunSonu({ data, onNavigate }) {
 
         cariToplam,
         cariDetay: {
-          sabitler: SABIT_CARILER.reduce((acc, ad) => {
+          sabitler: otomatikCariListesi.reduce((acc, ad) => {
             acc[ad] = cariGosterilenTutar(ad);
             return acc;
           }, {}),
@@ -429,7 +436,7 @@ export default function GunSonu({ data, onNavigate }) {
             <section className="gs-card">
               <h2><Users size={16} /> Cari Müşteriler <span className="gs-auto-tag">otomatik</span></h2>
               <div className="gs-cari-list">
-                {SABIT_CARILER.map((ad) => (
+                {otomatikCariListesi.map((ad) => (
                   <div key={ad} className="gs-cari-row">
                     {cariEditingFor === ad ? (
                       <>
