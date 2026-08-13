@@ -244,7 +244,7 @@ export default function Cariler({ data, onNavigate }) {
     bugunkuHareketler.forEach((h) => h.urunler.forEach((u) => urunSatirlari.push(padLine(u.ad, u.fiyat))));
 
     const text = [
-      selectedCari.ad,
+      `⭐ ${selectedCari.ad}`,
       '',
       'Önceki Cari',
       TL(Math.max(0, oncekiCari)),
@@ -253,11 +253,13 @@ export default function Cariler({ data, onNavigate }) {
       '',
       ...(urunSatirlari.length ? urunSatirlari : ['(bugün sipariş yok)']),
       '',
-      'Bugünkü Toplam',
+      '🟢 Bugünkü Toplam',
       TL(bugunToplam),
       '',
       'Yeni Cari',
       TL(getCariBakiye(selectedCari.id)),
+      '',
+      'Afiyet Olsun 😇',
     ].join('\n');
     setOzetText(text);
     setOzetModalOpen(true);
@@ -444,6 +446,15 @@ export default function Cariler({ data, onNavigate }) {
 
                 {detailTab === 'bilgiler' && (
                   <div className="cr-bilgi-form">
+                    <label>Cari Adı</label>
+                    <input
+                      value={selectedCari.ad}
+                      onChange={(e) => updateCari(selectedCari.id, { ad: e.target.value })}
+                      lang="tr"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck="false"
+                    />
                     <label>Telefon</label>
                     <input value={selectedCari.telefon} onChange={(e) => updateCari(selectedCari.id, { telefon: e.target.value })} />
                     <label>Adres</label>
