@@ -719,9 +719,22 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
         {/* ANA GÖVDE */}
         <main className="ds-main">
           <header className="ds-header">
-            <div className="ds-header-title">
-              <h1>{headerTitle}</h1>
-              <span className="ds-count-badge">{productCount} Ürün</span>
+            <div className="ds-header-actions">
+              {isPaketEkrani ? (
+                <button className="ds-header-send-btn" onClick={handleSend}>
+                  <Send size={16} /> Gönder
+                </button>
+              ) : (
+                <button className="ds-header-send-btn" onClick={handleSend}>
+                  <ArrowLeft size={16} /> {selectedTable === QUICK_SALE ? 'Geri Dön' : 'Masa'}
+                </button>
+              )}
+              <button disabled={isOrderEmpty} className="ds-header-print-btn" onClick={handlePrint}>
+                <Printer size={16} /> Yazdır
+              </button>
+              <button disabled={isOrderEmpty} className="ds-header-pay-btn" onClick={() => { setShowChangeCalc(false); setReceivedAmount(''); setPayMode(true); }}>
+                <Wallet size={17} /> Ödeme Al
+              </button>
             </div>
             <div className="ds-header-table">
               <button
@@ -839,15 +852,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
           {/* FAVORİLER */}
           <section className="ds-favorites">
-            <div className="ds-favorites-head">
-              <span className="ds-favorites-label"><Star size={12} /> HIZLI FAVORİLER</span>
-              <button className="ds-edit-fav-btn" onClick={() => setFavModalOpen(true)}>
-                <Pencil size={12} /> Düzenle
-              </button>
-            </div>
+            <button className="ds-edit-fav-btn" onClick={() => setFavModalOpen(true)} title="Favorileri Düzenle">
+              <Star size={16} />
+            </button>
             <div className="ds-favorites-row">
               {favoriteProducts.length === 0 && (
-                <span className="ds-favorites-empty">Favori bulunmuyor. "Düzenle" butonundan ekleyebilirsiniz.</span>
+                <span className="ds-favorites-empty">Favori yok — düzenlemek için yıldıza dokun</span>
               )}
               {favoriteProducts.map((product) => (
                 <button key={product.id} className="ds-fav-chip" onClick={() => addProductToOrder(product)}>
@@ -874,8 +884,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                       <div className="ds-split-col-head">
                         <h3 className="ds-split-col-title">{yon === 'büyük' ? 'BÜYÜK SANDVİÇ' : 'KÜÇÜK SANDVİÇ'}</h3>
                         <div className="ds-split-col-scrollbtns">
-                          <button onClick={() => scrollByPage(yon === 'büyük' ? bigColScrollRef : smallColScrollRef, -1)}><ChevronUp size={14} /></button>
-                          <button onClick={() => scrollByPage(yon === 'büyük' ? bigColScrollRef : smallColScrollRef, 1)}><ChevronDown size={14} /></button>
+                          <button onClick={() => scrollByPage(yon === 'büyük' ? bigColScrollRef : smallColScrollRef, -1)}><ChevronUp size={22} /></button>
+                          <button onClick={() => scrollByPage(yon === 'büyük' ? bigColScrollRef : smallColScrollRef, 1)}><ChevronDown size={22} /></button>
                         </div>
                       </div>
                       {Object.entries(groupedProducts)
@@ -946,8 +956,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             </div>
             {!(activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery) && (
               <div className="ds-products-scrollbtns">
-                <button onClick={() => scrollByPage(productsScrollRef, -1)}><ChevronUp size={16} /></button>
-                <button onClick={() => scrollByPage(productsScrollRef, 1)}><ChevronDown size={16} /></button>
+                <button onClick={() => scrollByPage(productsScrollRef, -1)}><ChevronUp size={26} /></button>
+                <button onClick={() => scrollByPage(productsScrollRef, 1)}><ChevronDown size={26} /></button>
               </div>
             )}
           </div>
@@ -1052,24 +1062,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             )}
           </div>
 
-          <div className="ds-payment-row">
-            <button disabled={isOrderEmpty} className="ds-pay-cta" onClick={() => { setShowChangeCalc(false); setReceivedAmount(''); setPayMode(true); }}>
-              <Wallet size={17} /> Ödeme Al
-            </button>
-            {selectedTable === QUICK_SALE ? (
-              <button className="ds-send-btn" onClick={handleSend}>
-                <ArrowLeft size={16} /> Geri Dön
-              </button>
-            ) : (
-              <button className="ds-send-btn" onClick={handleSend}>
-                <Send size={16} /> Gönder
-              </button>
-            )}
-          </div>
           <div className="ds-bottom-actions">
-            <button disabled={isOrderEmpty} onClick={handlePrint}><Printer size={14} /> Yazdır</button>
-            <button disabled={isOrderEmpty} onClick={handleUndoLastItem}><Undo2 size={14} /> Geri Al</button>
-            <button disabled={isOrderEmpty} className="danger" onClick={handleClearTable}><Trash2 size={14} /> Boşalt</button>
+            <button disabled={isOrderEmpty} onClick={handleUndoLastItem}><Undo2 size={16} /> Geri Al</button>
+            <button disabled={isOrderEmpty} className="danger" onClick={handleClearTable}><Trash2 size={18} /> Boşalt</button>
           </div>
 
           {isPaketEkrani && paketciHareketleri.length > 0 && (
