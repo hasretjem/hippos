@@ -96,10 +96,13 @@ export default async function handler(req, res) {
         const now = new Date();
         const tarih = now.toLocaleDateString('tr-TR');
         const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-        const adetNum = Number(adet) || 0;
-        const fiyatNum = Number(birimFiyat) || 0;
-        const iskNum = parseFloat(String(iskontoOrani).replace('%', '')) || 0;
-        const kdvNum = parseFloat(String(kdvOrani).replace('%', '')) || 0;
+        // KRİTİK: Number("0,5") -> NaN döner (Türkçe ondalık virgülü) — bu adet/birimFiyat
+        // alanları kg/gr/litre gibi ondalıklı miktarlar da taşıyabildiği için virgülü noktaya
+        // çevirip ayrıştırıyoruz, yoksa 0,5 gibi bir miktar sessizce 0 kabul edilirdi.
+        const adetNum = Number(String(adet).replace(',', '.')) || 0;
+        const fiyatNum = Number(String(birimFiyat).replace(',', '.')) || 0;
+        const iskNum = parseFloat(String(iskontoOrani).replace(',', '.').replace('%', '')) || 0;
+        const kdvNum = parseFloat(String(kdvOrani).replace(',', '.').replace('%', '')) || 0;
         // satirTutari: KDV HARİÇ matrah (adet × birim fiyat, iskonto düşülmüş).
         // kdvTutari: bu matrah üzerinden hesaplanan KDV — ayrı sütunda, toplamda görünsün diye.
         const satirTutari = adetNum * fiyatNum * (1 - iskNum / 100);

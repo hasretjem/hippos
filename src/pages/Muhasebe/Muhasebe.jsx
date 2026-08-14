@@ -86,6 +86,16 @@ function normalizeTrPhone(phone) {
   return digits;
 }
 
+// KRİTİK: Number("0,04") -> NaN döner (Türkçe ondalık virgülü). Reçete/malzeme miktar
+// input'larında kullanıcı "0,04" yazınca sessizce 0 kabul edilip kalem atılıyordu (0'ın
+// üzerinde mi kontrolü NaN>0 → false çıkıyordu) — bu yüzden TEK bir güvenli ayrıştırıcı
+// kullanılıyor, virgülü noktaya çevirip Number()'a veriyor.
+function ondalikParse(deger) {
+  if (deger === '' || deger === null || deger === undefined) return 0;
+  const n = Number(String(deger).trim().replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
+
 // Enter'a basınca DOM sırasındaki bir sonraki "mh-tabbable" alanına odaklanır —
 // sayfadaki hemen her giriş kutusunda kullanılıyor.
 function handleTabEnter(e) {
@@ -767,7 +777,7 @@ function FaturaDetaySekmesi({ showToast }) {
             malzemeAdi: seciliMalzeme.ad,
             miktar: kalemForm.adet,
             birim: seciliMalzeme.birim,
-            toplamFiyat: (Number(kalemForm.adet) || 0) * (Number(kalemForm.birimFiyat) || 0),
+            toplamFiyat: ondalikParse(kalemForm.adet) * ondalikParse(kalemForm.birimFiyat),
             faturaId: seciliFatura.id,
           }),
         }).catch(() => {});
@@ -846,14 +856,14 @@ function FaturaDetaySekmesi({ showToast }) {
                     </div>
                   )}
                 </div>
-                <input className="mh-tabbable" type="number" placeholder="Adet" value={kalemForm.adet} onChange={(e) => setKalemForm((p) => ({ ...p, adet: e.target.value }))} onKeyDown={handleTabEnter} />
-                <input className="mh-tabbable" type="number" placeholder="Birim Fiyat" value={kalemForm.birimFiyat} onChange={(e) => setKalemForm((p) => ({ ...p, birimFiyat: e.target.value }))} onKeyDown={handleTabEnter} />
+                <input className="mh-tabbable" type="number" step="any" placeholder="Adet" value={kalemForm.adet} onChange={(e) => setKalemForm((p) => ({ ...p, adet: e.target.value }))} onKeyDown={handleTabEnter} />
+                <input className="mh-tabbable" type="number" step="any" placeholder="Birim Fiyat" value={kalemForm.birimFiyat} onChange={(e) => setKalemForm((p) => ({ ...p, birimFiyat: e.target.value }))} onKeyDown={handleTabEnter} />
                 <select className="mh-tabbable" value={kalemForm.kdvOrani} onChange={(e) => setKalemForm((p) => ({ ...p, kdvOrani: e.target.value }))} onKeyDown={handleTabEnter}>
                   <option value="%1">%1</option>
                   <option value="%10">%10</option>
                   <option value="%20">%20</option>
                 </select>
-                <input className="mh-tabbable" type="number" placeholder="İskonto %" value={kalemForm.iskontoOrani} onChange={(e) => setKalemForm((p) => ({ ...p, iskontoOrani: e.target.value }))} onKeyDown={handleTabEnter} />
+                <input className="mh-tabbable" type="number" step="any" placeholder="İskonto %" value={kalemForm.iskontoOrani} onChange={(e) => setKalemForm((p) => ({ ...p, iskontoOrani: e.target.value }))} onKeyDown={handleTabEnter} />
                 <button className="mh-primary-btn small" disabled={saving} onClick={kalemEkle}><Plus size={13} /> Ekle</button>
               </div>
 
@@ -1005,7 +1015,7 @@ function ReceteSekmesi({ showToast }) {
 
   async function receteKaydet() {
     if (!seciliUrun) return;
-    const gecerliKalemler = kalemler.filter((k) => k.malzemeId && Number(k.miktar) > 0);
+    const gecerliKalemler = kalemler.filter((k) => k.malzemeId && ondalikParse(k.miktar) > 0);
     if (gecerliKalemler.length === 0) { showToast('En az bir malzeme + miktar girin'); return; }
     setKaydediliyor(true);
     try {
@@ -1080,7 +1090,7 @@ function ReceteSekmesi({ showToast }) {
               {kalemler.map((k, idx) => (
                 <div key={idx} className="rc-kalem-row">
                   <span>{k.malzemeAdi}</span>
-                  <input type="number" value={k.miktar} onChange={(e) => kalemMiktarGuncelle(idx, e.target.value)} />
+                  <input type="number" step="any" value={k.miktar} onChange={(e) => kalemMiktarGuncelle(idx, e.target.value)} />
                   <span>{k.birim}</span>
                   <button onClick={() => kalemSil(idx)}><Trash2 size={13} /></button>
                 </div>

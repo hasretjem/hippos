@@ -38,15 +38,31 @@ function ayniAileMi(a, b) {
   const hacim = ['ml', 'litre'];
   return (agirlik.includes(a) && agirlik.includes(b)) || (hacim.includes(a) && hacim.includes(b));
 }
+// KRİTİK: Number("0,04") -> NaN döner (Türkçe ondalık virgülü JS'in anlamadığı format).
+// Bu, "0,04 kg girince 0 kabul ediliyor" hatasının gerçek kaynağıydı — hem burada (Sheets'e
+// yazarken) hem frontend'de (Reçeteler/Fatura Detaylı Giriş miktar input'larında) TEK bir
+// güvenli ayrıştırıcı kullanılıyor: virgülü noktaya çevirip Number()'a veriyoruz.
+function ondalikParse(deger) {
+  if (deger === '' || deger === null || deger === undefined) return 0;
+  const n = Number(String(deger).trim().replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
 // birimMaliyet: kaynak birim başına TL (ör. kg başına). hedefBirim: reçetede kullanılan birim.
 // Döner: hedef birim başına TL. BIRIM_KATSAYI = "1 [birim] kaç TEMEL birime eşit" (kg=1000 gr,
 // litre=1000 ml). TL/kaynakBirim -> önce TEMEL birime böl, sonra hedef birime çarp.
 // Örnek: 400 TL/kg -> gr'a çevir: (400 / 1000) * 1 = 0.4 TL/gr (kritik: BÖLME işlemi, çarpma değil).
+// Kaynak/hedef birim string'leri de trim+lowercase ile normalize ediliyor — Sheets'ten "Kg",
+// " kg " gibi boşluklu/büyük harfli gelirse eşleşme bozulmasın diye.
+function birimNormalize(b) {
+  return String(b || '').trim().toLocaleLowerCase('tr');
+}
 function birimMaliyetiCevir(birimMaliyet, kaynakBirim, hedefBirim) {
-  if (kaynakBirim === hedefBirim) return birimMaliyet;
-  if (!ayniAileMi(kaynakBirim, hedefBirim)) return null; // adet gibi dönüştürülemeyen birimler
-  const kaynakKatsayi = BIRIM_KATSAYI[kaynakBirim];
-  const hedefKatsayi = BIRIM_KATSAYI[hedefBirim];
+  const k = birimNormalize(kaynakBirim);
+  const h = birimNormalize(hedefBirim);
+  if (k === h) return birimMaliyet;
+  if (!ayniAileMi(k, h)) return null; // adet gibi dönüştürülemeyen birimler
+  const kaynakKatsayi = BIRIM_KATSAYI[k];
+  const hedefKatsayi = BIRIM_KATSAYI[h];
   return (birimMaliyet / kaynakKatsayi) * hedefKatsayi;
 }
 
@@ -97,15 +113,15 @@ function rowToMalzeme(r) {
 function rowToMaliyet(r) {
   return {
     id: r[0], malzemeId: r[1], malzemeAdi: r[2] || '', tarih: r[3] || '',
-    miktar: Number(r[4]) || 0, birim: r[5] || '', toplamFiyat: Number(r[6]) || 0,
-    birimMaliyet: Number(r[7]) || 0, faturaId: r[8] || '',
+    miktar: ondalikParse(r[4]), birim: r[5] || '', toplamFiyat: ondalikParse(r[6]),
+    birimMaliyet: ondalikParse(r[7]), faturaId: r[8] || '',
   };
 }
 function rowToRecete(r) {
   return { id: r[0], urunId: r[1], urunAdi: r[2] || '', versiyon: Number(r[3]) || 1, aktif: r[4] !== 'FALSE', baslangic: r[5] || '', bitis: r[6] || '' };
 }
 function rowToKalem(r) {
-  return { id: r[0], receteId: r[1], malzemeId: r[2], malzemeAdi: r[3] || '', miktar: Number(r[4]) || 0, birim: r[5] || '' };
+  return { id: r[0], receteId: r[1], malzemeId: r[2], malzemeAdi: r[3] || '', miktar: ondalikParse(r[4]), birim: r[5] || '' };
 }
 
 // "GG.AA.YYYY" formatındaki (toLocaleDateString('tr-TR') çıktısı) tarihi Date'e çevirir.
@@ -226,8 +242,9 @@ export default async function handler(req, res) {
         }
         const id = String(Date.now());
         const tarih = new Date().toLocaleDateString('tr-TR');
-        const miktarNum = Number(miktar);
-        const toplamNum = Number(toplamFiyat);
+        const miktarNum = ondalikParse(miktar);
+        const toplamNum = ondalikParse(toplamFiyat);
+        if (miktarNum <= 0) return res.status(400).json({ error: 'Miktar 0\'dan büyük olmalı' });
         const birimMaliyet = Math.round((toplamNum / miktarNum) * 10000) / 10000;
         await appendRow(sheets, TABS.maliyetGecmisi, [id, malzemeId, malzemeAdi || '', tarih, miktarNum, birim, toplamNum, birimMaliyet, faturaId || '']);
         return res.status(200).json({ ok: true, record: { id, malzemeId, malzemeAdi, tarih, miktar: miktarNum, birim, toplamFiyat: toplamNum, birimMaliyet, faturaId } });
@@ -274,7 +291,7 @@ export default async function handler(req, res) {
 
         for (const kalem of kalemler) {
           const kalemId = String(Date.now() + Math.floor(Math.random() * 1000));
-          await appendRow(sheets, TABS.receteKalemleri, [kalemId, receteId, kalem.malzemeId, kalem.malzemeAdi || '', Number(kalem.miktar) || 0, kalem.birim || '']);
+          await appendRow(sheets, TABS.receteKalemleri, [kalemId, receteId, kalem.malzemeId, kalem.malzemeAdi || '', ondalikParse(kalem.miktar), kalem.birim || '']);
         }
 
         return res.status(200).json({ ok: true, receteId, versiyon: yeniVersiyon });
