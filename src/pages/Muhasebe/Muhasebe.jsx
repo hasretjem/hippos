@@ -718,6 +718,8 @@ function FaturaDetaySekmesi({ showToast }) {
   }
 
   const kalemToplam = kalemler.reduce((s, k) => s + (k.satirTutari || 0), 0);
+  const kdvToplam = kalemler.reduce((s, k) => s + (k.kdvTutari || 0), 0);
+  const genelToplam = kalemToplam + kdvToplam;
 
   return (
     <div className="mh-detay">
@@ -766,7 +768,7 @@ function FaturaDetaySekmesi({ showToast }) {
 
               <div className="mh-kalem-list">
                 <div className="mh-kalem-head">
-                  <span>Ürün</span><span>Adet</span><span>Birim F.</span><span>KDV</span><span>İsk.</span><span>Tutar</span>
+                  <span>Ürün</span><span>Adet</span><span>Birim F.</span><span>KDV</span><span>İsk.</span><span>KDV Tutarı</span><span>Tutar</span>
                 </div>
                 {kalemler.length === 0 && <p className="mh-empty">Henüz kalem girilmedi</p>}
                 {kalemler.map((k) => (
@@ -776,13 +778,22 @@ function FaturaDetaySekmesi({ showToast }) {
                     <span>{TL(k.birimFiyat)}</span>
                     <span>{k.kdvOrani}</span>
                     <span>{k.iskontoOrani || '-'}</span>
+                    <span>{TL(k.kdvTutari)}</span>
                     <span>{TL(k.satirTutari)}</span>
                   </div>
                 ))}
               </div>
               <div className="mh-kalem-toplam">
-                <span>Kalemler Toplamı</span>
+                <span>KDV Toplamı</span>
+                <strong>{TL(kdvToplam)}</strong>
+              </div>
+              <div className="mh-kalem-toplam">
+                <span>Kalemler Toplamı (KDV Hariç)</span>
                 <strong>{TL(kalemToplam)}</strong>
+              </div>
+              <div className="mh-kalem-toplam">
+                <span>Genel Toplam (KDV Dahil)</span>
+                <strong>{TL(genelToplam)}</strong>
               </div>
             </>
           )}

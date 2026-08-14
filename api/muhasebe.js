@@ -38,8 +38,8 @@ const BELGE_TIPLERI = {
 // Her kalem kendi satırında: hangi faturaya ait (faturaId), ürün adı, adet, birim fiyat,
 // KDV oranı, iskonto oranı. Fiyat farkı raporlaması ileride bu tablodan beslenecek.
 const DETAY_TAB = 'Fatura Detaylı Giriş';
-const DETAY_HEADERS = ['ID', 'FaturaID', 'Tedarikçi/Firma', 'Fatura No', 'Tarih', 'Saat', 'Ürün Adı', 'Adet', 'Birim Fiyat', 'KDV Oranı', 'İskonto Oranı', 'Satır Tutarı'];
-const DETAY_LAST_COL = 'L';
+const DETAY_HEADERS = ['ID', 'FaturaID', 'Tedarikçi/Firma', 'Fatura No', 'Tarih', 'Saat', 'Ürün Adı', 'Adet', 'Birim Fiyat', 'KDV Oranı', 'İskonto Oranı', 'KDV Tutarı', 'Satır Tutarı'];
+const DETAY_LAST_COL = 'M';
 
 async function ensureTab(sheets, tab, headers) {
   const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
@@ -66,7 +66,7 @@ function rowToDetay(r) {
   return {
     id: r[0], faturaId: r[1], firma: r[2], faturaNo: r[3], tarih: r[4], saat: r[5],
     urunAdi: r[6] || '', adet: Number(r[7]) || 0, birimFiyat: Number(r[8]) || 0,
-    kdvOrani: r[9] || '', iskontoOrani: r[10] || '', satirTutari: Number(r[11]) || 0,
+    kdvOrani: r[9] || '', iskontoOrani: r[10] || '', kdvTutari: Number(r[11]) || 0, satirTutari: Number(r[12]) || 0,
   };
 }
 
@@ -99,8 +99,10 @@ export default async function handler(req, res) {
         const adetNum = Number(adet) || 0;
         const fiyatNum = Number(birimFiyat) || 0;
         const iskNum = parseFloat(String(iskontoOrani).replace('%', '')) || 0;
+        const kdvNum = parseFloat(String(kdvOrani).replace('%', '')) || 0;
         const satirTutari = adetNum * fiyatNum * (1 - iskNum / 100);
-        const rowValues = [id, faturaId, firma || '', faturaNo || '', tarih, saat, urunAdi, adetNum, fiyatNum, kdvOrani || '', iskontoOrani || '', Math.round(satirTutari * 100) / 100];
+        const kdvTutari = satirTutari * (kdvNum / 100);
+        const rowValues = [id, faturaId, firma || '', faturaNo || '', tarih, saat, urunAdi, adetNum, fiyatNum, kdvOrani || '', iskontoOrani || '', Math.round(kdvTutari * 100) / 100, Math.round(satirTutari * 100) / 100];
         await sheets.spreadsheets.values.append({
           spreadsheetId: SHEET_ID, range: `${DETAY_TAB}!A2`, valueInputOption: 'USER_ENTERED',
           insertDataOption: 'INSERT_ROWS', requestBody: { values: [rowValues] },
