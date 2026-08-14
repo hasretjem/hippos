@@ -100,6 +100,8 @@ export default async function handler(req, res) {
         const fiyatNum = Number(birimFiyat) || 0;
         const iskNum = parseFloat(String(iskontoOrani).replace('%', '')) || 0;
         const kdvNum = parseFloat(String(kdvOrani).replace('%', '')) || 0;
+        // satirTutari: KDV HARİÇ matrah (adet × birim fiyat, iskonto düşülmüş).
+        // kdvTutari: bu matrah üzerinden hesaplanan KDV — ayrı sütunda, toplamda görünsün diye.
         const satirTutari = adetNum * fiyatNum * (1 - iskNum / 100);
         const kdvTutari = satirTutari * (kdvNum / 100);
         const rowValues = [id, faturaId, firma || '', faturaNo || '', tarih, saat, urunAdi, adetNum, fiyatNum, kdvOrani || '', iskontoOrani || '', Math.round(kdvTutari * 100) / 100, Math.round(satirTutari * 100) / 100];

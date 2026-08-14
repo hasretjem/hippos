@@ -1438,6 +1438,84 @@ export default function useHipposData(scope = 'full') {
       .from('sold_items')
       .insert(rows.map((r) => ({ id: r.id, ts: r.ts, ad: r.ad, fiyat: r.fiyat, kategori: r.kategori, alt_kategori: r.altKategori, table_name: r.table })))
       .then(({ error }) => { if (error) console.error('satılan ürün kaydedilemedi:', error.message); });
+
+    // ---- SATIŞ ANI MALİYET SNAPSHOT'I ----
+    // Bilinçli olarak satış kaydından TAMAMEN AYRI, ASENKRON ve fire-and-forget: satış akışı
+    // (Normal/Hızlı Satış/Paket/Masa/Cari, ödeme yöntemi fark etmeksizin — hepsi bu fonksiyona
+    // uğruyor) reçete/maliyet hesabının sonucunu HİÇ beklemez, bir hata olsa bile satış
+    // etkilenmez. Reçete Sheets'te, maliyet hesabı Sheets'ten okunuyor (api/recete.js) —
+    // satış anındaki GÜNCEL maliyeti Supabase'e snapshot olarak yazıyoruz ki malzeme fiyatı
+    // yarın değişse bile bugünün satışının maliyeti bugünkü değerde kilitli kalsın.
+    snapshotSoldItemCosts(rows);
+  }
+
+  // rows: logSoldItems'ın az önce Supabase'e insert ettiği satırlar (henüz maliyetsiz).
+  // Aynı üründen birden fazla satır varsa (aynı üründen 2+ adet satılmışsa) ürün adına göre
+  // GRUPLAYIP reçete/maliyet hesabını bir kez yapıyoruz (gereksiz tekrar Sheets sorgusu değil),
+  // sonra o üründen kaç satır varsa hepsine aynı unit_cost_at_sale'i yazıyoruz — her satır zaten
+  // TEK BİR adet ürünü temsil ettiği için total_cost_at_sale = unit_cost_at_sale (miktar 1).
+  async function snapshotSoldItemCosts(rows) {
+    const adGruplari = new Map(); // ad -> [row, row, ...]
+    rows.forEach((r) => {
+      if (!adGruplari.has(r.ad)) adGruplari.set(r.ad, []);
+      adGruplari.get(r.ad).push(r);
+    });
+
+    // Her grup için bir DURUM yazılır (cost_snapshot_status) — fire-and-forget olduğu için
+    // satışın kendisi asla beklemez/engellenmez, ama maliyetin eksik kaldığı SESSİZ kalmaz:
+    // 'ok' = snapshot başarılı, 'no_recipe' = ürünün reçetesi yok, 'missing_cost' = reçetede
+    // maliyeti bilinmeyen malzeme var, 'error' = ağ/API hatası. Bu sütun sonradan (ör. Reçeteler
+    // ekranında ya da ileride bir raporda) "maliyeti eksik kalan satışlar" diye filtrelenebilir.
+    async function durumYaz(idler, patch) {
+      const { error } = await supabase.from('sold_items').update(patch).in('id', idler);
+      if (error) console.error('[maliyet snapshot] durum yazılamadı:', error.message);
+    }
+
+    for (const [ad, grupRows] of adGruplari) {
+      const idler = grupRows.map((r) => r.id);
+      try {
+        // Ürünün Supabase products kaydını isimle bul (sipariş satırları products.id taşımıyor,
+        // sadece ad — mevcut sistemin geneli zaten isim bazlı çalışıyor, tutarlı).
+        const urun = products.find((p) => p.ad === ad);
+        if (!urun) {
+          console.warn(`[maliyet snapshot] "${ad}" için Supabase'de ürün kaydı bulunamadı, maliyet snapshot'ı atlandı.`);
+          await durumYaz(idler, { cost_snapshot_status: 'error' });
+          continue;
+        }
+        const res = await fetch(`/api/recete?resource=recete&urunId=${urun.id}`);
+        const hesap = await res.json();
+
+        if (hesap.receteYok) {
+          // Reçetesi hiç yok — satış zaten kaydedildi (üstte), sadece maliyet snapshot'ı boş
+          // kalıyor. Bilinçli: reçetesiz ürünler için satış ASLA engellenmez/bozulmaz.
+          console.info(`[maliyet snapshot] "${ad}" için reçete tanımlanmamış, maliyet boş bırakıldı.`);
+          await durumYaz(idler, { cost_snapshot_status: 'no_recipe' });
+          continue;
+        }
+        if (hesap.maliyet === null || hesap.eksikMalzemeler?.length > 0) {
+          // Eksik malzeme maliyeti var — KRİTİK KURAL: 0 TL yazılmaz, sessizce yanlış maliyet
+          // üretilmez. Loglanır, snapshot alanları NULL kalır, satış bozulmaz, DURUM işaretlenir.
+          console.warn(`[maliyet snapshot] "${ad}" için eksik malzeme maliyeti: ${(hesap.eksikMalzemeler || []).join(', ')} — maliyet snapshot'ı atlandı.`);
+          await durumYaz(idler, { cost_snapshot_status: 'missing_cost' });
+          continue;
+        }
+
+        const birimMaliyet = hesap.maliyet; // reçetenin toplam maliyeti = 1 adet ürünün maliyeti
+        const { error } = await supabase
+          .from('sold_items')
+          .update({ unit_cost_at_sale: birimMaliyet, total_cost_at_sale: birimMaliyet, cost_snapshot_status: 'ok' })
+          .in('id', idler);
+        if (error) {
+          console.error(`[maliyet snapshot] "${ad}" için sold_items güncellenemedi:`, error.message);
+          await durumYaz(idler, { cost_snapshot_status: 'error' });
+        }
+      } catch (err) {
+        // Ağ hatası, Sheets API hatası vb. — satış zaten tamamlanmış durumda, burada sessizce
+        // loglayıp devam ediyoruz. Maliyet snapshot'ı eksik kalabilir ama satış ASLA geri alınmaz.
+        console.error(`[maliyet snapshot] "${ad}" için maliyet hesabı başarısız:`, err.message);
+        await durumYaz(idler, { cost_snapshot_status: 'error' }).catch(() => {});
+      }
+    }
   }
 
   // ================== CARİ YÖNETİMİ ==================

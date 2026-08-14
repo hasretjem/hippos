@@ -93,6 +93,7 @@
   font-size: 12.5px; font-weight: 700; cursor: pointer;
   display: flex; align-items: center; justify-content: center; gap: 6px;
 }
+.mh-secondary-btn.small { width: auto; height: 32px; padding: 0 12px; font-size: 11.5px; }
 
 .mh-toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -263,6 +264,39 @@
   display: grid; grid-template-columns: 2fr 0.7fr 1fr 0.8fr 0.8fr auto; gap: 8px; margin: 12px 0 16px; align-items: center;
 }
 @media (max-width: 720px) { .mh-kalem-form { grid-template-columns: 1fr 1fr; } }
+.mh-malzeme-secici { position: relative; }
+.mh-malzeme-secici input { width: 100%; }
+.mh-malzeme-badge {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  font-size: 10px; font-weight: 700; color: #6a9955; background: rgba(106,153,85,0.12);
+  padding: 2px 8px; border-radius: 999px; pointer-events: none;
+}
+.mh-malzeme-dropdown {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20;
+  background: #fff; border: 1px solid #E3DFCF; border-radius: 10px; box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  max-height: 220px; overflow-y: auto; padding: 4px;
+}
+.mh-malzeme-dropdown button {
+  display: block; width: 100%; text-align: left; padding: 8px 10px; border: none; background: none;
+  font-size: 12.5px; color: #393E41; border-radius: 6px; cursor: pointer;
+}
+.mh-malzeme-dropdown button:hover { background: #F6F7EB; }
+.mh-malzeme-dropdown button span { color: #83786B; font-size: 11px; }
+.mh-malzeme-yeni-btn {
+  display: flex !important; align-items: center; gap: 6px;
+  color: #E94F37 !important; font-weight: 700 !important; border-top: 1px solid #E3DFCF !important; margin-top: 4px;
+}
+.mh-malzeme-modal-overlay {
+  position: fixed; inset: 0; background: rgba(46,42,34,0.45); z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+}
+.mh-malzeme-modal {
+  background: #F6F7EB; border-radius: 16px; padding: 20px; width: 320px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.mh-malzeme-modal label { font-size: 11px; font-weight: 700; color: #83786B; text-transform: uppercase; margin-top: 6px; }
+.mh-malzeme-modal-btns { display: flex; gap: 8px; margin-top: 14px; }
+.mh-malzeme-modal-btns button { flex: 1; height: 38px; border-radius: 10px; border: 1px solid #E3DFCF; background: #fff; cursor: pointer; font-weight: 600; }
 .mh-kalem-form input, .mh-kalem-form select {
   height: 36px; border: 1px solid #E3DFCF; border-radius: 8px; padding: 0 8px; font-size: 12px; color: #393E41 !important; background: #fff;
 }
@@ -279,3 +313,43 @@
   margin-top: 12px; padding: 10px 12px; background: #393E41; border-radius: 10px;
   color: #F6F7EB !important; font-size: 13px; font-weight: 700;
 }
+/* ================== REÇETELER ================== */
+.rc-shell { display: flex; gap: 16px; height: 100%; }
+.rc-col-left { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+.rc-search {
+  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px;
+  background: #fff; border: 1px solid #E3DFCF; border-radius: 10px; color: #83786B;
+}
+.rc-search input { border: none; outline: none; flex: 1; font-size: 13px; background: transparent; }
+.rc-urun-list { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+.rc-urun-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 12px; border: 1px solid #E3DFCF; border-radius: 10px; background: #fff;
+  cursor: pointer; font-size: 12.5px; text-align: left;
+}
+.rc-urun-row.active { border-color: #E94F37; background: rgba(233,79,55,0.08); }
+.rc-urun-ad { font-weight: 600; color: #393E41; }
+.rc-urun-fiyat { color: #83786B; font-weight: 700; }
+
+.rc-col-right { flex: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.rc-urun-head h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 18px; }
+.rc-metrikler { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.rc-metrikler > div { background: #fff; border: 1px solid #E3DFCF; border-radius: 10px; padding: 10px 12px; }
+.rc-metrikler span { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #83786B; margin-bottom: 4px; }
+.rc-metrikler strong { font-size: 15px; color: #393E41; }
+.rc-uyari { margin-top: 10px; font-size: 12px; color: #C0392B; font-weight: 600; }
+.rc-rozet { font-size: 15px; }
+
+.rc-kalem-list { display: flex; flex-direction: column; gap: 6px; }
+.rc-kalem-head, .rc-kalem-row {
+  display: grid; grid-template-columns: 2fr 1fr 0.7fr auto; gap: 8px; align-items: center;
+  padding: 8px 10px; font-size: 12.5px;
+}
+.rc-kalem-head { font-weight: 700; color: #83786B; text-transform: uppercase; font-size: 10.5px; }
+.rc-kalem-row { background: #fff; border: 1px solid #E3DFCF; border-radius: 8px; }
+.rc-kalem-row input { border: 1px solid #E3DFCF; border-radius: 6px; padding: 4px 8px; font-size: 12.5px; width: 100%; }
+.rc-kalem-row button { border: none; background: none; color: #C0392B; cursor: pointer; display: flex; }
+
+.rc-malzeme-ekle-wrap { position: relative; }
+.rc-malzeme-dropdown { position: absolute; top: calc(100% + 4px); left: 0; width: 280px; }
+.rc-malzeme-dropdown input { width: 100%; border: 1px solid #E3DFCF; border-radius: 8px; padding: 6px 10px; font-size: 12.5px; margin-bottom: 4px; }

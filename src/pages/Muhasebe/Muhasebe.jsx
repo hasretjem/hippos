@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './Muhasebe.css';
 import { TL } from '../../hooks/useHipposData';
+import { supabase } from '../../services/supabase';
 import {
   ArrowLeft, Receipt, Truck, Users, ListPlus, Copy, MessageCircle, Plus, Trash2,
-  Lock, Delete, Check, X, Search, Pencil,
+  Lock, Delete, Check, X, Search, Pencil, ChefHat,
 } from 'lucide-react';
 
 const PERSONEL_PIN = '1234';
@@ -156,6 +157,9 @@ export default function Muhasebe({ onNavigate }) {
         <button className={anaTab === 'faturaDetay' ? 'active' : ''} onClick={() => setAnaTab('faturaDetay')}>
           <ListPlus size={15} /> Fatura Detaylı Giriş
         </button>
+        <button className={anaTab === 'receteler' ? 'active' : ''} onClick={() => setAnaTab('receteler')}>
+          <ChefHat size={15} /> Reçeteler
+        </button>
       </div>
 
       <div className="mh-body">
@@ -170,6 +174,9 @@ export default function Muhasebe({ onNavigate }) {
         )}
         {anaTab === 'faturaDetay' && (
           <FaturaDetaySekmesi showToast={showToast} />
+        )}
+        {anaTab === 'receteler' && (
+          <ReceteSekmesi showToast={showToast} />
         )}
       </div>
 
@@ -663,6 +670,16 @@ function FaturaDetaySekmesi({ showToast }) {
   const [kalemForm, setKalemForm] = useState({ urunAdi: '', adet: '', birimFiyat: '', kdvOrani: '%20', iskontoOrani: '' });
   const [saving, setSaving] = useState(false);
 
+  // ---- Malzeme Havuzu — Reçete/Maliyet sistemi burada da kullanılıyor: ürün adı artık
+  // serbest yazılabilir (mevcut davranış korunuyor) AMA aynı zamanda Malzeme Havuzu'ndan
+  // bir malzemeye eşlenebiliyor — eşlenirse fiyat otomatik Malzeme Maliyet Geçmişi'ne
+  // de kaydolur, reçetelerde kullanılabilir hale gelir.
+  const [malzemeler, setMalzemeler] = useState([]);
+  const [seciliMalzeme, setSeciliMalzeme] = useState(null); // {id, ad, birim} ya da null (eşlenmemiş)
+  const [malzemeAramaAcik, setMalzemeAramaAcik] = useState(false);
+  const [yeniMalzemeModal, setYeniMalzemeModal] = useState(false);
+  const [yeniMalzemeForm, setYeniMalzemeForm] = useState({ ad: '', birim: 'kg' });
+
   useEffect(() => {
     async function load() {
       try {
@@ -676,17 +693,45 @@ function FaturaDetaySekmesi({ showToast }) {
       }
     }
     load();
+    fetch('/api/recete?resource=malzemeler').then((r) => r.json()).then((j) => setMalzemeler(j.records || [])).catch(() => {});
   }, []);
 
   async function faturaSec(f) {
     setSeciliFatura(f);
     setKalemForm({ urunAdi: '', adet: '', birimFiyat: '', kdvOrani: '%20', iskontoOrani: '' });
+    setSeciliMalzeme(null);
     try {
       const res = await fetch(`/api/muhasebe?resource=detay&faturaId=${f.id}`);
       const json = await res.json();
       setKalemler(json.records || []);
     } catch {
       showToast('Kalemler yüklenemedi');
+    }
+  }
+
+  function malzemeSec(m) {
+    setSeciliMalzeme(m);
+    setKalemForm((p) => ({ ...p, urunAdi: m.ad }));
+    setMalzemeAramaAcik(false);
+  }
+
+  async function yeniMalzemeKaydet() {
+    if (!yeniMalzemeForm.ad.trim()) { showToast('Malzeme adı gerekli'); return; }
+    try {
+      const res = await fetch('/api/recete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resource: 'malzemeler', ...yeniMalzemeForm }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error();
+      setMalzemeler((prev) => [...prev, json.record]);
+      malzemeSec(json.record);
+      setYeniMalzemeModal(false);
+      setYeniMalzemeForm({ ad: '', birim: 'kg' });
+      showToast('Malzeme oluşturuldu');
+    } catch {
+      showToast('Malzeme oluşturulamadı');
     }
   }
 
@@ -708,7 +753,28 @@ function FaturaDetaySekmesi({ showToast }) {
       const json = await res.json();
       if (!res.ok) throw new Error();
       setKalemler((prev) => [...prev, json.record]);
+
+      // Malzeme Havuzu'ndan bir malzemeye eşlendiyse, bu alışın fiyatını da Malzeme Maliyet
+      // Geçmişi'ne kaydet — reçete maliyeti hesabı bundan besleniyor. Eşlenmemişse (serbest
+      // yazılmış ürün adıysa) bu adım atlanır, sadece fatura kaydı olarak kalır.
+      if (seciliMalzeme) {
+        fetch('/api/recete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            resource: 'maliyetGecmisi',
+            malzemeId: seciliMalzeme.id,
+            malzemeAdi: seciliMalzeme.ad,
+            miktar: kalemForm.adet,
+            birim: seciliMalzeme.birim,
+            toplamFiyat: (Number(kalemForm.adet) || 0) * (Number(kalemForm.birimFiyat) || 0),
+            faturaId: seciliFatura.id,
+          }),
+        }).catch(() => {});
+      }
+
       setKalemForm({ urunAdi: '', adet: '', birimFiyat: '', kdvOrani: kalemForm.kdvOrani, iskontoOrani: '' });
+      setSeciliMalzeme(null);
       showToast('Kalem eklendi');
     } catch {
       showToast('Eklenemedi');
@@ -754,7 +820,32 @@ function FaturaDetaySekmesi({ showToast }) {
               <span className="mh-subhead">{seciliFatura.firma} — {seciliFatura.faturaNo || 'No yok'}</span>
 
               <div className="mh-kalem-form">
-                <input className="mh-tabbable" placeholder="Ürün Adı" value={kalemForm.urunAdi} onChange={(e) => setKalemForm((p) => ({ ...p, urunAdi: e.target.value }))} onKeyDown={handleTabEnter} />
+                <div className="mh-malzeme-secici">
+                  <input
+                    className="mh-tabbable"
+                    placeholder="Ürün Adı (Malzeme Havuzu'ndan seç veya yeni yaz)"
+                    value={kalemForm.urunAdi}
+                    onChange={(e) => { setKalemForm((p) => ({ ...p, urunAdi: e.target.value })); setSeciliMalzeme(null); setMalzemeAramaAcik(true); }}
+                    onFocus={() => setMalzemeAramaAcik(true)}
+                    onBlur={() => setTimeout(() => setMalzemeAramaAcik(false), 150)}
+                    onKeyDown={handleTabEnter}
+                    lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false"
+                  />
+                  {seciliMalzeme && <span className="mh-malzeme-badge">✓ {seciliMalzeme.birim}</span>}
+                  {malzemeAramaAcik && (
+                    <div className="mh-malzeme-dropdown">
+                      {malzemeler
+                        .filter((m) => !kalemForm.urunAdi.trim() || m.ad.toLocaleLowerCase('tr').includes(kalemForm.urunAdi.toLocaleLowerCase('tr')))
+                        .slice(0, 8)
+                        .map((m) => (
+                          <button key={m.id} onMouseDown={() => malzemeSec(m)}>{m.ad} <span>({m.birim})</span></button>
+                        ))}
+                      <button className="mh-malzeme-yeni-btn" onMouseDown={() => { setYeniMalzemeForm({ ad: kalemForm.urunAdi, birim: 'kg' }); setYeniMalzemeModal(true); setMalzemeAramaAcik(false); }}>
+                        <Plus size={12} /> Yeni Malzeme Oluştur
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <input className="mh-tabbable" type="number" placeholder="Adet" value={kalemForm.adet} onChange={(e) => setKalemForm((p) => ({ ...p, adet: e.target.value }))} onKeyDown={handleTabEnter} />
                 <input className="mh-tabbable" type="number" placeholder="Birim Fiyat" value={kalemForm.birimFiyat} onChange={(e) => setKalemForm((p) => ({ ...p, birimFiyat: e.target.value }))} onKeyDown={handleTabEnter} />
                 <select className="mh-tabbable" value={kalemForm.kdvOrani} onChange={(e) => setKalemForm((p) => ({ ...p, kdvOrani: e.target.value }))} onKeyDown={handleTabEnter}>
@@ -765,6 +856,29 @@ function FaturaDetaySekmesi({ showToast }) {
                 <input className="mh-tabbable" type="number" placeholder="İskonto %" value={kalemForm.iskontoOrani} onChange={(e) => setKalemForm((p) => ({ ...p, iskontoOrani: e.target.value }))} onKeyDown={handleTabEnter} />
                 <button className="mh-primary-btn small" disabled={saving} onClick={kalemEkle}><Plus size={13} /> Ekle</button>
               </div>
+
+              {yeniMalzemeModal && (
+                <div className="mh-malzeme-modal-overlay" onClick={() => setYeniMalzemeModal(false)}>
+                  <div className="mh-malzeme-modal" onClick={(e) => e.stopPropagation()}>
+                    <span className="mh-subhead">Yeni Malzeme Oluştur</span>
+                    <label>Malzeme Adı</label>
+                    <input className="mh-tabbable" autoFocus value={yeniMalzemeForm.ad} onChange={(e) => setYeniMalzemeForm((p) => ({ ...p, ad: e.target.value }))} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false" />
+                    <label>Birim</label>
+                    <select className="mh-tabbable" value={yeniMalzemeForm.birim} onChange={(e) => setYeniMalzemeForm((p) => ({ ...p, birim: e.target.value }))}>
+                      <option value="gr">gr</option>
+                      <option value="kg">kg</option>
+                      <option value="ml">ml</option>
+                      <option value="litre">litre</option>
+                      <option value="adet">adet</option>
+                      <option value="porsiyon">porsiyon</option>
+                    </select>
+                    <div className="mh-malzeme-modal-btns">
+                      <button onClick={() => setYeniMalzemeModal(false)}>İptal</button>
+                      <button className="mh-primary-btn small" onClick={yeniMalzemeKaydet}>Kaydet</button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="mh-kalem-list">
                 <div className="mh-kalem-head">
@@ -799,6 +913,227 @@ function FaturaDetaySekmesi({ showToast }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ================== REÇETELER ==================
+// Ürün listesi Supabase'ten (products) geliyor — mevcut ürün havuzu, elle yazılmıyor.
+// Maliyet/reçete hesabı Sheets'ten (api/recete.js) geliyor. Satış anındaki maliyet snapshot'ı
+// (sold_items.unit_cost_at_sale/total_cost_at_sale) Supabase'de — bu ekran onu göstermiyor,
+// sadece GÜNCEL maliyeti gösterip yeni reçete tanımlamaya yarıyor.
+function ReceteSekmesi({ showToast }) {
+  const [urunler, setUrunler] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [aramaMetni, setAramaMetni] = useState('');
+  const [seciliUrun, setSeciliUrun] = useState(null);
+  const [receteHesap, setReceteHesap] = useState(null);
+  const [receteYukleniyor, setReceteYukleniyor] = useState(false);
+
+  const [malzemeler, setMalzemeler] = useState([]);
+  const [kalemler, setKalemler] = useState([]);
+  const [malzemeEkleAcik, setMalzemeEkleAcik] = useState(false);
+  const [malzemeAramaMetni, setMalzemeAramaMetni] = useState('');
+  const [yeniMalzemeModal, setYeniMalzemeModal] = useState(false);
+  const [yeniMalzemeForm, setYeniMalzemeForm] = useState({ ad: '', birim: 'kg' });
+  const [kaydediliyor, setKaydediliyor] = useState(false);
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase.from('products').select('id, ad, kategori, alt_kategori, fiyat').eq('durum', 'AKTIF').order('ad');
+      setUrunler(data || []);
+      setLoading(false);
+    }
+    load();
+    fetch('/api/recete?resource=malzemeler').then((r) => r.json()).then((j) => setMalzemeler(j.records || [])).catch(() => {});
+  }, []);
+
+  const filtreliUrunler = useMemo(() => {
+    const q = aramaMetni.toLocaleLowerCase('tr').trim();
+    if (!q) return urunler;
+    return urunler.filter((u) => u.ad.toLocaleLowerCase('tr').includes(q));
+  }, [urunler, aramaMetni]);
+
+  async function urunSec(u) {
+    setSeciliUrun(u);
+    setReceteHesap(null);
+    setReceteYukleniyor(true);
+    try {
+      const res = await fetch(`/api/recete?resource=recete&urunId=${u.id}`);
+      const json = await res.json();
+      setReceteHesap(json);
+      setKalemler((json.kalemler || []).map((k) => ({ malzemeId: k.malzemeId, malzemeAdi: k.malzemeAdi, miktar: k.miktar, birim: k.birim })));
+    } catch {
+      showToast('Reçete yüklenemedi');
+    } finally {
+      setReceteYukleniyor(false);
+    }
+  }
+
+  function kalemMiktarGuncelle(idx, miktar) {
+    setKalemler((prev) => prev.map((k, i) => (i === idx ? { ...k, miktar } : k)));
+  }
+  function kalemSil(idx) {
+    setKalemler((prev) => prev.filter((_, i) => i !== idx));
+  }
+  function malzemeKalemeEkle(m) {
+    if (kalemler.some((k) => k.malzemeId === m.id)) { showToast('Bu malzeme zaten reçetede'); return; }
+    setKalemler((prev) => [...prev, { malzemeId: m.id, malzemeAdi: m.ad, miktar: '', birim: m.birim }]);
+    setMalzemeEkleAcik(false);
+    setMalzemeAramaMetni('');
+  }
+
+  async function yeniMalzemeKaydet() {
+    if (!yeniMalzemeForm.ad.trim()) { showToast('Malzeme adı gerekli'); return; }
+    try {
+      const res = await fetch('/api/recete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resource: 'malzemeler', ...yeniMalzemeForm }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error();
+      setMalzemeler((prev) => [...prev, json.record]);
+      malzemeKalemeEkle(json.record);
+      setYeniMalzemeModal(false);
+      setYeniMalzemeForm({ ad: '', birim: 'kg' });
+      showToast('Malzeme oluşturuldu');
+    } catch {
+      showToast('Malzeme oluşturulamadı');
+    }
+  }
+
+  async function receteKaydet() {
+    if (!seciliUrun) return;
+    const gecerliKalemler = kalemler.filter((k) => k.malzemeId && Number(k.miktar) > 0);
+    if (gecerliKalemler.length === 0) { showToast('En az bir malzeme + miktar girin'); return; }
+    setKaydediliyor(true);
+    try {
+      const res = await fetch('/api/recete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resource: 'recete', urunId: seciliUrun.id, urunAdi: seciliUrun.ad, kalemler: gecerliKalemler }),
+      });
+      if (!res.ok) throw new Error();
+      showToast('Reçete kaydedildi');
+      urunSec(seciliUrun);
+    } catch {
+      showToast('Reçete kaydedilemedi');
+    } finally {
+      setKaydediliyor(false);
+    }
+  }
+
+  const guncelMaliyet = receteHesap && !receteHesap.receteYok ? receteHesap.maliyet : null;
+  const satisFiyati = seciliUrun ? Number(seciliUrun.fiyat) || 0 : 0;
+  const brutKar = guncelMaliyet !== null ? satisFiyati - guncelMaliyet : null;
+  const maliyetOrani = guncelMaliyet !== null && satisFiyati > 0 ? (guncelMaliyet / satisFiyati) * 100 : null;
+
+  function durumRozeti(hesap) {
+    if (!hesap) return null;
+    if (hesap.receteYok) return <span className="rc-rozet rc-rozet-yok" title="Reçete Tanımlanmamış">⚠️</span>;
+    if (hesap.eksikMalzemeler && hesap.eksikMalzemeler.length > 0) return <span className="rc-rozet rc-rozet-eksik" title="Maliyet Verisi Eksik">🔴</span>;
+    return <span className="rc-rozet rc-rozet-tam" title="Maliyeti Güncel ve Eksiksiz">🟢</span>;
+  }
+
+  return (
+    <div className="rc-shell">
+      <div className="rc-col-left">
+        <div className="rc-search">
+          <Search size={14} />
+          <input placeholder="Ürün ara..." value={aramaMetni} onChange={(e) => setAramaMetni(e.target.value)} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false" />
+        </div>
+        {loading && <p className="mh-empty">Yükleniyor...</p>}
+        <div className="rc-urun-list">
+          {filtreliUrunler.map((u) => (
+            <button key={u.id} className={`rc-urun-row ${seciliUrun?.id === u.id ? 'active' : ''}`} onClick={() => urunSec(u)}>
+              <span className="rc-urun-ad">{u.ad}</span>
+              <span className="rc-urun-fiyat">{TL(Number(u.fiyat) || 0)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="rc-col-right">
+        {!seciliUrun ? (
+          <p className="mh-empty">Soldan bir ürün seç, reçetesini düzenle</p>
+        ) : receteYukleniyor ? (
+          <p className="mh-empty">Yükleniyor...</p>
+        ) : (
+          <>
+            <div className="rc-urun-head">
+              <h3>{seciliUrun.ad} {durumRozeti(receteHesap)}</h3>
+              <div className="rc-metrikler">
+                <div><span>Satış Fiyatı</span><strong>{TL(satisFiyati)}</strong></div>
+                <div><span>Güncel Maliyet</span><strong>{guncelMaliyet !== null ? TL(guncelMaliyet) : '⚠️ Hesaplanamıyor'}</strong></div>
+                <div><span>Brüt Kâr</span><strong>{brutKar !== null ? TL(brutKar) : '—'}</strong></div>
+                <div><span>Maliyet Oranı</span><strong>{maliyetOrani !== null ? `%${maliyetOrani.toFixed(1)}` : '—'}</strong></div>
+              </div>
+              {receteHesap?.eksikMalzemeler?.length > 0 && (
+                <p className="rc-uyari">⚠️ Maliyet bilgisi bulunamadı: {receteHesap.eksikMalzemeler.join(', ')}</p>
+              )}
+            </div>
+
+            <div className="rc-kalem-list">
+              <div className="rc-kalem-head"><span>Malzeme</span><span>Miktar</span><span>Birim</span><span></span></div>
+              {kalemler.length === 0 && <p className="mh-empty">Henüz malzeme eklenmedi</p>}
+              {kalemler.map((k, idx) => (
+                <div key={idx} className="rc-kalem-row">
+                  <span>{k.malzemeAdi}</span>
+                  <input type="number" value={k.miktar} onChange={(e) => kalemMiktarGuncelle(idx, e.target.value)} />
+                  <span>{k.birim}</span>
+                  <button onClick={() => kalemSil(idx)}><Trash2 size={13} /></button>
+                </div>
+              ))}
+            </div>
+
+            <div className="rc-malzeme-ekle-wrap">
+              <button className="mh-secondary-btn small" onClick={() => setMalzemeEkleAcik((v) => !v)}><Plus size={13} /> Malzeme Ekle</button>
+              {malzemeEkleAcik && (
+                <div className="mh-malzeme-dropdown rc-malzeme-dropdown">
+                  <input placeholder="Malzeme ara..." value={malzemeAramaMetni} onChange={(e) => setMalzemeAramaMetni(e.target.value)} autoFocus lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false" />
+                  {malzemeler
+                    .filter((m) => !malzemeAramaMetni.trim() || m.ad.toLocaleLowerCase('tr').includes(malzemeAramaMetni.toLocaleLowerCase('tr')))
+                    .slice(0, 8)
+                    .map((m) => (
+                      <button key={m.id} onClick={() => malzemeKalemeEkle(m)}>{m.ad} <span>({m.birim})</span></button>
+                    ))}
+                  <button className="mh-malzeme-yeni-btn" onClick={() => { setYeniMalzemeForm({ ad: malzemeAramaMetni, birim: 'kg' }); setYeniMalzemeModal(true); setMalzemeEkleAcik(false); }}>
+                    <Plus size={12} /> Yeni Malzeme Oluştur
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <button className="mh-primary-btn" disabled={kaydediliyor} onClick={receteKaydet}>
+              <Check size={14} /> Kaydet
+            </button>
+          </>
+        )}
+      </div>
+
+      {yeniMalzemeModal && (
+        <div className="mh-malzeme-modal-overlay" onClick={() => setYeniMalzemeModal(false)}>
+          <div className="mh-malzeme-modal" onClick={(e) => e.stopPropagation()}>
+            <span className="mh-subhead">Yeni Malzeme Oluştur</span>
+            <label>Malzeme Adı</label>
+            <input className="mh-tabbable" autoFocus value={yeniMalzemeForm.ad} onChange={(e) => setYeniMalzemeForm((p) => ({ ...p, ad: e.target.value }))} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false" />
+            <label>Birim</label>
+            <select className="mh-tabbable" value={yeniMalzemeForm.birim} onChange={(e) => setYeniMalzemeForm((p) => ({ ...p, birim: e.target.value }))}>
+              <option value="gr">gr</option>
+              <option value="kg">kg</option>
+              <option value="ml">ml</option>
+              <option value="litre">litre</option>
+              <option value="adet">adet</option>
+              <option value="porsiyon">porsiyon</option>
+            </select>
+            <div className="mh-malzeme-modal-btns">
+              <button onClick={() => setYeniMalzemeModal(false)}>İptal</button>
+              <button className="mh-primary-btn small" onClick={yeniMalzemeKaydet}>Kaydet</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
