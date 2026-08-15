@@ -20,6 +20,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     tableNotes,
     setTableNotes,
     updateTableNote,
+    saveTableNoteNow,
     tableDiscounts,
     setTableDiscounts,
     setSalesHistory,
@@ -635,14 +636,16 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     }
   }, [currentOrder.length, selectedTable]);
 
-  function handlePrint() {
+  async function handlePrint() {
     if (currentOrder.length === 0) return;
     if (selectedTable !== QUICK_SALE) {
-      sendTableNote();
-      setTimeout(() => {
-        window.print();
-        onNavigate('tables');
-      }, 0);
+      const result = await saveTableNoteNow(selectedTable, tableNoteDraft);
+      if (!result.success) {
+        showToast('Not kaydedilemedi, tekrar deneyin');
+        return;
+      }
+      window.print();
+      onNavigate('tables');
     } else {
       setTimeout(() => window.print(), 0);
     }
@@ -1447,7 +1450,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       {/* YAZDIRMA ŞABLONU */}
       <div id="print-receipt" ref={printRef}>
         <h2>{selectedTable}</h2>
-        {tableNotes[selectedTable] && <div className="print-note">{tableNotes[selectedTable]}</div>}
+        {tableNoteDraft && <div className="print-note">{tableNoteDraft}</div>}
         <div className="print-meta">
           <span>{new Date().toLocaleDateString('tr-TR')}</span>
           <span>{new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
