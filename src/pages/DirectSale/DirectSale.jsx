@@ -616,7 +616,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     setGenericModal({
       title: `${selectedTable} masasındaki tüm siparişleri silmek istiyor musunuz?`,
       showInput: false,
-      onConfirm: () => {
+      onConfirm: async () => {
+        const result = await setOrderItemsRemote(selectedTable, [], { discount: { type: null, value: 0 } });
+        if (!result.success) {
+          showToast('Boşaltma kaydedilemedi, tekrar deneyin');
+          return;
+        }
         setDraftItems([]);
         setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
       },

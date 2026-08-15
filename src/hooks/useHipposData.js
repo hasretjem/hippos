@@ -1192,8 +1192,12 @@ export default function useHipposData(scope = 'full') {
       // görünmeye devam ediyordu. Paket kapanınca kendi geçmişini de kapatıyoruz.
       clearPaketTeslimatlariFor(table);
     }
-    supabase.from('table_state').upsert(patch, { onConflict: 'table_name' }).then(({ error }) => {
-      if (error) console.error('masa durumu yazılamadı:', error.message);
+    return supabase.from('table_state').upsert(patch, { onConflict: 'table_name' }).then(({ error }) => {
+      if (error) {
+        console.error('masa durumu yazılamadı:', error.message);
+        return { success: false, error: error.message };
+      }
+      return { success: true };
     });
   }
 
