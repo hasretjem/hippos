@@ -622,6 +622,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
           showToast('Boşaltma kaydedilemedi, tekrar deneyin');
           return;
         }
+        if (selectedTable !== QUICK_SALE) clearViewingTable();
         setDraftItems([]);
         setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
       },
