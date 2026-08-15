@@ -1247,6 +1247,47 @@ export default function useHipposData(scope = 'full') {
     return { success: true };
   }
 
+  async function saveTableNoteNow(table, note) {
+    setTableNotes((prev) => ({ ...prev, [table]: note }));
+
+    const zatenBekleyenTimerYok = !noteDiscountTimersRef.current[table];
+    const zatenGuncelGonderilmis = noteDiscountLastSentRef.current.tableNotes[table] === note;
+    if (zatenBekleyenTimerYok && zatenGuncelGonderilmis) return { success: true };
+
+    if (noteDiscountTimersRef.current[table]) {
+      clearTimeout(noteDiscountTimersRef.current[table]);
+      delete noteDiscountTimersRef.current[table];
+    }
+
+    const discountForTable = tableDiscounts[table] || { type: null, value: 0 };
+    noteDiscountLastSentRef.current.tableNotes[table] = note;
+    noteDiscountLastSentRef.current.tableDiscounts[table] = discountForTable;
+
+    if (noteDiscountEchoGuardRef.current[table]) clearTimeout(noteDiscountEchoGuardRef.current[table]);
+    noteDiscountEchoGuardRef.current[table] = setTimeout(() => {
+      delete noteDiscountEchoGuardRef.current[table];
+    }, 1500);
+
+    const { error } = await supabase
+      .from('table_state')
+      .upsert(
+        [{
+          table_name: table,
+          note: note || '',
+          discount_type: discountForTable.type ?? null,
+          discount_value: discountForTable.value ?? 0,
+          updated_at: new Date().toISOString(),
+        }],
+        { onConflict: 'table_name' }
+      );
+
+    if (error) {
+      console.error('Not anlık kaydedilemedi:', error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  }
+
   function getTableTotal(table) {
     const items = orders[table] || [];
     const subtotal = items.reduce((s, i) => s + (i.note ? 0 : i.fiyat), 0);
@@ -1273,6 +1314,8 @@ export default function useHipposData(scope = 'full') {
     const name = `Paket ${num}`;
     setTableNotes((prev) => ({ ...prev, [name]: '' }));
     setTableDiscounts((prev) => ({ ...prev, [name]: { type: null, value: 0 } }));
+    noteDiscountLastSentRef.current.tableNotes[name] = '';
+    noteDiscountLastSentRef.current.tableDiscounts[name] = { type: null, value: 0 };
     return name;
   }
 
