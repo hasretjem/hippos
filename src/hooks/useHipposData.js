@@ -681,6 +681,7 @@ export default function useHipposData(scope = 'full') {
         message_count: events.length,
         events,
         device_id: deviceIdRef.current,
+        scope,
       }).then(({ error }) => {
         if (error) console.error('kullanım sayacı yazılamadı:', error.message);
       });
@@ -694,6 +695,7 @@ export default function useHipposData(scope = 'full') {
     });
     channel
       .on('presence', { event: 'sync' }, () => {
+        bumpUsageCounter('presence (sync)', 'durum senkronu');
         const state = channel.presenceState();
         const map = {};
         Object.entries(state).forEach(([deviceId, metas]) => {
@@ -703,6 +705,12 @@ export default function useHipposData(scope = 'full') {
           }
         });
         setPresenceMap(map);
+      })
+      .on('presence', { event: 'join' }, ({ key }) => {
+        bumpUsageCounter('presence (join)', `cihaz katıldı: ${key}`);
+      })
+      .on('presence', { event: 'leave' }, ({ key }) => {
+        bumpUsageCounter('presence (leave)', `cihaz ayrıldı: ${key}`);
       })
       .subscribe();
     presenceChannelRef.current = channel;
