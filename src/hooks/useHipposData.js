@@ -843,7 +843,10 @@ export default function useHipposData(scope = 'full') {
       });
     }
     if (wants.table_state) {
-      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'table_state' }, (payload) => {
+      // KOTA OPTİMİZASYONU (Seçenek A, dar kapsamlı): event:'*' yerine sadece INSERT+UPDATE
+      // dinleniyor. DELETE dalı callback içinde zaten "bumpUsageCounter'dan sonra hemen return"
+      // şeklinde no-op'tu — davranış DEĞİŞMİYOR, sadece işlevsiz mesajlar sunucudan hiç gelmiyor.
+      const tableStateHandler = (payload) => {
         bumpUsageCounter('table_state', summarizeRealtimePayload('table_state', payload));
         if (payload.eventType === 'DELETE') return;
         const row = payload.new;
@@ -852,9 +855,6 @@ export default function useHipposData(scope = 'full') {
         const lastTs = lastAppliedUpdatedAtRef.current[t] || 0;
         lastAppliedUpdatedAtRef.current[t] = Math.max(incomingTs, lastTs);
         setOrders((prev) => ({ ...prev, [t]: row.items || [] }));
-        // ÖNEMLİ: not/indirimde henüz Supabase'e yazılmayı BEKLEYEN (debounce dolmadı) YA DA
-        // az önce yazılıp yankısı hâlâ gelebilecek (echo guard) bir yerel değişiklik varsa,
-        // bu realtime mesajı o değeri EZMESİN — "kendiliğinden silinme" sorununun kaynağı buydu.
         if (!noteDiscountTimersRef.current[t] && !noteDiscountEchoGuardRef.current[t]) {
           setTableNotes((prev) => ({ ...prev, [t]: row.note || '' }));
           setTableDiscounts((prev) => ({ ...prev, [t]: { type: row.discount_type, value: row.discount_value || 0 } }));
@@ -865,7 +865,10 @@ export default function useHipposData(scope = 'full') {
           else delete next[t];
           return next;
         });
-      });
+      };
+      channel = channel
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'table_state' }, tableStateHandler)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'table_state' }, tableStateHandler);
     }
     if (wants.packages) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'packages' }, (payload) => {
