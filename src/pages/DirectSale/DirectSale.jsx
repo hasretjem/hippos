@@ -93,6 +93,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     draftItemsRef.current = draftItems;
   }, [draftItems]);
 
+  const tableNotesRef = useRef(tableNotes);
+  useEffect(() => {
+    tableNotesRef.current = tableNotes;
+  }, [tableNotes]);
+  const tableDiscountsRef = useRef(tableDiscounts);
+  useEffect(() => {
+    tableDiscountsRef.current = tableDiscounts;
+  }, [tableDiscounts]);
+
   const prevTableRef = useRef(selectedTable);
   // Taşıma/birleştirme sonrası hedef masanın GÜNCEL (henüz Supabase'ten yankısı gelmemiş)
   // içeriğini elle taslağa yazdığımızda, aşağıdaki "masa değişince yükle" efektinin bunu
@@ -102,8 +111,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   function flushDraftToSupabase(table, items) {
     if (!table || table === QUICK_SALE) return; // Hızlı Satış hiçbir zaman Supabase'e yazılmaz
     const baseline = orders[table] || [];
-    const noteBaseline = tableNotes[table] || '';
-    const discountBaseline = tableDiscounts[table] || { type: null, value: 0 };
+    const noteBaseline = tableNotesRef.current[table] || '';
+    const discountBaseline = tableDiscountsRef.current[table] || { type: null, value: 0 };
     const itemsChanged = JSON.stringify(baseline) !== JSON.stringify(items);
     if (!itemsChanged) return; // ürün değişmediyse yazma (not/indirim ayrı, kendi debounce'unda gider)
     // Not/indirimi de AYNI yazmaya dahil ediyoruz — aksi halde ürün yazması ile ayrı giden
