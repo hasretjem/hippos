@@ -458,10 +458,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     setPayMode(false);
   }
 
-  function handleSend() {
-    // Not, Hızlı Satış hariç, sipariş gönderilirken otomatik olarak da gönderilir —
-    // ayrı bir "Gönder" butonuna gerek kalmasın diye (yazıp Enter'a basmasan bile gider).
-    if (selectedTable !== QUICK_SALE) sendTableNote();
+  async function handleSend() {
+    if (selectedTable !== QUICK_SALE) {
+      const result = await saveTableNoteNow(selectedTable, tableNoteDraft);
+      if (!result.success) {
+        showToast('Not kaydedilemedi, tekrar deneyin');
+        return;
+      }
+    }
     onNavigate('tables');
   }
 
