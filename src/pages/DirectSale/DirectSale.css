@@ -547,6 +547,37 @@
   grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
   gap: 12px;
 }
+.ds-size-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.ds-size-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px 5px;
+  color: var(--ink-soft);
+}
+.ds-size-group button {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.ds-size-group button:active { transform: scale(0.9); }
+.ds-size-group span { font-size: 10px; font-weight: 700; min-width: 14px; text-align: center; }
+.ds-size-icon-label { font-size: 9px; }
 .ds-product-card {
   position: relative;
   background: var(--bg);

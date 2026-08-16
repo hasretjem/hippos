@@ -3,9 +3,11 @@ import './Products.css';
 import { TL } from '../../hooks/useHipposData';
 import {
   ArrowLeft, Search, Plus, Trash2, Pin, ChevronUp, ChevronDown,
-  Check, X, RefreshCw, Save, Lock, Delete,
+  Check, X, RefreshCw, Save, Lock, Delete, Palette, Tag,
 } 
 from 'lucide-react';
+import IconPickerModal from '../../components/IconPickerModal';
+import { DEFAULT_BTN_BG, DEFAULT_BTN_TEXT, DEFAULT_ICON_SIZE } from '../../constants/themeDefaults';
 // Türkçe karakter duyarsız arama için normalize eder (İ/I, ı/i, ş/s, ğ/g, ü/u, ö/o, ç/c)
 function normalizeTr(s) {
   return (s || '')
@@ -316,73 +318,21 @@ matches.sort((a, b) => {
                 ))}
               </div>
             ) : (
-              sortedCategories.map((cat) => {
-                return (
-                  <div key={cat.name} className="pr-category-block">
-                    <div className="pr-category-head">
-                      <div className="pr-category-head-left">
-                        <span className="pr-category-name">{cat.name}</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={100}
-                          className="pr-order-input"
-                          value={cat.menuSirasi}
-                          onChange={(e) => localUpdateCategoryMeta(cat.name, { menuSirasi: parseInt(e.target.value, 10) || 1 })}
-                          title="Menü Sırası (1-100)"
-                        />
-                        <label className="pr-sabit-check" title="Sabit Kategori">
-                          <input
-                            type="checkbox"
-                            checked={cat.sabit}
-                            onChange={(e) => localUpdateCategoryMeta(cat.name, { sabit: e.target.checked })}
-                          />
-                          <Pin size={12} /> Sabit
-                        </label>
-                      </div>
-                      <div className="pr-category-head-actions">
-                        <button onClick={() => localBulkSetCategoryStatus(cat.name, 'AKTIF')}>Hepsini Aktif Yap</button>
-                        <button disabled={cat.sabit} title={cat.sabit ? 'Sabit kategori — önce Sabit işaretini kaldırın' : ''} onClick={() => localBulkSetCategoryStatus(cat.name, 'PASIF')}>
-                          Hepsini Pasife Al
-                        </button>
-                        <button className="pr-new-product-btn" onClick={() => openNewProduct(cat.name)}><Plus size={13} /> Yeni Ürün</button>
-                      </div>
-                    </div>
-
-                    {groupedByAlt(cat.name).length === 0 && <p className="pr-empty">Bu kategoride ürün yok</p>}
-                    {groupedByAlt(cat.name).map(({ alt, items, sub }) => (
-                      <div key={alt || '_'} className="pr-subcat-block">
-                        {alt && (
-                          <div className="pr-subcat-head">
-                            <span>{alt}</span>
-                            {sub && (
-                              <input
-                                type="number"
-                                min={1}
-                                max={100}
-                                className="pr-order-input small"
-                                value={sub.menuSirasi}
-                                onChange={(e) => localUpdateSubcategoryMeta(cat.name, alt, { menuSirasi: parseInt(e.target.value, 10) || 1 })}
-                                title="Alt Kategori Menü Sırası (1-100)"
-                              />
-                            )}
-                          </div>
-                        )}
-                        {items.map((p) => (
-                          <ProductRow
-                            key={p.id}
-                            product={p}
-                            onToggle={() => localToggleProductStatus(p.id)}
-                            onUpdate={(patch) => localUpdateProduct(p.id, patch)}
-                            onDelete={() => localDeleteProduct(p.id)}
-                            onSetAz={(enabled, fiyat) => localSetAzPorsiyon(p.id, enabled, fiyat)}
-                          />
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                );
-              })
+              sortedCategories.map((cat) => (
+                <CategoryBlock
+                  key={cat.name}
+                  cat={cat}
+                  onUpdateCategoryMeta={localUpdateCategoryMeta}
+                  onBulkSetStatus={localBulkSetCategoryStatus}
+                  onOpenNewProduct={openNewProduct}
+                  groupedByAlt={groupedByAlt}
+                  localUpdateSubcategoryMeta={localUpdateSubcategoryMeta}
+                  localToggleProductStatus={localToggleProductStatus}
+                  localUpdateProduct={localUpdateProduct}
+                  localDeleteProduct={localDeleteProduct}
+                  localSetAzPorsiyon={localSetAzPorsiyon}
+                />
+              ))
             )}
           </div>
           <div className="pr-scroll-btns">
@@ -553,10 +503,212 @@ function InfoTip({ text }) {
   return <span className="pr-info-tip" title={text}>i</span>;
 }
 
+// Ürün VE kategori düzenlemede kullanılan ortak "Görünüm" popup'ı.
+// showSaleName: ürün satırında true (Satış Sayfası Görünen İsim alanı gösterilir).
+// showIconSize: kategori satırında true (ikon boyutu ayarı gösterilir).
+// Kaydet'e basılana kadar hiçbir şey Supabase'e yazılmaz — tüm alanlar local taslakta tutulur.
+function GorunumPopup({ target, showSaleName, showIconSize, onSave, onClose }) {
+  const [saleName, setSaleName] = useState(target.satisAdi || '');
+  const [btnColor, setBtnColor] = useState(target.butonRengi || '');
+  const [txtColor, setTxtColor] = useState(target.butonYaziRengi || '');
+  const [italic, setItalic] = useState(target.italik ?? false);
+  const [icon, setIcon] = useState(target.ikon || null);
+  const [iconSize, setIconSize] = useState(target.ikonBoyutu || DEFAULT_ICON_SIZE);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+
+  function handleSave() {
+    const patch = {
+      butonRengi: btnColor.trim() || null,
+      butonYaziRengi: txtColor.trim() || null,
+      italik: italic,
+      ikon: icon,
+    };
+    if (showSaleName) patch.satisAdi = saleName.trim() || null;
+    if (showIconSize) patch.ikonBoyutu = iconSize || null;
+    onSave(patch);
+    onClose();
+  }
+
+  return (
+    <div className="gp-overlay" onClick={onClose}>
+      <div className="gp-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="gp-header">
+          <h3>Görünüm Ayarları — {target.ad || target.name}</h3>
+          <button className="gp-close" onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className="gp-body">
+          {showSaleName && (
+            <div className="gp-field">
+              <label>Satış Sayfası Görünen İsim</label>
+              <input
+                type="text"
+                placeholder={target.ad}
+                value={saleName}
+                onChange={(e) => setSaleName(e.target.value)}
+                lang="tr"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+              />
+              <span className="gp-hint">Boş bırakılırsa satış ekranında ürünün normal adı ({target.ad}) görünür.</span>
+            </div>
+          )}
+          <div className="gp-field-row">
+            <div className="gp-field">
+              <label>Buton Rengi (hex)</label>
+              <div className="gp-color-input">
+                <input
+                  type="text"
+                  placeholder={DEFAULT_BTN_BG}
+                  value={btnColor}
+                  onChange={(e) => setBtnColor(e.target.value)}
+                />
+                <span className="gp-swatch" style={{ background: btnColor || DEFAULT_BTN_BG }} />
+              </div>
+            </div>
+            <div className="gp-field">
+              <label>Yazı Rengi (hex)</label>
+              <div className="gp-color-input">
+                <input
+                  type="text"
+                  placeholder={DEFAULT_BTN_TEXT}
+                  value={txtColor}
+                  onChange={(e) => setTxtColor(e.target.value)}
+                />
+                <span className="gp-swatch" style={{ background: txtColor || DEFAULT_BTN_TEXT }} />
+              </div>
+            </div>
+          </div>
+          <label className="gp-checkbox">
+            <input type="checkbox" checked={italic} onChange={(e) => setItalic(e.target.checked)} />
+            İtalik yazı
+          </label>
+          {showIconSize && (
+            <div className="gp-field">
+              <label>İkon Boyutu (px)</label>
+              <input
+                type="number"
+                min={12}
+                max={48}
+                value={iconSize}
+                onChange={(e) => setIconSize(parseInt(e.target.value, 10) || DEFAULT_ICON_SIZE)}
+              />
+            </div>
+          )}
+          <div className="gp-field">
+            <label>İkon</label>
+            <button className="gp-icon-pick-btn" onClick={() => setIconPickerOpen(true)}>
+              {icon ? icon.replace('mdi:', '') : 'İkon seç...'}
+            </button>
+          </div>
+        </div>
+        <div className="gp-footer">
+          <button className="gp-cancel" onClick={onClose}>Vazgeç</button>
+          <button className="gp-save" onClick={handleSave}><Save size={14} /> Kaydet</button>
+        </div>
+      </div>
+      <IconPickerModal
+        open={iconPickerOpen}
+        currentIcon={icon}
+        onSelect={(name) => setIcon(name)}
+        onClose={() => setIconPickerOpen(false)}
+      />
+    </div>
+  );
+}
+
+// Bir kategori bloğunu (başlık + alt kategoriler + ürünler) render eder.
+// Ayrı component olmasının sebebi: Görünüm popup'ının kendi state'i (useState) var,
+// bu da onu inline .map() içinde değil, kendi fonksiyon bileşeninde tutmamızı gerektiriyor.
+function CategoryBlock({
+  cat, onUpdateCategoryMeta, onBulkSetStatus, onOpenNewProduct, groupedByAlt,
+  localUpdateSubcategoryMeta, localToggleProductStatus, localUpdateProduct, localDeleteProduct, localSetAzPorsiyon,
+}) {
+  const [gorunumOpen, setGorunumOpen] = useState(false);
+
+  return (
+    <div className="pr-category-block">
+      <div className="pr-category-head">
+        <div className="pr-category-head-left">
+          <span className="pr-category-name">{cat.name}</span>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            className="pr-order-input"
+            value={cat.menuSirasi}
+            onChange={(e) => onUpdateCategoryMeta(cat.name, { menuSirasi: parseInt(e.target.value, 10) || 1 })}
+            title="Menü Sırası (1-100)"
+          />
+          <label className="pr-sabit-check" title="Sabit Kategori">
+            <input
+              type="checkbox"
+              checked={cat.sabit}
+              onChange={(e) => onUpdateCategoryMeta(cat.name, { sabit: e.target.checked })}
+            />
+            <Pin size={12} /> Sabit
+          </label>
+          <button className="pr-gorunum-btn" onClick={() => setGorunumOpen(true)} title="Görünüm Ayarları">
+            <Palette size={14} />
+          </button>
+        </div>
+        <div className="pr-category-head-actions">
+          <button onClick={() => onBulkSetStatus(cat.name, 'AKTIF')}>Hepsini Aktif Yap</button>
+          <button disabled={cat.sabit} title={cat.sabit ? 'Sabit kategori — önce Sabit işaretini kaldırın' : ''} onClick={() => onBulkSetStatus(cat.name, 'PASIF')}>
+            Hepsini Pasife Al
+          </button>
+          <button className="pr-new-product-btn" onClick={() => onOpenNewProduct(cat.name)}><Plus size={13} /> Yeni Ürün</button>
+        </div>
+      </div>
+
+      {groupedByAlt(cat.name).length === 0 && <p className="pr-empty">Bu kategoride ürün yok</p>}
+      {groupedByAlt(cat.name).map(({ alt, items, sub }) => (
+        <div key={alt || '_'} className="pr-subcat-block">
+          {alt && (
+            <div className="pr-subcat-head">
+              <span>{alt}</span>
+              {sub && (
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  className="pr-order-input small"
+                  value={sub.menuSirasi}
+                  onChange={(e) => localUpdateSubcategoryMeta(cat.name, alt, { menuSirasi: parseInt(e.target.value, 10) || 1 })}
+                  title="Alt Kategori Menü Sırası (1-100)"
+                />
+              )}
+            </div>
+          )}
+          {items.map((p) => (
+            <ProductRow
+              key={p.id}
+              product={p}
+              onToggle={() => localToggleProductStatus(p.id)}
+              onUpdate={(patch) => localUpdateProduct(p.id, patch)}
+              onDelete={() => localDeleteProduct(p.id)}
+              onSetAz={(enabled, fiyat) => localSetAzPorsiyon(p.id, enabled, fiyat)}
+            />
+          ))}
+        </div>
+      ))}
+      {gorunumOpen && (
+        <GorunumPopup
+          target={cat}
+          showIconSize
+          onSave={(patch) => onUpdateCategoryMeta(cat.name, patch)}
+          onClose={() => setGorunumOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) {
   const [editingAd, setEditingAd] = useState(false);
   const [adDraft, setAdDraft] = useState(p.ad);
   const [azFiyatDraft, setAzFiyatDraft] = useState(p.azFiyat ?? '');
+  const [gorunumOpen, setGorunumOpen] = useState(false);
 
   const isActive = p.durum !== 'PASIF';
   const showGununMenusuSecim = GUNUN_MENUSU_ALT_KATEGORILER.includes(p.altKategori);
@@ -674,6 +826,11 @@ function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) 
           </>
         )}
 
+        <button className="pr-gorunum-btn" onClick={() => setGorunumOpen(true)} title="Görünüm Ayarları">
+          <Palette size={14} />
+        </button>
+        <InfoTip text="Satış sayfası görünen ismi, buton rengi, yazı rengi, italik ve ikonu buradan ayarlarsın." />
+
         <button className="pr-delete-btn" onClick={onDelete}><Trash2 size={14} /></button>
       </div>
 
@@ -710,6 +867,14 @@ function ProductRow({ product: p, onToggle, onUpdate, onDelete, onSetAz, tag }) 
           </span>
         )}
       </div>
+      {gorunumOpen && (
+        <GorunumPopup
+          target={p}
+          showSaleName
+          onSave={(patch) => onUpdate(patch)}
+          onClose={() => setGorunumOpen(false)}
+        />
+      )}
     </div>
   );
 }

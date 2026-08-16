@@ -96,10 +96,24 @@ function rowToProduct(r) {
     gununMenusuSira: r.gunun_menusu_sira === null || r.gunun_menusu_sira === undefined ? null : Number(r.gunun_menusu_sira),
     bicakGerekli: !!r.bicak_gerekli,
     ekmekGerekli: !!r.ekmek_gerekli,
+    satisAdi: r.satis_adi || null,
+    butonRengi: r.buton_rengi || null,
+    butonYaziRengi: r.buton_yazi_rengi || null,
+    italik: r.italik === null || r.italik === undefined ? null : !!r.italik,
+    ikon: r.ikon || null,
   };
 }
 function rowToCategory(r) {
-  return { name: r.name, menuSirasi: r.menu_sirasi, sabit: r.sabit };
+  return {
+    name: r.name,
+    menuSirasi: r.menu_sirasi,
+    sabit: r.sabit,
+    butonRengi: r.buton_rengi || null,
+    butonYaziRengi: r.buton_yazi_rengi || null,
+    italik: r.italik === null || r.italik === undefined ? null : !!r.italik,
+    ikon: r.ikon || null,
+    ikonBoyutu: r.ikon_boyutu || null,
+  };
 }
 function rowToSubcategory(r) {
   return { kategori: r.kategori, name: r.name, menuSirasi: r.menu_sirasi };
@@ -274,6 +288,11 @@ export default function useHipposData(scope = 'full') {
     const dbPatch = {};
     if (patch.menuSirasi !== undefined) dbPatch.menu_sirasi = patch.menuSirasi;
     if (patch.sabit !== undefined) dbPatch.sabit = patch.sabit;
+    if (patch.butonRengi !== undefined) dbPatch.buton_rengi = patch.butonRengi;
+    if (patch.butonYaziRengi !== undefined) dbPatch.buton_yazi_rengi = patch.butonYaziRengi;
+    if (patch.italik !== undefined) dbPatch.italik = patch.italik;
+    if (patch.ikon !== undefined) dbPatch.ikon = patch.ikon;
+    if (patch.ikonBoyutu !== undefined) dbPatch.ikon_boyutu = patch.ikonBoyutu;
     if (Object.keys(dbPatch).length === 0) return;
     supabase.from('categories').update(dbPatch).eq('name', name).then(({ error }) => {
       if (error) console.error('kategori güncellenemedi:', error.message);
@@ -390,6 +409,11 @@ export default function useHipposData(scope = 'full') {
     if (patch.gununMenusuSira !== undefined) dbPatch.gunun_menusu_sira = patch.gununMenusuSira;
     if (patch.bicakGerekli !== undefined) dbPatch.bicak_gerekli = patch.bicakGerekli;
     if (patch.ekmekGerekli !== undefined) dbPatch.ekmek_gerekli = patch.ekmekGerekli;
+    if (patch.satisAdi !== undefined) dbPatch.satis_adi = patch.satisAdi;
+    if (patch.butonRengi !== undefined) dbPatch.buton_rengi = patch.butonRengi;
+    if (patch.butonYaziRengi !== undefined) dbPatch.buton_yazi_rengi = patch.butonYaziRengi;
+    if (patch.italik !== undefined) dbPatch.italik = patch.italik;
+    if (patch.ikon !== undefined) dbPatch.ikon = patch.ikon;
     if (Object.keys(dbPatch).length === 0) return;
     supabase.from('products').update(dbPatch).eq('id', id).then(({ error }) => {
       if (error) console.error('ürün güncellenemedi:', error.message);
@@ -550,6 +574,29 @@ export default function useHipposData(scope = 'full') {
     setProducts((pr.data || []).map(rowToProduct));
     setCategories((cat.data || []).map(rowToCategory));
     setSubcategories((sub.data || []).map(rowToSubcategory));
+  }
+
+  // ---- store_settings — global font/ikon boyutu (satış sayfası). Tek satır (id=1),
+  // broadcastMenuChanged akışına dahil edilir ki değişiklik anında tüm cihazlara yansısın.
+  const [storeSettings, setStoreSettings] = useState({ globalFontSize: 13, globalIconSize: 22 });
+  async function refetchStoreSettings() {
+    const { data } = await supabase.from('store_settings').select('*').eq('id', 1).maybeSingle();
+    if (data) {
+      setStoreSettings({
+        globalFontSize: data.global_font_size ?? 13,
+        globalIconSize: data.global_icon_size ?? 22,
+      });
+    }
+  }
+  function updateStoreSettings(patch) {
+    setStoreSettings((prev) => ({ ...prev, ...patch }));
+    const dbPatch = { id: 1, updated_at: new Date().toISOString() };
+    if (patch.globalFontSize !== undefined) dbPatch.global_font_size = patch.globalFontSize;
+    if (patch.globalIconSize !== undefined) dbPatch.global_icon_size = patch.globalIconSize;
+    supabase.from('store_settings').upsert([dbPatch], { onConflict: 'id' }).then(({ error }) => {
+      if (error) console.error('store_settings güncellenemedi:', error.message);
+    });
+    broadcastMenuChanged();
   }
   // Ürün/kategori/alt kategoriyi DEĞİŞTİREN her fonksiyon (tekil ya da toplu, fark etmez),
   // kendi Supabase yazmasından sonra bunu çağırır. TEK bir broadcast mesajı gönderir — 200
@@ -740,7 +787,7 @@ export default function useHipposData(scope = 'full') {
     let cancelled = false;
 
     async function loadAll() {
-      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn] = await Promise.all([
+      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn, ss] = await Promise.all([
         supabase.from('table_state').select('*'),
         supabase.from('packages').select('*'),
         supabase.from('package_meta').select('*').eq('id', 1).maybeSingle(),
@@ -758,12 +805,19 @@ export default function useHipposData(scope = 'full') {
         supabase.from('paket_teslimatlari').select('*'),
         supabase.from('cari_teslimat_bildirimleri').select('*'),
         supabase.from('mutfak_hazir_notlar').select('*').order('created_at', { ascending: true }),
+        supabase.from('store_settings').select('*').eq('id', 1).maybeSingle(),
       ]);
       if (cancelled) return;
 
       setProducts((pr.data || []).map(rowToProduct));
       setCategories((cat.data || []).map(rowToCategory));
       setSubcategories((sub.data || []).map(rowToSubcategory));
+      if (ss.data) {
+        setStoreSettings({
+          globalFontSize: ss.data.global_font_size ?? 13,
+          globalIconSize: ss.data.global_icon_size ?? 22,
+        });
+      }
       setPaketTeslimatlari((pt.data || []).map(rowToPaketTeslimat).sort((a, b) => b.ts - a.ts));
       setCariTeslimatBildirimleri((ctb.data || []).map(rowToCariTeslimatBildirim).sort((a, b) => b.ts - a.ts));
       setMutfakHazirNotlar((mhn.data || []).map((r) => ({ id: r.id, metin: r.metin })));
@@ -842,6 +896,7 @@ export default function useHipposData(scope = 'full') {
       channel = channel.on('broadcast', { event: 'menu_changed' }, () => {
         bumpUsageCounter('menu_changed (broadcast)', 'toplu/tekil ürün-kategori senkronu');
         refetchMenuData();
+        refetchStoreSettings(); // buton görünüm ayarları da aynı broadcast ile yayılıyor
       });
     }
     if (wants.ekmek_stok) {
@@ -1877,6 +1932,8 @@ export default function useHipposData(scope = 'full') {
     subcategories,
     addSubcategory,
     updateSubcategoryMeta,
+    storeSettings,
+    updateStoreSettings,
     favorites,
     toggleFavorite,
     allTables,

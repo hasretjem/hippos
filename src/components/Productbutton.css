@@ -1,0 +1,58 @@
+/* ProductButton — ortak ürün butonu. Buton dış boyutu (.ds-product-card ile aynı
+   height/padding) DirectSale.css'te tanımlı kalıyor, burada sadece İÇ içerik düzeni var. */
+
+.pb-card {
+  position: relative;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 14px;
+  text-align: left;
+  height: 88px;
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color var(--t-hover) var(--ease), transform var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease);
+}
+.pb-card:hover { border-color: var(--olive); transform: translateY(-2px) scale(1.01); box-shadow: var(--shadow-2); }
+.pb-card:active { transform: scale(0.97); transition-duration: var(--t-press); }
+.pb-card.fav { border-color: var(--earth); }
+
+/* İkon: solda sabit genişlikte kutu, dikeyde ortalanır, asla küçülmez/büyümez */
+.pb-icon-box {
+  flex-shrink: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Metin: ikonun SAĞINDA ayrı alan — asla ikonun altına kaymaz (flex-direction:row sayesinde) */
+.pb-text-box {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  height: 100%;
+}
+
+.pb-name {
+  font-weight: 700; /* Bold (700) — madde 3 */
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  /* Sabit PX yükseklik (global_font_size tavanına göre) — em kullanılmaz, çünkü
+     fit-text ölçümü sırasında font-size değiştikçe em-tabanlı bir kutu da
+     kendisiyle birlikte büyür/küçülür ve ölçüm referans noktasını kaybeder. */
+  max-height: var(--pb-name-max-h, 34px);
+  word-break: break-word;
+}
+
+.pb-star { flex-shrink: 0; }

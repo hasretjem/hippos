@@ -5,8 +5,9 @@ import {
   Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
   Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp, ArrowLeft, Package, Calculator, Delete,
-  MessageCircle, Building2, User, MapPin, Phone,
+  MessageCircle, Building2, User, MapPin, Phone, Type, Minus, Plus,
 } from 'lucide-react';
+import ProductButton from '../../components/ProductButton';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
   const {
@@ -29,6 +30,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     getTableTotal,
     categories: rawCategories,
     subcategories,
+    storeSettings,
+    updateStoreSettings,
     announceViewingTable,
     clearViewingTable,
     isTableOccupiedElsewhere,
@@ -41,6 +44,16 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     updateCari,
     addCariHareket,
   } = data;
+
+  // Ürünün bağlı olduğu kategori objesini bulur — renk/italik/ikon fallback zinciri için.
+  const categoryByName = useMemo(() => {
+    const map = {};
+    (rawCategories || []).forEach((c) => { map[c.name] = c; });
+    return map;
+  }, [rawCategories]);
+  function getCategoryFor(product) {
+    return categoryByName[product.kategori] || null;
+  }
 
   // ---- Ekran durumu ----
   const categories = useMemo(() => {
@@ -918,27 +931,16 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                               <h3 className="ds-subcat-label">{subCat}</h3>
                             )}
                             <div className="ds-product-grid">
-                              {items.map((product) => {
-                                const isFav = favorites.includes(product.id);
-                                return (
-                                  <button
-                                    key={product.id}
-                                    className={`ds-product-card ${isFav ? 'fav' : ''}`}
-                                    onClick={() => addProductToOrder(product)}
-                                  >
-                                    <div className="ds-product-card-top">
-                                      <span className="ds-product-name">
-                                        {product.bicakGerekli && <span className="ds-bicak-mark" title="Bıçak gerekli">🔪</span>}
-                                        {product.ekmekGerekli && <span className="ds-ekmek-mark" title="Ekmek gerekli">🥖</span>}
-                                        {product.ad}
-                                      </span>
-                                      {isFav && <Star size={11} className="ds-star" fill="currentColor" />}
-                                    </div>
-                                    <span className="ds-product-price">{TL(product.fiyat)}</span>
-                                    {product.isAzVariant && <span className="ds-az-badge">AZ</span>}
-                                  </button>
-                                );
-                              })}
+                              {items.map((product) => (
+                                <ProductButton
+                                  key={product.id}
+                                  product={product}
+                                  category={getCategoryFor(product)}
+                                  storeSettings={storeSettings}
+                                  isFav={favorites.includes(product.id)}
+                                  onClick={() => addProductToOrder(product)}
+                                />
+                              ))}
                             </div>
                           </div>
                         ))}
@@ -950,27 +952,16 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 <div key={subCat} className="ds-product-group">
                   {subCat && subCat !== 'Genel' && <h3 className="ds-subcat-label">{subCat}</h3>}
                   <div className="ds-product-grid">
-                    {items.map((product) => {
-                      const isFav = favorites.includes(product.id);
-                      return (
-                        <button
-                          key={product.id}
-                          className={`ds-product-card ${isFav ? 'fav' : ''}`}
-                          onClick={() => addProductToOrder(product)}
-                        >
-                          <div className="ds-product-card-top">
-                            <span className="ds-product-name">
-                              {product.bicakGerekli && <span className="ds-bicak-mark" title="Bıçak gerekli">🔪</span>}
-                              {product.ekmekGerekli && <span className="ds-ekmek-mark" title="Ekmek gerekli">🥖</span>}
-                              {product.ad}
-                            </span>
-                            {isFav && <Star size={11} className="ds-star" fill="currentColor" />}
-                          </div>
-                          <span className="ds-product-price">{TL(product.fiyat)}</span>
-                          {product.isAzVariant && <span className="ds-az-badge">AZ</span>}
-                        </button>
-                      );
-                    })}
+                    {items.map((product) => (
+                      <ProductButton
+                        key={product.id}
+                        product={product}
+                        category={getCategoryFor(product)}
+                        storeSettings={storeSettings}
+                        isFav={favorites.includes(product.id)}
+                        onClick={() => addProductToOrder(product)}
+                      />
+                    ))}
                   </div>
                 </div>
                 ))
@@ -978,6 +969,20 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             </div>
             {!(activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery) && (
               <div className="ds-products-scrollbtns">
+                <div className="ds-size-controls">
+                  <div className="ds-size-group" title="Yazı Boyutu">
+                    <Type size={13} />
+                    <button onClick={() => updateStoreSettings({ globalFontSize: Math.max(11, (storeSettings.globalFontSize || 13) - 1) })}><Minus size={12} /></button>
+                    <span>{storeSettings.globalFontSize || 13}</span>
+                    <button onClick={() => updateStoreSettings({ globalFontSize: Math.min(28, (storeSettings.globalFontSize || 13) + 1) })}><Plus size={12} /></button>
+                  </div>
+                  <div className="ds-size-group" title="İkon Boyutu">
+                    <span className="ds-size-icon-label">◆</span>
+                    <button onClick={() => updateStoreSettings({ globalIconSize: Math.max(12, (storeSettings.globalIconSize || 22) - 2) })}><Minus size={12} /></button>
+                    <span>{storeSettings.globalIconSize || 22}</span>
+                    <button onClick={() => updateStoreSettings({ globalIconSize: Math.min(48, (storeSettings.globalIconSize || 22) + 2) })}><Plus size={12} /></button>
+                  </div>
+                </div>
                 <button onClick={() => scrollByPage(productsScrollRef, -1)}><ChevronUp size={26} /></button>
                 <button onClick={() => scrollByPage(productsScrollRef, 1)}><ChevronDown size={26} /></button>
               </div>
