@@ -1,10 +1,14 @@
 import React from 'react';
+import * as MdiReactPkg from '@mdi/react';
 import { Star } from 'lucide-react';
-import Icon from '@mdi/react';
 import * as mdiIcons from '@mdi/js';
 import useFitText from '../hooks/useFitText';
 import { resolveButtonStyle, resolveIconSize } from '../constants/themeDefaults';
 import './ProductButton.css';
+
+// @mdi/react CJS/ESM interop farklı bundler'larda farklı şekillerde export ediliyor
+// (bazen module.default, bazen module.default.default). İkisini de güvenle dener.
+const Icon = MdiReactPkg.default?.default || MdiReactPkg.default || MdiReactPkg.Icon;
 
 // mdi ikon adını (örn. "mdi:cheese") @mdi/js export adına ("mdiCheese") çevirir.
 function getMdiPath(mdiName) {

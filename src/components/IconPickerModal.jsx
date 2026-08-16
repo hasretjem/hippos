@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { X, Search } from 'lucide-react';
-import Icon from '@mdi/react';
+import * as MdiReactPkg from '@mdi/react';
 import * as mdiIcons from '@mdi/js';
 import './IconPickerModal.css';
+
+const Icon = MdiReactPkg.default?.default || MdiReactPkg.default || MdiReactPkg.Icon;
 
 // @mdi/js'in export ettiği "mdiCheese" gibi adları "mdi:cheese" biçimine çevirir.
 function toMdiName(exportKey) {
