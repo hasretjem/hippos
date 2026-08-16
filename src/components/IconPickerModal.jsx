@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { X, Search } from 'lucide-react';
 import * as MdiReactPkg from '@mdi/react';
 import * as mdiIcons from '@mdi/js';
@@ -15,18 +15,45 @@ function toMdiName(exportKey) {
 }
 
 // Tüm mdi ikon listesi bir kez, modül yüklenirken hazırlanır.
-const ALL_ICONS = Object.keys(mdiIcons)
+const MDI_ICONS = Object.keys(mdiIcons)
   .filter((k) => k.startsWith('mdi') && k.length > 3)
-  .map((k) => ({ name: toMdiName(k), path: mdiIcons[k] }));
+  .map((k) => ({ kind: 'mdi', name: toMdiName(k), label: toMdiName(k).replace('mdi:', ''), path: mdiIcons[k] }));
+
+// Özel gıda/malzeme ikon seti — public/food-icons/index.json'dan runtime'da (bir kez) çekilir.
+// İsimlendirme: "custom:dosya_adi" (uzantısız). SVG'ler CSS mask-image ile currentColor'a boyanır.
+let customIconsCache = null;
+function useCustomIcons() {
+  const [icons, setIcons] = useState(customIconsCache || []);
+  useEffect(() => {
+    if (customIconsCache) return;
+    fetch('/food-icons/index.json')
+      .then((r) => r.json())
+      .then((list) => {
+        const mapped = list.map((it) => ({
+          kind: 'custom',
+          name: 'custom:' + it.file,
+          label: it.label,
+          file: it.file,
+        }));
+        customIconsCache = mapped;
+        setIcons(mapped);
+      })
+      .catch(() => {});
+  }, []);
+  return icons;
+}
 
 export default function IconPickerModal({ open, currentIcon, onSelect, onClose }) {
   const [query, setQuery] = useState('');
+  const customIcons = useCustomIcons();
+
+  const allIcons = useMemo(() => [...customIcons, ...MDI_ICONS], [customIcons]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return ALL_ICONS.slice(0, 60);
-    return ALL_ICONS.filter((ic) => ic.name.includes(q)).slice(0, 60);
-  }, [query]);
+    if (!q) return allIcons.slice(0, 60);
+    return allIcons.filter((ic) => ic.label.includes(q) || ic.name.includes(q)).slice(0, 60);
+  }, [query, allIcons]);
 
   if (!open) return null;
 
@@ -65,8 +92,15 @@ export default function IconPickerModal({ open, currentIcon, onSelect, onClose }
               onClick={() => { onSelect(ic.name); onClose(); }}
               title={ic.name}
             >
-              <Icon path={ic.path} size={1} />
-              <span>{ic.name.replace('mdi:', '')}</span>
+              {ic.kind === 'mdi' ? (
+                <Icon path={ic.path} size={1} />
+              ) : (
+                <span
+                  className="ipm-custom-icon"
+                  style={{ WebkitMaskImage: `url(/food-icons/${ic.file}.svg)`, maskImage: `url(/food-icons/${ic.file}.svg)` }}
+                />
+              )}
+              <span>{ic.label}</span>
             </button>
           ))}
           {results.length === 0 && (

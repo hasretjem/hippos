@@ -71,6 +71,18 @@
 }
 .ipm-item:hover { border-color: #999; background: #f0f0f0; }
 .ipm-item.active { border-color: var(--olive, #6b7c3f); background: #eef3e6; }
+.ipm-custom-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-block;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
 .ipm-item span {
   font-size: 9.5px;
   text-align: center;

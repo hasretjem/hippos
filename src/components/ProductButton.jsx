@@ -32,7 +32,9 @@ export default function ProductButton({
 }) {
   const style = resolveButtonStyle(product, category);
   const iconSize = resolveIconSize(category, storeSettings);
-  const iconPath = getMdiPath(style.icon);
+  const isCustomIcon = style.icon && style.icon.startsWith('custom:');
+  const iconPath = isCustomIcon ? null : getMdiPath(style.icon);
+  const customIconFile = isCustomIcon ? style.icon.replace('custom:', '') : null;
   const maxFontSize = storeSettings?.globalFontSize ?? 13;
   const displayName = getDisplayName(product);
 
@@ -48,9 +50,22 @@ export default function ProductButton({
       style={{ background: style.backgroundColor }}
       onClick={onClick}
     >
-      {iconPath && (
+      {(iconPath || customIconFile) && (
         <div className="pb-icon-box" style={{ width: iconSize + 16 }}>
-          <Icon path={iconPath} size={iconSize / 24} color={style.textColor} />
+          {iconPath ? (
+            <Icon path={iconPath} size={iconSize / 24} color={style.textColor} />
+          ) : (
+            <span
+              className="pb-custom-icon"
+              style={{
+                width: iconSize,
+                height: iconSize,
+                backgroundColor: style.textColor,
+                WebkitMaskImage: `url(/food-icons/${customIconFile}.svg)`,
+                maskImage: `url(/food-icons/${customIconFile}.svg)`,
+              }}
+            />
+          )}
         </div>
       )}
       <div className="pb-text-box">
