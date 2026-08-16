@@ -863,10 +863,9 @@ export default function useHipposData(scope = 'full') {
         const lastTs = lastAppliedUpdatedAtRef.current[t] || 0;
         lastAppliedUpdatedAtRef.current[t] = Math.max(incomingTs, lastTs);
         setOrders((prev) => ({ ...prev, [t]: row.items || [] }));
-        if (!noteDiscountTimersRef.current[t] && !noteDiscountEchoGuardRef.current[t]) {
-          setTableNotes((prev) => ({ ...prev, [t]: row.note || '' }));
-          setTableDiscounts((prev) => ({ ...prev, [t]: { type: row.discount_type, value: row.discount_value || 0 } }));
-        }
+        // GEÇİCİ TEŞHİS: guard koşulu kaldırıldı, her update koşulsuz uygulanıyor.
+        setTableNotes((prev) => ({ ...prev, [t]: row.note || '' }));
+        setTableDiscounts((prev) => ({ ...prev, [t]: { type: row.discount_type, value: row.discount_value || 0 } }));
         setTableOpenedAt((prev) => {
           const next = { ...prev };
           if (row.opened_at) next[t] = new Date(row.opened_at).getTime();
