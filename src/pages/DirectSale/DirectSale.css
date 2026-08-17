@@ -705,8 +705,7 @@
 
 .ds-order-tools { padding: 10px 16px; }
 .ds-order-tools-row { display: flex; align-items: stretch; gap: 12px; }
-/* Mutfağa Not Ekle + İndirim Tuşluğu — dokunmatik için dikey büyütüldü, ikincil işlem
-   ailesinde (sakin ama okunabilir): koyu zemin + açık yazı/ikon, yeterli aralık. */
+/* Mutfağa Not Ekle: krem zemin + koyu yazı. İndirim Tuşluğu: kırmızı zemin + beyaz yazı. */
 .ds-note-btn {
   display: flex;
   align-items: center;
@@ -716,16 +715,16 @@
   height: 60px;
   padding: 0 16px;
   border: none;
-  background: var(--panel-dark-2);
-  color: #fff;
+  background: #F3EEE0;
+  color: var(--ink);
   font-size: 15px;
   font-weight: 600;
   border-radius: var(--r-btn);
   cursor: pointer;
   transition: background var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
 }
-.ds-note-btn, .ds-note-btn * { color: #fff !important; stroke: #fff; }
-.ds-note-btn:hover { background: var(--smoke); transform: translateY(-1px); }
+.ds-note-btn, .ds-note-btn * { color: var(--ink) !important; stroke: var(--ink); }
+.ds-note-btn:hover { background: #EAE3D0; transform: translateY(-1px); }
 .ds-numpad-toggle {
   display: flex;
   align-items: center;
@@ -735,7 +734,7 @@
   height: 60px;
   padding: 0 16px;
   border: none;
-  background: var(--panel-dark-2);
+  background: var(--danger);
   color: #fff;
   font-size: 15px;
   font-weight: 600;
@@ -744,10 +743,17 @@
   transition: background var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
 }
 .ds-numpad-toggle, .ds-numpad-toggle * { color: #fff !important; stroke: #fff; }
-.ds-numpad-toggle:hover { background: var(--smoke); transform: translateY(-1px); }
+.ds-numpad-toggle:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+/* Mutfağa Not yanındaki yapıştır butonu: Mutfağa Not Ekle ile aynı yükseklik + büyük ikon */
+.ds-paste-btn-lg {
+  height: 60px;
+  width: 60px;
+  border-radius: var(--r-btn);
+}
 
 .ds-numpad-box {
-  margin-top: 8px;
+  margin-top: 0;
   padding: 12px;
   background: var(--bg);
   border-radius: var(--r-card);
@@ -831,6 +837,10 @@
 
 .ds-pay-modal-wrap { display: flex; gap: 24px; align-items: flex-start; }
 .ds-modal.ds-pay-modal { width: 920px; max-width: 96vw; padding: 36px; }
+.ds-modal.ds-numpad-modal { width: 560px; max-width: 94vw; padding: 28px; }
+.ds-numpad-modal .ds-numpad-display-row input { height: 40px; font-size: 15px; }
+.ds-numpad-modal .ds-numpad-grid button { height: 56px; font-size: 18px; }
+.ds-numpad-modal .ds-numpad-actions button { height: 52px; font-size: 15px; }
 .ds-pay-modal .ds-modal-head { padding-bottom: 20px; margin-bottom: 24px; }
 .ds-pay-modal .ds-modal-head h3 { font-size: 26px; }
 .ds-pay-modal .ds-modal-x { width: 40px; height: 40px; }

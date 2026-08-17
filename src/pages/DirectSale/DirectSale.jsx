@@ -1013,35 +1013,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
           <div className="ds-order-tools">
             <div className="ds-order-tools-row">
-              <button className="ds-paste-btn" onClick={pasteKitchenNote} title="Panodan not olarak yapıştır"><ClipboardPaste size={14} /></button>
+              <button className="ds-paste-btn ds-paste-btn-lg" onClick={pasteKitchenNote} title="Panodan not olarak yapıştır"><ClipboardPaste size={22} /></button>
               <button className="ds-note-btn" onClick={openKitchenNoteModal}><StickyNote size={13} /> + Mutfağa Not Ekle</button>
-              <button className="ds-numpad-toggle" onClick={() => setNumpadOpen((v) => !v)}><Percent size={13} /> İndirim Tuşluğu</button>
+              <button className="ds-numpad-toggle" onClick={() => setNumpadOpen(true)}><Percent size={13} /> İndirim Tuşluğu</button>
             </div>
-            {numpadOpen && (
-              <div className="ds-numpad-box">
-                <div className="ds-numpad-display-row">
-                  <span>GİRİLEN DEĞER:</span>
-                  <input
-                    ref={numpadInputRef}
-                    type="text"
-                    inputMode="decimal"
-                    value={numpadValue}
-                    onChange={(e) => setNumpadValue(e.target.value.replace(/[^0-9.,]/g, ''))}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="ds-numpad-grid">
-                  {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map((n) => (
-                    <button key={n} onClick={() => pressNumpad(n)}>{n}</button>
-                  ))}
-                </div>
-                <div className="ds-numpad-actions">
-                  <button className="blue" onClick={() => applyDiscount('percent')}>% İndirim Yap</button>
-                  <button className="green" onClick={() => applyDiscount('amount')}>₺ İndirim Yap</button>
-                  <button className="red" onClick={() => setNumpadValue('')}>C</button>
-                </div>
-              </div>
-            )}
           </div>
 
           {selectedItems.length > 0 && (
@@ -1069,11 +1044,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   : 'Ödeme tüm siparişe uygulanacak'}
               </div>
             )}
-          </div>
-
-          <div className="ds-bottom-actions">
-            <button disabled={isOrderEmpty} onClick={handleUndoLastItem}><Undo2 size={16} /> Geri Al</button>
-            <button disabled={isOrderEmpty} className="danger" onClick={handleClearTable}><Trash2 size={18} /> Boşalt</button>
           </div>
 
           {isPaketEkrani && paketciHareketleri.length > 0 && (
@@ -1208,6 +1178,41 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             <div className="ds-modal-footer two">
               <button className="ds-secondary-btn" onClick={() => setPriceModal(null)}>Vazgeç</button>
               <button className="ds-primary-btn" onClick={confirmPriceModal}>Onayla</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* İNDİRİM TUŞLUĞU MODALI */}
+      {numpadOpen && (
+        <div className="ds-modal-overlay" onClick={() => setNumpadOpen(false)}>
+          <div className="ds-modal ds-numpad-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ds-modal-head">
+              <h3><Percent size={16} /> İndirim Tuşluğu</h3>
+              <button className="ds-modal-x" onClick={() => setNumpadOpen(false)}><X size={16} /></button>
+            </div>
+            <div className="ds-numpad-box">
+              <div className="ds-numpad-display-row">
+                <span>GİRİLEN DEĞER:</span>
+                <input
+                  ref={numpadInputRef}
+                  type="text"
+                  inputMode="decimal"
+                  value={numpadValue}
+                  onChange={(e) => setNumpadValue(e.target.value.replace(/[^0-9.,]/g, ''))}
+                  placeholder="0"
+                />
+              </div>
+              <div className="ds-numpad-grid">
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map((n) => (
+                  <button key={n} onClick={() => pressNumpad(n)}>{n}</button>
+                ))}
+              </div>
+              <div className="ds-numpad-actions">
+                <button className="blue" onClick={() => applyDiscount('percent')}>% İndirim Yap</button>
+                <button className="green" onClick={() => applyDiscount('amount')}>₺ İndirim Yap</button>
+                <button className="red" onClick={() => setNumpadValue('')}>C</button>
+              </div>
             </div>
           </div>
         </div>
