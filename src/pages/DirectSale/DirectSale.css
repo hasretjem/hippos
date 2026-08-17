@@ -500,6 +500,9 @@
 .ds-split-col .ds-product-grid {
   grid-template-columns: repeat(4, 1fr);
 }
+.ds-split-col .pb-name {
+  font-size: 17px;
+}
 .ds-split-col-head {
   position: sticky;
   top: -20px;

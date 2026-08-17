@@ -31,8 +31,6 @@ function ProductButton({ product, category, isFav, onClick }) {
             fontStyle: style.italic ? 'italic' : 'normal',
           }}
         >
-          {product.bicakGerekli && <span className="ds-bicak-mark" title="Bıçak gerekli">🔪</span>}
-          {product.ekmekGerekli && <span className="ds-ekmek-mark" title="Ekmek gerekli">🥖</span>}
           {displayName}
         </span>
         {isFav && <Star size={11} className="pb-star" fill="currentColor" style={{ color: style.textColor }} />}
