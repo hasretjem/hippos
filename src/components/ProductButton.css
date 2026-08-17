@@ -8,7 +8,8 @@
   border-radius: var(--r-card);
   padding: 10px 12px;
   text-align: left;
-  height: 98px;
+  min-height: 98px;
+  height: 100%;
   width: 100%;
   display: flex;
   flex-direction: row;
@@ -55,12 +56,6 @@
   font-weight: 800;
   line-height: 1.25;
   text-align: left;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  /* Kelimeler harf ortasından bölünmesin — sadece kelime boşluklarından alt satıra geçsin */
   overflow-wrap: break-word;
   word-break: normal;
 }

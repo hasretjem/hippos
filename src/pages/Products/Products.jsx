@@ -512,19 +512,21 @@ function GorunumPopup({ target, showSaleName, showIconSize, onSave, onClose }) {
   const [txtColor, setTxtColor] = useState(target.butonYaziRengi || '');
   const [italic, setItalic] = useState(target.italik ?? false);
   const [iconSize, setIconSize] = useState(target.ikonBoyutu || DEFAULT_ICON_SIZE);
+  const [emoji, setEmoji] = useState(target.ikon || '');
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   function handleSave() {
     const patch = {
       butonRengi: btnColor.trim() || null,
       butonYaziRengi: txtColor.trim() || null,
       italik: italic,
+      ikon: emoji || null,
     };
     if (showSaleName) patch.satisAdi = saleName.trim() || null;
     if (showIconSize) patch.ikonBoyutu = iconSize || null;
     onSave(patch);
     onClose();
   }
-
   return (
     <div className="gp-overlay" onClick={onClose}>
       <div className="gp-modal" onClick={(e) => e.stopPropagation()}>
@@ -575,6 +577,20 @@ function GorunumPopup({ target, showSaleName, showIconSize, onSave, onClose }) {
               </div>
             </div>
           </div>
+         <div className="gp-field">
+            <label>Emoji</label>
+            <div className="gp-emoji-row">
+              <button type="button" className="gp-emoji-pick-btn" onClick={() => setEmojiPickerOpen(true)}>
+                <span className="gp-emoji-preview">{emoji || '—'}</span>
+                <span>{emoji ? 'Değiştir' : 'Emoji Seç'}</span>
+              </button>
+              {emoji && (
+                <button type="button" className="gp-emoji-clear-btn" onClick={() => setEmoji('')}>
+                  <X size={14} /> Kaldır
+                </button>
+              )}
+            </div>
+          </div>
           <label className="gp-checkbox">
             <input type="checkbox" checked={italic} onChange={(e) => setItalic(e.target.checked)} />
             İtalik yazı
@@ -595,6 +611,49 @@ function GorunumPopup({ target, showSaleName, showIconSize, onSave, onClose }) {
         <div className="gp-footer">
           <button className="gp-cancel" onClick={onClose}>Vazgeç</button>
           <button className="gp-save" onClick={handleSave}><Save size={14} /> Kaydet</button>
+        </div>
+      </div>
+      {emojiPickerOpen && (
+        <EmojiPickerModal
+          current={emoji}
+          onPick={(e) => { setEmoji(e); setEmojiPickerOpen(false); }}
+          onClose={() => setEmojiPickerOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Sık kullanılan gıda/içecek emojileri — yaygın kasa menüsü kategorilerini kapsar.
+const EMOJI_CHOICES = [
+  '🍅', '🥒', '🧀', '🥚', '🫒', '🥓', '🍗', '🐟', '🍯', '🔪',
+  '🥬', '🍟', '🍚', '🍞', '🥗', '🍲', '🍵', '☕', '🥤', '🥛',
+  '🍮', '🥪', '🍽️', '🥩', '🍖', '🌶️', '🫑', '🥧', '🍫', '🥐',
+];
+
+// Ürün/kategori butonuna eklenecek emojiyi seçmek için ayrı, hafif popup.
+// Sabit bir emoji listesi kullanır — ek dosya/network yükü yok.
+function EmojiPickerModal({ current, onPick, onClose }) {
+  return (
+    <div className="gp-overlay" style={{ zIndex: 1200 }} onClick={onClose}>
+      <div className="gp-modal gp-emoji-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="gp-header">
+          <h3>Emoji Seç</h3>
+          <button className="gp-close" onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className="gp-body">
+          <div className="gp-emoji-grid">
+            {EMOJI_CHOICES.map((e) => (
+              <button
+                type="button"
+                key={e}
+                className={`gp-emoji-choice ${current === e ? 'selected' : ''}`}
+                onClick={() => onPick(e)}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
