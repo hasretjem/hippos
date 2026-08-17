@@ -497,6 +497,9 @@
 .ds-split-col.büyük {
   border-right: 1px solid rgba(255, 255, 255, 0.12);
 }
+.ds-split-col .ds-product-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
 .ds-split-col-head {
   position: sticky;
   top: -20px;
