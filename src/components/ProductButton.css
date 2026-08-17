@@ -1,4 +1,4 @@
-/* ProductButton — sade, sabit boyutlu, ikon olmadan, tam ortalanmış ürün butonu.
+/* ProductButton — sade, sabit boyutlu ürün butonu, köşede emoji filigran.
    Performans için: dinamik font ölçümü (useFitText) YOK, sadece saf CSS. */
 
 .pb-card {
@@ -7,40 +7,57 @@
   border: 1px solid var(--border);
   border-radius: var(--r-card);
   padding: 10px 12px;
-  text-align: center;
-  height: 88px;
+  text-align: left;
+  height: 98px;
   width: 100%;
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  overflow: hidden;
   cursor: pointer;
-  transition: border-color var(--t-hover) var(--ease), transform var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease);
+  transition: transform var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease);
 }
-.pb-card:hover { border-color: var(--olive); transform: translateY(-2px) scale(1.01); box-shadow: var(--shadow-2); }
+/* Turuncu hover kenarlığı kaldırıldı — sadece hafif kalkma efekti kalıyor */
+.pb-card:hover { transform: translateY(-2px) scale(1.01); box-shadow: var(--shadow-2); }
 .pb-card:active { transform: scale(0.97); transition-duration: var(--t-press); }
 .pb-card.fav { border-color: var(--earth); }
 
-/* Metin: ikon yok, buton içinde tam ortalanmış */
+/* Köşede büyük, soluk emoji filigran — metnin arkasında, tıklamayı engellemez */
+.pb-icon-watermark {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 66px;
+  line-height: 1;
+  opacity: 0.65;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Metin: sola-üste hizalı */
 .pb-text-box {
+  position: relative;
+  z-index: 1;
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
+  justify-content: flex-start;
   gap: 4px;
   height: 100%;
 }
 
 .pb-name {
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.3;
-  text-align: center;
+  font-family: 'Inter', -apple-system, 'Segoe UI', Arial, sans-serif;
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: left;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   overflow: hidden;
   text-overflow: ellipsis;
   /* Kelimeler harf ortasından bölünmesin — sadece kelime boşluklarından alt satıra geçsin */

@@ -20,8 +20,9 @@ function ProductButton({ product, category, isFav, onClick }) {
     <button
       className={`pb-card ${isFav ? 'fav' : ''}`}
       style={{ background: style.backgroundColor }}
-      onClick={onClick}
+     onClick={onClick}
     >
+      {style.icon && <span className="pb-icon-watermark" aria-hidden="true">{style.icon}</span>}
       <div className="pb-text-box">
         <span
           className="pb-name"
