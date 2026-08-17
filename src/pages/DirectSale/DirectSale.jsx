@@ -261,10 +261,26 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   // ---- Masa notu — artık her harfte YAZMIYOR (realtime kotasını boşuna dolduruyordu).
   // Yerel taslakta tutulup sadece "Gönder" ikonuna ya da Enter'a basınca gönderiliyor.
   const [tableNoteDraft, setTableNoteDraft] = useState('');
+  // Bu masa için EN SON bilinen "uzak" (Supabase/realtime) not değeri. Kullanıcının kendi
+  // yazdığını uzaktan gelen bir güncellemenin silmemesi için kıyas noktası olarak tutuluyor.
+  const sonUzakNotRef = useRef('');
   useEffect(() => {
-    setTableNoteDraft(tableNotes[selectedTable] || '');
+    sonUzakNotRef.current = tableNotes[selectedTable] || '';
+    setTableNoteDraft(sonUzakNotRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTable]);
+  // KRİTİK: eskiden bu senkron SADECE masa değişince çalışıyordu, bu yüzden diğer kasadan
+  // gelen not realtime ile doğru şekilde geldiği hâlde ekrandaki kutuya hiç yansımıyordu
+  // (masadan çıkıp girince ya da F5'te görünüyordu). Artık uzak not değişince de çalışıyor.
+  // KORUMA: taslak, son bilinen uzak değerden farklıysa kullanıcı o an bir şey yazıyor
+  // demektir, bu durumda yazdığının üzerine YAZILMIYOR.
+  useEffect(() => {
+    const uzak = tableNotes[selectedTable] || '';
+    if (uzak === sonUzakNotRef.current) return;
+    setTableNoteDraft((mevcut) => (mevcut === sonUzakNotRef.current ? uzak : mevcut));
+    sonUzakNotRef.current = uzak;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableNotes[selectedTable], selectedTable]);
   function sendTableNote() {
     updateTableNote(selectedTable, tableNoteDraft);
   }

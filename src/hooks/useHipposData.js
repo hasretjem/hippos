@@ -1112,8 +1112,15 @@ export default function useHipposData(scope = 'full') {
     const tablesToCheck = new Set([...allTables, ...Object.keys(tableNotes), ...Object.keys(tableDiscounts)]);
     tablesToCheck.forEach((t) => {
       if (t === QUICK_SALE) return; // Hızlı Satış hiçbir zaman Supabase'e yazılmaz (items ile aynı kural)
-      const noteChanged = tableNotes[t] !== noteDiscountLastSentRef.current.tableNotes[t];
-      const discountChanged = tableDiscounts[t] !== noteDiscountLastSentRef.current.tableDiscounts[t];
+      // KRİTİK (realtime sonsuz döngü düzeltmesi): indirim bir OBJE ({type, value}) ve
+      // realtime her mesajda bu objeyi YENİDEN oluşturuyor. Eskiden burada obje referansı
+      // karşılaştırılıyordu, bu yüzden değerler birebir aynı olsa bile "değişti" sanılıyor,
+      // 600ms sonra Supabase'e yazılıyor, yazma geri realtime olarak geliyor ve döngü hiç
+      // durmuyordu. Artık REFERANS değil DEĞER karşılaştırılıyor.
+      const d = tableDiscounts[t] || { type: null, value: 0 };
+      const dSon = noteDiscountLastSentRef.current.tableDiscounts[t] || { type: null, value: 0 };
+      const noteChanged = (tableNotes[t] || '') !== (noteDiscountLastSentRef.current.tableNotes[t] || '');
+      const discountChanged = (d.type ?? null) !== (dSon.type ?? null) || (d.value || 0) !== (dSon.value || 0);
       if (!noteChanged && !discountChanged) return;
 
       if (noteDiscountTimersRef.current[t]) clearTimeout(noteDiscountTimersRef.current[t]);
