@@ -6,7 +6,6 @@ import {
   Check, X, RefreshCw, Save, Lock, Delete, Palette, Tag,
 } 
 from 'lucide-react';
-import IconPickerModal from '../../components/IconPickerModal';
 import { DEFAULT_BTN_BG, DEFAULT_BTN_TEXT, DEFAULT_ICON_SIZE } from '../../constants/themeDefaults';
 // Türkçe karakter duyarsız arama için normalize eder (İ/I, ı/i, ş/s, ğ/g, ü/u, ö/o, ç/c)
 function normalizeTr(s) {
@@ -512,16 +511,13 @@ function GorunumPopup({ target, showSaleName, showIconSize, onSave, onClose }) {
   const [btnColor, setBtnColor] = useState(target.butonRengi || '');
   const [txtColor, setTxtColor] = useState(target.butonYaziRengi || '');
   const [italic, setItalic] = useState(target.italik ?? false);
-  const [icon, setIcon] = useState(target.ikon || null);
   const [iconSize, setIconSize] = useState(target.ikonBoyutu || DEFAULT_ICON_SIZE);
-  const [iconPickerOpen, setIconPickerOpen] = useState(false);
 
   function handleSave() {
     const patch = {
       butonRengi: btnColor.trim() || null,
       butonYaziRengi: txtColor.trim() || null,
       italik: italic,
-      ikon: icon,
     };
     if (showSaleName) patch.satisAdi = saleName.trim() || null;
     if (showIconSize) patch.ikonBoyutu = iconSize || null;
@@ -595,24 +591,12 @@ function GorunumPopup({ target, showSaleName, showIconSize, onSave, onClose }) {
               />
             </div>
           )}
-          <div className="gp-field">
-            <label>İkon</label>
-            <button className="gp-icon-pick-btn" onClick={() => setIconPickerOpen(true)}>
-              {icon ? icon.replace('mdi:', '') : 'İkon seç...'}
-            </button>
-          </div>
         </div>
         <div className="gp-footer">
           <button className="gp-cancel" onClick={onClose}>Vazgeç</button>
           <button className="gp-save" onClick={handleSave}><Save size={14} /> Kaydet</button>
         </div>
       </div>
-      <IconPickerModal
-        open={iconPickerOpen}
-        currentIcon={icon}
-        onSelect={(name) => setIcon(name)}
-        onClose={() => setIconPickerOpen(false)}
-      />
     </div>
   );
 }

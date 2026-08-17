@@ -5,7 +5,7 @@ import {
   Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
   Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp, ArrowLeft, Package, Calculator, Delete,
-  MessageCircle, Building2, User, MapPin, Phone, Type, Minus, Plus,
+  MessageCircle, Building2, User, MapPin, Phone,
 } from 'lucide-react';
 import ProductButton from '../../components/ProductButton';
 
@@ -30,8 +30,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     getTableTotal,
     categories: rawCategories,
     subcategories,
-    storeSettings,
-    updateStoreSettings,
     announceViewingTable,
     clearViewingTable,
     isTableOccupiedElsewhere,
@@ -936,7 +934,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                                   key={product.id}
                                   product={product}
                                   category={getCategoryFor(product)}
-                                  storeSettings={storeSettings}
                                   isFav={favorites.includes(product.id)}
                                   onClick={() => addProductToOrder(product)}
                                 />
@@ -957,7 +954,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                         key={product.id}
                         product={product}
                         category={getCategoryFor(product)}
-                        storeSettings={storeSettings}
                         isFav={favorites.includes(product.id)}
                         onClick={() => addProductToOrder(product)}
                       />
@@ -969,20 +965,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             </div>
             {!(activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery) && (
               <div className="ds-products-scrollbtns">
-                <div className="ds-size-controls">
-                  <div className="ds-size-group" title="Yazı Boyutu">
-                    <Type size={13} />
-                    <button onClick={() => updateStoreSettings({ globalFontSize: Math.max(11, (storeSettings.globalFontSize || 13) - 1) })}><Minus size={12} /></button>
-                    <span>{storeSettings.globalFontSize || 13}</span>
-                    <button onClick={() => updateStoreSettings({ globalFontSize: Math.min(28, (storeSettings.globalFontSize || 13) + 1) })}><Plus size={12} /></button>
-                  </div>
-                  <div className="ds-size-group" title="İkon Boyutu">
-                    <span className="ds-size-icon-label">◆</span>
-                    <button onClick={() => updateStoreSettings({ globalIconSize: Math.max(12, (storeSettings.globalIconSize || 22) - 2) })}><Minus size={12} /></button>
-                    <span>{storeSettings.globalIconSize || 22}</span>
-                    <button onClick={() => updateStoreSettings({ globalIconSize: Math.min(48, (storeSettings.globalIconSize || 22) + 2) })}><Plus size={12} /></button>
-                  </div>
-                </div>
                 <button onClick={() => scrollByPage(productsScrollRef, -1)}><ChevronUp size={26} /></button>
                 <button onClick={() => scrollByPage(productsScrollRef, 1)}><ChevronDown size={26} /></button>
               </div>

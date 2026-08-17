@@ -1,19 +1,19 @@
-/* ProductButton — ortak ürün butonu. Buton dış boyutu (.ds-product-card ile aynı
-   height/padding) DirectSale.css'te tanımlı kalıyor, burada sadece İÇ içerik düzeni var. */
+/* ProductButton — sade, sabit boyutlu, ikon olmadan, tam ortalanmış ürün butonu.
+   Performans için: dinamik font ölçümü (useFitText) YOK, sadece saf CSS. */
 
 .pb-card {
   position: relative;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--r-card);
-  padding: 14px;
-  text-align: left;
+  padding: 10px 12px;
+  text-align: center;
   height: 88px;
   width: 100%;
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
   cursor: pointer;
   transition: border-color var(--t-hover) var(--ease), transform var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease);
 }
@@ -21,48 +21,31 @@
 .pb-card:active { transform: scale(0.97); transition-duration: var(--t-press); }
 .pb-card.fav { border-color: var(--earth); }
 
-/* İkon: solda sabit genişlikte kutu, dikeyde ortalanır, asla küçülmez/büyümez */
-.pb-icon-box {
-  flex-shrink: 0;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Metin: ikonun SAĞINDA ayrı alan — asla ikonun altına kaymaz (flex-direction:row sayesinde) */
+/* Metin: ikon yok, buton içinde tam ortalanmış */
 .pb-text-box {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
   gap: 4px;
   height: 100%;
 }
 
 .pb-name {
-  font-weight: 700; /* Bold (700) — madde 3 */
+  font-size: 14px;
+  font-weight: 700;
   line-height: 1.3;
+  text-align: center;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  /* Sabit PX yükseklik (global_font_size tavanına göre) — em kullanılmaz, çünkü
-     fit-text ölçümü sırasında font-size değiştikçe em-tabanlı bir kutu da
-     kendisiyle birlikte büyür/küçülür ve ölçüm referans noktasını kaybeder. */
-  max-height: var(--pb-name-max-h, 34px);
-  word-break: break-word;
+  text-overflow: ellipsis;
+  /* Kelimeler harf ortasından bölünmesin — sadece kelime boşluklarından alt satıra geçsin */
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .pb-star { flex-shrink: 0; }
-
-.pb-custom-icon {
-  display: inline-block;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-position: center;
-  mask-position: center;
-}
