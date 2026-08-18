@@ -121,13 +121,14 @@
 }
 /* Header'daki 3 ana aksiyon: Masa/Gönder solda (navigasyon), Yazdır (ikincil), Ödeme Al
    (en güçlü görsel ağırlık) — dokunmatik kullanım için büyük hit-area, en az 52px yükseklik. */
-.ds-header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.ds-header-actions { display: flex; align-items: stretch; gap: 10px; flex-shrink: 0; }
 .ds-header-actions button {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   height: 52px;
+  align-self: center;
   padding: 0 22px;
   border: none;
   border-radius: var(--r-btn);
@@ -143,7 +144,16 @@
 .ds-header-send-btn { background: var(--panel-dark-2); border: 1.5px solid rgba(255,255,255,0.18); color: #fff; }
 .ds-header-send-btn, .ds-header-send-btn * { color: #fff !important; stroke: #fff; }
 .ds-header-print-btn { background: var(--panel-2); color: var(--ink); }
-.ds-header-pay-btn { background: var(--olive); color: #fff; padding: 0 28px; }
+.ds-header-pay-btn {
+  background: var(--olive);
+  color: #fff;
+  align-self: stretch;
+  height: auto;
+  padding: 0 34px;
+  margin: -12px -20px -12px 0;
+  border-radius: 0 var(--r-panel) var(--r-panel) 0;
+  font-size: 18px;
+}
 .ds-header-pay-btn, .ds-header-pay-btn * { color: #fff !important; stroke: #fff; }
 .ds-header-table {
   display: flex;
@@ -639,13 +649,14 @@
   color: var(--ink);
   font-style: italic;
   font-weight: 700;
-  font-size: 15px;
+  font-size: 13px;
+  line-height: 1.3;
   padding: 10px 12px;
   display: flex;
   align-items: center;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
 }
 .ds-note-edit-btn {
   background: var(--earth);
