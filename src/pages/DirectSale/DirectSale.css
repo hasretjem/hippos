@@ -121,7 +121,13 @@
 }
 /* Header'daki 3 ana aksiyon: Masa/Gönder solda (navigasyon), Yazdır (ikincil), Ödeme Al
    (en güçlü görsel ağırlık) — dokunmatik kullanım için büyük hit-area, en az 52px yükseklik. */
-.ds-header-actions { display: flex; align-items: stretch; gap: 10px; flex-shrink: 0; }
+.ds-header-actions {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  gap: 10px;
+  flex-shrink: 0;
+}
 .ds-header-actions button {
   display: flex;
   align-items: center;
@@ -647,7 +653,7 @@
   min-width: 0;
   background: #F3EEE0;
   color: var(--ink);
-  font-style: italic;
+  font-style: italic !important;
   font-weight: 700;
   font-size: 13px;
   line-height: 1.3;
