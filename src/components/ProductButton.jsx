@@ -86,3 +86,8 @@ function ProductButton({ product, category, isFav, onClick }) {
         {isFav && <Star size={11} className="pb-star" fill="currentColor" style={{ color: style.textColor }} />}
       </div>
       {product.isAzVariant && <span className="ds-az-badge">AZ</span>}
+      </button>
+  );
+}
+
+export default React.memo(ProductButton);
