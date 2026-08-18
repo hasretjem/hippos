@@ -627,30 +627,40 @@
   transition: background var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
 }
 .ds-order-line.note {
+  padding: 0;
+  gap: 0;
+  border-radius: var(--r-card);
+  background: transparent;
+}
+.ds-order-line.note .note-mid {
+  flex: 1;
+  min-width: 0;
+  background: #F3EEE0;
   color: var(--ink);
   font-style: italic;
-  justify-content: space-between;
-  background: #F3EEE0;
-  padding: 10px;
-  gap: 10px;
-  border-radius: var(--r-card);
+  font-weight: 700;
+  font-size: 15px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.ds-order-line.note .note-mid { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ds-note-edit-btn {
-  background: transparent;
-  color: var(--ink-muted);
-  border: 1px solid transparent;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
+  background: var(--earth);
+  color: #fff;
+  border: none;
+  width: 44px;
+  flex-shrink: 0;
+  border-radius: 0 var(--r-card) var(--r-card) 0;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  flex-shrink: 0;
   transition: background var(--t-hover) var(--ease);
 }
-.ds-note-edit-btn:hover { background: var(--panel-2); color: var(--ink); }
+.ds-note-edit-btn:hover { background: var(--earth-dark); }
 .ds-order-line.selected { box-shadow: inset 0 0 0 2px var(--olive); border-radius: var(--r-card); }
 .ds-order-line.duplicate .ds-order-line-mid { background: var(--earth-dark); }
 
@@ -667,6 +677,7 @@
   cursor: pointer;
   transition: background var(--t-hover) var(--ease), transform var(--t-press) var(--ease);
 }
+.ds-remove-btn svg { stroke-width: 3.5; }
 .ds-remove-btn:hover { background: var(--earth-dark); }
 .ds-remove-btn:active { transform: scale(0.9); }
 .ds-order-line-mid {
@@ -680,10 +691,6 @@
   padding: 10px 12px;
 }
 .ds-order-line-name { display: flex; align-items: center; gap: 5px; font-weight: 700; color: #fff; letter-spacing: 0.5px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; }
-/* Not satırının arka planı açık krem (#F3EEE0) — üstteki genel kural (beyaz, kırmızı
-   ürün satırları için) burada geçersiz, ikon+yazı görünmez kalıyordu. Kalıcı düzeltme. */
-.ds-order-line.note .ds-order-line-name { color: #E94F37 !important; }
-.ds-order-line.note .ds-order-line-name svg { color: #E94F37 !important; stroke: #E94F37 !important; }
 .ds-tag {
   display: inline-flex;
   align-items: center;
@@ -729,40 +736,50 @@
 .ds-order-list.ultra-compact .ds-remove-btn { width: 28px; height: 28px; border-radius: 8px; }
 .ds-order-list.ultra-compact .ds-tag { display: none; }
 
-.ds-order-tools { padding: 10px 16px; }
-.ds-order-tools-row { display: flex; align-items: stretch; gap: 12px; }
-/* Mutfağa Not Ekle: krem zemin + koyu yazı. İndirim Tuşluğu: kırmızı zemin + beyaz yazı. */
+.ds-order-tools { padding: 10px 12px; }
+.ds-order-tools-row { display: flex; align-items: stretch; gap: 8px; }
+/* Mutfağa Not Ekle: krem zemin + kırmızı yazı. İndirim Tuşluğu: kırmızı zemin + beyaz yazı.
+   280px dar panelde 3 buton (yapıştır+not+indirim) yan yana sığsın diye padding/font küçültüldü. */
 .ds-note-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 6px;
   flex: 1;
-  height: 60px;
-  padding: 0 16px;
+  min-width: 0;
+  height: 56px;
+  padding: 0 6px;
   border: none;
   background: #F3EEE0;
   color: #E94F37;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  letter-spacing: 0.2px;
   border-radius: var(--r-btn);
   cursor: pointer;
   transition: background var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
 }
 .ds-note-btn, .ds-note-btn * { color: #E94F37 !important; stroke: #E94F37; }
-.ds-note-btn:hover { background: #EAE3D0; transform: translateY(-1px); }.ds-numpad-toggle {
+.ds-note-btn:hover { background: #EAE3D0; transform: translateY(-1px); }
+.ds-numpad-toggle {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 6px;
   flex: 1;
-  height: 60px;
-  padding: 0 16px;
+  min-width: 0;
+  height: 56px;
+  padding: 0 6px;
   border: none;
   background: var(--danger);
   color: #fff;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  letter-spacing: 0.2px;
   border-radius: var(--r-btn);
   cursor: pointer;
   transition: background var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
@@ -770,10 +787,11 @@
 .ds-numpad-toggle, .ds-numpad-toggle * { color: #fff !important; stroke: #fff; }
 .ds-numpad-toggle:hover { filter: brightness(1.08); transform: translateY(-1px); }
 
-/* Mutfağa Not yanındaki yapıştır butonu: Mutfağa Not Ekle ile aynı yükseklik + büyük ikon */
+/* Mutfağa Not yanındaki yapıştır butonu: Mutfağa Not Ekle ile aynı yükseklik, dar panelde küçültülmüş */
 .ds-paste-btn-lg {
-  height: 60px;
-  width: 60px;
+  height: 56px;
+  width: 44px;
+  flex-shrink: 0;
   border-radius: var(--r-btn);
 }
 

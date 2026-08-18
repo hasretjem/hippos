@@ -1001,7 +1001,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 return (
                   <div key={item.id} className="ds-order-line note">
                     <button className="ds-remove-btn" onClick={() => removeItem(item.id)}><X size={16} /></button>
-                    <span className="ds-order-line-name note-mid"><StickyNote size={13} /> {item.ad}</span>
+                    <span className="note-mid">"{item.ad}"</span>
                     <button className="ds-note-edit-btn" onClick={() => editNoteItem(item)} title="Notu Düzenle"><Pencil size={14} /></button>
                   </div>
                 );
