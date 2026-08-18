@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import './DirectSale.css';
 import { TL, QUICK_SALE } from '../../hooks/useHipposData';
 import {
@@ -218,7 +218,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const isOrderEmpty = currentOrder.length === 0;
 
   // ---- Ürün işlemleri — TAMAMEN YEREL, Supabase'e masadan çıkınca yazılır ----
-  function addProductToOrder(product) {
+  const addProductToOrder = useCallback((product) => {
     const newItem = {
       id: Date.now() + Math.random(),
       ad: product.ad,
@@ -231,7 +231,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       ekmekGerekli: !!product.ekmekGerekli,
     };
     setDraftItems((prev) => [...prev, newItem]);
-  }
+  }, []);
 
   function removeItem(id) {
     setDraftItems((prev) => prev.filter((i) => i.id !== id));
@@ -951,7 +951,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                                   product={product}
                                   category={getCategoryFor(product)}
                                   isFav={favorites.includes(product.id)}
-                                  onClick={() => addProductToOrder(product)}
+                                  onAdd={addProductToOrder}
                                 />
                               ))}
                             </div>

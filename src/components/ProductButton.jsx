@@ -13,10 +13,10 @@ export function getDisplayName(product) {
 // arası paylaşılan) bir cache'te tutar — aynı ikon birden fazla buton için tekrar
 // indirilmez, eski/yavaş PC'lerde bile ağ isteği minimumda kalır.
 const svgCache = new Map();
-const svgListeners = new Map();
+const pendingFetches = new Map();
 
 function useSvgIcon(fileName) {
-  const [svg, setSvg] = useState(() => svgCache.get(fileName) || null);
+  const [svg, setSvg] = useState(() => (fileName ? svgCache.get(fileName) || null : null));
 
   useEffect(() => {
     if (!fileName) return;
@@ -24,22 +24,29 @@ function useSvgIcon(fileName) {
       setSvg(svgCache.get(fileName));
       return;
     }
-    let cancelled = false;
-    if (!svgListeners.has(fileName)) svgListeners.set(fileName, []);
-    svgListeners.get(fileName).push(setSvg);
 
-    fetch(`/food-icons-color/${fileName}`)
-      .then((res) => (res.ok ? res.text() : null))
-      .then((text) => {
-        if (!text) return;
-        svgCache.set(fileName, text);
-        (svgListeners.get(fileName) || []).forEach((fn) => fn(text));
-        svgListeners.delete(fileName);
-      })
-      .catch(() => {});
+    let cancelled = false;
+
+    if (!pendingFetches.has(fileName)) {
+      const promise = fetch(`/food-icons-color/${fileName}`)
+        .then((res) => (res.ok ? res.text() : null))
+        .then((text) => {
+          if (text) svgCache.set(fileName, text);
+          pendingFetches.delete(fileName);
+          return text;
+        })
+        .catch(() => {
+          pendingFetches.delete(fileName);
+          return null;
+        });
+      pendingFetches.set(fileName, promise);
+    }
+
+    pendingFetches.get(fileName).then((text) => {
+      if (!cancelled && text) setSvg(text);
+    });
 
     return () => {
-      if (cancelled) return;
       cancelled = true;
     };
   }, [fileName]);
@@ -50,7 +57,7 @@ function useSvgIcon(fileName) {
 // React.memo: props (product/category/isFav referansları) değişmediği sürece
 // bu buton yeniden render edilmez — satış sayfasında onlarca butonun aynı anda
 // gereksiz re-render olmasını (donma/kasma hissi) engeller.
-function ProductButton({ product, category, isFav, onClick }) {
+function ProductButton({ product, category, isFav, onAdd }) {
   const style = resolveButtonStyle(product, category);
   const displayName = getDisplayName(product);
   const isSvgIcon = typeof style.icon === 'string' && style.icon.endsWith('.svg');
@@ -60,7 +67,7 @@ function ProductButton({ product, category, isFav, onClick }) {
     <button
       className={`pb-card ${isFav ? 'fav' : ''}`}
       style={{ background: style.backgroundColor }}
-      onClick={onClick}
+      onClick={() => onAdd(product)}
     >
       {isSvgIcon && svgMarkup && (
         <span
