@@ -971,7 +971,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                         product={product}
                         category={getCategoryFor(product)}
                         isFav={favorites.includes(product.id)}
-                        onClick={() => addProductToOrder(product)}
+                        onAdd={addProductToOrder}
                       />
                     ))}
                   </div>
