@@ -7,7 +7,7 @@ import {
   Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp, ArrowLeft, Package, Calculator, Delete,
   MessageCircle, Building2, User, MapPin, Phone,
 } from 'lucide-react';
-import ProductButton from '../../components/ProductButton';
+import ProductButton, { getDisplayName } from '../../components/ProductButton';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
   const {
@@ -222,6 +222,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const newItem = {
       id: Date.now() + Math.random(),
       ad: product.ad,
+      satisAdi: product.satisAdi,
       fiyat: product.fiyat,
       kategori: product.kategori,
       altKategori: product.altKategori,
@@ -1014,13 +1015,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                     <span className="ds-order-line-name">
                       {item.bicakGerekli && <span className="ds-bicak-mark" title="Bıçak gerekli">🔪</span>}
                       {item.ekmekGerekli && <span className="ds-ekmek-mark" title="Ekmek gerekli">🥖</span>}
-                      {item.ad}
+                      {getDisplayName(item)}
                     </span>
-                    {item.selected && <span className="ds-tag selected"><Check size={10} /> SEÇİLİ</span>}
-                    {!item.selected && isDup && <span className="ds-tag duplicate"><AlertTriangle size={10} /> İKAZ</span>}
+                    {item.selected && <span className="ds-tag selected"><Check size={10} /> SEÇİLİ</span>}                    {!item.selected && isDup && <span className="ds-tag duplicate"><AlertTriangle size={10} /> İKAZ</span>}
                   </div>
-                  <span className="ds-order-line-price" onClick={() => openPriceModal(item)}>
-                    {TL(item.fiyat)}
+                    <span className="ds-order-line-price" onClick={() => openPriceModal(item)}>
+                    {Math.round(item.fiyat || 0).toLocaleString('tr-TR')} ₺
                   </span>
                 </div>
               );
