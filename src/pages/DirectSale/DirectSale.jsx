@@ -797,7 +797,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 <Printer size={16} /> Yazdır
               </button>
               <button disabled={isOrderEmpty} className="ds-header-pay-btn" onClick={() => { setShowChangeCalc(false); setReceivedAmount(''); setPayMode(true); }}>
-                <Wallet size={17} /> Ödeme Al
+                <span className="pay-icon-block"><Wallet size={17} /></span>
+                <span className="pay-text-block">Ödeme Al</span>
               </button>
             </div>
             <div className="ds-header-table">
@@ -969,15 +970,21 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                               <h3 className="ds-subcat-label">{subCat}</h3>
                             )}
                             <div className="ds-product-grid">
-                              {items.map((product) => (
+                              {items.map((product, idx) => {
+                              let pairPosition = null;
+                              if (product.isAzVariant) pairPosition = 'az';
+                              else if (items[idx + 1]?.isAzVariant && items[idx + 1]?.parentId === product.id) pairPosition = 'main';
+                              return (
                                 <ProductButton
                                   key={product.id}
                                   product={product}
                                   category={getCategoryFor(product)}
                                   isFav={favorites.includes(product.id)}
                                   onAdd={addProductToOrder}
+                                  pairPosition={pairPosition}
                                 />
-                              ))}
+                              );
+                            })}
                             </div>
                           </div>
                         ))}
@@ -1000,15 +1007,21 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                     </h3>
                   )}
                   <div className={`ds-product-grid ${activeCategory === 'KAHVALTI' ? 'kahvalti-grid' : ''}`}>
-                    {items.map((product) => (
-                      <ProductButton
-                        key={product.id}
-                        product={product}
-                        category={getCategoryFor(product)}
-                        isFav={favorites.includes(product.id)}
-                        onAdd={addProductToOrder}
-                      />
-                    ))}
+                    {items.map((product, idx) => {
+                      let pairPosition = null;
+                      if (product.isAzVariant) pairPosition = 'az';
+                      else if (items[idx + 1]?.isAzVariant && items[idx + 1]?.parentId === product.id) pairPosition = 'main';
+                      return (
+                        <ProductButton
+                          key={product.id}
+                          product={product}
+                          category={getCategoryFor(product)}
+                          isFav={favorites.includes(product.id)}
+                          onAdd={addProductToOrder}
+                          pairPosition={pairPosition}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
                 ))

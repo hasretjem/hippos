@@ -57,15 +57,21 @@ function useSvgIcon(fileName) {
 // React.memo: props (product/category/isFav referansları) değişmediği sürece
 // bu buton yeniden render edilmez — satış sayfasında onlarca butonun aynı anda
 // gereksiz re-render olmasını (donma/kasma hissi) engeller.
-function ProductButton({ product, category, isFav, onAdd }) {
+function ProductButton({ product, category, isFav, onAdd, pairPosition }) {
   const style = resolveButtonStyle(product, category);
   const displayName = getDisplayName(product);
   const isSvgIcon = typeof style.icon === 'string' && style.icon.endsWith('.svg');
   const svgMarkup = useSvgIcon(isSvgIcon ? style.icon : null);
 
+  // pairPosition: null = tekli, 'main' = ana ürün (Az'lı), 'az' = az varyant
+  const pairClass = pairPosition === 'main' ? 'pb-pair-main' : pairPosition === 'az' ? 'pb-pair-az' : '';
+  
+  // Fiyat gösterimi: sadece tekli (pair olmayan) ürünlerde, Yemekler kategorisinde
+  const showPrice = !pairPosition && product.fiyat > 0 && product.kategori === 'YEMEKLER';
+
   return (
     <button
-      className={`pb-card ${isFav ? 'fav' : ''}`}
+      className={`pb-card ${isFav ? 'fav' : ''} ${pairClass}`}
       style={{ background: style.backgroundColor }}
       onClick={() => onAdd(product)}
     >
@@ -92,8 +98,12 @@ function ProductButton({ product, category, isFav, onAdd }) {
         </span>
         {isFav && <Star size={11} className="pb-star" fill="currentColor" style={{ color: style.textColor }} />}
       </div>
-      {product.isAzVariant && <span className="ds-az-badge">AZ</span>}
-      </button>
+      {showPrice && (
+        <span className="pb-price" style={{ color: style.textColor }}>
+          {Math.round(product.fiyat).toLocaleString('tr-TR')} ₺
+        </span>
+      )}
+    </button>
   );
 }
 
