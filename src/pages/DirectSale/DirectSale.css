@@ -96,6 +96,7 @@
 
 /* ---- Üst şerit: aksiyonlar + masa seçimi + arama ---- */
 .ds-header {
+  position: relative;
   background: var(--panel-dark);
   border: none;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
@@ -123,10 +124,12 @@
    (en güçlü görsel ağırlık) — dokunmatik kullanım için büyük hit-area, en az 52px yükseklik. */
 .ds-header-actions {
   display: flex;
-  align-items: stretch;
-  align-self: stretch;
+  align-items: center;
   gap: 10px;
   flex-shrink: 0;
+  /* Ödeme Al artık absolute (panelin sağ kenarına kaynaşık) — diğer butonlar onun altına
+     girmesin diye burada sağ tarafta yer ayrılıyor. */
+  padding-right: 160px;
 }
 .ds-header-actions button {
   display: flex;
@@ -134,7 +137,6 @@
   justify-content: center;
   gap: 8px;
   height: 52px;
-  align-self: center;
   padding: 0 22px;
   border: none;
   border-radius: var(--r-btn);
@@ -150,13 +152,18 @@
 .ds-header-send-btn { background: var(--panel-dark-2); border: 1.5px solid rgba(255,255,255,0.18); color: #fff; }
 .ds-header-send-btn, .ds-header-send-btn * { color: #fff !important; stroke: #fff; }
 .ds-header-print-btn { background: var(--panel-2); color: var(--ink); }
+/* Ödeme Al: panelin sağ kenarına TAM yükseklikte kaynaşık — .ds-header artık position:relative,
+   bu buton ona göre absolute konumlanıp panelin kendi köşe yuvarlaklığını miras alıyor. */
 .ds-header-pay-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
   background: var(--olive);
   color: #fff;
-  align-self: stretch;
   height: auto;
   padding: 0 34px;
-  margin: -12px -20px -12px 0;
+  margin: 0;
   border-radius: 0 var(--r-panel) var(--r-panel) 0;
   font-size: 18px;
 }
@@ -742,15 +749,23 @@
 .ds-order-line-price:hover { filter: brightness(1.08); }
 .ds-order-line-price:active { transform: scale(0.94); }
 /* Yoğunluk arttıkça otomatik sıkışma (scroll'a gerek kalmasın) */
-.ds-order-list.compact .ds-order-line { padding: 7px 8px; margin-bottom: 6px; }
+/* Yoğunluk arttıkça otomatik sıkışma (scroll'a gerek kalmasın) — kaynaşık şerit yapısına göre:
+   .ds-order-line kendi padding taşımıyor, gerçek boşluk .ds-order-line-mid içinde. */
+.ds-order-list.compact .ds-order-line { margin-bottom: 6px; }
+.ds-order-list.compact .ds-order-line-mid { padding: 7px 10px; }
 .ds-order-list.compact .ds-order-line-name { font-size: 12.5px; }
-.ds-order-list.compact .ds-order-line-price { font-size: 13px; padding: 6px 10px; min-height: 32px; }
-.ds-order-list.compact .ds-remove-btn { width: 32px; height: 32px; }
+.ds-order-list.compact .ds-order-line-price { font-size: 13px; min-width: 54px; padding: 0 8px; }
+.ds-order-list.compact .ds-remove-btn { width: 32px; }
+.ds-order-list.compact .ds-note-edit-btn { width: 36px; }
+.ds-order-list.compact .ds-order-line.note .note-mid { padding: 7px 10px; font-size: 12.5px; }
 .ds-order-list.compact .ds-tag { font-size: 8.5px; padding: 1px 6px; }
-.ds-order-list.ultra-compact .ds-order-line { padding: 5px 7px; margin-bottom: 4px; }
+.ds-order-list.ultra-compact .ds-order-line { margin-bottom: 4px; }
+.ds-order-list.ultra-compact .ds-order-line-mid { padding: 5px 8px; }
 .ds-order-list.ultra-compact .ds-order-line-name { font-size: 11.5px; }
-.ds-order-list.ultra-compact .ds-order-line-price { font-size: 12px; padding: 5px 9px; min-height: 28px; }
-.ds-order-list.ultra-compact .ds-remove-btn { width: 28px; height: 28px; border-radius: 8px; }
+.ds-order-list.ultra-compact .ds-order-line-price { font-size: 12px; min-width: 48px; padding: 0 6px; }
+.ds-order-list.ultra-compact .ds-remove-btn { width: 28px; }
+.ds-order-list.ultra-compact .ds-note-edit-btn { width: 32px; }
+.ds-order-list.ultra-compact .ds-order-line.note .note-mid { padding: 5px 8px; font-size: 11.5px; }
 .ds-order-list.ultra-compact .ds-tag { display: none; }
 
 .ds-order-tools { padding: 10px 12px; }
