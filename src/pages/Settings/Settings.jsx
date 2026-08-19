@@ -330,10 +330,6 @@ export default function Settings({ data, onNavigate }) {
   const [revenueRevealed, setRevenueRevealed] = useState(true);
   const [usageData, setUsageData] = useState(null);
 
-  // ---- 1000 satır uyarısı: bugünkü fiş sayısı 1000'e ulaşırsa Supabase kesmiş olabilir ----
-  // sales_history fetch'i zaten bugünle filtreli ama Supabase varsayılan limiti 1000 satır —
-  // bugün tam 1000 fiş döndüyse bazıları kayıp olabilir, uyar.
-  const salesRowCount = todaysSales.length;
 
   // Gün Sonu'nda kaydedilen sayımlarla Hippos'un kendi hesapladığı ciroyu karşılaştırmak için
   // — bugünün Gün Sonu kaydı varsa çekiyoruz. Realtime değil, düz fetch.
@@ -389,6 +385,7 @@ export default function Settings({ data, onNavigate }) {
     return { ...t, total: t['NAKİT'] + t['KREDİ KARTI'] + t['YEMEK KARTI'] + t['CARİ'] };
   }, [todaysSales]);
 
+  const salesRowCount = todaysSales.length;
   const txCount = todaysSales.length;
   const avgTicket = txCount > 0 ? totals.total / txCount : 0;
 
