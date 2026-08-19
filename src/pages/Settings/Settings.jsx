@@ -4,14 +4,11 @@ import { TL, EKMEK_TURLERI_STOK } from '../../hooks/useHipposData';
 import { supabase } from '../../services/supabase';
 import GununMenusu from './GununMenusu';
 import {
-  ListChecks, Calculator, Eye, EyeOff, Share2, Lock, Delete, Search, X,
+  ListChecks, Calculator, Eye, EyeOff, Share2, Search, X,
   Banknote, CreditCard, UtensilsCrossed, BookOpen, ExternalLink, ChevronRight,
   Undo2, Wifi, WifiOff, Printer, Database, FileSpreadsheet, Triangle, Image as ImageIcon, RefreshCw,
-  Wheat, Copy, Check, Receipt,
+  Wheat, Copy, Check, Receipt, AlertTriangle,
 } from 'lucide-react';
-
-// Ciro panelini açan PIN — ileride Gelişmiş Ayarlar'dan değiştirilebilir hale gelecek.
-const REVENUE_PIN = '1234';
 
 // Ekmek stok kritik seviyeye düşünce önerilecek sipariş listesi (kopyala-yapıştır için)
 const EKMEK_SIPARIS_LISTESI = [
@@ -185,7 +182,7 @@ export default function Settings({ data, onNavigate }) {
     onNavigate('endofday');
   }
 
-  // ---- Son işlemler / geri al (sol alt) ----
+  // ---- Son işlemler / geri al (sağ alt) ----
   const [historyOpen, setHistoryOpen] = useState(false);
 
   // ---- Ekmek Stok Ekleme ----
@@ -329,8 +326,14 @@ export default function Settings({ data, onNavigate }) {
   const overallOk = online && supabaseOk !== false && sheetsOk !== false;
 
   // ---- Anlık Ciro ----
-  const [revenueRevealed, setRevenueRevealed] = useState(false);
+  // Şifre kaldırıldı — sayfa açılır açılmaz göster, göz butonuyla gizle/göster.
+  const [revenueRevealed, setRevenueRevealed] = useState(true);
   const [usageData, setUsageData] = useState(null);
+
+  // ---- 1000 satır uyarısı: bugünkü fiş sayısı 1000'e ulaşırsa Supabase kesmiş olabilir ----
+  // sales_history fetch'i zaten bugünle filtreli ama Supabase varsayılan limiti 1000 satır —
+  // bugün tam 1000 fiş döndüyse bazıları kayıp olabilir, uyar.
+  const salesRowCount = todaysSales.length;
 
   // Gün Sonu'nda kaydedilen sayımlarla Hippos'un kendi hesapladığı ciroyu karşılaştırmak için
   // — bugünün Gün Sonu kaydı varsa çekiyoruz. Realtime değil, düz fetch.
@@ -366,23 +369,12 @@ export default function Settings({ data, onNavigate }) {
     }
   }
   // Sayfa açılır açılmaz bir kere çek, sonra 30 saniyede bir tazele — düz fetch, Realtime
-  // değil, kotaya hiç dokunmuyor. Şifreli ciro bölümünden BAĞIMSIZ, her zaman görünür.
+  // değil, kotaya hiç dokunmuyor.
   useEffect(() => {
     fetchUsage();
     const id = setInterval(fetchUsage, 30000);
     return () => clearInterval(id);
   }, []);
-  const [pinModalOpen, setPinModalOpen] = useState(false);
-  const [pinValue, setPinValue] = useState('');
-  const [pinError, setPinError] = useState(false);
-  const pinInputRef = useRef(null);
-
-  useEffect(() => {
-    if (pinModalOpen) {
-      const t = setTimeout(() => pinInputRef.current?.focus(), 50);
-      return () => clearTimeout(t);
-    }
-  }, [pinModalOpen]);
 
   const todaysSales = useMemo(() => {
     const todayStr = new Date().toDateString();
@@ -400,41 +392,8 @@ export default function Settings({ data, onNavigate }) {
   const txCount = todaysSales.length;
   const avgTicket = txCount > 0 ? totals.total / txCount : 0;
 
-  function checkPin(digits) {
-    if (digits === REVENUE_PIN) {
-      setRevenueRevealed(true);
-      setPinModalOpen(false);
-      setPinValue('');
-      setPinError(false);
-    } else {
-      setPinError(true);
-      setTimeout(() => {
-        setPinValue('');
-        setPinError(false);
-      }, 550);
-    }
-  }
-
-  function pressPinDigit(d) {
-    setPinValue((prev) => {
-      if (prev.length >= 4) return prev;
-      const next = prev + d;
-      if (next.length === 4) setTimeout(() => checkPin(next), 100);
-      return next;
-    });
-  }
-  function pinBackspace() {
-    setPinValue((prev) => prev.slice(0, -1));
-  }
-
   function toggleRevenue() {
-    if (revenueRevealed) {
-      setRevenueRevealed(false);
-    } else {
-      setPinValue('');
-      setPinError(false);
-      setPinModalOpen(true);
-    }
+    setRevenueRevealed((v) => !v);
   }
 
   async function shareRevenue() {
@@ -670,6 +629,14 @@ export default function Settings({ data, onNavigate }) {
               </div>
             </div>
 
+            {/* 1000 satır uyarısı */}
+            {salesRowCount >= 1000 && (
+              <div className="st-revenue-limit-warn">
+                <AlertTriangle size={14} />
+                <span>GÜNLÜK VERİ EKSİK OLABİLİR — bugün 1000+ fiş var, Supabase bir kısmını kesmemiş olabilir. Ciro güvenilir değil.</span>
+              </div>
+            )}
+
             {revenueRevealed ? (
               <div className="st-revenue-body">
                 <div className="st-revenue-row"><Banknote size={15} /><span>Nakit</span><strong>{TL(totals['NAKİT'])}</strong></div>
@@ -703,11 +670,9 @@ export default function Settings({ data, onNavigate }) {
                 </div>
               </div>
             ) : (
-              <button className="st-revenue-masked" onClick={toggleRevenue}>
-                <Lock size={20} />
-                <span className="masked-amount">•••• ₺</span>
-                <span className="hint">Görmek için dokun</span>
-              </button>
+              <div className="st-revenue-body st-revenue-hidden">
+                <div className="st-revenue-total"><span>TOPLAM CİRO</span><strong>••••• ₺</strong></div>
+              </div>
             )}
           </aside>
 
@@ -746,7 +711,7 @@ export default function Settings({ data, onNavigate }) {
 
       {toast && <div className="st-toast">{toast}</div>}
 
-      {/* SON İŞLEMLER / GERİ AL (sol alt) */}
+      {/* SON İŞLEMLER / GERİ AL (sağ alt) */}
       <div className="st-history-wrap">
         {historyOpen && (
           <div className="st-history-panel">
@@ -964,45 +929,6 @@ export default function Settings({ data, onNavigate }) {
               <button className="st-primary" disabled={ekmekKaydediliyor} onClick={handleEkmekKaydet}>
                 {ekmekKaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* PIN MODALI */}
-      {pinModalOpen && (
-        <div className="st-modal-overlay" onClick={() => setPinModalOpen(false)}>
-          <div className={`st-modal st-pin-modal ${pinError ? 'shake' : ''}`} onClick={(e) => e.stopPropagation()}>
-            <div className="st-modal-head">
-              <h3><Lock size={15} /> Ciroyu Görüntüle</h3>
-              <button className="st-modal-x" onClick={() => setPinModalOpen(false)}><X size={16} /></button>
-            </div>
-            <div className="st-pin-dots" onClick={() => pinInputRef.current?.focus()}>
-              {[0, 1, 2, 3].map((i) => (
-                <span key={i} className={`st-pin-dot ${pinValue.length > i ? 'filled' : ''}`} />
-              ))}
-              <input
-                ref={pinInputRef}
-                className="st-pin-hidden-input"
-                type="tel"
-                inputMode="numeric"
-                maxLength={4}
-                value={pinValue}
-                onChange={(e) => {
-                  const digits = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
-                  setPinValue(digits);
-                  if (digits.length === 4) setTimeout(() => checkPin(digits), 100);
-                }}
-              />
-            </div>
-            {pinError && <p className="st-pin-error">Yanlış PIN, tekrar deneyin</p>}
-            <div className="st-pin-keypad">
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((n) => (
-                <button key={n} onClick={() => pressPinDigit(n)}>{n}</button>
-              ))}
-              <div />
-              <button onClick={() => pressPinDigit('0')}>0</button>
-              <button onClick={pinBackspace}><Delete size={16} /></button>
             </div>
           </div>
         </div>
