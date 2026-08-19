@@ -129,7 +129,7 @@
   flex-shrink: 0;
   /* Ödeme Al artık absolute (panelin sağ kenarına kaynaşık) — diğer butonlar onun altına
      girmesin diye burada sağ tarafta yer ayrılıyor. */
-  padding-right: 160px;
+  padding-right: 180px;
 }
 .ds-header-actions button {
   display: flex;
@@ -165,7 +165,8 @@
   padding: 0 34px;
   margin: 0;
   border-radius: 0 var(--r-panel) var(--r-panel) 0;
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 800;
 }
 .ds-header-pay-btn, .ds-header-pay-btn * { color: #fff !important; stroke: #fff; }
 .ds-header-table {
