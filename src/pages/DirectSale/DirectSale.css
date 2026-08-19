@@ -154,7 +154,7 @@
 .ds-header-print-btn { background: var(--panel-2); color: var(--ink); }
 /* Ödeme Al: panelin sağ kenarına TAM yükseklikte kaynaşık — .ds-header artık position:relative,
    bu buton ona göre absolute konumlanıp panelin kendi köşe yuvarlaklığını miras alıyor. */
-.ds-header-pay-btn {
+.ds-header-actions .ds-header-pay-btn {
   position: absolute;
   top: 0;
   right: 0;
