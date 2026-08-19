@@ -550,6 +550,9 @@
   letter-spacing: 0.04em;
   color: #E94F37 !important;
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .ds-split-col.küçük .ds-split-col-title { color: var(--olive); }
 .ds-split-col-scrollbtns { display: flex; gap: 10px; flex-shrink: 0; }
@@ -579,11 +582,50 @@
   padding-bottom: 8px;
   margin: 0 0 12px;
   border-bottom: 1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+/* Açılış kategorisi yıldızı — sadece bu cihazda (localStorage) hangi kategorinin
+   satış ekranı her açıldığında otomatik seçili geleceğini belirler. */
+.ds-default-cat-star {
+  background: transparent;
+  border: none;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--ink-soft);
+  transition: color var(--t-hover) var(--ease), transform var(--t-press) var(--ease);
+}
+.ds-default-cat-star:hover { color: var(--earth); }
+.ds-default-cat-star:active { transform: scale(0.85); }
+.ds-default-cat-star.active { color: var(--earth); }
 .ds-product-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 12px;
+}
+/* Kahvaltı kategorisine özel: 8 sütun, butonlar/yazı/ikon orantılı küçülür. */
+.ds-product-grid.kahvalti-grid {
+  grid-template-columns: repeat(8, 1fr);
+  gap: 10px;
+}
+.ds-product-grid.kahvalti-grid .pb-name {
+  font-size: 20px;
+}
+.ds-product-grid.kahvalti-grid .pb-icon-svg,
+.ds-product-grid.kahvalti-grid .pb-icon-watermark {
+  width: 52px;
+  height: 52px;
+}
+.ds-product-grid.kahvalti-grid .pb-card {
+  min-height: 84px;
+  padding: 8px 10px;
 }
 .ds-product-card {
   position: relative;

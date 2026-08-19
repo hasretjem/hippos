@@ -58,11 +58,25 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const sorted = [...rawCategories].sort((a, b) => a.menuSirasi - b.menuSirasi || a.name.localeCompare(b.name, 'tr'));
     return sorted.map((c) => c.name);
   }, [rawCategories]);
+  // Açılış kategorisi: bu cihaza (localStorage) özel, PC'ler arası paylaşılmaz.
+  // Kullanıcı bir alt kategori başlığındaki yıldıza basınca o ANA kategori kaydedilir.
+  const [defaultCategory, setDefaultCategoryState] = useState(() => {
+    try { return localStorage.getItem('hippos_default_category') || ''; } catch { return ''; }
+  });
+  function setDefaultCategory(cat) {
+    setDefaultCategoryState(cat);
+    try { localStorage.setItem('hippos_default_category', cat); } catch { /* localStorage kapalıysa sessizce geç */ }
+  }
   const [activeCategory, setActiveCategory] = useState('');
   useEffect(() => {
     // Kategoriler ilk yüklendiğinde (ya da hepsi silinip yeniden geldiğinde) sıradaki
-    // en küçük kategoriyi otomatik seç — artık "TÜMÜ" diye bir seçenek yok.
-    if (!activeCategory && categories.length > 0) setActiveCategory(categories[0]);
+    // en küçük kategoriyi otomatik seç — kullanıcı bir "açılış kategorisi" kaydettiyse
+    // (yıldız ile, bu cihaza özel) onu, yoksa ilk kategoriyi kullan.
+    if (!activeCategory && categories.length > 0) {
+      const tercih = defaultCategory && categories.includes(defaultCategory) ? defaultCategory : categories[0];
+      setActiveCategory(tercih);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categories, activeCategory]);
   const [searchQuery, setSearchQuery] = useState('');
   const [payMode, setPayMode] = useState(false);
@@ -932,7 +946,16 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   {['büyük', 'küçük'].map((yon) => (
                     <div className={`ds-split-col ${yon}`} key={yon} ref={yon === 'büyük' ? bigColScrollRef : smallColScrollRef}>
                       <div className="ds-split-col-head">
-                        <h3 className="ds-split-col-title">{yon === 'büyük' ? 'BÜYÜK SANDVİÇ' : 'KÜÇÜK SANDVİÇ'}</h3>
+                        <h3 className="ds-split-col-title">
+                          <button
+                            className={`ds-default-cat-star ${defaultCategory === activeCategory ? 'active' : ''}`}
+                            onClick={(e) => { e.stopPropagation(); setDefaultCategory(activeCategory); }}
+                            title="Bu kategoriyi açılış kategorisi yap"
+                          >
+                            <Star size={14} fill={defaultCategory === activeCategory ? 'currentColor' : 'none'} />
+                          </button>
+                          {yon === 'büyük' ? 'BÜYÜK SANDVİÇ' : 'KÜÇÜK SANDVİÇ'}
+                        </h3>
                         <div className="ds-split-col-scrollbtns">
                           <button onClick={() => scrollByPage(yon === 'büyük' ? bigColScrollRef : smallColScrollRef, -1)}><ChevronUp size={22} /></button>
                           <button onClick={() => scrollByPage(yon === 'büyük' ? bigColScrollRef : smallColScrollRef, 1)}><ChevronDown size={22} /></button>
@@ -964,8 +987,19 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               ) : (
                 Object.entries(groupedProducts).map(([subCat, items]) => (
                 <div key={subCat} className="ds-product-group">
-                  {subCat && subCat !== 'Genel' && <h3 className="ds-subcat-label">{subCat}</h3>}
-                  <div className="ds-product-grid">
+                  {subCat && subCat !== 'Genel' && (
+                    <h3 className="ds-subcat-label">
+                      <button
+                        className={`ds-default-cat-star ${defaultCategory === activeCategory ? 'active' : ''}`}
+                        onClick={(e) => { e.stopPropagation(); setDefaultCategory(activeCategory); }}
+                        title="Bu kategoriyi açılış kategorisi yap"
+                      >
+                        <Star size={14} fill={defaultCategory === activeCategory ? 'currentColor' : 'none'} />
+                      </button>
+                      {subCat}
+                    </h3>
+                  )}
+                  <div className={`ds-product-grid ${activeCategory === 'KAHVALTI' ? 'kahvalti-grid' : ''}`}>
                     {items.map((product) => (
                       <ProductButton
                         key={product.id}
