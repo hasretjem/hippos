@@ -255,7 +255,7 @@ export default function Settings({ data, onNavigate }) {
   }
 
   const isSandwich = (i) => i.kategori && i.kategori.includes('SANDVİÇ');
-  const isMeal = (i) => i.altKategori === 'Ev Yemekleri';
+  const isMeal = (i) => i.kategori === 'YEMEKLER';
 
   const sandwichSellers = useMemo(() => topSellers(isSandwich, sandwichShowAll ? 10 : 5), [todaysSoldItems, sandwichShowAll]);
   const mealSellers = useMemo(() => topSellers(isMeal, mealShowAll ? 10 : 5), [todaysSoldItems, mealShowAll]);
