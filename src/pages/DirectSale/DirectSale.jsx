@@ -777,6 +777,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     });
   }
 
+  const isYemeklerGrid = activeCategory === 'YEMEKLER';
+  
   return (
     <div className="ds-shell">
       <div className="ds-body">
@@ -993,8 +995,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 </div>
               ) : (
                 Object.entries(groupedProducts).map(([subCat, items]) => (// Yemekler kategorisi için 8 sütun, diğerleri için mevcut grid
-const isYemeklerGrid = activeCategory === 'YEMEKLER'; // Kategorinin tam adını buraya yaz (büyük/küçük harf duyarlı)
-
 Object.entries(groupedProducts).map(([subCat, items]) => (
   <div key={subCat} className="ds-product-group">
     {subCat && subCat !== 'Genel' && (
