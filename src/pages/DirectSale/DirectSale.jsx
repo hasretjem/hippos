@@ -992,38 +992,48 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   ))}
                 </div>
               ) : (
-                Object.entries(groupedProducts).map(([subCat, items]) => (
-                <div key={subCat} className="ds-product-group">
-                  {subCat && subCat !== 'Genel' && (
-                    <h3 className="ds-subcat-label">
-                      <button
-                        className={`ds-default-cat-star ${defaultCategory === activeCategory ? 'active' : ''}`}
-                        onClick={(e) => { e.stopPropagation(); setDefaultCategory(activeCategory); }}
-                        title="Bu kategoriyi açılış kategorisi yap"
-                      >
-                        <Star size={14} fill={defaultCategory === activeCategory ? 'currentColor' : 'none'} />
-                      </button>
-                      {subCat}
-                    </h3>
-                  )}
-                  <div className={`ds-product-grid ${activeCategory === 'KAHVALTI' ? 'kahvalti-grid' : ''}`}>
-                    {items.map((product, idx) => {
-                      let pairPosition = null;
-                      if (product.isAzVariant) pairPosition = 'az';
-                      else if (items[idx + 1]?.isAzVariant && items[idx + 1]?.parentId === product.id) pairPosition = 'main';
-                      return (
-                        <ProductButton
-                          key={product.id}
-                          product={product}
-                          category={getCategoryFor(product)}
-                          isFav={favorites.includes(product.id)}
-                          onAdd={addProductToOrder}
-                          pairPosition={pairPosition}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
+                Object.entries(groupedProducts).map(([subCat, items]) => (// Yemekler kategorisi için 8 sütun, diğerleri için mevcut grid
+const isYemeklerGrid = activeCategory === 'YEMEKLER'; // Kategorinin tam adını buraya yaz (büyük/küçük harf duyarlı)
+
+Object.entries(groupedProducts).map(([subCat, items]) => (
+  <div key={subCat} className="ds-product-group">
+    {subCat && subCat !== 'Genel' && (
+      <h3 className="ds-subcat-label">
+        <button
+          className={`ds-default-cat-star ${defaultCategory === activeCategory ? 'active' : ''}`}
+          onClick={(e) => { e.stopPropagation(); setDefaultCategory(activeCategory); }}
+          title="Bu kategoriyi açılış kategorisi yap"
+        >
+          <Star size={14} fill={defaultCategory === activeCategory ? 'currentColor' : 'none'} />
+        </button>
+        {subCat}
+      </h3>
+    )}
+    <div className={`ds-product-grid ${isYemeklerGrid ? 'kahvalti-grid' : ''}`}>
+      {items.map((product, idx) => {
+        // Görsel İlizyon Mantığı: Bir sonraki ürün bu ürünün "Az" varyantı mı?
+        let pairPosition = null;
+        if (product.isAzVariant) {
+          pairPosition = 'az';
+        } else if (items[idx + 1]?.isAzVariant && items[idx + 1]?.parentId === product.id) {
+          pairPosition = 'main';
+        }
+
+        return (
+          <ProductButton
+            key={product.id}
+            product={product}
+            category={getCategoryFor(product)}
+            isFav={favorites.includes(product.id)}
+            onAdd={addProductToOrder}
+            pairPosition={pairPosition}
+            isYemeklerGrid={isYemeklerGrid} // Fiyat gösterip göstermeyeceğini bilmek için
+          />
+        );
+      })}
+    </div>
+  </div>
+))
                 ))
               )}
             </div>

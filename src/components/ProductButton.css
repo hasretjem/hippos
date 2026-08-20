@@ -1,96 +1,57 @@
-/* ProductButton — sade, sabit boyutlu ürün butonu, köşede emoji filigran.
-   Performans için: dinamik font ölçümü (useFitText) YOK, sadece saf CSS. */
+/* =========================================
+   YEMEKLER - GÖRSEL İLÜZYON (SPLIT BUTTON)
+   ========================================= */
 
-.pb-card {
-  position: relative;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  padding: 10px 12px;
-  text-align: left;
-  min-height: 98px;
-  height: 100%;
-  width: 100%;
-  display: flex;
-  flex-direction: row;
-  align-items: flex-end;
-  justify-content: flex-start;
-  overflow: hidden;
-  cursor: pointer;
-  transition: transform var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease);
-}
-/* Turuncu hover kenarlığı kaldırıldı — sadece hafif kalkma efekti kalıyor */
-.pb-card:hover { transform: translateY(-2px) scale(1.01); box-shadow: var(--shadow-2); }
-.pb-card:active { transform: scale(0.97); transition-duration: var(--t-press); }
-.pb-card.fav { border-color: var(--earth); }
-
-/* Köşede büyük, soluk emoji filigran — metnin arkasında, tıklamayı engellemez */
-.pb-icon-watermark {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  font-size: 66px;
-  line-height: 1;
-  opacity: 0.65;
-  pointer-events: none;
-  z-index: 0;
+/* Ana ürün (Sol %75) - Sağ kenarlar keskin */
+.pb-pair-main {
+  border-radius: var(--r-card) 0 0 var(--r-card) !important;
+  border-right: none !important;
 }
 
-/* Metin: sola-üste hizalı */
-/* DEĞİŞTİR İLE */
-.pb-text-box {
-  position: relative;
-  z-index: 1;
-  flex: 1 1 auto;
-  min-width: 0;
+/* Az varyant (Sağ %25) - Sol kenarlar keskin, ortalanmış içerik, koyu ton */
+.pb-pair-az {
+  border-radius: 0 var(--r-card) var(--r-card) 0 !important;
+  border-left: 1px solid rgba(0,0,0,0.3) !important; /* İki butonu ayıran keskin çizgi */
+  
+  /* Varsayılan pb-card hizalamasını (sol-alt) iptal edip ortalamak için */
+  align-items: center !important;
+  justify-content: center !important;
+  
+  /* Clauidenin çözemediği koyu renk sorunu: CSS filter ile arka planı %25 koyulaştırıyoruz */
+  filter: brightness(0.75);
+}
+
+/* AZ butonunun içeriği */
+.pb-az-content {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-end;
-  gap: 4px;
-  height: auto;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
 }
 
-.pb-name {
-  font-family: 'Inter', -apple-system, 'Segoe UI', Arial, sans-serif;
-  font-size: 25px;
-  font-weight: 800;
-  line-height: 1.25;
-  text-align: left;
-  overflow-wrap: break-word;
-  word-break: normal;
+.pb-az-label {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  line-height: 1;
 }
-.pb-icon-svg {
-  width: 60px;
-  height: 60px;
+
+.pb-az-price {
+  font-size: 11px;
+  font-weight: 600;
   opacity: 0.9;
-}
-.pb-icon-svg svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-.pb-star { flex-shrink: 0; }
-
-/* Ana ürün (Az'lı): sağ kenarı keskin, sağda Az butonuyla bitişik görünür */
-.pb-pair-main {
-  border-radius: var(--r-card) 0 0 var(--r-card);
-  border-right: none;
-}
-/* Az varyant: sol kenarı keskin, soldaki ana ürüne bitişik */
-.pb-pair-az {
-  border-radius: 0 var(--r-card) var(--r-card) 0;
-  border-left: none;
+  line-height: 1;
 }
 
-/* Tekli ürün fiyatı — pilsiz, sağ altta, kontrast renginde */
+/* =========================================
+   TEKLİ ÜRÜN FİYATI (Pilsiz, Düz Yazı)
+   ========================================= */
+/* (Senin kodunda pb-price zaten vardı, sadece pill olmamasını sağladık. 
+   Eğer eski projede pill varsa aşağıdaki satırı ekle) */
 .pb-price {
-  position: absolute;
-  bottom: 8px;
-  right: 10px;
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  pointer-events: none;
-  z-index: 1;
+  /* Yuvarlak pill arka planı varsa onu sıfırla */
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
 }
