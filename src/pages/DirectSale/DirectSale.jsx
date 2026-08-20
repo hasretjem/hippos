@@ -778,7 +778,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   }
 
   const isYemeklerGrid = activeCategory === 'YEMEKLER';
-  
+
   return (
     <div className="ds-shell">
       <div className="ds-body">
@@ -1011,25 +1011,59 @@ Object.entries(groupedProducts).map(([subCat, items]) => (
     )}
     <div className={`ds-product-grid ${isYemeklerGrid ? 'kahvalti-grid' : ''}`}>
       {items.map((product, idx) => {
-        // Görsel İlizyon Mantığı: Bir sonraki ürün bu ürünün "Az" varyantı mı?
-        let pairPosition = null;
-        if (product.isAzVariant) {
-          pairPosition = 'az';
-        } else if (items[idx + 1]?.isAzVariant && items[idx + 1]?.parentId === product.id) {
-          pairPosition = 'main';
-        }
+<div className={`ds-product-grid ${isYemeklerGrid ? 'kahvalti-grid' : ''}`}>
+  {items.map((product, idx) => {
+    let pairPosition = null;
+    if (product.isAzVariant) {
+      pairPosition = 'az';
+    } else if (items[idx + 1]?.isAzVariant && items[idx + 1]?.parentId === product.id) {
+      pairPosition = 'main';
+    }
 
-        return (
+    // --- SADECE YEMEKLER SAYFASI İÇİN GÖRSEL İLÜZYON ---
+    if (isYemeklerGrid && pairPosition === 'main') {
+      const azProduct = items[idx + 1]; // Hemen yanındaki Az ürünü yakala
+      return (
+        <div key={product.id} className="pb-pair-wrapper">
           <ProductButton
-            key={product.id}
             product={product}
             category={getCategoryFor(product)}
             isFav={favorites.includes(product.id)}
             onAdd={addProductToOrder}
-            pairPosition={pairPosition}
-            isYemeklerGrid={isYemeklerGrid} // Fiyat gösterip göstermeyeceğini bilmek için
+            pairPosition="main"
+            isYemeklerGrid={isYemeklerGrid}
           />
-        );
+          <ProductButton
+            product={azProduct}
+            category={getCategoryFor(azProduct)}
+            isFav={favorites.includes(azProduct.id)}
+            onAdd={addProductToOrder}
+            pairPosition="az"
+            isYemeklerGrid={isYemeklerGrid}
+          />
+        </div>
+      );
+    }
+
+    // Az ürünü yukarıdaki wrapper içine yazdığımız için, burada tekrar ekrana basma (Çift kaymayı önle)
+    if (isYemeklerGrid && pairPosition === 'az') {
+      return null;
+    }
+
+    // --- DİĞER TÜM KATEGORİLER (Kahvaltı vb.) ESKİ HALİYLE KALSIN ---
+    return (
+      <ProductButton
+        key={product.id}
+        product={product}
+        category={getCategoryFor(product)}
+        isFav={favorites.includes(product.id)}
+        onAdd={addProductToOrder}
+        pairPosition={null} // Diğer kategorilere sıfır gönderiyoruz
+        isYemeklerGrid={false} // Diğer kategorilerde yanlışlıkla devreye girmesin
+      />
+    );
+  })}
+</div>
       })}
     </div>
   </div>

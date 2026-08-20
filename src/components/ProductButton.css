@@ -1,57 +1,52 @@
 /* =========================================
-   YEMEKLER - GÖRSEL İLÜZYON (SPLIT BUTTON)
+   YEMEKLER İÇİN KESİN ÇÖZÜM: WRAPPER (SARMALAYICI)
    ========================================= */
 
-/* Ana ürün (Sol %75) - Sağ kenarlar keskin */
+/* İki butonu saran dış kutu. Grid'de 2 sütunluk yer kaplar */
+.pb-pair-wrapper {
+  grid-column: span 2; 
+  display: flex;
+  border-radius: var(--r-card); /* DIŞ kenarlar yuvarlatıldı */
+  overflow: hidden; /* İÇ kenarlar keskin kaldı (ALTIN KURAL) */
+  box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+}
+
+/* Wrapper içindeki kartların bağımsız grid span'ını kaldır (satır dışına taşmasınlar) */
+.pb-pair-wrapper .pb-card {
+  grid-column: span 1 !important; 
+  border-radius: 0 !important; /* Köşeleri wrapper yönetir */
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Sol Taraf: Tam Porsiyon (%75) */
 .pb-pair-main {
-  border-radius: var(--r-card) 0 0 var(--r-card) !important;
-  border-right: none !important;
+  flex: 3;
+  position: relative;
 }
 
-/* Az varyant (Sağ %25) - Sol kenarlar keskin, ortalanmış içerik, koyu ton */
+/* Sağ Taraf: Az Porsiyon (%25) */
 .pb-pair-az {
-  border-radius: 0 var(--r-card) var(--r-card) 0 !important;
-  border-left: 1px solid rgba(0,0,0,0.3) !important; /* İki butonu ayıran keskin çizgi */
-  
-  /* Varsayılan pb-card hizalamasını (sol-alt) iptal edip ortalamak için */
-  align-items: center !important;
-  justify-content: center !important;
-  
-  /* Clauidenin çözemediği koyu renk sorunu: CSS filter ile arka planı %25 koyulaştırıyoruz */
-  filter: brightness(0.75);
-}
-
-/* AZ butonunun içeriği */
-.pb-az-content {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  filter: brightness(0.75); /* Arka planı otomatik koyulaştırır */
+  border-left: 1px solid rgba(0,0,0,0.3); /* İki tarafı ayıran keskin çizgi */
+}
+
+/* AZ butonunun yazıları */
+.pb-az-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 2px;
 }
+.pb-az-label { font-size: 13px; font-weight: 900; letter-spacing: 1px; }
+.pb-az-price { font-size: 11px; font-weight: 600; opacity: 0.9; }
 
-.pb-az-label {
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 1px;
-  line-height: 1;
-}
-
-.pb-az-price {
-  font-size: 11px;
-  font-weight: 600;
-  opacity: 0.9;
-  line-height: 1;
-}
-
-/* =========================================
-   TEKLİ ÜRÜN FİYATI (Pilsiz, Düz Yazı)
-   ========================================= */
-/* (Senin kodunda pb-price zaten vardı, sadece pill olmamasını sağladık. 
-   Eğer eski projede pill varsa aşağıdaki satırı ekle) */
-.pb-price {
-  /* Yuvarlak pill arka planı varsa onu sıfırla */
-  background: transparent !important;
-  padding: 0 !important;
-  border-radius: 0 !important;
+/* 8 Sütunlu gridde tekli ürünlerin boyutu (Sadece Yemekler ve Kahvaltı için) */
+.kahvalti-grid .pb-card {
+  grid-column: span 2;
 }
