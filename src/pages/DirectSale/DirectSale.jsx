@@ -777,8 +777,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     });
   }
 
-  const isYemeklerGrid = activeCategory === 'YEMEKLER';
-
   return (
     <div className="ds-shell">
       <div className="ds-body">
@@ -972,21 +970,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                               <h3 className="ds-subcat-label">{subCat}</h3>
                             )}
                             <div className="ds-product-grid">
-                              {items.map((product, idx) => {
-                              let pairPosition = null;
-                              if (product.isAzVariant) pairPosition = 'az';
-                              else if (items[idx + 1]?.isAzVariant && items[idx + 1]?.parentId === product.id) pairPosition = 'main';
-                              return (
+                              {items.map((product) => (
                                 <ProductButton
                                   key={product.id}
                                   product={product}
                                   category={getCategoryFor(product)}
                                   isFav={favorites.includes(product.id)}
                                   onAdd={addProductToOrder}
-                                  pairPosition={pairPosition}
                                 />
-                              );
-                            })}
+                              ))}
                             </div>
                           </div>
                         ))}
@@ -994,80 +986,45 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   ))}
                 </div>
               ) : (
-                Object.entries(groupedProducts).map(([subCat, items]) => (// Yemekler kategorisi için 8 sütun, diğerleri için mevcut grid
-Object.entries(groupedProducts).map(([subCat, items]) => (
-  <div key={subCat} className="ds-product-group">
-    {subCat && subCat !== 'Genel' && (
-      <h3 className="ds-subcat-label">
-        <button
-          className={`ds-default-cat-star ${defaultCategory === activeCategory ? 'active' : ''}`}
-          onClick={(e) => { e.stopPropagation(); setDefaultCategory(activeCategory); }}
-          title="Bu kategoriyi açılış kategorisi yap"
-        >
-          <Star size={14} fill={defaultCategory === activeCategory ? 'currentColor' : 'none'} />
-        </button>
-        {subCat}
-      </h3>
-    )}
-    <div className={`ds-product-grid ${isYemeklerGrid ? 'kahvalti-grid' : ''}`}>
-      {items.map((product, idx) => {
-<div className={`ds-product-grid ${isYemeklerGrid ? 'kahvalti-grid' : ''}`}>
-  {items.map((product, idx) => {
-    let pairPosition = null;
-    if (product.isAzVariant) {
-      pairPosition = 'az';
-    } else if (items[idx + 1]?.isAzVariant && items[idx + 1]?.parentId === product.id) {
-      pairPosition = 'main';
-    }
-
-    // --- SADECE YEMEKLER SAYFASI İÇİN GÖRSEL İLÜZYON ---
-    if (isYemeklerGrid && pairPosition === 'main') {
-      const azProduct = items[idx + 1]; // Hemen yanındaki Az ürünü yakala
-      return (
-        <div key={product.id} className="pb-pair-wrapper">
-          <ProductButton
-            product={product}
-            category={getCategoryFor(product)}
-            isFav={favorites.includes(product.id)}
-            onAdd={addProductToOrder}
-            pairPosition="main"
-            isYemeklerGrid={isYemeklerGrid}
-          />
-          <ProductButton
-            product={azProduct}
-            category={getCategoryFor(azProduct)}
-            isFav={favorites.includes(azProduct.id)}
-            onAdd={addProductToOrder}
-            pairPosition="az"
-            isYemeklerGrid={isYemeklerGrid}
-          />
-        </div>
-      );
-    }
-
-    // Az ürünü yukarıdaki wrapper içine yazdığımız için, burada tekrar ekrana basma (Çift kaymayı önle)
-    if (isYemeklerGrid && pairPosition === 'az') {
-      return null;
-    }
-
-    // --- DİĞER TÜM KATEGORİLER (Kahvaltı vb.) ESKİ HALİYLE KALSIN ---
-    return (
-      <ProductButton
-        key={product.id}
-        product={product}
-        category={getCategoryFor(product)}
-        isFav={favorites.includes(product.id)}
-        onAdd={addProductToOrder}
-        pairPosition={null} // Diğer kategorilere sıfır gönderiyoruz
-        isYemeklerGrid={false} // Diğer kategorilerde yanlışlıkla devreye girmesin
-      />
-    );
-  })}
-</div>
-      })}
-    </div>
-  </div>
-))
+                Object.entries(groupedProducts).map(([subCat, items]) => (
+                <div key={subCat} className="ds-product-group">
+                  {subCat && subCat !== 'Genel' && (
+                    <h3 className="ds-subcat-label">
+                      <button
+                        className={`ds-default-cat-star ${defaultCategory === activeCategory ? 'active' : ''}`}
+                        onClick={(e) => { e.stopPropagation(); setDefaultCategory(activeCategory); }}
+                        title="Bu kategoriyi açılış kategorisi yap"
+                      >
+                        <Star size={14} fill={defaultCategory === activeCategory ? 'currentColor' : 'none'} />
+                      </button>
+                      {subCat}
+                    </h3>
+                  )}
+                  <div className={`ds-product-grid ${activeCategory === 'KAHVALTI' || activeCategory === 'YEMEKLER' ? 'kahvalti-grid' : ''}`}>
+                    {items.map((product, idx) => {
+                      // "Az X" varyantı her zaman kendi ana ürününün hemen ardından geliyor
+                      // (yukarıdaki sıralama zaten garanti ediyor) — burada sadece komşuluğa
+                      // bakıp GÖRSEL bir ilizyon kuruyoruz: iki ayrı buton, ama birbirine bakan
+                      // kenarları keskin, dışarı bakanlar yuvarlak — tek parça gibi görünüyorlar.
+                      const isAz = product.isAzVariant;
+                      const nextIsAzPair = !isAz && items[idx + 1]?.isAzVariant && items[idx + 1]?.parentId === product.id;
+                      const prevIsAzPair = isAz && items[idx - 1] && product.parentId === items[idx - 1].id;
+                      let pairPosition = null;
+                      if (nextIsAzPair) pairPosition = 'main';
+                      else if (prevIsAzPair) pairPosition = 'az';
+                      return (
+                        <ProductButton
+                          key={product.id}
+                          product={product}
+                          category={getCategoryFor(product)}
+                          isFav={favorites.includes(product.id)}
+                          onAdd={addProductToOrder}
+                          pairPosition={pairPosition}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
                 ))
               )}
             </div>
