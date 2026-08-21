@@ -1,39 +1,27 @@
 /* =========================================
-   YEMEKLER İÇİN KESİN ÇÖZÜM: WRAPPER (SARMALAYICI)
+   AZ/TAM PORSİYON GÖRSEL İLİZYONU (wrapper YOK — iki ayrı grid item,
+   sadece komşu kenarları keskin + aralarında boşluk yok, tek parça gibi görünüyorlar)
    ========================================= */
 
-/* İki butonu saran dış kutu. Grid'de 2 sütunluk yer kaplar */
-.pb-pair-wrapper {
-  grid-column: span 2; 
-  display: flex;
-  border-radius: var(--r-card); /* DIŞ kenarlar yuvarlatıldı */
-  overflow: hidden; /* İÇ kenarlar keskin kaldı (ALTIN KURAL) */
-  box-shadow: 0 2px 5px rgba(0,0,0,0.08);
-}
-
-/* Wrapper içindeki kartların bağımsız grid span'ını kaldır (satır dışına taşmasınlar) */
-.pb-pair-wrapper .pb-card {
-  grid-column: span 1 !important; 
-  border-radius: 0 !important; /* Köşeleri wrapper yönetir */
-  border: none !important;
-  box-shadow: none !important;
-}
-
-/* Sol Taraf: Tam Porsiyon (%75) */
+/* Ana ürün (Az varyantı olan): grid'de normal 1 sütun kaplar, sağ kenarı keskin,
+   sağındaki "Az" kartına yapışık durur (kenar boşluğu yok). */
 .pb-pair-main {
-  flex: 3;
-  position: relative;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  margin-right: 0;
 }
 
-/* Sağ Taraf: Az Porsiyon (%25) */
+/* "Az" varyantı: sol kenarı keskin, ana ürüne yapışık; kendi rengi otomatik koyulaştırılır
+   (filter: brightness) böylece göz "bu farklı bir bölge" sinyalini hemen alır. */
 .pb-pair-az {
-  flex: 1;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  margin-left: 3px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  filter: brightness(0.75); /* Arka planı otomatik koyulaştırır */
-  border-left: 1px solid rgba(0,0,0,0.3); /* İki tarafı ayıran keskin çizgi */
+  filter: brightness(0.8);
 }
 
 /* AZ butonunun yazıları */
@@ -45,8 +33,3 @@
 }
 .pb-az-label { font-size: 13px; font-weight: 900; letter-spacing: 1px; }
 .pb-az-price { font-size: 11px; font-weight: 600; opacity: 0.9; }
-
-/* 8 Sütunlu gridde tekli ürünlerin boyutu (Sadece Yemekler ve Kahvaltı için) */
-.kahvalti-grid .pb-card {
-  grid-column: span 2;
-}
