@@ -49,6 +49,8 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     deleteMutfakHazirNot,
     ekmekStok,
     ekmekStoktanDus,
+    tableBosvars,
+    bosvarBildirimleri,
   } = data;
 
   // Renk-zaman kademesi her 30 dk'da bir değişsin diye periyodik yeniden çizim
@@ -475,6 +477,10 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       document.body
     );
 
+    const sonBosvar = compact
+      ? bosvarBildirimleri.filter((b) => b.paketAdi === table).sort((a, b) => b.ts - a.ts)[0]
+      : null;
+
     const deliveryTag = sonTeslimat && (
       <div className={`tb-delivery-tag ${sonTeslimat.durum}`}>
         {sonTeslimat.tip === 'teslim_edildi'
@@ -484,6 +490,12 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
           : sonTeslimat.durum === 'onaylandi' ? `✓ Kısmi ödeme onaylandı`
           : sonTeslimat.durum === 'reddedildi' ? '✕ Kısmi ödeme reddedildi'
           : 'Kısmi ödeme bildirildi'}
+      </div>
+    );
+
+    const bosvarTag = compact && tableBosvars[table] && sonBosvar && (
+      <div className="tb-delivery-tag onaylandi" style={{ background: '#74d600', color: '#1a3300' }}>
+        📦 Boşu Aldım (paketçi bildirdi)
       </div>
     );
 
@@ -547,6 +559,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
             )
           )}
           {deliveryTag}
+          {bosvarTag}
           {lockedOverlay}
         </div>
       );
@@ -673,20 +686,20 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
 
         <aside className="tb-packages">
           <h2 className="tb-section-title">Paketler</h2>
+          <button
+            className="tb-add-package tb-add-package--sticky"
+            onClick={() => {
+              const name = openPackage();
+              openTable(name);
+            }}
+          >
+            <div className="tb-add-package-plus-wrap">
+              <div className="tb-add-package-plus"><Plus size={18} /></div>
+            </div>
+            <span>Yeni Paket</span>
+          </button>
           <div className={`tb-package-list ${packages.length > 8 ? 'ultra-compact' : packages.length > 4 ? 'compact' : ''}`}>
             {packages.map((p) => renderTableCard(p.name, p.name, true))}
-            <button
-              className="tb-add-package"
-              onClick={() => {
-                const name = openPackage();
-                openTable(name);
-              }}
-            >
-              <div className="tb-add-package-plus-wrap">
-                <div className="tb-add-package-plus"><Plus size={18} /></div>
-              </div>
-              <span>Yeni Paket</span>
-            </button>
           </div>
         </aside>
       </div>

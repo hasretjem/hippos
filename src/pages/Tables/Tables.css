@@ -648,8 +648,12 @@
   box-shadow: var(--shadow-3);
   padding: 20px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.tb-package-list { display: flex; flex-direction: column; gap: 10px; }
+.tb-package-list { display: flex; flex-direction: column; gap: 10px; flex: 1; overflow-y: auto; }
+.tb-add-package--sticky { flex-shrink: 0; }
 
 /* ---- Paket kartı — yatay, sağdan sola dolum (animasyonsuz) ---- */
 .tb-card-compact {

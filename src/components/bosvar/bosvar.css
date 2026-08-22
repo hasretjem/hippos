@@ -5,35 +5,57 @@
 /* ---------- Satış ekranı: tik butonu ---------- */
 
 .bv-panel {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
+/* Yazdır butonuyla birebir aynı şekil/tipografi, arkaplan #74d600 */
 .bv-tik-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--color-text-muted, #64748b);
-  background: none;
+  gap: 8px;
+  height: 52px;
+  padding: 0 18px;
   border: none;
+  border-radius: var(--r-btn);
+  background: #74d600;
+  color: var(--ink);           /* #3A3530 — koyu, yeterli kontrast */
+  font-size: 15px;
+  font-weight: 700;
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 5px;
-  transition: color 0.15s;
   white-space: nowrap;
+  transition: transform var(--t-hover, 0.15s) var(--ease, ease),
+              filter var(--t-hover, 0.15s) var(--ease, ease);
+  user-select: none;
 }
-.bv-tik-btn:hover { color: #74d600; }
+.bv-tik-btn:hover  { filter: brightness(1.08); transform: translateY(-1px); }
+.bv-tik-btn:active { transform: scale(0.96); }
 
-.bv-panel--aktif .bv-tik-btn {
+/* Tikbox — sağda */
+.bv-tik-box {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 2px solid var(--ink);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.1s;
+}
+.bv-tik-btn.aktif .bv-tik-box {
+  background: var(--ink);
+}
+.bv-tik-check {
+  display: none;
   color: #74d600;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
 }
-
-.bv-icon-aktif { color: #74d600; }
-.bv-icon-pasif { color: var(--color-text-muted, #94a3b8); }
+.bv-tik-btn.aktif .bv-tik-check { display: block; }
 
 /* Paketçi "Boşu Aldım dedi" satırı */
 .bv-bildirim {
@@ -41,59 +63,62 @@
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  color: #16a34a;
-  background: rgba(116, 214, 0, 0.1);
+  font-weight: 700;
+  color: #1a3300;
+  background: rgba(116, 214, 0, 0.18);
   border-radius: 6px;
   padding: 3px 8px;
+  margin-left: 6px;
 }
-.bv-bildirim-ad   { font-weight: 600; }
-.bv-bildirim-saat { color: #64748b; margin-left: 2px; }
+.bv-bildirim-saat { color: #64748b; margin-left: 2px; font-weight: 500; }
 
 
-/* ---------- Paketçi ekranı: ikaz ---------- */
+/* ---------- Paketçi: liste kartı ikazı — içecek var ile aynı pill ---------- */
 
 .bv-ikaz {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  align-self: flex-start;
   background: #74d600;
-  color: #1a3300;   /* koyu yeşil — yeterli kontrast */
+  color: #1a3300;
   font-size: 12px;
   font-weight: 800;
-  padding: 3px 9px;
-  border-radius: 6px;
-  letter-spacing: 0.02em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-top: 2px;
 }
 
+/* Detay sayfasındaki büyük versiyon — içecek-var-big ile aynı */
 .bv-ikaz--buyuk {
   font-size: 14px;
-  padding: 6px 14px;
-  border-radius: 8px;
-  width: 100%;
+  font-weight: 800;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1.5px dashed #4a8800;
   justify-content: center;
-  margin-bottom: 6px;
+  width: 100%;
 }
 
-/* ---------- Paketçi detay bloku ---------- */
+/* ---------- Paketçi detay: "Boşu Aldım" blok ---------- */
 
 .bv-detay-blok {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 12px;
-  margin-bottom: 4px;
+  margin-top: 4px;
 }
 
 .bv-gonderildi {
-  font-size: 12px;
-  color: #16a34a;
-  font-weight: 600;
-  padding: 6px 10px;
-  background: rgba(116, 214, 0, 0.1);
-  border-radius: 7px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #1a3300;
+  padding: 10px 14px;
+  background: #74d600;
+  border-radius: 10px;
+  text-align: center;
 }
 
-/* Boşu Aldım butonu */
 .bv-bosum-btn {
   display: flex;
   align-items: center;
@@ -109,9 +134,9 @@
   border-radius: 10px;
   cursor: pointer;
   letter-spacing: 0.02em;
-  transition: background 0.15s, transform 0.1s;
+  transition: filter 0.15s, transform 0.1s;
 }
-.bv-bosum-btn:hover:not(:disabled) { background: #62b800; }
+.bv-bosum-btn:hover:not(:disabled) { filter: brightness(1.08); }
 .bv-bosum-btn:active:not(:disabled) { transform: scale(0.98); }
 .bv-bosum-btn--loading,
 .bv-bosum-btn:disabled { opacity: 0.6; cursor: not-allowed; }
