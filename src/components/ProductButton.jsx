@@ -70,8 +70,8 @@ function ProductButton({ product, category, isFav, onAdd, pairPosition, pairColo
       >
         <div className="pb-az-content">
           <span className="pb-az-label">AZ</span>
-          <span className="pb-az-price">{Math.round(product.fiyat).toLocaleString('tr-TR')} ₺</span>
         </div>
+        <span className="pb-az-price">{Math.round(product.fiyat).toLocaleString('tr-TR')}</span>
       </button>
     );
   }
