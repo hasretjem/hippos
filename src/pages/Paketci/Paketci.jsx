@@ -289,6 +289,18 @@ function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, s
 
       <div className="pk-action-row">
         <button className="pk-deliver-btn" onClick={() => onAction('teslim_edildi')}>
+          <Check size={16} /> Teslim Ettim
+        </button>
+        <button className="pk-partial-btn" onClick={() => onAction('kismi_odeme')}>
+          <Wallet size={16} /> Kısmi Ödeme Aldım
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CariDetay({ cari, onBack, onAction }) {
+  return (
     <div className="pk-detail">
       <button className="pk-back-btn" onClick={onBack}><ChevronLeft size={16} /> Listeye dön</button>
       <div className="pk-detail-card">
