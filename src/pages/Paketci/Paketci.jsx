@@ -19,7 +19,6 @@ export default function Paketci({ data }) {
     deletePaketTeslimat, deleteCariTeslimatBildirim,
     bosvarBildirimleri, submitBosvarBildirim,
     tableBosvars,
-    bosvarBildirimleri,
   } = data;
 
   // ---- Paketçi adı (bir kez sorulur, cihazda saklanır) ----
