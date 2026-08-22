@@ -592,22 +592,31 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
   }
 
   function renderSalonGrid() {
-    const nodes = [];
-    SALON_TABLES.forEach((table) => {
-      if (PAIR_SECOND.has(table)) return; // ikili grubun ikincisi, birinciyle beraber çizildi
-      const pairWith = PAIR_FIRST.get(table);
-      if (pairWith) {
-        nodes.push(
-          <div className="tb-pair" key={table}>
-            {renderTableCard(table)}
-            {renderTableCard(pairWith)}
+    return (
+      <div className="tb-salon-layout">
+        <div className="tb-salon-col tb-salon-col--center">
+          {renderTableCard('Masa 7')}
+          {renderTableCard('Masa 8')}
+        </div>
+        <div className="tb-salon-col tb-salon-col--between">
+          {renderTableCard('Masa 6')}
+          {renderTableCard('Masa 9')}
+        </div>
+        <div className="tb-salon-col tb-salon-col--between">
+          {renderTableCard('Masa 5')}
+          <div className="tb-salon-group">
+            {renderTableCard('Masa 11')}
+            {renderTableCard('Masa 10')}
           </div>
-        );
-      } else {
-        nodes.push(renderTableCard(table));
-      }
-    });
-    return nodes;
+        </div>
+        <div className="tb-salon-col tb-salon-col--start">
+          <div className="tb-salon-group">
+            {renderTableCard('Masa 4')}
+            {renderTableCard('Masa 3')}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -654,7 +663,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
         <div className="tb-left">
           <section className="tb-section">
             <h2 className="tb-section-title">Salon</h2>
-            <div className="tb-flow">{renderSalonGrid()}</div>
+            {renderSalonGrid()}
           </section>
           <section className="tb-section">
             <h2 className="tb-section-title">Alt Kat</h2>

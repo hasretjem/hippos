@@ -395,6 +395,26 @@
 .tb-flow { display: flex; flex-wrap: wrap; gap: 14px; }
 .tb-pair { display: flex; gap: 5px; }
 
+.tb-salon-layout {
+  display: flex;
+  gap: 32px;
+  align-items: stretch;
+  min-height: 520px;
+}
+.tb-salon-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.tb-salon-col--center { justify-content: center; }
+.tb-salon-col--between { justify-content: space-between; }
+.tb-salon-col--start { justify-content: flex-start; }
+.tb-salon-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
 /* ==================== MASA KARTI ==================== */
 /* Hover'da büyüme/gölge animasyonu YOK, transition YOK — eski donanımda kasmasın diye
    sabit kenarlık + sabit gölge kullanılıyor. */
