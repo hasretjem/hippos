@@ -839,7 +839,6 @@ export default function useHipposData(scope = 'full') {
       const n = emptyTableMap(FIXED_TABLES, '');
       const d = emptyTableMap(FIXED_TABLES, () => ({ type: null, value: 0 }));
       const oa = {};
-      const bv = {};
       (ts.data || []).forEach((row) => {
         o[row.table_name] = row.items || [];
         n[row.table_name] = row.note || '';
