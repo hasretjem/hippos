@@ -278,8 +278,7 @@ function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, s
         </div>
       )}
 
-      <div className="pk-action-row">
-             <BosVarPaketci
+      <BosVarPaketci
         paketAdi={paket.name}
         paketciAdi={paketciAdi}
         bosvarBildirimleri={bosvarBildirimleri}
