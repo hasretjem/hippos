@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import ProductButton, { getDisplayName } from '../../components/ProductButton';
 import { resolveButtonStyle } from '../../constants/themeDefaults';
+import BosVarPanel, { isBosvarOnaylandi } from '../../components/bosvar/BosVarPanel';
+import '../../components/bosvar/bosvar.css';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
   const {
@@ -37,6 +39,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     paketTeslimatlari,
     onaylaPaketTeslimat,
     reddetPaketTeslimat,
+    bosvarBildirimleri,
+    onaylaBosvarBildirim,
+    reddetBosvarBildirim,
     presenceMap,
     cariler,
     addCari,
@@ -797,7 +802,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               <button disabled={isOrderEmpty} className="ds-header-print-btn" onClick={handlePrint}>
                 <Printer size={16} /> Yazdır
               </button>
-              <button disabled={isOrderEmpty} className="ds-header-pay-btn" onClick={() => { setShowChangeCalc(false); setReceivedAmount(''); setPayMode(true); }}>
+              <button
+                disabled={isOrderEmpty || (isPaketEkrani && !isBosvarOnaylandi(selectedTable, bosvarBildirimleri))}
+                className="ds-header-pay-btn"
+                onClick={() => { setShowChangeCalc(false); setReceivedAmount(''); setPayMode(true); }}
+                title={isPaketEkrani && !isBosvarOnaylandi(selectedTable, bosvarBildirimleri) ? 'Paketçi "Boşum Aldım" onayı bekleniyor' : undefined}
+              >
                 <span className="pay-icon-block"><Wallet size={17} /></span>
                 <span className="pay-text-block">Ödeme Al</span>
               </button>
@@ -1137,6 +1147,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               </div>
             )}
           </div>
+
+          {isPaketEkrani && (
+            <BosVarPanel
+              paketAdi={selectedTable}
+              bosvarBildirimleri={bosvarBildirimleri}
+              onaylaBosvar={onaylaBosvarBildirim}
+              reddetBosvar={reddetBosvarBildirim}
+            />
+          )}
 
           {isPaketEkrani && paketciHareketleri.length > 0 && (
             <div className="ds-courier-panel">

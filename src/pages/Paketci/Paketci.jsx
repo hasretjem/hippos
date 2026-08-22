@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import './Paketci.css';
+import BosVarPaketci from '../../components/bosvar/BosVarPaketci';
+import '../../components/bosvar/bosvar.css';
 import { TL } from '../../hooks/useHipposData';
 import {
   Package, Users, Camera, Image as ImageIcon, StickyNote, Check, X,
@@ -15,6 +17,7 @@ export default function Paketci({ data }) {
     paketTeslimatlari, cariTeslimatBildirimleri,
     uploadTeslimatFoto, submitPaketTeslimat, submitCariTeslimatBildirim,
     deletePaketTeslimat, deleteCariTeslimatBildirim,
+    bosvarBildirimleri, submitBosvarBildirim, deleteBosvarBildirim,
   } = data;
 
   // ---- Paketçi adı (bir kez sorulur, cihazda saklanır) ----
@@ -161,6 +164,11 @@ export default function Paketci({ data }) {
             paket={selectedPaketData}
             onBack={() => setSelectedPaket(null)}
             onAction={(tip) => setActionModal({ hedefTip: 'paket', hedefId: selectedPaketData.name, tip, ustTutar: selectedPaketData.tutar })}
+            paketciAdi={paketciAdi}
+            bosvarBildirimleri={bosvarBildirimleri}
+            submitBosvarBildirim={submitBosvarBildirim}
+            deleteBosvarBildirim={deleteBosvarBildirim}
+            showToast={showToast}
           />
         )}
 
@@ -227,7 +235,7 @@ export default function Paketci({ data }) {
   );
 }
 
-function PaketDetay({ paket, onBack, onAction }) {
+function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, submitBosvarBildirim, deleteBosvarBildirim, showToast }) {
   const hasIcecek = paket.items.some((i) => i.kategori === 'İÇECEKLER');
   return (
     <div className="pk-detail">
@@ -271,19 +279,17 @@ function PaketDetay({ paket, onBack, onAction }) {
       )}
 
       <div className="pk-action-row">
-        <button className="pk-deliver-btn" onClick={() => onAction('teslim_edildi')}>
-          <Check size={16} /> Teslim Ettim
-        </button>
-        <button className="pk-partial-btn" onClick={() => onAction('kismi_odeme')}>
-          <Wallet size={16} /> Kısmi Ödeme Aldım
-        </button>
-      </div>
-    </div>
-  );
-}
+             <BosVarPaketci
+        paketAdi={paket.name}
+        paketciAdi={paketciAdi}
+        bosvarBildirimleri={bosvarBildirimleri}
+        submitBosvar={submitBosvarBildirim}
+        deleteBosvar={deleteBosvarBildirim}
+        showToast={showToast}
+      />
 
-function CariDetay({ cari, onBack, onAction }) {
-  return (
+      <div className="pk-action-row">
+        <button className="pk-deliver-btn" onClick={() => onAction('teslim_edildi')}>
     <div className="pk-detail">
       <button className="pk-back-btn" onClick={onBack}><ChevronLeft size={16} /> Listeye dön</button>
       <div className="pk-detail-card">

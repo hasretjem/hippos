@@ -170,6 +170,13 @@ function rowToCariTeslimatBildirim(r) {
     ts: Number(r.ts), onayTs: r.onay_ts ? Number(r.onay_ts) : null,
   };
 }
+function rowToBosvar(r) {
+  return {
+    id: r.id, paketAdi: r.paket_adi, paketciAdi: r.paketci_adi,
+    durum: r.durum, onayNotu: r.onay_notu,
+    ts: Number(r.ts), onayTs: r.onay_ts ? Number(r.onay_ts) : null,
+  };
+}
 
 // Tüm sayfaların (DirectSale, Tables, Reports...) paylaştığı tek veri kaynağı.
 // App.jsx içinde BİR KEZ çağrılır, sonuçlar prop olarak sayfalara aktarılır.
@@ -543,6 +550,7 @@ export default function useHipposData(scope = 'full') {
   // "bildirim/onay" katmanı. Yönetici onaylamadan hiçbir satış/cari kaydını etkilemez.
   const [paketTeslimatlari, setPaketTeslimatlari] = useState([]);
   const [cariTeslimatBildirimleri, setCariTeslimatBildirimleri] = useState([]);
+  const [bosvarBildirimleri, setBosvarBildirimleri] = useState([]);
   const [mutfakHazirNotlar, setMutfakHazirNotlar] = useState([]);
   // Ekmek Stok — Yönetim Paneli'nde elle eklenir (Ekmek Stok Ekleme), Masalar'daki
   // Mutfağa Not > Ekmek Gönderme'de mutfağa fiilen giden miktar kadar düşülür. Supabase'de
@@ -787,7 +795,7 @@ export default function useHipposData(scope = 'full') {
     let cancelled = false;
 
     async function loadAll() {
-      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn, ss] = await Promise.all([
+      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn, ss, bv] = await Promise.all([
         supabase.from('table_state').select('*'),
         supabase.from('packages').select('*'),
         supabase.from('package_meta').select('*').eq('id', 1).maybeSingle(),
@@ -806,6 +814,7 @@ export default function useHipposData(scope = 'full') {
         supabase.from('cari_teslimat_bildirimleri').select('*'),
         supabase.from('mutfak_hazir_notlar').select('*').order('created_at', { ascending: true }),
         supabase.from('store_settings').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('bosvar_bildirimleri').select('*'),
       ]);
       if (cancelled) return;
 
@@ -820,6 +829,7 @@ export default function useHipposData(scope = 'full') {
       }
       setPaketTeslimatlari((pt.data || []).map(rowToPaketTeslimat).sort((a, b) => b.ts - a.ts));
       setCariTeslimatBildirimleri((ctb.data || []).map(rowToCariTeslimatBildirim).sort((a, b) => b.ts - a.ts));
+      setBosvarBildirimleri((bv.data || []).map(rowToBosvar).sort((a, b) => b.ts - a.ts));
       setMutfakHazirNotlar((mhn.data || []).map((r) => ({ id: r.id, metin: r.metin })));
       refetchEkmekStok(); // Sheets'ten — Supabase'in loadAll'ından bağımsız.
       refetchHarcamaTaslagi(); // Supabase'ten — kendi bağımsız fetch'i.
@@ -879,6 +889,7 @@ export default function useHipposData(scope = 'full') {
       cari_gecmis: need([]),
       paket_teslimatlari: need(['paketci']),
       cari_teslimat_bildirimleri: need(['paketci']),
+      bosvar_bildirimleri: need(['paketci']),
       mutfak_hazir_notlar: need([]),
     };
 
@@ -1035,6 +1046,19 @@ export default function useHipposData(scope = 'full') {
         const row = rowToCariTeslimatBildirim(payload.new);
         setCariTeslimatBildirimleri((prev) =>
           prev.some((c) => c.id === row.id) ? prev.map((c) => (c.id === row.id ? row : c)) : [row, ...prev]
+        );
+      });
+    }
+    if (wants.bosvar_bildirimleri) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'bosvar_bildirimleri' }, (payload) => {
+        bumpUsageCounter('bosvar_bildirimleri', summarizeRealtimePayload('bosvar_bildirimleri', payload));
+        if (payload.eventType === 'DELETE') {
+          setBosvarBildirimleri((prev) => prev.filter((b) => b.id !== payload.old.id));
+          return;
+        }
+        const row = rowToBosvar(payload.new);
+        setBosvarBildirimleri((prev) =>
+          prev.some((b) => b.id === row.id) ? prev.map((b) => (b.id === row.id ? row : b)) : [row, ...prev]
         );
       });
     }
@@ -1868,6 +1892,37 @@ export default function useHipposData(scope = 'full') {
     });
   }
 
+  // ---- Boş Var bildirimleri ----
+  async function submitBosvarBildirim({ paketAdi, paketciAdi }) {
+    const ts = Date.now();
+    const row = { paket_adi: paketAdi, paketci_adi: paketciAdi, durum: 'bekliyor', ts };
+    const { data, error } = await supabase.from('bosvar_bildirimleri').insert(row).select().single();
+    if (error) { console.error('bosvar bildirilemedi:', error.message); return null; }
+    const created = rowToBosvar(data);
+    setBosvarBildirimleri((prev) => [created, ...prev]);
+    return created;
+  }
+  function onaylaBosvarBildirim(id) {
+    const onayTs = Date.now();
+    setBosvarBildirimleri((prev) => prev.map((b) => (b.id === id ? { ...b, durum: 'onaylandi', onayTs } : b)));
+    supabase.from('bosvar_bildirimleri').update({ durum: 'onaylandi', onay_ts: onayTs }).eq('id', id).then(({ error }) => {
+      if (error) console.error(error.message);
+    });
+  }
+  function reddetBosvarBildirim(id, onayNotu) {
+    const onayTs = Date.now();
+    setBosvarBildirimleri((prev) => prev.map((b) => (b.id === id ? { ...b, durum: 'reddedildi', onayNotu, onayTs } : b)));
+    supabase.from('bosvar_bildirimleri').update({ durum: 'reddedildi', onay_notu: onayNotu, onay_ts: onayTs }).eq('id', id).then(({ error }) => {
+      if (error) console.error(error.message);
+    });
+  }
+  function deleteBosvarBildirim(id) {
+    setBosvarBildirimleri((prev) => prev.filter((b) => b.id !== id));
+    supabase.from('bosvar_bildirimleri').delete().eq('id', id).then(({ error }) => {
+      if (error) console.error('bosvar geri alınamadı:', error.message);
+    });
+  }
+
   // Mutfağa Not ekranındaki hazır not butonları — tüm cihazlarda görünür.
   function addMutfakHazirNot(metin) {
     if (!metin.trim()) return;
@@ -2011,5 +2066,10 @@ export default function useHipposData(scope = 'full') {
     reddetPaketTeslimat,
     onaylaCariTeslimatBildirim,
     reddetCariTeslimatBildirim,
+    bosvarBildirimleri,
+    submitBosvarBildirim,
+    onaylaBosvarBildirim,
+    reddetBosvarBildirim,
+    deleteBosvarBildirim,
   };
 }
