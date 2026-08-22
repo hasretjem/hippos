@@ -533,6 +533,7 @@ export default function useHipposData(scope = 'full') {
   const [tableNotes, setTableNotes] = useState(() => emptyTableMap(FIXED_TABLES, ''));
   const [tableDiscounts, setTableDiscounts] = useState(() => emptyTableMap(FIXED_TABLES, () => ({ type: null, value: 0 })));
   const [tableOpenedAt, setTableOpenedAt] = useState({});
+  const [tableBosvars, setTableBosvars] = useState({});
   const [packages, setPackages] = useState([]);
   const [packageMeta, setPackageMeta] = useState({ date: todayStr(), next: 1 });
   const [salesHistory, setSalesHistory] = useState([]);
@@ -838,16 +839,19 @@ export default function useHipposData(scope = 'full') {
       const n = emptyTableMap(FIXED_TABLES, '');
       const d = emptyTableMap(FIXED_TABLES, () => ({ type: null, value: 0 }));
       const oa = {};
+      const bv = {};
       (ts.data || []).forEach((row) => {
         o[row.table_name] = row.items || [];
         n[row.table_name] = row.note || '';
         d[row.table_name] = { type: row.discount_type, value: row.discount_value || 0 };
         if (row.opened_at) oa[row.table_name] = new Date(row.opened_at).getTime();
+        if (row.bosvar) bv[row.table_name] = true;
       });
       setOrders(o);
       setTableNotes(n);
       setTableDiscounts(d);
       setTableOpenedAt(oa);
+      setTableBosvars(bv);
       setPackages((pk.data || []).map((r) => ({ name: r.name, num: r.num })));
       if (pm.data) setPackageMeta({ date: pm.data.meta_date, next: pm.data.next_num });
       setSalesHistory((sh.data || []).map(rowToSale).sort((a, b) => b.ts - a.ts));
@@ -936,6 +940,12 @@ export default function useHipposData(scope = 'full') {
           const next = { ...prev };
           if (row.opened_at) next[t] = new Date(row.opened_at).getTime();
           else delete next[t];
+          return next;
+        });
+        setTableBosvars((prev) => {
+          if (!!row.bosvar === !!prev[t]) return prev;
+          const next = { ...prev };
+          if (row.bosvar) next[t] = true; else delete next[t];
           return next;
         });
       };
@@ -1263,6 +1273,7 @@ export default function useHipposData(scope = 'full') {
       patch.discount_type = opts.discount?.type ?? null;
       patch.discount_value = opts.discount?.value ?? 0;
     }
+    if ('bosvar' in opts) patch.bosvar = !!opts.bosvar;
     // Paket, ilk kez içerik kazandığı an "gerçek" hale gelsin — bu çağrı eskiden addOrderItem
     // içinden geliyordu, yeni "yerel taslak" mimarisinde o yol devre dışı kaldığı için paketler
     // hiç kayda geçmiyordu (Paketler panelinde görünmüyordu). Artık tek merkezden garanti ediliyor.
@@ -1902,25 +1913,13 @@ export default function useHipposData(scope = 'full') {
     setBosvarBildirimleri((prev) => [created, ...prev]);
     return created;
   }
-  function onaylaBosvarBildirim(id) {
-    const onayTs = Date.now();
-    setBosvarBildirimleri((prev) => prev.map((b) => (b.id === id ? { ...b, durum: 'onaylandi', onayTs } : b)));
-    supabase.from('bosvar_bildirimleri').update({ durum: 'onaylandi', onay_ts: onayTs }).eq('id', id).then(({ error }) => {
-      if (error) console.error(error.message);
+  function setBosvarTik(paketAdi, deger) {
+    setTableBosvars((prev) => {
+      const next = { ...prev };
+      if (deger) next[paketAdi] = true; else delete next[paketAdi];
+      return next;
     });
-  }
-  function reddetBosvarBildirim(id, onayNotu) {
-    const onayTs = Date.now();
-    setBosvarBildirimleri((prev) => prev.map((b) => (b.id === id ? { ...b, durum: 'reddedildi', onayNotu, onayTs } : b)));
-    supabase.from('bosvar_bildirimleri').update({ durum: 'reddedildi', onay_notu: onayNotu, onay_ts: onayTs }).eq('id', id).then(({ error }) => {
-      if (error) console.error(error.message);
-    });
-  }
-  function deleteBosvarBildirim(id) {
-    setBosvarBildirimleri((prev) => prev.filter((b) => b.id !== id));
-    supabase.from('bosvar_bildirimleri').delete().eq('id', id).then(({ error }) => {
-      if (error) console.error('bosvar geri alınamadı:', error.message);
-    });
+    setOrderItemsRemote(paketAdi, orders[paketAdi] || [], { bosvar: deger });
   }
 
   // Mutfağa Not ekranındaki hazır not butonları — tüm cihazlarda görünür.
@@ -2068,8 +2067,7 @@ export default function useHipposData(scope = 'full') {
     reddetCariTeslimatBildirim,
     bosvarBildirimleri,
     submitBosvarBildirim,
-    onaylaBosvarBildirim,
-    reddetBosvarBildirim,
-    deleteBosvarBildirim,
+    tableBosvars,
+    setBosvarTik,
   };
 }

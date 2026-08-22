@@ -1,124 +1,82 @@
 /**
- * BosVarPaketci — Paketçi ekranındaki "Boşum Aldım" modülü
+ * BosVarPaketci — Paketçi ekranında iki yerde kullanılır:
+ *   1. Liste kartında: yeşil "Boş Var!" ikazı (sadece görsel)
+ *   2. Paket detayında: "Boşu Aldım" butonu
  *
- * Kullanım: Paketci.jsx'te PaketDetay bileşeninin içine ya da paket detay alanına
- * import edip render et.
+ * Props (liste kartı için):
+ *   mod='ikaz'  paketAdi  bosvarTikliler
  *
- * Props:
- *   paketAdi           — string
- *   paketciAdi         — string (localStorage'dan gelen)
- *   bosvarBildirimleri — hook'tan
- *   submitBosvar       — hook fonksiyonu ({ paketAdi, paketciAdi }) => Promise<obj|null>
- *   deleteBosvar       — hook fonksiyonu (id) => void  (geri al için)
- *   showToast          — (msg: string) => void
+ * Props (detay için):
+ *   mod='detay'  paketAdi  paketciAdi  bosvarBildirimleri  submitBosvarBildirim  showToast
  */
-
-import React, { useState, useMemo } from 'react';
-import { Package, Undo2, Clock } from 'lucide-react';
+import React, { useState } from 'react';
+import { Package } from 'lucide-react';
 import './bosvar.css';
 
 export default function BosVarPaketci({
+  mod = 'ikaz',
   paketAdi,
+  bosvarTikliler = [],
   paketciAdi,
   bosvarBildirimleri = [],
-  submitBosvar,
-  deleteBosvar,
+  submitBosvarBildirim,
   showToast,
 }) {
   const [loading, setLoading] = useState(false);
-  const [recentId, setRecentId] = useState(null); // geri alınabilir son bildirim id
 
-  // Bu pakete ait bildirimler
-  const buPaketBildirimler = useMemo(
-    () => bosvarBildirimleri
-      .filter((b) => b.paketAdi === paketAdi)
-      .sort((a, b) => b.ts - a.ts),
-    [bosvarBildirimleri, paketAdi]
-  );
+  const tikVar = bosvarTikliler.includes(paketAdi);
 
-  const bekleyen = buPaketBildirimler.find((b) => b.durum === 'bekliyor');
-  const onaylanmis = buPaketBildirimler.find((b) => b.durum === 'onaylandi');
-  const reddedilmis = buPaketBildirimler.find(
-    (b) => b.durum === 'reddedildi' && b.id === recentId
-  );
+  // Liste kartı ikazı
+  if (mod === 'ikaz') {
+    if (!tikVar) return null;
+    return (
+      <div className="bv-ikaz">
+        <Package size={13} /> Boş Var!
+      </div>
+    );
+  }
+
+  // Detay sayfası — "Boşu Aldım" butonu
+  if (!tikVar) return null;
+
+  const buPaketBildirimler = bosvarBildirimleri
+    .filter((b) => b.paketAdi === paketAdi)
+    .sort((a, b) => b.ts - a.ts);
+
+  const sonBildirim = buPaketBildirimler[0];
+  const zatenGonderildi = !!sonBildirim;
 
   async function handleBosum() {
-    if (loading || bekleyen) return;
+    if (loading || zatenGonderildi) return;
     setLoading(true);
-    const result = await submitBosvar({ paketAdi, paketciAdi });
+    const result = await submitBosvarBildirim({ paketAdi, paketciAdi });
     if (result) {
-      setRecentId(result.id);
-      showToast('Bildirim gönderildi — yönetici onayı bekleniyor');
+      showToast('Bildirim gönderildi');
     } else {
-      showToast('Gönderilemedi, tekrar deneyin');
+      showToast('Gönderilemedi, tekrar dene');
     }
     setLoading(false);
   }
 
-  function handleUndo() {
-    if (!recentId) return;
-    deleteBosvar(recentId);
-    setRecentId(null);
-    showToast('Geri alındı');
-  }
-
-  // Durum etiketi
-  const durumEtiketi = onaylanmis
-    ? { text: '✓ Onaylandı', cls: 'bv-tag--onaylandi' }
-    : bekleyen
-    ? { text: 'Onay bekliyor', cls: 'bv-tag--wait' }
-    : null;
-
   return (
-    <div className="bv-pk-block">
-      <div className="bv-pk-title">
-        <Package size={14} /> Boş Var Durumu
+    <div className="bv-detay-blok">
+      <div className="bv-ikaz bv-ikaz--buyuk">
+        <Package size={15} /> Boş Var!
       </div>
 
-      {/* Onaylandıysa sadece yeşil rozet göster */}
-      {onaylanmis && (
-        <div className="bv-pk-approved">
-          <span className="bv-tag bv-tag--onaylandi">✓ Yönetici Onayladı</span>
-          <span className="bv-pk-name">{onaylanmis.paketciAdi}</span>
-          <span className="bv-history-time">
-            <Clock size={11} /> {new Date(onaylanmis.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
-          </span>
+      {zatenGonderildi ? (
+        <div className="bv-gonderildi">
+          ✓ Bildirim gönderildi —{' '}
+          {new Date(sonBildirim.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
         </div>
-      )}
-
-      {/* Bekleniyorsa bilgi + geri al */}
-      {!onaylanmis && bekleyen && (
-        <div className="bv-pk-waiting">
-          <span className="bv-tag bv-tag--wait">Onay bekleniyor…</span>
-          {bekleyen.id === recentId && (
-            <button className="bv-undo-btn" onClick={handleUndo}>
-              <Undo2 size={12} /> Geri Al
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Reddedildiyse uyarı + tekrar gönder */}
-      {!onaylanmis && !bekleyen && buPaketBildirimler.some((b) => b.durum === 'reddedildi') && (
-        <div className="bv-pk-rejected">
-          <span className="bv-tag bv-tag--reddedildi">Reddedildi</span>
-          {buPaketBildirimler.find((b) => b.durum === 'reddedildi')?.onayNotu && (
-            <span className="bv-pk-reject-note">
-              {buPaketBildirimler.find((b) => b.durum === 'reddedildi').onayNotu}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Ana buton: boşum aldım */}
-      {!onaylanmis && !bekleyen && (
+      ) : (
         <button
           className={`bv-bosum-btn ${loading ? 'bv-bosum-btn--loading' : ''}`}
           onClick={handleBosum}
           disabled={loading}
         >
-          <Package size={16} />
-          {loading ? 'Gönderiliyor…' : 'Boşum Aldım'}
+          <Package size={15} />
+          {loading ? 'Gönderiliyor…' : 'Boşu Aldım'}
         </button>
       )}
     </div>

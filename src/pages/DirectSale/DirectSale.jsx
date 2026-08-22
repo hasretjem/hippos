@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import ProductButton, { getDisplayName } from '../../components/ProductButton';
 import { resolveButtonStyle } from '../../constants/themeDefaults';
-import BosVarPanel, { isBosvarOnaylandi } from '../../components/bosvar/BosVarPanel';
+import BosVarPanel from '../../components/bosvar/BosVarPanel';
 import '../../components/bosvar/bosvar.css';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
@@ -40,8 +40,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     onaylaPaketTeslimat,
     reddetPaketTeslimat,
     bosvarBildirimleri,
-    onaylaBosvarBildirim,
-    reddetBosvarBildirim,
+    tableBosvars,
+    setBosvarTik,
     presenceMap,
     cariler,
     addCari,
@@ -803,10 +803,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 <Printer size={16} /> Yazdır
               </button>
               <button
-                disabled={isOrderEmpty || (isPaketEkrani && !isBosvarOnaylandi(selectedTable, bosvarBildirimleri))}
+                disabled={isOrderEmpty || (isPaketEkrani && !!tableBosvars[selectedTable])}
                 className="ds-header-pay-btn"
                 onClick={() => { setShowChangeCalc(false); setReceivedAmount(''); setPayMode(true); }}
-                title={isPaketEkrani && !isBosvarOnaylandi(selectedTable, bosvarBildirimleri) ? 'Paketçi "Boşum Aldım" onayı bekleniyor' : undefined}
+                title={isPaketEkrani && !!tableBosvars[selectedTable] ? 'Boş Var tiki kaldırılmadan ödeme alınamaz' : undefined}
               >
                 <span className="pay-icon-block"><Wallet size={17} /></span>
                 <span className="pay-text-block">Ödeme Al</span>
@@ -904,6 +904,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 onChange={(e) => setTableNoteDraft(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && sendTableNote()}
               />
+              {isPaketEkrani && (
+                <BosVarPanel
+                  paketAdi={selectedTable}
+                  bosvarTik={!!tableBosvars[selectedTable]}
+                  onTikDegis={(val) => setBosvarTik(selectedTable, val)}
+                  bosvarBildirimleri={bosvarBildirimleri}
+                />
+              )}
             </div>
           </header>
 
@@ -1147,16 +1155,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               </div>
             )}
           </div>
-
-          {isPaketEkrani && (
-            <BosVarPanel
-              paketAdi={selectedTable}
-              bosvarBildirimleri={bosvarBildirimleri}
-              onaylaBosvar={onaylaBosvarBildirim}
-              reddetBosvar={reddetBosvarBildirim}
-            />
-          )}
-
           {isPaketEkrani && paketciHareketleri.length > 0 && (
             <div className="ds-courier-panel">
               <h4><Package size={13} /> Paketçi Bildirimi</h4>

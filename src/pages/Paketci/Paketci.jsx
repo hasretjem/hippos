@@ -17,7 +17,8 @@ export default function Paketci({ data }) {
     paketTeslimatlari, cariTeslimatBildirimleri,
     uploadTeslimatFoto, submitPaketTeslimat, submitCariTeslimatBildirim,
     deletePaketTeslimat, deleteCariTeslimatBildirim,
-    bosvarBildirimleri, submitBosvarBildirim, deleteBosvarBildirim,
+    bosvarBildirimleri, submitBosvarBildirim,
+    tableBosvars,
   } = data;
 
   // ---- Paketçi adı (bir kez sorulur, cihazda saklanır) ----
@@ -152,6 +153,7 @@ export default function Paketci({ data }) {
                   </div>
                   {tableNotes[p.name] && <div className="pk-list-item-note"><StickyNote size={11} /> {tableNotes[p.name]}</div>}
                   {p.hasIcecek && <div className="pk-drink-warning"><CupSoda size={13} /> Siparişte İçecek Var!</div>}
+                  <BosVarPaketci mod="ikaz" paketAdi={p.name} bosvarTikliler={Object.keys(tableBosvars)} />
                   {durumEtiketi && <div className={`pk-status-tag ${durumEtiketi.cls}`}>{durumEtiketi.text}</div>}
                 </button>
               );
@@ -167,7 +169,7 @@ export default function Paketci({ data }) {
             paketciAdi={paketciAdi}
             bosvarBildirimleri={bosvarBildirimleri}
             submitBosvarBildirim={submitBosvarBildirim}
-            deleteBosvarBildirim={deleteBosvarBildirim}
+            tableBosvars={tableBosvars}
             showToast={showToast}
           />
         )}
@@ -235,7 +237,7 @@ export default function Paketci({ data }) {
   );
 }
 
-function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, submitBosvarBildirim, deleteBosvarBildirim, showToast }) {
+function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, submitBosvarBildirim, showToast, tableBosvars }) {
   const hasIcecek = paket.items.some((i) => i.kategori === 'İÇECEKLER');
   return (
     <div className="pk-detail">
@@ -279,11 +281,12 @@ function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, s
       )}
 
       <BosVarPaketci
+        mod="detay"
         paketAdi={paket.name}
         paketciAdi={paketciAdi}
+        bosvarTikliler={Object.keys(tableBosvars)}
         bosvarBildirimleri={bosvarBildirimleri}
-        submitBosvar={submitBosvarBildirim}
-        deleteBosvar={deleteBosvarBildirim}
+        submitBosvarBildirim={submitBosvarBildirim}
         showToast={showToast}
       />
 
