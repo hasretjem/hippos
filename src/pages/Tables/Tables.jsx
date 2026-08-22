@@ -494,7 +494,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     );
 
     const bosvarTag = compact && tableBosvars[table] && sonBosvar && (
-      <div className="tb-delivery-tag onaylandi" style={{ background: '#74d600', color: '#1a3300' }}>
+      <div className="tb-delivery-tag onaylandi">
         📦 Boşu Aldım (paketçi bildirdi)
       </div>
     );

@@ -57,20 +57,23 @@
 }
 .bv-tik-btn.aktif .bv-tik-check { display: block; }
 
-/* Paketçi "Boşu Aldım dedi" satırı */
+/* Paketçi "Boşu Aldım dedi" satırı — ds-courier-pending ile aynı ağırlık */
 .bv-bildirim {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #1a3300;
-  background: rgba(116, 214, 0, 0.18);
-  border-radius: 6px;
-  padding: 3px 8px;
-  margin-left: 6px;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink, #3A3530);
+  background: var(--panel-2, #EDEEDF);
+  border: 1px solid var(--border, rgba(0,0,0,0.1));
+  border-radius: 14px;
+  padding: 10px 12px;
+  margin-top: 6px;
+  width: 100%;
+  box-sizing: border-box;
 }
-.bv-bildirim-saat { color: #64748b; margin-left: 2px; font-weight: 500; }
+.bv-bildirim-saat { color: var(--ink-muted, #83786B); margin-left: auto; font-weight: 600; font-size: 12px; }
 
 
 /* ---------- Paketçi: liste kartı ikazı — içecek var ile aynı pill ---------- */
