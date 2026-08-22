@@ -1,3 +1,86 @@
+/* ProductButton — sade, sabit boyutlu ürün butonu, köşede emoji filigran.
+   Performans için: dinamik font ölçümü (useFitText) YOK, sadece saf CSS. */
+
+.pb-card {
+  position: relative;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  padding: 10px 12px;
+  text-align: left;
+  min-height: 98px;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: flex-start;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease);
+}
+/* Turuncu hover kenarlığı kaldırıldı — sadece hafif kalkma efekti kalıyor */
+.pb-card:hover { transform: translateY(-2px) scale(1.01); box-shadow: var(--shadow-2); }
+.pb-card:active { transform: scale(0.97); transition-duration: var(--t-press); }
+.pb-card.fav { border-color: var(--earth); }
+
+/* Köşede büyük, soluk emoji/SVG filigran — metnin arkasında, tıklamayı engellemez */
+.pb-icon-watermark {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 66px;
+  line-height: 1;
+  opacity: 0.65;
+  pointer-events: none;
+  z-index: 0;
+}
+.pb-icon-svg {
+  width: 60px;
+  height: 60px;
+  opacity: 0.9;
+}
+.pb-icon-svg svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Metin: sola-alta hizalı */
+.pb-text-box {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.pb-name {
+  font-family: 'Inter', -apple-system, 'Segoe UI', Arial, sans-serif;
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: left;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.pb-star { flex-shrink: 0; }
+
+/* Tekli (Az varyantı olmayan) ürünlerde fiyat — sağ altta, pilsiz, sade metin. */
+.pb-price {
+  position: relative;
+  z-index: 1;
+  align-self: flex-end;
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
 /* =========================================
    AZ/TAM PORSİYON GÖRSEL İLİZYONU (wrapper YOK — iki ayrı grid item,
    sadece komşu kenarları keskin + aralarında boşluk yok, tek parça gibi görünüyorlar)
