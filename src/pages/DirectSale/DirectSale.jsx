@@ -1004,21 +1004,41 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   <div className={`ds-product-grid ${activeCategory === 'KAHVALTI' || activeCategory === 'YEMEKLER' ? 'kahvalti-grid' : ''}`}>
                     {items.map((product, idx) => {
                       // "Az X" varyantı her zaman kendi ana ürününün hemen ardından geliyor
-                      // (yukarıdaki sıralama zaten garanti ediyor) — burada sadece komşuluğa
-                      // bakıp GÖRSEL bir ilizyon kuruyoruz: iki ayrı buton, ama birbirine bakan
-                      // kenarları keskin, dışarı bakanlar yuvarlak — tek parça gibi görünüyorlar.
+                      // (yukarıdaki sıralama zaten garanti ediyor). Az varyantını AYRI bir grid
+                      // hücresi olarak render ETMİYORUZ (aşağıda gizleniyor) — bunun yerine ana
+                      // ürünle birlikte TEK bir wrapper'a sarıp, o wrapper tek grid hücresi kaplıyor,
+                      // içinde flex ile %75 (ana) / %25 (az) bölünüyor.
                       const isAz = product.isAzVariant;
                       const nextIsAzPair = !isAz && items[idx + 1]?.isAzVariant && items[idx + 1]?.parentId === product.id;
                       const prevIsAzPair = isAz && items[idx - 1] && product.parentId === items[idx - 1].id;
-                      let pairPosition = null;
-                      let pairColor = null;
-                      if (nextIsAzPair) pairPosition = 'main';
-                      else if (prevIsAzPair) {
-                        pairPosition = 'az';
-                        // Az kartının kendi buton_rengi'i genelde boş (hiç ayrı renk atanmamış) —
-                        // görsel ilizyonun çalışması için komşusundaki ANA ürünün rengini kullanıyoruz.
-                        pairColor = resolveButtonStyle(items[idx - 1], getCategoryFor(items[idx - 1])).backgroundColor;
+
+                      // Az varyantı, ana ürünün render'ı sırasında wrapper içine zaten çizildi — tekrar çizme.
+                      if (prevIsAzPair) return null;
+
+                      if (nextIsAzPair) {
+                        const azProduct = items[idx + 1];
+                        const pairColor = resolveButtonStyle(product, getCategoryFor(product)).backgroundColor;
+                        return (
+                          <div key={product.id} className="pb-pair-wrapper">
+                            <ProductButton
+                              product={product}
+                              category={getCategoryFor(product)}
+                              isFav={favorites.includes(product.id)}
+                              onAdd={addProductToOrder}
+                              pairPosition="main"
+                            />
+                            <ProductButton
+                              product={azProduct}
+                              category={getCategoryFor(azProduct)}
+                              isFav={favorites.includes(azProduct.id)}
+                              onAdd={addProductToOrder}
+                              pairPosition="az"
+                              pairColor={pairColor}
+                            />
+                          </div>
+                        );
                       }
+
                       return (
                         <ProductButton
                           key={product.id}
@@ -1026,8 +1046,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                           category={getCategoryFor(product)}
                           isFav={favorites.includes(product.id)}
                           onAdd={addProductToOrder}
-                          pairPosition={pairPosition}
-                          pairColor={pairColor}
+                          pairPosition={null}
+                          pairColor={null}
                         />
                       );
                     })}

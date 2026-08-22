@@ -75,9 +75,9 @@
   z-index: 1;
   align-self: flex-end;
   margin-left: auto;
-  font-size: 13px;
-  font-weight: 700;
-  opacity: 0.85;
+  font-size: 16px;
+  font-weight: 800;
+  opacity: 0.95;
   flex-shrink: 0;
 }
 
@@ -91,6 +91,7 @@
   flex-direction: column;
   align-items: flex-start;
   justify-content: space-between;
+  min-height: auto;
 }
 .pb-yemekler .pb-text-box {
   flex: 1 1 auto;
@@ -99,15 +100,7 @@
 }
 .pb-yemekler .pb-name {
   font-size: 16px;
-  line-height: 1.15;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-/* 18 karakterden uzun isimlerde bir kademe küçült — taşma/çakışma riskini azaltır */
-.pb-yemekler .pb-name.pb-name-long {
-  font-size: 14px;
+  line-height: 1.2;
 }
 .pb-yemekler .pb-price {
   align-self: flex-end;
@@ -116,22 +109,25 @@
 }
 
 /* =========================================
-   AZ/TAM PORSİYON GÖRSEL İLİZYONU (wrapper YOK — iki ayrı grid item,
-   sadece komşu kenarları keskin + aralarında boşluk yok, tek parça gibi görünüyorlar)
+   AZ/TAM PORSİYON: wrapper TEK grid hücresi kaplar, içinde flex ile
+   %75 (ana ürün) / %25 (Az) — birbirine bakan kenarlar keskin, dışa bakanlar yuvarlak.
    ========================================= */
-
-/* Ana ürün (Az varyantı olan): grid'de normal 1 sütun kaplar, sağ kenarı keskin,
-   sağındaki "Az" kartına yapışık durur (kenar boşluğu yok). */
+.pb-pair-wrapper {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
 .pb-pair-main {
+  flex: 3;
+  min-width: 0;
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
   border-right: 3px solid var(--panel-dark, #2b2d33);
   box-sizing: border-box;
 }
-
-/* "Az" varyantı: sol kenarı keskin, ana ürüne yapışık; kendi rengi otomatik koyulaştırılır
-   (filter: brightness) böylece göz "bu farklı bir bölge" sinyalini hemen alır. */
 .pb-pair-az {
+  flex: 1;
+  min-width: 0;
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
   display: flex;
@@ -149,5 +145,5 @@
   align-items: center;
   gap: 2px;
 }
-.pb-az-label { font-size: 13px; font-weight: 900; letter-spacing: 1px; }
-.pb-az-price { font-size: 11px; font-weight: 600; opacity: 0.9; }
+.pb-az-label { font-size: 16px; font-weight: 800; letter-spacing: 0.5px; }
+.pb-az-price { font-size: 15px; font-weight: 800; opacity: 0.95; }
