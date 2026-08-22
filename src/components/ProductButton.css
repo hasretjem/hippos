@@ -122,7 +122,7 @@
   min-width: 0;
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
-  border-right: 3px solid var(--panel-dark, #2b2d33);
+  border-right: 6px solid var(--panel-dark, #2b2d33);
   box-sizing: border-box;
 }
 .pb-pair-az {

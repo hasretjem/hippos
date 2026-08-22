@@ -478,7 +478,7 @@
 .ds-products-scrollbtns {
   position: absolute;
   top: 14px;
-  right: 14px;
+  right: 70px;
   display: flex;
   gap: 12px;
   z-index: 5;
@@ -630,6 +630,11 @@
 .ds-product-grid.kahvalti-grid .pb-card {
   min-height: 84px;
   padding: 8px 10px;
+}
+/* Yemekler kategorisine özel: 7 sütun (Kahvaltı'nın 8'inden daha geniş kartlar). */
+.ds-product-grid.yemekler-grid {
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
 }
 .ds-product-card {
   position: relative;
@@ -1147,25 +1152,25 @@
   min-height: 0;
 }
 .ds-courier-panel h4 {
-  display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800;
-  color: var(--ink-muted); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.03em;
+  display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 800;
+  color: var(--danger); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.03em;
 }
 .ds-courier-pending {
   background: var(--panel-2); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 10px;
 }
 .ds-courier-row { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
-.ds-courier-meta { font-size: 11px; color: var(--ink-muted); display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
-.ds-courier-note { font-size: 12px; color: var(--ink-muted); font-style: italic; margin-bottom: 8px; }
+.ds-courier-meta { font-size: 12px; color: var(--ink); font-weight: 800; display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+.ds-courier-note { font-size: 13px; color: var(--ink); font-weight: 800; font-style: italic; margin-bottom: 8px; }
 .ds-courier-foto-link { display: inline-block; font-size: 12px; color: var(--olive); font-weight: 700; margin-bottom: 8px; }
 .ds-courier-actions { display: flex; gap: 8px; }
 .ds-courier-approve, .ds-courier-reject {
   flex: 1; height: 38px; border-radius: 10px; border: none; font-weight: 700; font-size: 13px;
   display: flex; align-items: center; justify-content: center; gap: 5px;
 }
-.ds-courier-approve { background: var(--olive); color: #fff; }
-.ds-courier-reject { background: var(--danger); color: #fff; }
+.ds-courier-approve { background: #F3EEE0; color: var(--olive); }
+.ds-courier-reject { background: #F3EEE0; color: var(--danger); }
 .ds-courier-history { display: flex; flex-direction: column; gap: 6px; max-height: 140px; overflow-y: auto; }
-.ds-courier-history-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-muted); flex-wrap: wrap; }
+.ds-courier-history-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--danger); font-weight: 700; flex-wrap: wrap; }
 .ds-courier-reject-note { color: var(--danger); font-style: italic; }
 .ds-courier-tag {
   font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px; flex-shrink: 0;

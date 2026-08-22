@@ -1001,7 +1001,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                       {subCat}
                     </h3>
                   )}
-                  <div className={`ds-product-grid ${activeCategory === 'KAHVALTI' || activeCategory === 'YEMEKLER' ? 'kahvalti-grid' : ''}`}>
+                  <div className={`ds-product-grid ${activeCategory === 'KAHVALTI' ? 'kahvalti-grid' : ''} ${activeCategory === 'YEMEKLER' ? 'yemekler-grid' : ''}`}>
                     {items.map((product, idx) => {
                       // "Az X" varyantı her zaman kendi ana ürününün hemen ardından geliyor
                       // (yukarıdaki sıralama zaten garanti ediyor). Az varyantını AYRI bir grid
