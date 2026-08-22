@@ -397,11 +397,12 @@
 
 .tb-salon-layout {
   display: flex;
-  gap: 32px;
+  gap: 20px;
   align-items: stretch;
-  min-height: 520px;
+  width: 100%;
 }
 .tb-salon-col {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -413,6 +414,11 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+.tb-salon-col .tb-card,
+.tb-salon-col .tb-card-empty-wrap,
+.tb-salon-group .tb-card {
+  width: 100%;
 }
 
 /* ==================== MASA KARTI ==================== */
