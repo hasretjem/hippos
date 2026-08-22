@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import './DirectSale.css';
 import { TL, QUICK_SALE } from '../../hooks/useHipposData';
 import {
-  Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote,
+  Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote, PackageOpen,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
   Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp, ArrowLeft, Package, Calculator, Delete,
   MessageCircle, Building2, User, MapPin, Phone,
@@ -909,7 +909,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   paketAdi={selectedTable}
                   bosvarTik={!!tableBosvars[selectedTable]}
                   onTikDegis={(val) => setBosvarTik(selectedTable, val)}
-                  bosvarBildirimleri={bosvarBildirimleri}
                 />
               )}
             </div>
@@ -1152,6 +1151,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 {selectedItems.length > 0
                   ? `Ödeme yalnızca seçili ${selectedItems.length} ürüne uygulanacak`
                   : 'Ödeme tüm siparişe uygulanacak'}
+              </div>
+            )}
+            {isPaketEkrani && bosvarBildirimleri.some((b) => b.paketAdi === selectedTable) && (
+              <div className="bv-bildirim" style={{ marginTop: 6 }}>
+                {(() => {
+                  const b = bosvarBildirimleri.filter((x) => x.paketAdi === selectedTable).sort((a, c) => c.ts - a.ts)[0];
+                  return <><PackageOpen size={11} /> {b.paketciAdi} — Boşu Aldım dedi <span className="bv-bildirim-saat">{new Date(b.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span></>;
+                })()}
               </div>
             )}
           </div>

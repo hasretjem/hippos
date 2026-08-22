@@ -140,3 +140,30 @@
 .bv-bosum-btn:active:not(:disabled) { transform: scale(0.98); }
 .bv-bosum-btn--loading,
 .bv-bosum-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Gönderildi satırı + geri al butonu yan yana */
+.bv-gonderildi-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bv-gonderildi-row .bv-gonderildi {
+  flex: 1;
+}
+.bv-geri-al-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 800;
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+.bv-geri-al-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.bv-geri-al-btn:disabled { opacity: 0.6; cursor: not-allowed; }

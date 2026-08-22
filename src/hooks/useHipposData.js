@@ -1286,6 +1286,7 @@ export default function useHipposData(scope = 'full') {
       // (onaylı/reddedilmiş/bekleyen) burada temizlenmezse, yeni siparişe "yapışmış" gibi
       // görünmeye devam ediyordu. Paket kapanınca kendi geçmişini de kapatıyoruz.
       clearPaketTeslimatlariFor(table);
+      clearBosvarBildirimleriFor(table);
     }
     return supabase.from('table_state').upsert(patch, { onConflict: 'table_name' }).then(({ error }) => {
       if (error) {
@@ -1912,6 +1913,18 @@ export default function useHipposData(scope = 'full') {
     setBosvarBildirimleri((prev) => [created, ...prev]);
     return created;
   }
+  function deleteBosvarBildirim(id) {
+    setBosvarBildirimleri((prev) => prev.filter((b) => b.id !== id));
+    supabase.from('bosvar_bildirimleri').delete().eq('id', id).then(({ error }) => {
+      if (error) console.error('bosvar geri alınamadı:', error.message);
+    });
+  }
+  function clearBosvarBildirimleriFor(paketAdi) {
+    setBosvarBildirimleri((prev) => prev.filter((b) => b.paketAdi !== paketAdi));
+    supabase.from('bosvar_bildirimleri').delete().eq('paket_adi', paketAdi).then(({ error }) => {
+      if (error) console.error('bosvar temizlenemedi:', error.message);
+    });
+  }
   function setBosvarTik(paketAdi, deger) {
     setTableBosvars((prev) => {
       const next = { ...prev };
@@ -2066,6 +2079,7 @@ export default function useHipposData(scope = 'full') {
     reddetCariTeslimatBildirim,
     bosvarBildirimleri,
     submitBosvarBildirim,
+    deleteBosvarBildirim,
     tableBosvars,
     setBosvarTik,
   };

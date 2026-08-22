@@ -17,7 +17,7 @@ export default function Paketci({ data }) {
     paketTeslimatlari, cariTeslimatBildirimleri,
     uploadTeslimatFoto, submitPaketTeslimat, submitCariTeslimatBildirim,
     deletePaketTeslimat, deleteCariTeslimatBildirim,
-    bosvarBildirimleri, submitBosvarBildirim,
+    bosvarBildirimleri, submitBosvarBildirim, deleteBosvarBildirim,
     tableBosvars,
   } = data;
 
@@ -169,6 +169,7 @@ export default function Paketci({ data }) {
             paketciAdi={paketciAdi}
             bosvarBildirimleri={bosvarBildirimleri}
             submitBosvarBildirim={submitBosvarBildirim}
+            deleteBosvarBildirim={deleteBosvarBildirim}
             tableBosvars={tableBosvars}
             showToast={showToast}
           />
@@ -237,7 +238,7 @@ export default function Paketci({ data }) {
   );
 }
 
-function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, submitBosvarBildirim, showToast, tableBosvars }) {
+function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, submitBosvarBildirim, deleteBosvarBildirim, showToast, tableBosvars }) {
   const hasIcecek = paket.items.some((i) => i.kategori === 'İÇECEKLER');
   return (
     <div className="pk-detail">
@@ -287,6 +288,7 @@ function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, s
         bosvarTikliler={Object.keys(tableBosvars)}
         bosvarBildirimleri={bosvarBildirimleri}
         submitBosvarBildirim={submitBosvarBildirim}
+        deleteBosvarBildirim={deleteBosvarBildirim}
         showToast={showToast}
       />
 
