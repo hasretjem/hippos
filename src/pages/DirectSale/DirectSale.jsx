@@ -8,6 +8,7 @@ import {
   MessageCircle, Building2, User, MapPin, Phone,
 } from 'lucide-react';
 import ProductButton, { getDisplayName } from '../../components/ProductButton';
+import { resolveButtonStyle } from '../../constants/themeDefaults';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
   const {
@@ -1010,8 +1011,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                       const nextIsAzPair = !isAz && items[idx + 1]?.isAzVariant && items[idx + 1]?.parentId === product.id;
                       const prevIsAzPair = isAz && items[idx - 1] && product.parentId === items[idx - 1].id;
                       let pairPosition = null;
+                      let pairColor = null;
                       if (nextIsAzPair) pairPosition = 'main';
-                      else if (prevIsAzPair) pairPosition = 'az';
+                      else if (prevIsAzPair) {
+                        pairPosition = 'az';
+                        // Az kartının kendi buton_rengi'i genelde boş (hiç ayrı renk atanmamış) —
+                        // görsel ilizyonun çalışması için komşusundaki ANA ürünün rengini kullanıyoruz.
+                        pairColor = resolveButtonStyle(items[idx - 1], getCategoryFor(items[idx - 1])).backgroundColor;
+                      }
                       return (
                         <ProductButton
                           key={product.id}
@@ -1020,6 +1027,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                           isFav={favorites.includes(product.id)}
                           onAdd={addProductToOrder}
                           pairPosition={pairPosition}
+                          pairColor={pairColor}
                         />
                       );
                     })}

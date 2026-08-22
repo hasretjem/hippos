@@ -38,7 +38,7 @@ function useSvgIcon(fileName) {
   return svg;
 }
 
-function ProductButton({ product, category, isFav, onAdd, pairPosition }) {
+function ProductButton({ product, category, isFav, onAdd, pairPosition, pairColor }) {
   const style = resolveButtonStyle(product, category);
   const isSvgIcon = typeof style.icon === 'string' && style.icon.endsWith('.svg');
   const svgMarkup = useSvgIcon(isSvgIcon ? style.icon : null);
@@ -58,10 +58,14 @@ function ProductButton({ product, category, isFav, onAdd, pairPosition }) {
   // AZ VARYANTI (Sağ %25'lik Koyu Şerit)
   // ==========================================
   if (pairPosition === 'az') {
+    // Az kaydının kendi buton_rengi'i genelde boş — komşusundaki ana ürünün rengi
+    // (pairColor, DirectSale.jsx'ten geliyor) kullanılır, CSS'teki brightness(0.8)
+    // filtresi bu rengi otomatik koyulaştırır.
+    const azBg = pairColor || style.backgroundColor;
     return (
       <button
         className={`pb-card pb-pair-az`}
-        style={{ background: style.backgroundColor }}
+        style={{ background: azBg }}
         onClick={() => onAdd(product)}
       >
         <div className="pb-az-content">
@@ -77,7 +81,7 @@ function ProductButton({ product, category, isFav, onAdd, pairPosition }) {
   // ==========================================
   return (
     <button
-      className={`pb-card ${isFav ? 'fav' : ''} ${pairClass}`}
+      className={`pb-card ${isFav ? 'fav' : ''} ${pairClass} ${isYemekler ? 'pb-yemekler' : ''}`}
       style={{ background: style.backgroundColor }}
       onClick={() => onAdd(product)}
     >
@@ -96,7 +100,7 @@ function ProductButton({ product, category, isFav, onAdd, pairPosition }) {
       
       <div className="pb-text-box">
         <span
-          className="pb-name"
+          className={`pb-name ${isYemekler && finalDisplayName.length > 18 ? 'pb-name-long' : ''}`}
           style={{
             color: style.textColor,
             fontStyle: style.italic ? 'italic' : 'normal',
