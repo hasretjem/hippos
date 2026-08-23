@@ -1,45 +1,85 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import './MutfakPaneli.css';
-import { TL } from '../../hooks/useHipposData';
-import { Search, X, Send, ChefHat, Check } from 'lucide-react';
+import { Search, X, Send, ChefHat, ShoppingBag } from 'lucide-react';
+import { resolveButtonStyle } from '../../constants/themeDefaults';
 
-// Kategori eşleştirmesi büyük/küçük harf ve Türkçe karakter duyarlı yapılıyor —
-// mevcut ürün verisinde kategoriler genelde BÜYÜK HARF ("YEMEKLER") tutuluyor.
+// Kategori filtre yardımcıları
 function isZeytinyagli(p) {
   const a = (p.altKategori || '').toLocaleLowerCase('tr-TR');
   return a === 'yoğurt - z.yağlı';
 }
 function isYemek(p) {
-  // "Yoğurt - Z.Yağlı" alt kategorisindeki ürünler kategori olarak da YEMEKLER'de
-  // duruyor — bu yüzden Zeytinyağlılar'a ait olan hiçbir ürün Yemekler listesine
-  // düşmesin diye burada açıkça hariç tutuluyor (aksi halde iki listede birden çıkıyordu).
   if (isZeytinyagli(p)) return false;
   return (p.kategori || '').toLocaleLowerCase('tr-TR').includes('yemek');
 }
-
 function sortByMenu(list) {
   return [...list].sort((a, b) => a.menuSirasi - b.menuSirasi || a.ad.localeCompare(b.ad, 'tr'));
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Çorba & Baklagil Sihirbazı adım tanımları
+// ────────────────────────────────────────────────────────────────────
+const WIZARD_STEPS = [
+  {
+    soru: 'Menüde hangi çorba var?',
+    isimler: ['Ezogelin Çorbası', 'Mercimek Çorbası', 'Yayla Çorbası', 'Domates Çorbası', 'Şehriyeli Tavuk Suyu Çorbası'],
+    yokButon: 'Hiçbiri',
+    coklu: true,
+  },
+  {
+    soru: 'Menüde hangi baklagil / ana yemek var?',
+    isimler: ['Kuru Fasülye', 'Nohut', 'Taze Fasülye'],
+    yokButon: 'Hiçbiri Yok',
+    coklu: true,
+  },
+];
+
 export default function MutfakPaneli({ data }) {
-  const { products, applyMutfakMenusu } = data;
+  const { products, categories, applyMutfakMenusu } = data;
 
-  const yemekler = useMemo(() => sortByMenu(products.filter((p) => isYemek(p) && !p.sabit && !p.isAzVariant)), [products]);
-  const zeytinyaglilar = useMemo(() => sortByMenu(products.filter((p) => isZeytinyagli(p) && !p.sabit && !p.isAzVariant)), [products]);
-  const relevantProductIds = useMemo(() => [...yemekler, ...zeytinyaglilar].map((p) => p.id), [yemekler, zeytinyaglilar]);
+  // Ürün listeleri
+  const yemekler = useMemo(
+    () => sortByMenu(products.filter((p) => isYemek(p) && !p.sabit && !p.isAzVariant)),
+    [products],
+  );
+  const zeytinyaglilar = useMemo(
+    () => sortByMenu(products.filter((p) => isZeytinyagli(p) && !p.sabit && !p.isAzVariant)),
+    [products],
+  );
+  const relevantProductIds = useMemo(
+    () => [...yemekler, ...zeytinyaglilar].map((p) => p.id),
+    [yemekler, zeytinyaglilar],
+  );
 
-  // Sayfa her zaman TAMAMEN BOŞ (hepsi kapalı) başlar — personel sadece bugün açık olanı
-  // işaretler, dünden kalanı kapatmakla hiç uğraşmaz.
+  // Kategori haritası (butonRengi çözümü için)
+  const categoryMap = useMemo(() => {
+    const m = {};
+    (categories || []).forEach((c) => { m[c.ad] = c; });
+    return m;
+  }, [categories]);
+
+  // Sayfa durumu
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [search, setSearch] = useState('');
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [toast, setToast] = useState('');
+  const searchRef = useRef(null);
+
+  // Sihirbaz durumu
+  // phase: 'idle' | 'wizard' | 'confirm' | 'done'
+  const [phase, setPhase] = useState('idle');
+  const [wizardStep, setWizardStep] = useState(0);
+  // Her adım için seçilen isimler kümesi (boşsa "hiçbiri" demek)
+  const [wizardSeçimler, setWizardSeçimler] = useState([new Set(), new Set()]);
+  // Sihirbazın final'de seçeceği ek product ID'ler
+  const [wizardEkIds, setWizardEkIds] = useState(new Set());
 
   function showToast(msg) {
     setToast(msg);
     setTimeout(() => setToast(''), 2000);
   }
 
+  // ── Chip seçme / kaldırma ──
   function toggleSelect(id) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -49,66 +89,152 @@ export default function MutfakPaneli({ data }) {
     });
   }
   function removeSelected(id) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
+    setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+  }
+
+  // ── Arama: seçince metni sil, klavye açık kalsın ──
+  function handleSearchSelect(p) {
+    toggleSelect(p.id);
+    setSearch('');
+    // Klavyeyi açık tutmak için focus'u geri ver
+    setTimeout(() => searchRef.current?.focus(), 0);
+  }
+
+  // ── Filtreler ──
+  const q = search.trim().toLocaleLowerCase('tr-TR');
+  const filteredYemekler = q
+    ? yemekler.filter((p) => p.ad.toLocaleLowerCase('tr-TR').includes(q))
+    : yemekler;
+  const filteredZeytinyagli = q
+    ? zeytinyaglilar.filter((p) => p.ad.toLocaleLowerCase('tr-TR').includes(q))
+    : zeytinyaglilar;
+
+  const selectedYemekler = sortByMenu(yemekler.filter((p) => selectedIds.has(p.id)));
+  const selectedZeytinyagli = sortByMenu(zeytinyaglilar.filter((p) => selectedIds.has(p.id)));
+  const toplamSecili = selectedIds.size;
+
+  // ── "Menüyü Gönder" butonuna basınca sihirbazı aç ──
+  function handleGonderClick() {
+    setWizardStep(0);
+    setWizardSeçimler([new Set(), new Set()]);
+    setWizardEkIds(new Set());
+    setPhase('wizard');
+    setDrawerOpen(false);
+  }
+
+  // ── Sihirbaz: bir isim seç/kaldır ──
+  function wizardToggleIsim(stepIdx, isim) {
+    setWizardSeçimler((prev) => {
+      const next = prev.map((s) => new Set(s));
+      if (next[stepIdx].has(isim)) next[stepIdx].delete(isim);
+      else next[stepIdx].add(isim);
       return next;
     });
   }
 
-  const q = search.trim().toLocaleLowerCase('tr-TR');
-  const filteredYemekler = q ? yemekler.filter((p) => p.ad.toLocaleLowerCase('tr-TR').includes(q)) : yemekler;
-  const filteredZeytinyagli = q ? zeytinyaglilar.filter((p) => p.ad.toLocaleLowerCase('tr-TR').includes(q)) : zeytinyaglilar;
+  // ── Sihirbaz: "İleri" / "Hiçbiri" ──
+  function wizardIleri() {
+    if (wizardStep < WIZARD_STEPS.length - 1) {
+      setWizardStep((s) => s + 1);
+    } else {
+      // Son adım bitti → seçilen isimleri products'ta eşleştir
+      const toplamSeçilenIsimler = new Set();
+      wizardSeçimler.forEach((set) => set.forEach((isim) => toplamSeçilenIsimler.add(isim)));
 
-  const selectedYemekler = sortByMenu(yemekler.filter((p) => selectedIds.has(p.id)));
-  const selectedZeytinyagli = sortByMenu(zeytinyaglilar.filter((p) => selectedIds.has(p.id)));
-  const toplamSecili = selectedYemekler.length + selectedZeytinyagli.length;
-  const toplamDegisecek = relevantProductIds.filter((id) => {
-    const p = products.find((x) => x.id === id);
-    const willBeActive = selectedIds.has(id);
-    return p && !p.sabit && (willBeActive ? p.durum !== 'AKTIF' : p.durum !== 'PASIF');
-  }).length;
+      const bulunacak = products.filter((p) =>
+        toplamSeçilenIsimler.has(p.ad) &&
+        !selectedIds.has(p.id),
+      );
+      setWizardEkIds(new Set(bulunacak.map((p) => p.id)));
+      setPhase('confirm');
+    }
+  }
 
-  function handleSend() {
-    applyMutfakMenusu([...selectedIds], relevantProductIds);
-    setConfirmOpen(false);
-    showToast('Menü gönderildi');
+  function wizardHicbiri() {
+    if (wizardStep < WIZARD_STEPS.length - 1) {
+      setWizardStep((s) => s + 1);
+    } else {
+      const toplamSeçilenIsimler = new Set();
+      wizardSeçimler.slice(0, -1).forEach((set) => set.forEach((isim) => toplamSeçilenIsimler.add(isim)));
+      const bulunacak = products.filter((p) =>
+        toplamSeçilenIsimler.has(p.ad) && !selectedIds.has(p.id),
+      );
+      setWizardEkIds(new Set(bulunacak.map((p) => p.id)));
+      setPhase('confirm');
+    }
+  }
+
+  // Confirm ekranındaki birleşik ID seti
+  const finalIds = useMemo(() => {
+    const s = new Set(selectedIds);
+    wizardEkIds.forEach((id) => s.add(id));
+    return s;
+  }, [selectedIds, wizardEkIds]);
+
+  const finalYemekler = sortByMenu(yemekler.filter((p) => finalIds.has(p.id)));
+  const finalZeytinyagli = sortByMenu(zeytinyaglilar.filter((p) => finalIds.has(p.id)));
+
+  function handleFinalGonder() {
+    applyMutfakMenusu([...finalIds], relevantProductIds);
+    setPhase('done');
+    showToast('Menü gönderildi ✓');
+    setTimeout(() => setPhase('idle'), 1500);
+  }
+
+  function handleIptal() {
+    setPhase('idle');
+  }
+
+  // ── Chip renk çözümü ──
+  function chipStyle(p, seçili) {
+    if (!seçili) return {};
+    const cat = categoryMap[p.kategori] || {};
+    const style = resolveButtonStyle(p, cat);
+    return {
+      background: style.backgroundColor,
+      color: style.textColor,
+      borderColor: style.backgroundColor,
+    };
   }
 
   return (
     <div className="mp-shell">
+      {/* ── HEADER ── */}
       <header className="mp-header">
         <ChefHat size={20} />
         <h1>Mutfak Paneli</h1>
+        {/* Çekmece ikonu + rozet */}
+        <button
+          className={`mp-drawer-trigger ${drawerOpen ? 'active' : ''}`}
+          onClick={() => setDrawerOpen((o) => !o)}
+          aria-label="Seçilenler"
+        >
+          <ShoppingBag size={22} />
+          {toplamSecili > 0 && (
+            <span className="mp-badge">{toplamSecili}</span>
+          )}
+        </button>
       </header>
 
-      <div className="mp-search">
-        <Search size={18} />
-        <input
-          autoFocus
-          placeholder="Ürün ara..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        {search && <button onClick={() => setSearch('')}><X size={16} /></button>}
-      </div>
-
+      {/* ── ÜRÜN LİSTESİ ── */}
       <div className="mp-list">
         {filteredYemekler.length > 0 && (
           <div className="mp-section">
             <h2>Yemekler</h2>
-            <div className="mp-grid">
-              {filteredYemekler.map((p) => (
-                <button
-                  key={p.id}
-                  className={`mp-card ${selectedIds.has(p.id) ? 'selected' : ''}`}
-                  onClick={() => toggleSelect(p.id)}
-                >
-                  {selectedIds.has(p.id) && <span className="mp-check"><Check size={13} /></span>}
-                  <span className="mp-card-name">{p.ad}</span>
-                  <span className="mp-card-price">{TL(p.fiyat)}</span>
-                </button>
-              ))}
+            <div className="mp-chips">
+              {filteredYemekler.map((p) => {
+                const seçili = selectedIds.has(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    className={`mp-chip ${seçili ? 'selected' : ''}`}
+                    style={chipStyle(p, seçili)}
+                    onClick={() => q ? handleSearchSelect(p) : toggleSelect(p.id)}
+                  >
+                    {p.ad}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -116,18 +242,20 @@ export default function MutfakPaneli({ data }) {
         {filteredZeytinyagli.length > 0 && (
           <div className="mp-section">
             <h2>Zeytinyağlılar</h2>
-            <div className="mp-grid">
-              {filteredZeytinyagli.map((p) => (
-                <button
-                  key={p.id}
-                  className={`mp-card ${selectedIds.has(p.id) ? 'selected' : ''}`}
-                  onClick={() => toggleSelect(p.id)}
-                >
-                  {selectedIds.has(p.id) && <span className="mp-check"><Check size={13} /></span>}
-                  <span className="mp-card-name">{p.ad}</span>
-                  <span className="mp-card-price">{TL(p.fiyat)}</span>
-                </button>
-              ))}
+            <div className="mp-chips">
+              {filteredZeytinyagli.map((p) => {
+                const seçili = selectedIds.has(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    className={`mp-chip ${seçili ? 'selected' : ''}`}
+                    style={chipStyle(p, seçili)}
+                    onClick={() => q ? handleSearchSelect(p) : toggleSelect(p.id)}
+                  >
+                    {p.ad}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -139,55 +267,141 @@ export default function MutfakPaneli({ data }) {
         )}
       </div>
 
-      <div className="mp-preview">
-        <div className="mp-preview-scroll">
-          {toplamSecili === 0 && <p className="mp-preview-empty">Henüz ürün seçilmedi.</p>}
-          {selectedYemekler.length > 0 && (
-            <div className="mp-preview-group">
-              <h3>YEMEKLER</h3>
-              {selectedYemekler.map((p) => (
-                <div key={p.id} className="mp-preview-row">
-                  <span>{p.ad}</span>
-                  <button onClick={() => removeSelected(p.id)}><X size={14} /> Çıkart</button>
-                </div>
-              ))}
-            </div>
-          )}
-          {selectedZeytinyagli.length > 0 && (
-            <div className="mp-preview-group">
-              <h3>ZEYTİNYAĞLILAR</h3>
-              {selectedZeytinyagli.map((p) => (
-                <div key={p.id} className="mp-preview-row">
-                  <span>{p.ad}</span>
-                  <button onClick={() => removeSelected(p.id)}><X size={14} /> Çıkart</button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <button className="mp-send-btn" onClick={() => setConfirmOpen(true)}>
-          <Send size={18} /> MENÜYÜ GÖNDER
-        </button>
+      {/* ── ARAMA ÇUBUĞU (ALTTA SABİT) ── */}
+      <div className="mp-search-bar">
+        <Search size={16} />
+        <input
+          ref={searchRef}
+          placeholder="Hızlı ara..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {search && (
+          <button onClick={() => { setSearch(''); searchRef.current?.focus(); }}>
+            <X size={14} />
+          </button>
+        )}
       </div>
 
-      {toast && <div className="mp-toast">{toast}</div>}
-
-      {confirmOpen && (
-        <div className="mp-modal-overlay" onClick={() => setConfirmOpen(false)}>
-          <div className="mp-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Menüyü gönder?</h3>
-            <p>
-              {toplamSecili} ürün <strong>AKTİF</strong> olacak, bu kategorilerdeki seçilmeyen ürünler
-              <strong> PASİF</strong> olacak. Hippos menüsü anında güncellenecek.
-              {toplamDegisecek > 0 && ` (${toplamDegisecek} üründe değişiklik var)`}
-            </p>
-            <div className="mp-modal-actions">
-              <button className="mp-modal-cancel" onClick={() => setConfirmOpen(false)}>Vazgeç</button>
-              <button className="mp-modal-confirm" onClick={handleSend}>Evet, Gönder</button>
+      {/* ── ÇEKMECE (DRAWER) ── */}
+      {drawerOpen && (
+        <div className="mp-drawer-overlay" onClick={() => setDrawerOpen(false)}>
+          <div className="mp-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="mp-drawer-header">
+              <span>Seçilenler ({toplamSecili})</span>
+              <button onClick={() => setDrawerOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="mp-drawer-scroll">
+              {toplamSecili === 0 && (
+                <p className="mp-preview-empty">Henüz ürün seçilmedi.</p>
+              )}
+              {selectedYemekler.length > 0 && (
+                <div className="mp-preview-group">
+                  <h3>YEMEKLER</h3>
+                  {selectedYemekler.map((p) => (
+                    <div key={p.id} className="mp-preview-row">
+                      <span>{p.ad}</span>
+                      <button onClick={() => removeSelected(p.id)}><X size={14} /> Çıkart</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {selectedZeytinyagli.length > 0 && (
+                <div className="mp-preview-group">
+                  <h3>ZEYTİNYAĞLILAR</h3>
+                  {selectedZeytinyagli.map((p) => (
+                    <div key={p.id} className="mp-preview-row">
+                      <span>{p.ad}</span>
+                      <button onClick={() => removeSelected(p.id)}><X size={14} /> Çıkart</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="mp-drawer-footer">
+              <button className="mp-send-btn" onClick={handleGonderClick}>
+                <Send size={17} /> MENÜYÜ GÖNDER
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ── SİHİRBAZ MODAL ── */}
+      {phase === 'wizard' && (
+        <div className="mp-modal-overlay">
+          <div className="mp-modal mp-wizard">
+            <p className="mp-wizard-soru">{WIZARD_STEPS[wizardStep].soru}</p>
+            <div className="mp-wizard-secenekler">
+              {WIZARD_STEPS[wizardStep].isimler.map((isim) => {
+                const seçili = wizardSeçimler[wizardStep].has(isim);
+                return (
+                  <button
+                    key={isim}
+                    className={`mp-wizard-btn ${seçili ? 'selected' : ''}`}
+                    onClick={() => wizardToggleIsim(wizardStep, isim)}
+                  >
+                    {isim}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mp-wizard-actions">
+              <button className="mp-modal-cancel" onClick={() => setPhase('idle')}>İptal</button>
+              <button className="mp-modal-cancel mp-wizard-hicbiri" onClick={wizardHicbiri}>
+                {WIZARD_STEPS[wizardStep].yokButon}
+              </button>
+              <button className="mp-modal-confirm" onClick={wizardIleri}>
+                {wizardStep < WIZARD_STEPS.length - 1 ? 'İleri →' : 'Devam →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ONAY EKRANI ── */}
+      {phase === 'confirm' && (
+        <div className="mp-modal-overlay">
+          <div className="mp-modal mp-confirm">
+            <h3>Menü Özeti</h3>
+            <div className="mp-confirm-scroll">
+              {finalYemekler.length > 0 && (
+                <div className="mp-preview-group">
+                  <h3>YEMEKLER</h3>
+                  {finalYemekler.map((p) => (
+                    <div key={p.id} className="mp-preview-row">
+                      <span>{p.ad}</span>
+                      {wizardEkIds.has(p.id) && <span className="mp-new-badge">sihirbaz</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {finalZeytinyagli.length > 0 && (
+                <div className="mp-preview-group">
+                  <h3>ZEYTİNYAĞLILAR</h3>
+                  {finalZeytinyagli.map((p) => (
+                    <div key={p.id} className="mp-preview-row">
+                      <span>{p.ad}</span>
+                      {wizardEkIds.has(p.id) && <span className="mp-new-badge">sihirbaz</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {finalYemekler.length === 0 && finalZeytinyagli.length === 0 && (
+                <p className="mp-preview-empty">Seçili ürün yok.</p>
+              )}
+            </div>
+            <div className="mp-modal-actions">
+              <button className="mp-modal-cancel" onClick={handleIptal}>İptal</button>
+              <button className="mp-modal-confirm" onClick={handleFinalGonder}>
+                <Send size={15} /> Gönder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && <div className="mp-toast">{toast}</div>}
     </div>
   );
 }
