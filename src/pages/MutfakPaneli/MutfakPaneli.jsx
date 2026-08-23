@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import './MutfakPaneli.css';
-import { Search, X, Send, ChefHat, ShoppingBag } from 'lucide-react';
+import { Search, X, Send, ShoppingBag } from 'lucide-react';
 import { resolveButtonStyle } from '../../constants/themeDefaults';
 
 // Kategori filtre yardımcıları
@@ -186,8 +186,12 @@ export default function MutfakPaneli({ data }) {
   }
 
   // ── Chip renk çözümü ──
+  // Seçilmemişken → ürünün kendi butonRengi/butonYaziRengi
+  // Seçilince     → beyaz zemin, siyah yazı (tıklandığını netçe göster)
   function chipStyle(p, seçili) {
-    if (!seçili) return {};
+    if (seçili) {
+      return { background: '#ffffff', color: '#111111', borderColor: '#111111' };
+    }
     const cat = categoryMap[p.kategori] || {};
     const style = resolveButtonStyle(p, cat);
     return {
@@ -199,23 +203,6 @@ export default function MutfakPaneli({ data }) {
 
   return (
     <div className="mp-shell">
-      {/* ── HEADER ── */}
-      <header className="mp-header">
-        <ChefHat size={20} />
-        <h1>Mutfak Paneli</h1>
-        {/* Çekmece ikonu + rozet */}
-        <button
-          className={`mp-drawer-trigger ${drawerOpen ? 'active' : ''}`}
-          onClick={() => setDrawerOpen((o) => !o)}
-          aria-label="Seçilenler"
-        >
-          <ShoppingBag size={22} />
-          {toplamSecili > 0 && (
-            <span className="mp-badge">{toplamSecili}</span>
-          )}
-        </button>
-      </header>
-
       {/* ── ÜRÜN LİSTESİ ── */}
       <div className="mp-list">
         {filteredYemekler.length > 0 && (
@@ -267,9 +254,9 @@ export default function MutfakPaneli({ data }) {
         )}
       </div>
 
-      {/* ── ARAMA ÇUBUĞU (ALTTA SABİT) ── */}
+      {/* ── ARAMA ÇUBUĞU + ÇEKMECE İKONU (ALTTA SABİT) ── */}
       <div className="mp-search-bar">
-        <Search size={16} />
+        <Search size={16} className="mp-search-icon" />
         <input
           ref={searchRef}
           placeholder="Hızlı ara..."
@@ -277,10 +264,20 @@ export default function MutfakPaneli({ data }) {
           onChange={(e) => setSearch(e.target.value)}
         />
         {search && (
-          <button onClick={() => { setSearch(''); searchRef.current?.focus(); }}>
+          <button className="mp-search-clear" onClick={() => { setSearch(''); searchRef.current?.focus(); }}>
             <X size={14} />
           </button>
         )}
+        <button
+          className={`mp-drawer-trigger ${drawerOpen ? 'active' : ''}`}
+          onClick={() => setDrawerOpen((o) => !o)}
+          aria-label="Seçilenler"
+        >
+          <ShoppingBag size={20} />
+          {toplamSecili > 0 && (
+            <span className="mp-badge">{toplamSecili}</span>
+          )}
+        </button>
       </div>
 
       {/* ── ÇEKMECE (DRAWER) ── */}
