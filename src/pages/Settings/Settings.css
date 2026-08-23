@@ -1139,7 +1139,7 @@
   padding: 1.5px 0;
 }
 .st-preview-num { font-size: 10px; color: var(--ink-soft); min-width: 14px; text-align: right; flex-shrink: 0; }
-.st-preview-name { font-size: 14px; color: var(--ink); line-height: 1.4; }
+.st-preview-name { font-size: 24px; color: var(--ink); line-height: 1.4; }
 .st-preview-empty { font-size: 11px; color: var(--ink-soft); font-style: italic; padding: 8px 0; }
 .st-preview-changed { gap: 6px; padding: 3px 0; }
 .st-preview-badge { font-size: 11px; font-weight: 800; min-width: 14px; flex-shrink: 0; }
