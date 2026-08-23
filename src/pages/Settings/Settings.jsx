@@ -5,7 +5,7 @@ import { supabase } from '../../services/supabase';
 import GununMenusu from './GununMenusu';
 import {
   ListChecks, Calculator, Eye, EyeOff, Share2, Search, X,
-  Banknote, CreditCard, UtensilsCrossed, BookOpen, ExternalLink, ChevronRight,
+  Banknote, CreditCard, UtensilsCrossed, BookOpen, ExternalLink, ChevronRight, ChevronDown,
   Undo2, Wifi, WifiOff, Printer, Database, FileSpreadsheet, Triangle, Image as ImageIcon, RefreshCw,
   Wheat, Copy, Check, Receipt, AlertTriangle,
 } from 'lucide-react';
