@@ -34,6 +34,55 @@
 .nav-bottom button.active { color: #fff; background: #E94F37; box-shadow: 0 6px 16px rgba(233, 79, 55, 0.35); }
 .nav-bottom button.active:hover { background: #D6432C; }
 
+/* ---- İkon sarmalayıcı (rozet konumlandırması için) ---- */
+.nav-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- Rozet (kırmızı sayı balonu) ---- */
+.nav-badge {
+  position: absolute;
+  top: -7px;
+  right: -9px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #E94F37;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 17px;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(233,79,55,0.5);
+  pointer-events: none;
+}
+/* Aktif (seçili) buton üzerindeyken rozet beyaz+kırmızı yazı olsun */
+.nav-bottom button.active .nav-badge {
+  background: #fff;
+  color: #E94F37;
+}
+
+/* ---- "Paketçi Ödeme Bildirimi!" ikaz metni ---- */
+.nav-alert-text {
+  font-size: 11px;
+  font-weight: 800;
+  color: #E94F37;
+  white-space: nowrap;
+  animation: nav-pulse 1.2s ease-in-out infinite;
+}
+.nav-bottom button.active .nav-alert-text {
+  color: #fff;
+}
+
+@keyframes nav-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+
 @media print {
   .nav-bottom { display: none !important; }
 }

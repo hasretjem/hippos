@@ -89,7 +89,7 @@ export default function App() {
       {activePage === 'muhasebe' && (
         <Muhasebe onNavigate={handleNavigate} />
       )}
-      {activePage !== 'products' && activePage !== 'pos' && activePage !== 'endofday' && activePage !== 'muhasebe' && <BottomNav activePage={activePage} onNavigate={handleNavigate} />}
+      {activePage !== 'products' && activePage !== 'pos' && activePage !== 'endofday' && activePage !== 'muhasebe' && <BottomNav activePage={activePage} onNavigate={handleNavigate} paketciBekleyenSayisi={(data.cariTeslimatBildirimleri || []).filter((b) => b.durum === 'bekliyor').length} />}
     </>
   );
 }
