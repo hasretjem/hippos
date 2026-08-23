@@ -862,7 +862,7 @@ export default function Settings({ data, onNavigate }) {
                               </span>
                               <button
                                 className={`st-toggle ${isActive ? 'on' : ''}`}
-                                onClick={() => toggleProductStatus(p.id)}
+                                onClick={() => { toggleProductStatus(p.id); setMenuSearchQuery(''); setTimeout(() => menuSearchRef.current?.focus(), 50); }}
                               >
                                 <span className="st-toggle-knob" />
                               </button>
