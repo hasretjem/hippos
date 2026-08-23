@@ -1141,3 +1141,8 @@
 .st-preview-num { font-size: 10px; color: var(--ink-soft); min-width: 14px; text-align: right; flex-shrink: 0; }
 .st-preview-name { font-size: 11.5px; color: var(--ink); line-height: 1.3; }
 .st-preview-empty { font-size: 11px; color: var(--ink-soft); font-style: italic; padding: 8px 0; }
+.st-preview-changed { gap: 6px; padding: 3px 0; }
+.st-preview-badge { font-size: 11px; font-weight: 800; min-width: 14px; flex-shrink: 0; }
+.st-preview-changed.acildi .st-preview-badge { color: #4a7c59; }
+.st-preview-changed.kapandi .st-preview-badge { color: #c0392b; }
+.st-preview-changed.kapandi .st-preview-name { text-decoration: line-through; opacity: 0.6; }

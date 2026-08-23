@@ -111,8 +111,18 @@ export default function Settings({ data, onNavigate }) {
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
   // Accordion: hangi kategoriler açık (Set<string>). Başlangıçta hepsi kapalı.
   const [openCategories, setOpenCategories] = useState(new Set());
+  // Modal açıldığı andaki durum snapshot'ı — sadece bu oturumda değişenleri bulmak için
+  const menuSnapshot = useRef({});
 
   useEffect(() => {
+  if (!menuModalOpen) {
+    menuSnapshot.current = {}; // modal kapanınca sıfırla
+    return;
+  }
+  // Modal açıldığında tüm ürünlerin o anki durumunu kaydet
+  menuSnapshot.current = Object.fromEntries(
+    products.filter((p) => !p.isAzVariant).map((p) => [p.id, p.durum])
+  );
   if (!menuModalOpen) return;
   function handleKeyDown(e) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -867,35 +877,29 @@ export default function Settings({ data, onNavigate }) {
               })}
               </div>
 
-            {/* ANLIKT MENÜ ÖNİZLEME PANELİ */}
+            {/* BU OTURUMDA DEĞİŞTİRİLEN ÜRÜNLER PANELİ */}
             <div className="st-menu-preview">
-              <div className="st-menu-preview-head">Aktif Ürünler</div>
+              <div className="st-menu-preview-head">Bu Oturumda Değiştirilenler</div>
               {(() => {
-                const sortedCats = [...new Set(
-                  products.filter((p) => !p.isAzVariant).map((p) => p.kategori)
-                )].sort((a, b) => {
-                  const ca = categories?.find((c) => c.name === a);
-                  const cb = categories?.find((c) => c.name === b);
-                  return (ca?.menuSirasi ?? 50) - (cb?.menuSirasi ?? 50) || a.localeCompare(b, 'tr');
+                const degistirilenler = products.filter((p) => {
+                  if (p.isAzVariant) return false;
+                  const snapshot = menuSnapshot.current[p.id];
+                  if (snapshot === undefined) return false; // modal açılmadan önce yoktu
+                  return snapshot !== p.durum; // açılıştaki durumdan farklı
                 });
-                const aktifUrunler = sortedCats.map((kat) => ({
-                  kat,
-                  uruler: products
-                    .filter((p) => !p.isAzVariant && p.kategori === kat && p.durum !== 'PASIF')
-                    .sort((a, b) => a.menuSirasi - b.menuSirasi || a.ad.localeCompare(b.ad, 'tr')),
-                })).filter((g) => g.uruler.length > 0);
-                if (aktifUrunler.length === 0) return <p className="st-preview-empty">Tüm ürünler pasif</p>;
-                return aktifUrunler.map(({ kat, uruler }) => (
-                  <div key={kat} className="st-preview-group">
-                    <div className="st-preview-cat">{kat}</div>
-                    {uruler.map((p, i) => (
-                      <div key={p.id} className="st-preview-item">
-                        <span className="st-preview-num">{i + 1}</span>
-                        <span className="st-preview-name">{p.ad}</span>
-                      </div>
-                    ))}
-                  </div>
-                ));
+                if (degistirilenler.length === 0) {
+                  return <p className="st-preview-empty">Henüz değişiklik yok</p>;
+                }
+                return degistirilenler.map((p) => {
+                  const onceki = menuSnapshot.current[p.id];
+                  const aktif = p.durum !== 'PASIF';
+                  return (
+                    <div key={p.id} className={`st-preview-item st-preview-changed ${aktif ? 'acildi' : 'kapandi'}`}>
+                      <span className="st-preview-badge">{aktif ? '✓' : '✗'}</span>
+                      <span className="st-preview-name">{p.ad}</span>
+                    </div>
+                  );
+                });
               })()}
             </div>
             </div>{/* .st-menu-body */}
