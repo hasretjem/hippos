@@ -395,30 +395,40 @@
 .tb-flow { display: flex; flex-wrap: wrap; gap: 14px; }
 .tb-pair { display: flex; gap: 5px; }
 
-.tb-salon-layout {
-  display: flex;
-  gap: 20px;
-  align-items: stretch;
+.tb-salon-grid {
+  display: grid;
   width: 100%;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(3, 140px);
+  grid-template-areas:
+    "m9  gap1 m8  gap2 m7  gap3 m6"
+    "g4  g5   g6  g7   g8  g9   m5"
+    "g10 g11  p1  p1   g12 p2   p2";
+  column-gap: 14px;
+  row-gap: 14px;
 }
-.tb-salon-col {
-  flex: 1;
+/* Yapışık çift wrapper: 2 sütunu kaplar, içinde flex, gap sıfır */
+.tb-salon-pair {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.tb-salon-col--center { justify-content: center; }
-.tb-salon-col--between { justify-content: space-between; }
-.tb-salon-col--start { justify-content: flex-start; }
-.tb-salon-group {
-  display: flex;
-  flex-direction: column;
   gap: 0;
+  height: 100%;
 }
-.tb-salon-col .tb-card,
-.tb-salon-col .tb-card-empty-wrap,
-.tb-salon-group .tb-card {
+.tb-salon-pair .tb-card {
+  flex: 1;
+  width: 0; /* flex ile eşit böl */
+  height: 100%;
+}
+/* Sol kart: sağ kenar keskin */
+.tb-card.tb-pair-left {
+  border-radius: var(--r-card) 4px 4px var(--r-card);
+}
+/* Sağ kart: sol kenar keskin */
+.tb-card.tb-pair-right {
+  border-radius: 4px var(--r-card) var(--r-card) 4px;
+}
+.tb-salon-grid .tb-card {
   width: 100%;
+  height: 100%;
 }
 
 /* ==================== MASA KARTI ==================== */
@@ -648,12 +658,8 @@
   box-shadow: var(--shadow-3);
   padding: 20px;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
-.tb-package-list { display: flex; flex-direction: column; gap: 10px; flex: 1; overflow-y: auto; }
-.tb-add-package--sticky { flex-shrink: 0; }
+.tb-package-list { display: flex; flex-direction: column; gap: 10px; }
 
 /* ---- Paket kartı — yatay, sağdan sola dolum (animasyonsuz) ---- */
 .tb-card-compact {

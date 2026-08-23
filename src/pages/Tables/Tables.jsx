@@ -49,8 +49,6 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     deleteMutfakHazirNot,
     ekmekStok,
     ekmekStoktanDus,
-    tableBosvars,
-    bosvarBildirimleri,
   } = data;
 
   // Renk-zaman kademesi her 30 dk'da bir değişsin diye periyodik yeniden çizim
@@ -436,7 +434,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     2: { fill: 100, cssVar: '--tier3' },
   };
 
-  function renderTableCard(table, key, compact) {
+  function renderTableCard(table, key, compact, extraClass = '') {
     const items = orders[table] || [];
     const isEmpty = items.length === 0;
     const openedAt = tableOpenedAt[table];
@@ -477,10 +475,6 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       document.body
     );
 
-    const sonBosvar = compact
-      ? bosvarBildirimleri.filter((b) => b.paketAdi === table).sort((a, b) => b.ts - a.ts)[0]
-      : null;
-
     const deliveryTag = sonTeslimat && (
       <div className={`tb-delivery-tag ${sonTeslimat.durum}`}>
         {sonTeslimat.tip === 'teslim_edildi'
@@ -493,12 +487,6 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       </div>
     );
 
-    const bosvarTag = compact && tableBosvars[table] && sonBosvar && (
-      <div className="tb-delivery-tag onaylandi">
-        📦 Boşu Aldım (paketçi bildirdi)
-      </div>
-    );
-
     const lockedOverlay = occupiedElsewhere && (
       <div className="tb-locked-overlay">
         <Lock />
@@ -506,7 +494,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
       </div>
     );
 
-    const cardClass = `tb-card tier-${isEmpty ? 'empty' : tier} ${dragOverTable === table ? 'drag-over' : ''} ${isMenuOpen ? 'menu-open' : ''} ${compact ? 'tb-card-compact' : ''} ${occupiedElsewhere ? 'locked' : ''} ${tier === 2 ? 'full' : ''}`;
+    const cardClass = `tb-card tier-${isEmpty ? 'empty' : tier} ${dragOverTable === table ? 'drag-over' : ''} ${isMenuOpen ? 'menu-open' : ''} ${compact ? 'tb-card-compact' : ''} ${occupiedElsewhere ? 'locked' : ''} ${tier === 2 ? 'full' : ''} ${extraClass}`;
     const dragProps = {
       draggable: !isEmpty,
       onDragStart: (e) => handleDragStart(e, table),
@@ -519,7 +507,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     // ---- Boş masa: v9'daki "dokun ve aç" kartı — kesikli çerçeve + parlayan (+) ----
     if (isEmpty && !compact) {
       return (
-        <div key={key || table} className={`tb-card tier-empty ${occupiedElsewhere ? 'locked' : ''}`} {...dragProps}>
+        <div key={key || table} className={`tb-card tier-empty ${occupiedElsewhere ? 'locked' : ''} ${extraClass}`} {...dragProps}>
           <div className="tb-empty-plus-wrap">
             <div className="tb-empty-plus"><Plus size={20} /></div>
           </div>
@@ -559,7 +547,6 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
             )
           )}
           {deliveryTag}
-          {bosvarTag}
           {lockedOverlay}
         </div>
       );
@@ -606,27 +593,21 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
 
   function renderSalonGrid() {
     return (
-      <div className="tb-salon-layout">
-        <div className="tb-salon-col tb-salon-col--center">
-          {renderTableCard('Masa 7')}
-          {renderTableCard('Masa 8')}
+      <div className="tb-salon-grid">
+        <div style={{ gridArea: 'm9' }}>{renderTableCard('Masa 9')}</div>
+        <div style={{ gridArea: 'm8' }}>{renderTableCard('Masa 8')}</div>
+        <div style={{ gridArea: 'm7' }}>{renderTableCard('Masa 7')}</div>
+        <div style={{ gridArea: 'm6' }}>{renderTableCard('Masa 6')}</div>
+        <div style={{ gridArea: 'm5' }}>{renderTableCard('Masa 5')}</div>
+        {/* 10-11 yapışık çift — p1 alanı 2 sütun kaplıyor */}
+        <div className="tb-salon-pair" style={{ gridArea: 'p1' }}>
+          {renderTableCard('Masa 10', null, false, 'tb-pair-left')}
+          {renderTableCard('Masa 11', null, false, 'tb-pair-right')}
         </div>
-        <div className="tb-salon-col tb-salon-col--between">
-          {renderTableCard('Masa 6')}
-          {renderTableCard('Masa 9')}
-        </div>
-        <div className="tb-salon-col tb-salon-col--between">
-          {renderTableCard('Masa 5')}
-          <div className="tb-salon-group">
-            {renderTableCard('Masa 11')}
-            {renderTableCard('Masa 10')}
-          </div>
-        </div>
-        <div className="tb-salon-col tb-salon-col--start">
-          <div className="tb-salon-group">
-            {renderTableCard('Masa 4')}
-            {renderTableCard('Masa 3')}
-          </div>
+        {/* 4-3 yapışık çift — p2 alanı 2 sütun kaplıyor */}
+        <div className="tb-salon-pair" style={{ gridArea: 'p2' }}>
+          {renderTableCard('Masa 4', null, false, 'tb-pair-left')}
+          {renderTableCard('Masa 3', null, false, 'tb-pair-right')}
         </div>
       </div>
     );
@@ -686,20 +667,20 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
 
         <aside className="tb-packages">
           <h2 className="tb-section-title">Paketler</h2>
-          <button
-            className="tb-add-package tb-add-package--sticky"
-            onClick={() => {
-              const name = openPackage();
-              openTable(name);
-            }}
-          >
-            <div className="tb-add-package-plus-wrap">
-              <div className="tb-add-package-plus"><Plus size={18} /></div>
-            </div>
-            <span>Yeni Paket</span>
-          </button>
           <div className={`tb-package-list ${packages.length > 8 ? 'ultra-compact' : packages.length > 4 ? 'compact' : ''}`}>
             {packages.map((p) => renderTableCard(p.name, p.name, true))}
+            <button
+              className="tb-add-package"
+              onClick={() => {
+                const name = openPackage();
+                openTable(name);
+              }}
+            >
+              <div className="tb-add-package-plus-wrap">
+                <div className="tb-add-package-plus"><Plus size={18} /></div>
+              </div>
+              <span>Yeni Paket</span>
+            </button>
           </div>
         </aside>
       </div>
