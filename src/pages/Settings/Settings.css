@@ -1085,3 +1085,59 @@
 .st-muhasebe-wa-btn:hover {
   background: #1fb356;
 }
+/* ---- Menü Düzenleme — İki Kolonlu Yapı + Önizleme ---- */
+.st-menu-modal { max-width: 760px !important; }
+.st-menu-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+.st-menu-body > .st-menu-list {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  margin-bottom: 0;
+  padding-right: 10px;
+}
+.st-menu-preview {
+  width: 190px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--border-soft);
+  padding: 0 0 0 12px;
+  margin-left: 10px;
+  font-size: 12px;
+}
+.st-menu-preview-head {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  padding: 6px 0 4px;
+}
+.st-preview-group { margin-bottom: 10px; }
+.st-preview-cat {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--olive);    
+  margin-bottom: 3px;
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 2px;
+}
+.st-preview-item {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  padding: 1.5px 0;
+}
+.st-preview-num { font-size: 10px; color: var(--ink-soft); min-width: 14px; text-align: right; flex-shrink: 0; }
+.st-preview-name { font-size: 11.5px; color: var(--ink); line-height: 1.3; }
+.st-preview-empty { font-size: 11px; color: var(--ink-soft); font-style: italic; padding: 8px 0; }

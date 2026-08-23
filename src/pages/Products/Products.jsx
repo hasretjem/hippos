@@ -3,7 +3,7 @@ import './Products.css';
 import { TL } from '../../hooks/useHipposData';
 import {
   ArrowLeft, Search, Plus, Trash2, Pin, ChevronUp, ChevronDown,
-  Check, X, RefreshCw, Save, Lock, Delete, Palette, Tag,
+  Check, X, RefreshCw, Save, Lock, Delete, Palette, Tag, ChevronRight,
 } 
 from 'lucide-react';
 import { DEFAULT_BTN_BG, DEFAULT_BTN_TEXT, DEFAULT_ICON_SIZE } from '../../constants/themeDefaults';
@@ -502,6 +502,9 @@ function InfoTip({ text }) {
   return <span className="pr-info-tip" title={text}>i</span>;
 }
 
+// Görünüm şablonları Sheets'ten okunur/yazılır (/api/sablon).
+// GorunumPopup mount olunca çeker, değişince kaydeder.
+
 // Ürün VE kategori düzenlemede kullanılan ortak "Görünüm" popup'ı.
 // showSaleName: ürün satırında true (Satış Sayfası Görünen İsim alanı gösterilir).
 // showIconSize: kategori satırında true (ikon boyutu ayarı gösterilir).
@@ -514,6 +517,58 @@ function GorunumPopup({ target, showSaleName, showIconSize, onSave, onClose }) {
   const [iconSize, setIconSize] = useState(target.ikonBoyutu || DEFAULT_ICON_SIZE);
   const [emoji, setEmoji] = useState(target.ikon || '');
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+
+  // Şablon sistemi — Sheets tabanlı
+  const [sablonlar, setSablonlar] = useState([]);
+  const [sablonLoading, setSablonLoading] = useState(true);
+  const [sablonSaving, setSablonSaving] = useState(false);
+  const [sablonAdiDraft, setSablonAdiDraft] = useState('');
+  const [sablonKayitAcik, setSablonKayitAcik] = useState(false);
+  const [sablonSilOnay, setSablonSilOnay] = useState(null); // index
+
+  useEffect(() => {
+    fetch('/api/sablon')
+      .then((r) => r.json())
+      .then((d) => setSablonlar(d.sablonlar || []))
+      .catch(() => {})
+      .finally(() => setSablonLoading(false));
+  }, []);
+
+  async function pushSablonlar(yeniList) {
+    setSablonSaving(true);
+    try {
+      await fetch('/api/sablon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sablonlar: yeniList }),
+      });
+      setSablonlar(yeniList);
+    } catch {}
+    setSablonSaving(false);
+  }
+
+  function sablonUygula(s) {
+    if (s.butonRengi !== undefined) setBtnColor(s.butonRengi || '');
+    if (s.butonYaziRengi !== undefined) setTxtColor(s.butonYaziRengi || '');
+    if (s.italik !== undefined) setItalic(!!s.italik);
+    if (s.ikon !== undefined) setEmoji(s.ikon || '');
+  }
+
+  async function sablonKaydet() {
+    const ad = sablonAdiDraft.trim();
+    if (!ad) return;
+    const yeni = { ad, butonRengi: btnColor.trim() || null, butonYaziRengi: txtColor.trim() || null, italik: italic, ikon: emoji || null };
+    const guncellenmis = [...sablonlar.filter((s) => s.ad !== ad), yeni];
+    await pushSablonlar(guncellenmis);
+    setSablonAdiDraft('');
+    setSablonKayitAcik(false);
+  }
+
+  async function sablonSil(idx) {
+    const guncellenmis = sablonlar.filter((_, i) => i !== idx);
+    await pushSablonlar(guncellenmis);
+    setSablonSilOnay(null);
+  }
 
   function handleSave() {
     const patch = {
@@ -607,6 +662,89 @@ function GorunumPopup({ target, showSaleName, showIconSize, onSave, onClose }) {
               />
             </div>
           )}
+
+          {/* ŞABLON SİSTEMİ */}
+          <div className="gp-sablon-section">
+            <div className="gp-sablon-header">
+              <span className="gp-sablon-title">Görünüm Şablonları {sablonLoading && <span style={{fontSize:10,opacity:0.5}}>yükleniyor...</span>}{sablonSaving && <span style={{fontSize:10,opacity:0.5}}>kaydediliyor...</span>}</span>
+              <button
+                autoFocus
+                type="button"
+                className="gp-sablon-kaydet-btn"
+                onClick={() => { setSablonKayitAcik((v) => !v); setSablonAdiDraft(''); }}
+              >
+                <Save size={12} /> Şablon Olarak Kaydet
+              </button>
+            </div>
+
+            {sablonKayitAcik && (
+              <div className="gp-sablon-kayit-row">
+                <input
+                  autoFocus
+                  type="text"
+                  className="gp-sablon-ad-input"
+                  placeholder="Şablon adı (örn: Kırmızı İtalik)..."
+                  value={sablonAdiDraft}
+                  onChange={(e) => setSablonAdiDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') sablonKaydet(); if (e.key === 'Escape') setSablonKayitAcik(false); }}
+                  lang="tr"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                />
+                <button type="button" className="gp-sablon-onayla" onClick={sablonKaydet} disabled={!sablonAdiDraft.trim()}>
+                  <Check size={13} /> Kaydet
+                </button>
+                <button type="button" className="gp-sablon-iptal" onClick={() => setSablonKayitAcik(false)}>
+                  <X size={13} />
+                </button>
+              </div>
+            )}
+
+            {sablonlar.length > 0 && (
+              <div className="gp-sablon-list">
+                {sablonlar.map((s, idx) => (
+                  <div key={s.ad} className="gp-sablon-item">
+                    <button
+                      type="button"
+                      className="gp-sablon-uygula"
+                      onClick={() => sablonUygula(s)}
+                      title={`Uygula: Buton ${s.butonRengi || 'varsayılan'}, Yazı ${s.butonYaziRengi || 'varsayılan'}${s.italik ? ', İtalik' : ''}${s.ikon ? `, ${s.ikon}` : ''}`}
+                    >
+                      {s.ikon && <span>{s.ikon}</span>}
+                      <span
+                        style={{
+                          background: s.butonRengi || '#f0f0f0',
+                          color: s.butonYaziRengi || '#333',
+                          fontStyle: s.italik ? 'italic' : 'normal',
+                          padding: '1px 6px',
+                          borderRadius: 4,
+                          fontSize: 12,
+                        }}
+                      >
+                        {s.ad}
+                      </span>
+                    </button>
+                    {sablonSilOnay === idx ? (
+                      <span className="gp-sablon-sil-onay">
+                        Sil?
+                        <button type="button" className="gp-sablon-sil-evet" onClick={() => sablonSil(idx)}>Evet</button>
+                        <button type="button" className="gp-sablon-sil-hayir" onClick={() => setSablonSilOnay(null)}>Hayır</button>
+                      </span>
+                    ) : (
+                      <button type="button" className="gp-sablon-sil-btn" onClick={() => setSablonSilOnay(idx)} title="Şablonu sil">
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {sablonlar.length === 0 && !sablonKayitAcik && (
+              <p className="gp-sablon-bos">Henüz şablon yok. Ayarları yapıp "Şablon Olarak Kaydet"e bas.</p>
+            )}
+          </div>
         </div>
         <div className="gp-footer">
           <button className="gp-cancel" onClick={onClose}>Vazgeç</button>
@@ -668,11 +806,13 @@ function CategoryBlock({
   localUpdateSubcategoryMeta, localToggleProductStatus, localUpdateProduct, localDeleteProduct, localSetAzPorsiyon,
 }) {
   const [gorunumOpen, setGorunumOpen] = useState(false);
+  const [acik, setAcik] = useState(false);
 
   return (
     <div className="pr-category-block">
-      <div className="pr-category-head">
+      <div className="pr-category-head" style={{ cursor: 'pointer' }} onClick={() => setAcik((v) => !v)}>
         <div className="pr-category-head-left">
+          <ChevronDown size={15} style={{ transform: acik ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.18s', flexShrink: 0 }} />
           <span className="pr-category-name">{cat.name}</span>
           <input
             type="number"
@@ -691,11 +831,11 @@ function CategoryBlock({
             />
             <Pin size={12} /> Sabit
           </label>
-          <button className="pr-gorunum-btn" onClick={() => setGorunumOpen(true)} title="Görünüm Ayarları">
+          <button className="pr-gorunum-btn" onClick={(e) => { e.stopPropagation(); setGorunumOpen(true); }} title="Görünüm Ayarları">
             <Palette size={14} />
           </button>
         </div>
-        <div className="pr-category-head-actions">
+        <div className="pr-category-head-actions" onClick={(e) => e.stopPropagation()}>
           <button onClick={() => onBulkSetStatus(cat.name, 'AKTIF')}>Hepsini Aktif Yap</button>
           <button disabled={cat.sabit} title={cat.sabit ? 'Sabit kategori — önce Sabit işaretini kaldırın' : ''} onClick={() => onBulkSetStatus(cat.name, 'PASIF')}>
             Hepsini Pasife Al
@@ -704,8 +844,8 @@ function CategoryBlock({
         </div>
       </div>
 
-      {groupedByAlt(cat.name).length === 0 && <p className="pr-empty">Bu kategoride ürün yok</p>}
-      {groupedByAlt(cat.name).map(({ alt, items, sub }) => (
+      {acik && groupedByAlt(cat.name).length === 0 && <p className="pr-empty">Bu kategoride ürün yok</p>}
+      {acik && groupedByAlt(cat.name).map(({ alt, items, sub }) => (
         <div key={alt || '_'} className="pr-subcat-block">
           {alt && (
             <div className="pr-subcat-head">

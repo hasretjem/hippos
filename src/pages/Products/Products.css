@@ -668,3 +668,76 @@
 .gp-footer button { flex: 1; height: 44px; border-radius: var(--r-btn); border: none; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .gp-cancel { background: var(--panel-2); color: var(--ink); border: 1px solid var(--border) !important; }
 .gp-save { background: var(--olive); color: #fff; }
+/* ---- Şablon Sistemi (GorunumPopup) ---- */
+.gp-sablon-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+.gp-sablon-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.gp-sablon-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2, #666);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.gp-sablon-kaydet-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--olive);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--olive);
+  cursor: pointer;
+  font-weight: 600;
+}
+.gp-sablon-kaydet-btn:hover { background: var(--olive); color: #fff; }
+.gp-sablon-kayit-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.gp-sablon-ad-input {
+  flex: 1; height: 34px; border: 1px solid var(--border); border-radius: 6px;
+  padding: 0 10px; font-size: 13px; background: var(--panel-2); color: var(--ink);
+}
+.gp-sablon-onayla {
+  display: flex; align-items: center; gap: 4px; padding: 0 10px; height: 34px;
+  background: var(--olive); color: #fff; border: none; border-radius: 6px;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.gp-sablon-onayla:disabled { opacity: 0.45; cursor: default; }
+.gp-sablon-iptal {
+  width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--panel-2); color: var(--ink-2, #888); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.gp-sablon-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.gp-sablon-item {
+  display: flex; align-items: center; gap: 2px;
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 3px 6px 3px 4px; background: var(--panel-2);
+}
+.gp-sablon-uygula {
+  display: flex; align-items: center; gap: 4px;
+  background: none; border: none; cursor: pointer; padding: 2px; border-radius: 4px;
+}
+.gp-sablon-uygula:hover { background: rgba(0,0,0,0.05); }
+.gp-sablon-sil-btn {
+  background: none; border: none; cursor: pointer; color: #bbb;
+  padding: 2px; display: flex; align-items: center; border-radius: 4px; margin-left: 2px;
+}
+.gp-sablon-sil-btn:hover { color: #e55; background: rgba(220,50,50,0.08); }
+.gp-sablon-sil-onay { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #e55; }
+.gp-sablon-sil-evet, .gp-sablon-sil-hayir {
+  padding: 1px 6px; border-radius: 4px; border: 1px solid currentColor;
+  font-size: 11px; cursor: pointer; background: none;
+}
+.gp-sablon-sil-evet { color: #e55; }
+.gp-sablon-sil-hayir { color: #888; }
+.gp-sablon-bos { font-size: 11px; color: #aaa; font-style: italic; margin: 0; }

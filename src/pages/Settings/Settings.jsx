@@ -10,8 +10,20 @@ import {
   Wheat, Copy, Check, Receipt, AlertTriangle,
 } from 'lucide-react';
 
+// Türkçe karakter duyarsız arama (İ/I/ı/i, ş/s, ğ/g, ü/u, ö/o, ç/c)
+function normalizeTr(s) {
+  return (s || '')
+    .toLocaleLowerCase('tr-TR')
+    .replace(/ı/g, 'i')
+    .replace(/ş/g, 's')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c');
+}
+
 // Ekmek stok kritik seviyeye düşünce önerilecek sipariş listesi (kopyala-yapıştır için)
-const EKMEK_SIPARIS_LISTESI = [
+  const EKMEK_SIPARIS_LISTESI = [
   { kod: '1027053', metin: '2 Koli 1027053  Don.Baget Fransız  YP 1/2 (40*160 Gr) Ulker Marifet' },
   { kod: '4400064', metin: '2 Koli 4400064  1/3 Baget Sade 95 Gr. 50/36' },
   { kod: '1033506', metin: '1 Koli 1033506 1/3 Küçük Tahıl Ekmek (70 Ad )' },
@@ -21,6 +33,7 @@ const EKMEK_SIPARIS_LISTESI = [
 export default function Settings({ data, onNavigate }) {
   const {
     products,
+    categories,
     toggleProductStatus,
     bulkSetCategoryStatus,
     subcategories,
@@ -96,7 +109,9 @@ export default function Settings({ data, onNavigate }) {
   const [gununMenusuOpen, setGununMenusuOpen] = useState(false);
   const [menuSearchOpen, setMenuSearchOpen] = useState(false);
   const [menuSearchQuery, setMenuSearchQuery] = useState('');
-    
+  // Accordion: hangi kategoriler açık (Set<string>). Başlangıçta hepsi kapalı.
+  const [openCategories, setOpenCategories] = useState(new Set());
+
   useEffect(() => {
   if (!menuModalOpen) return;
   function handleKeyDown(e) {
@@ -129,11 +144,11 @@ export default function Settings({ data, onNavigate }) {
   }
 
   const menuGroups = useMemo(() => {
-    const q = menuSearchQuery.trim().toLowerCase();
+    const q = normalizeTr(menuSearchQuery.trim());
     const groups = {}; // kategori -> { altKategori -> [ürünler] }
     products.forEach((p) => {
       if (p.isAzVariant) return; // Az varyantı, ana ürünün "Az Porsiyonlu" tikiyle yönetiliyor
-      if (q && !p.ad.toLowerCase().includes(q)) return;
+      if (q && !normalizeTr(p.ad).includes(q)) return;
       const alt = p.altKategori || '';
       groups[p.kategori] = groups[p.kategori] || {};
       (groups[p.kategori][alt] = groups[p.kategori][alt] || []).push(p);
@@ -782,18 +797,32 @@ export default function Settings({ data, onNavigate }) {
               />
             )}
 
-            <div className="st-menu-list">
-              {Object.keys(menuGroups).length === 0 && <p className="st-menu-empty">Sonuç bulunamadı</p>}
-              {sortedMenuGroupEntries.map(([kategori, subMap]) => (
-                <div key={kategori} className="st-menu-group">
-                  <div className="st-menu-group-head">
-                    <span>{kategori}</span>
-                    <div className="st-menu-bulk-btns">
-                      <button onClick={() => bulkSetCategoryStatus(kategori, 'AKTIF')}>Hepsini Aç</button>
-                      <button onClick={() => bulkSetCategoryStatus(kategori, 'PASIF')}>Hepsini Kapat</button>
+            <div className="st-menu-body">
+              <div className="st-menu-list">
+                {Object.keys(menuGroups).length === 0 && <p className="st-menu-empty">Sonuç bulunamadı</p>}
+                {sortedMenuGroupEntries.map(([kategori, subMap]) => {
+                  const isOpen = menuSearchQuery.trim() ? true : openCategories.has(kategori);
+                  return (
+                  <div key={kategori} className="st-menu-group">
+                    <div
+                      className="st-menu-group-head"
+                      onClick={() => setOpenCategories((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(kategori)) next.delete(kategori); else next.add(kategori);
+                        return next;
+                      })}
+                      style={{ cursor: 'pointer', userSelect: 'none' }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <ChevronDown size={14} style={{ transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.18s' }} />
+                        {kategori}
+                      </span>
+                      <div className="st-menu-bulk-btns" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => bulkSetCategoryStatus(kategori, 'AKTIF')}>Hepsini Aç</button>
+                        <button onClick={() => bulkSetCategoryStatus(kategori, 'PASIF')}>Hepsini Kapat</button>
+                      </div>
                     </div>
-                  </div>
-                  {sortedSubKeys(kategori, subMap).map((alt) => {
+                  {isOpen && sortedSubKeys(kategori, subMap).map((alt) => {
                     const sub = subcategories.find((s) => s.kategori === kategori && s.name === alt);
                     return (
                       <div key={alt || '_'} className="st-submenu-group">
@@ -834,8 +863,42 @@ export default function Settings({ data, onNavigate }) {
                     );
                   })}
                 </div>
-              ))}
+                );
+              })}
+              </div>
+
+            {/* ANLIKT MENÜ ÖNİZLEME PANELİ */}
+            <div className="st-menu-preview">
+              <div className="st-menu-preview-head">Aktif Ürünler</div>
+              {(() => {
+                const sortedCats = [...new Set(
+                  products.filter((p) => !p.isAzVariant).map((p) => p.kategori)
+                )].sort((a, b) => {
+                  const ca = categories?.find((c) => c.name === a);
+                  const cb = categories?.find((c) => c.name === b);
+                  return (ca?.menuSirasi ?? 50) - (cb?.menuSirasi ?? 50) || a.localeCompare(b, 'tr');
+                });
+                const aktifUrunler = sortedCats.map((kat) => ({
+                  kat,
+                  uruler: products
+                    .filter((p) => !p.isAzVariant && p.kategori === kat && p.durum !== 'PASIF')
+                    .sort((a, b) => a.menuSirasi - b.menuSirasi || a.ad.localeCompare(b.ad, 'tr')),
+                })).filter((g) => g.uruler.length > 0);
+                if (aktifUrunler.length === 0) return <p className="st-preview-empty">Tüm ürünler pasif</p>;
+                return aktifUrunler.map(({ kat, uruler }) => (
+                  <div key={kat} className="st-preview-group">
+                    <div className="st-preview-cat">{kat}</div>
+                    {uruler.map((p, i) => (
+                      <div key={p.id} className="st-preview-item">
+                        <span className="st-preview-num">{i + 1}</span>
+                        <span className="st-preview-name">{p.ad}</span>
+                      </div>
+                    ))}
+                  </div>
+                ));
+              })()}
             </div>
+            </div>{/* .st-menu-body */}
 
             <button className="st-goto-products" onClick={() => onNavigate('products')}>
               Detaylı ürün yönetimi (fiyat / ekle / sil) için Ürünler sayfasına git
