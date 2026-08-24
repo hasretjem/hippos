@@ -19,7 +19,7 @@ const CIKART_ADLAR = new Set([
 // Balık ürünleri de burada
 const ET_KEBAP_ADLAR = new Set([
   'Arnavut Ci̇ğeri̇','Bahçivan Kebabi','Çi̇ftli̇k Kebabi','Çoban Kavurma',
-  'İslip Kebabı','Kağıt Kebabı','Manti','Orman Kebabi','Patlican Kebabi',
+  'İslip Kebabı','İslim Kebabı','Kağıt Kebabı','Manti','Orman Kebabi','Patlican Kebabi',
   'Püreli̇ Tas Kebabi','Sebzeli̇ Et Sote','Sebzeli̇ Kavurma','Tas Kebabi',
   // Balık
   'Hamsi Buğulama','Hamsi Tava',
@@ -58,16 +58,13 @@ const SEBZE_ADLAR = new Set([
 // Grup 5 — Pilav / Makarna
 const PILAV_MAKARNA_ADLAR = new Set([
   'Bulgur Pi̇lavi','Eri̇şte','Spagetti̇',
-  // Fırın Makarna — burada
-  'Fırın Makarna',
+  'Fırın Makarna','Arpa Şehri̇ye',
 ]);
 
 // Grup 6 — Zeytinyağlı / Yoğurtlu / Salata
 // Bu grup hem alt_kategori bazlı hem de yoğurtlular
 // Kod içinde alt_kategori eşleşmesiyle bulunacak + ekstra adlar
-const ZEYTINYAGLI_EK_ADLAR = new Set([
-  'Arpa Şehri̇ye', // tek ürün bu gruba uyuyor
-]);
+const ZEYTINYAGLI_EK_ADLAR = new Set([]);
 
 // Grup 7 — Tatlı
 const TATLI_ADLAR = new Set([
@@ -219,9 +216,8 @@ export default function MutfakPaneli({ data }) {
   }
   function toggleGroup(id) {
     setOpenGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
+      if (prev.has(id)) return new Set();
+      return new Set([id]);
     });
   }
 
