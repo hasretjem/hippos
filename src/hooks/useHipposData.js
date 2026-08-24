@@ -746,6 +746,15 @@ export default function useHipposData(scope = 'full') {
   }, []);
 
   useEffect(() => {
+    // KOTA OPTİMİZASYONU: presence kanalı SADECE "başka cihazda açık mı" masa kilidini
+    // gösteren satış/masalar sayfaları için gerekli — bunlar yalnızca 'full' scope'ta
+    // render edilir. Paketçi (/paketci) ve mutfak (/mutfak) panelleri bu kilidi HİÇ
+    // kullanmaz (isTableOccupiedElsewhere/announceViewingTable o sayfalarda çağrılmıyor),
+    // ama eskiden yine de presence kanalına bağlanıp her masa navigasyonunda tüm cihazlara
+    // gereksiz sync/join/leave mesajı ürettiriyorlardı. Artık full dışındaki scope'lar
+    // presence'e HİÇ bağlanmıyor. announceViewingTable/clearViewingTable zaten null-güvenli
+    // (?.track / ?.untrack), presenceChannelRef null kaldığında sessizce no-op olurlar.
+    if (scope !== 'full') return;
     const channel = supabase.channel('hippos-presence', {
       config: { presence: { key: deviceIdRef.current } },
     });
