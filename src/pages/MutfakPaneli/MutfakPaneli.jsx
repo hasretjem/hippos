@@ -163,12 +163,21 @@ export default function MutfakPaneli({ data }) {
     return m;
   }, [products]);
 
-  // applyMutfakMenusu için yönetilecek ID'ler
+  // applyMutfakMenusu için yönetilecek ID'ler —
+  // SADECE yemek kategorisi + zeytinyağlı/yoğurtlu alt kategorisi.
+  // Diğer kategoriler dokunulmaz.
   const relevantProductIds = useMemo(() => {
-    const ids = tumUrunler.map((p) => p.id);
+    const ids = products
+      .filter((p) => {
+        if (p.sabit) return false;
+        const kat = (p.kategori    || '').toLocaleLowerCase('tr-TR');
+        const alt = (p.altKategori || '').toLocaleLowerCase('tr-TR');
+        return kat.includes('yemek') || alt === 'yoğurt - z.yağlı';
+      })
+      .map((p) => p.id);
     ids.forEach((id) => { if (azVariantMap[id]) ids.push(azVariantMap[id]); });
     return ids;
-  }, [tumUrunler, azVariantMap]);
+  }, [products, azVariantMap]);
 
   const categoryMap = useMemo(() => {
     const m = {};
