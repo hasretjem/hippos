@@ -3,7 +3,6 @@ import './MutfakPaneli.css';
 import { Search, X, Send, ShoppingBag } from 'lucide-react';
 import { resolveButtonStyle } from '../../constants/themeDefaults';
 
-// Kategori filtre yardımcıları
 function isZeytinyagli(p) {
   const a = (p.altKategori || '').toLocaleLowerCase('tr-TR');
   return a === 'yoğurt - z.yağlı';
@@ -16,9 +15,6 @@ function sortByMenu(list) {
   return [...list].sort((a, b) => a.menuSirasi - b.menuSirasi || a.ad.localeCompare(b.ad, 'tr'));
 }
 
-// ────────────────────────────────────────────────────────────────────
-// Çorba & Baklagil Sihirbazı adım tanımları
-// ────────────────────────────────────────────────────────────────────
 const WIZARD_STEPS = [
   {
     soru: 'Menüde hangi çorba var?',
@@ -37,7 +33,6 @@ const WIZARD_STEPS = [
 export default function MutfakPaneli({ data }) {
   const { products, categories, applyMutfakMenusu } = data;
 
-  // Ürün listeleri
   const yemekler = useMemo(
     () => sortByMenu(products.filter((p) => isYemek(p) && !p.sabit && !p.isAzVariant)),
     [products],
@@ -46,32 +41,37 @@ export default function MutfakPaneli({ data }) {
     () => sortByMenu(products.filter((p) => isZeytinyagli(p) && !p.sabit && !p.isAzVariant)),
     [products],
   );
-  const relevantProductIds = useMemo(
-    () => [...yemekler, ...zeytinyaglilar].map((p) => p.id),
-    [yemekler, zeytinyaglilar],
-  );
 
-  // Kategori haritası (butonRengi çözümü için)
+  // parentId → az varyant ID eşlemesi — gönderimde otomatik eklenir
+  const azVariantMap = useMemo(() => {
+    const m = {};
+    products.forEach((p) => { if (p.isAzVariant && p.parentId) m[p.parentId] = p.id; });
+    return m;
+  }, [products]);
+
+  // applyMutfakMenusu'nun yönettiği ID'ler: ana ürünler + az varyantları
+  const relevantProductIds = useMemo(() => {
+    const ids = [...yemekler, ...zeytinyaglilar].map((p) => p.id);
+    ids.forEach((id) => { if (azVariantMap[id]) ids.push(azVariantMap[id]); });
+    return ids;
+  }, [yemekler, zeytinyaglilar, azVariantMap]);
+
   const categoryMap = useMemo(() => {
     const m = {};
     (categories || []).forEach((c) => { m[c.ad] = c; });
     return m;
   }, [categories]);
 
-  // Sayfa durumu
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [search, setSearch] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [toast, setToast] = useState('');
   const searchRef = useRef(null);
+  const listRef = useRef(null);
 
-  // Sihirbaz durumu
-  // phase: 'idle' | 'wizard' | 'confirm' | 'done'
   const [phase, setPhase] = useState('idle');
   const [wizardStep, setWizardStep] = useState(0);
-  // Her adım için seçilen isimler kümesi (boşsa "hiçbiri" demek)
   const [wizardSeçimler, setWizardSeçimler] = useState([new Set(), new Set()]);
-  // Sihirbazın final'de seçeceği ek product ID'ler
   const [wizardEkIds, setWizardEkIds] = useState(new Set());
 
   function showToast(msg) {
@@ -79,12 +79,10 @@ export default function MutfakPaneli({ data }) {
     setTimeout(() => setToast(''), 2000);
   }
 
-  // ── Chip seçme / kaldırma ──
   function toggleSelect(id) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   }
@@ -92,15 +90,17 @@ export default function MutfakPaneli({ data }) {
     setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
   }
 
-  // ── Arama: seçince metni sil, klavye açık kalsın ──
+  // Arama modunda seçim: scroll konumunu koru, klavye açık kalsın
   function handleSearchSelect(p) {
+    const scrollTop = listRef.current?.scrollTop ?? 0;
     toggleSelect(p.id);
     setSearch('');
-    // Klavyeyi açık tutmak için focus'u geri ver
-    setTimeout(() => searchRef.current?.focus(), 0);
+    requestAnimationFrame(() => {
+      if (listRef.current) listRef.current.scrollTop = scrollTop;
+      searchRef.current?.focus();
+    });
   }
 
-  // ── Filtreler ──
   const q = search.trim().toLocaleLowerCase('tr-TR');
   const filteredYemekler = q
     ? yemekler.filter((p) => p.ad.toLocaleLowerCase('tr-TR').includes(q))
@@ -113,7 +113,6 @@ export default function MutfakPaneli({ data }) {
   const selectedZeytinyagli = sortByMenu(zeytinyaglilar.filter((p) => selectedIds.has(p.id)));
   const toplamSecili = selectedIds.size;
 
-  // ── "Menüyü Gönder" butonuna basınca sihirbazı aç ──
   function handleGonderClick() {
     setWizardStep(0);
     setWizardSeçimler([new Set(), new Set()]);
@@ -122,30 +121,22 @@ export default function MutfakPaneli({ data }) {
     setDrawerOpen(false);
   }
 
-  // ── Sihirbaz: bir isim seç/kaldır ──
   function wizardToggleIsim(stepIdx, isim) {
     setWizardSeçimler((prev) => {
       const next = prev.map((s) => new Set(s));
-      if (next[stepIdx].has(isim)) next[stepIdx].delete(isim);
-      else next[stepIdx].add(isim);
+      if (next[stepIdx].has(isim)) next[stepIdx].delete(isim); else next[stepIdx].add(isim);
       return next;
     });
   }
 
-  // ── Sihirbaz: "İleri" / "Hiçbiri" ──
   function wizardIleri() {
     if (wizardStep < WIZARD_STEPS.length - 1) {
       setWizardStep((s) => s + 1);
     } else {
-      // Son adım bitti → seçilen isimleri products'ta eşleştir
-      const toplamSeçilenIsimler = new Set();
-      wizardSeçimler.forEach((set) => set.forEach((isim) => toplamSeçilenIsimler.add(isim)));
-
-      const bulunacak = products.filter((p) =>
-        toplamSeçilenIsimler.has(p.ad) &&
-        !selectedIds.has(p.id),
-      );
-      setWizardEkIds(new Set(bulunacak.map((p) => p.id)));
+      const isimler = new Set();
+      wizardSeçimler.forEach((set) => set.forEach((isim) => isimler.add(isim)));
+      const ek = products.filter((p) => isimler.has(p.ad) && !selectedIds.has(p.id));
+      setWizardEkIds(new Set(ek.map((p) => p.id)));
       setPhase('confirm');
     }
   }
@@ -154,22 +145,21 @@ export default function MutfakPaneli({ data }) {
     if (wizardStep < WIZARD_STEPS.length - 1) {
       setWizardStep((s) => s + 1);
     } else {
-      const toplamSeçilenIsimler = new Set();
-      wizardSeçimler.slice(0, -1).forEach((set) => set.forEach((isim) => toplamSeçilenIsimler.add(isim)));
-      const bulunacak = products.filter((p) =>
-        toplamSeçilenIsimler.has(p.ad) && !selectedIds.has(p.id),
-      );
-      setWizardEkIds(new Set(bulunacak.map((p) => p.id)));
+      const isimler = new Set();
+      wizardSeçimler.slice(0, -1).forEach((set) => set.forEach((isim) => isimler.add(isim)));
+      const ek = products.filter((p) => isimler.has(p.ad) && !selectedIds.has(p.id));
+      setWizardEkIds(new Set(ek.map((p) => p.id)));
       setPhase('confirm');
     }
   }
 
-  // Confirm ekranındaki birleşik ID seti
+  // Manuel seçimler + sihirbaz + az varyantları
   const finalIds = useMemo(() => {
     const s = new Set(selectedIds);
     wizardEkIds.forEach((id) => s.add(id));
+    s.forEach((id) => { if (azVariantMap[id]) s.add(azVariantMap[id]); });
     return s;
-  }, [selectedIds, wizardEkIds]);
+  }, [selectedIds, wizardEkIds, azVariantMap]);
 
   const finalYemekler = sortByMenu(yemekler.filter((p) => finalIds.has(p.id)));
   const finalZeytinyagli = sortByMenu(zeytinyaglilar.filter((p) => finalIds.has(p.id)));
@@ -181,30 +171,18 @@ export default function MutfakPaneli({ data }) {
     setTimeout(() => setPhase('idle'), 1500);
   }
 
-  function handleIptal() {
-    setPhase('idle');
-  }
+  function handleIptal() { setPhase('idle'); }
 
-  // ── Chip renk çözümü ──
-  // Seçilmemişken → ürünün kendi butonRengi/butonYaziRengi
-  // Seçilince     → beyaz zemin, siyah yazı (tıklandığını netçe göster)
   function chipStyle(p, seçili) {
-    if (seçili) {
-      return { background: '#ffffff', color: '#111111', borderColor: '#111111' };
-    }
+    if (seçili) return { background: '#ffffff', color: '#111111', borderColor: '#111111' };
     const cat = categoryMap[p.kategori] || {};
     const style = resolveButtonStyle(p, cat);
-    return {
-      background: style.backgroundColor,
-      color: style.textColor,
-      borderColor: style.backgroundColor,
-    };
+    return { background: style.backgroundColor, color: style.textColor, borderColor: style.backgroundColor };
   }
 
   return (
     <div className="mp-shell">
-      {/* ── ÜRÜN LİSTESİ ── */}
-      <div className="mp-list">
+      <div className="mp-list" ref={listRef}>
         {filteredYemekler.length > 0 && (
           <div className="mp-section">
             <h2>Yemekler</h2>
@@ -217,9 +195,7 @@ export default function MutfakPaneli({ data }) {
                     className={`mp-chip ${seçili ? 'selected' : ''}`}
                     style={chipStyle(p, seçili)}
                     onClick={() => q ? handleSearchSelect(p) : toggleSelect(p.id)}
-                  >
-                    {p.ad}
-                  </button>
+                  >{p.ad}</button>
                 );
               })}
             </div>
@@ -238,9 +214,7 @@ export default function MutfakPaneli({ data }) {
                     className={`mp-chip ${seçili ? 'selected' : ''}`}
                     style={chipStyle(p, seçili)}
                     onClick={() => q ? handleSearchSelect(p) : toggleSelect(p.id)}
-                  >
-                    {p.ad}
-                  </button>
+                  >{p.ad}</button>
                 );
               })}
             </div>
@@ -254,7 +228,6 @@ export default function MutfakPaneli({ data }) {
         )}
       </div>
 
-      {/* ── ARAMA ÇUBUĞU + ÇEKMECE İKONU (ALTTA SABİT) ── */}
       <div className="mp-search-bar">
         <Search size={16} className="mp-search-icon" />
         <input
@@ -274,13 +247,10 @@ export default function MutfakPaneli({ data }) {
           aria-label="Seçilenler"
         >
           <ShoppingBag size={20} />
-          {toplamSecili > 0 && (
-            <span className="mp-badge">{toplamSecili}</span>
-          )}
+          {toplamSecili > 0 && <span className="mp-badge">{toplamSecili}</span>}
         </button>
       </div>
 
-      {/* ── ÇEKMECE (DRAWER) ── */}
       {drawerOpen && (
         <div className="mp-drawer-overlay" onClick={() => setDrawerOpen(false)}>
           <div className="mp-drawer" onClick={(e) => e.stopPropagation()}>
@@ -289,9 +259,7 @@ export default function MutfakPaneli({ data }) {
               <button onClick={() => setDrawerOpen(false)}><X size={18} /></button>
             </div>
             <div className="mp-drawer-scroll">
-              {toplamSecili === 0 && (
-                <p className="mp-preview-empty">Henüz ürün seçilmedi.</p>
-              )}
+              {toplamSecili === 0 && <p className="mp-preview-empty">Henüz ürün seçilmedi.</p>}
               {selectedYemekler.length > 0 && (
                 <div className="mp-preview-group">
                   <h3>YEMEKLER</h3>
@@ -324,7 +292,6 @@ export default function MutfakPaneli({ data }) {
         </div>
       )}
 
-      {/* ── SİHİRBAZ MODAL ── */}
       {phase === 'wizard' && (
         <div className="mp-modal-overlay">
           <div className="mp-modal mp-wizard">
@@ -337,9 +304,7 @@ export default function MutfakPaneli({ data }) {
                     key={isim}
                     className={`mp-wizard-btn ${seçili ? 'selected' : ''}`}
                     onClick={() => wizardToggleIsim(wizardStep, isim)}
-                  >
-                    {isim}
-                  </button>
+                  >{isim}</button>
                 );
               })}
             </div>
@@ -356,7 +321,6 @@ export default function MutfakPaneli({ data }) {
         </div>
       )}
 
-      {/* ── ONAY EKRANI ── */}
       {phase === 'confirm' && (
         <div className="mp-modal-overlay">
           <div className="mp-modal mp-confirm">
