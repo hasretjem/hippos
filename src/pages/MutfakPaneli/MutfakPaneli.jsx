@@ -90,15 +90,11 @@ export default function MutfakPaneli({ data }) {
     setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
   }
 
-  // Arama modunda seçim: scroll konumunu koru, klavye açık kalsın
+  // Arama dropdown'ından seçim: metni sil, klavye açık kalsın
   function handleSearchSelect(p) {
-    const scrollTop = listRef.current?.scrollTop ?? 0;
     toggleSelect(p.id);
     setSearch('');
-    requestAnimationFrame(() => {
-      if (listRef.current) listRef.current.scrollTop = scrollTop;
-      searchRef.current?.focus();
-    });
+    searchRef.current?.focus();
   }
 
   const q = search.trim().toLocaleLowerCase('tr-TR');
@@ -249,6 +245,41 @@ export default function MutfakPaneli({ data }) {
           <ShoppingBag size={20} />
           {toplamSecili > 0 && <span className="mp-badge">{toplamSecili}</span>}
         </button>
+
+        {/* Arama sonuçları — klavye açıkken arama çubuğunun hemen üstünde */}
+        {q && (
+          <div className="mp-search-dropdown">
+            {filteredYemekler.length === 0 && filteredZeytinyagli.length === 0 && (
+              <div className="mp-search-empty">Sonuç yok</div>
+            )}
+            {filteredYemekler.map((p) => {
+              const seçili = selectedIds.has(p.id);
+              return (
+                <button
+                  key={p.id}
+                  className={`mp-search-row ${seçili ? 'selected' : ''}`}
+                  onPointerDown={(e) => { e.preventDefault(); handleSearchSelect(p); }}
+                >
+                  <span>{p.ad}</span>
+                  {seçili && <span className="mp-search-check">✓</span>}
+                </button>
+              );
+            })}
+            {filteredZeytinyagli.map((p) => {
+              const seçili = selectedIds.has(p.id);
+              return (
+                <button
+                  key={p.id}
+                  className={`mp-search-row ${seçili ? 'selected' : ''}`}
+                  onPointerDown={(e) => { e.preventDefault(); handleSearchSelect(p); }}
+                >
+                  <span>{p.ad}</span>
+                  {seçili && <span className="mp-search-check">✓</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {drawerOpen && (
