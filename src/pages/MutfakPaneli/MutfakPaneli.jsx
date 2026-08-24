@@ -137,7 +137,8 @@ export default function MutfakPaneli({ data }) {
       if (ZEYTINYAGLI_EK_ADLAR.has(ad))  { zeytinyagli.push(p); return; }
 
       // Geri kalan yemekler — yemek kategorisindeyse sebze grubuna at
-      if (kat.includes('yemek'))          { sebze.push(p); }
+      // (sadece alt_kategori Ana Yemekler olanlar — zeytinyağlı/yoğurtlu zaten üstte yakalandı)
+      if (kat.includes('yemek') && alt !== 'yoğurt - z.yağlı') { sebze.push(p); }
     });
 
     return [
