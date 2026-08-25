@@ -57,29 +57,27 @@ function birlesebilirMi(a, b) {
   return Math.round(a.fiyat) === Math.round(b.fiyat) && !!a.azPorsiyon === !!b.azPorsiyon;
 }
 
-// Ürün listesini slot dizisine çevirir.
-// Önce komşu çiftler arasında birleştirme fırsatı arar (greedy, soldan sağa).
-// Oluşan slot sayısı max'ı geçemez — geçerse kalan ürünler "sığmayan" sayılır.
+// İlk max ürünü tekli slotlara koy.
+// max'ı aşan her ürün için: birleşebileceği tekli slotlar arasından adı en kısa olanı seç.
+// Uygun tekli slot yoksa (fiyat/format uyumsuz veya hepsi dolu) → sığmayan sayısına ekle.
 function urundenleriSlotlara(urunler, max) {
-  const slots = [];
-  let i = 0;
-  while (i < urunler.length) {
-    if (
-      i + 1 < urunler.length &&
-      birlesebilirMi(urunler[i], urunler[i + 1]) &&
-      slots.length < max
-    ) {
-      slots.push([urunler[i], urunler[i + 1]]);
-      i += 2;
-    } else if (slots.length < max) {
-      slots.push([urunler[i]]);
-      i++;
-    } else {
-      // max doldu, kalan ürünler sığmıyor
-      break;
+  const slots = urunler.slice(0, max).map((u) => [u]);
+  let sigmayanSayisi = 0;
+  for (let i = max; i < urunler.length; i++) {
+    const yeni = urunler[i];
+    const adaylar = slots
+      .map((slot, idx) => ({ slot, idx }))
+      .filter(({ slot }) => slot.length === 1 && birlesebilirMi(slot[0], yeni));
+    if (adaylar.length === 0) {
+      sigmayanSayisi++;
+      continue;
     }
+    // Adı en kısa olan tekli slota ekle
+    adaylar.sort((a, b) =>
+      turkishTitleCase(a.slot[0].ad).length - turkishTitleCase(b.slot[0].ad).length
+    );
+    slots[adaylar[0].idx] = [slots[adaylar[0].idx][0], yeni];
   }
-  const sigmayanSayisi = urunler.length - slots.reduce((acc, s) => acc + s.length, 0);
   return { slots, sigmayanSayisi };
 }
 
@@ -123,20 +121,25 @@ async function renderMenuCanvas({ tarihText, corbaSlots, anaSlots, yardimciSlots
       ? `${turkishTitleCase(slot[0].ad)} / ${turkishTitleCase(slot[1].ad)}`
       : turkishTitleCase(slot[0].ad);
 
-    ctx.textAlign = 'right';
+    // Önce isim için gereken puntoyu hesapla (fiyat genişliğini sabit tutarak)
     ctx.font = `${ITEM_FONT_SIZE}px "${FONT}"`;
-    ctx.fillText(price, priceRightX, y);
-    const priceWidth = ctx.measureText(price).width;
+    ctx.textAlign = 'right';
+    const priceWidthRef = ctx.measureText(price).width;
 
-    const availableWidth = priceRightX - priceWidth - PRICE_GAP - x;
+    const availableWidth = priceRightX - priceWidthRef - PRICE_GAP - x;
     let size = ITEM_FONT_SIZE;
     ctx.font = `${size}px "${FONT}"`;
     while (ctx.measureText(nameRaw).width > availableWidth && size > MIN_FONT_SIZE) {
       size -= 0.5;
       ctx.font = `${size}px "${FONT}"`;
     }
+
+    // İsim ve fiyat aynı nihai puntoyla çizilir
+    ctx.font = `${size}px "${FONT}"`;
     ctx.textAlign = 'left';
     ctx.fillText(nameRaw, x, y);
+    ctx.textAlign = 'right';
+    ctx.fillText(price, priceRightX, y);
   }
 
   const pairs = [
@@ -175,9 +178,8 @@ function initialSlotsFor(products, sectionKey) {
   const eslesenler = sortByGununMenusuSira(
     products.filter((p) => p.gununMenusuKategori === etiket && p.durum === 'AKTIF' && !p.isAzVariant)
   );
-  // max × 2 ürün alınır, ardından slotlara bölünür
-  const alinan = eslesenler.slice(0, max * 2);
-  return urundenleriSlotlara(alinan, max);
+  // Tümünü ver — urundenleriSlotlara kendi içinde max kontrolü yapar
+  return urundenleriSlotlara(eslesenler, max);
 }
 
 export default function GununMenusu({ data, onClose }) {
