@@ -99,7 +99,7 @@
   border: 1.5px solid transparent;
   background: var(--panel);
   color: var(--ink);
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
@@ -499,3 +499,33 @@
   transition: background 0.2s;
 }
 .mp-wizard-dot.active { background: var(--olive); }
+
+/* ── SEKME ÇUBUĞU ── */
+.mp-tabs {
+  display: flex;
+  border-bottom: 2px solid #000;
+  background: #fff;
+  flex-shrink: 0;
+  z-index: 10;
+}
+.mp-tab {
+  flex: 1;
+  padding: 10px 0;
+  font-size: 13px;
+  font-weight: 800;
+  border: none;
+  background: #f0f0f0;
+  color: #555;
+  cursor: pointer;
+  border-right: 1px solid #ccc;
+  font-family: 'Inter', sans-serif;
+  transition: background 0.15s, color 0.15s;
+}
+.mp-tab:last-child { border-right: none; }
+.mp-tab.active {
+  background: #fff;
+  color: #000;
+  border-bottom: 2px solid #fff;
+  margin-bottom: -2px;
+}
+.mp-tab:not(.active):hover { background: #e8e8e8; }

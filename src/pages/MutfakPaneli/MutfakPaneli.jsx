@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import './MutfakPaneli.css';
+import FisMenü from './FisMenü';
 import { Search, X, Send, ShoppingBag, ChevronDown } from 'lucide-react';
 import { resolveButtonStyle } from '../../constants/themeDefaults';
 
@@ -19,7 +20,7 @@ const CIKART_ADLAR = new Set([
 // Balık ürünleri de burada
 const ET_KEBAP_ADLAR = new Set([
   'Arnavut Ci̇ğeri̇','Bahçivan Kebabi','Çi̇ftli̇k Kebabi','Çoban Kavurma',
-  'İslip Kebabı','İslim Kebabı','Kağıt Kebabı','Manti','Orman Kebabi','Patlican Kebabi',
+  'İslip Kebabı','Kağıt Kebabı','Manti','Orman Kebabi','Patlican Kebabi',
   'Püreli̇ Tas Kebabi','Sebzeli̇ Et Sote','Sebzeli̇ Kavurma','Tas Kebabi',
   // Balık
   'Hamsi Buğulama','Hamsi Tava',
@@ -58,13 +59,16 @@ const SEBZE_ADLAR = new Set([
 // Grup 5 — Pilav / Makarna
 const PILAV_MAKARNA_ADLAR = new Set([
   'Bulgur Pi̇lavi','Eri̇şte','Spagetti̇',
-  'Fırın Makarna','Arpa Şehri̇ye',
+  // Fırın Makarna — burada
+  'Fırın Makarna',
 ]);
 
 // Grup 6 — Zeytinyağlı / Yoğurtlu / Salata
 // Bu grup hem alt_kategori bazlı hem de yoğurtlular
 // Kod içinde alt_kategori eşleşmesiyle bulunacak + ekstra adlar
-const ZEYTINYAGLI_EK_ADLAR = new Set([]);
+const ZEYTINYAGLI_EK_ADLAR = new Set([
+  'Arpa Şehri̇ye', // tek ürün bu gruba uyuyor
+]);
 
 // Grup 7 — Tatlı
 const TATLI_ADLAR = new Set([
@@ -137,8 +141,7 @@ export default function MutfakPaneli({ data }) {
       if (ZEYTINYAGLI_EK_ADLAR.has(ad))  { zeytinyagli.push(p); return; }
 
       // Geri kalan yemekler — yemek kategorisindeyse sebze grubuna at
-      // (sadece alt_kategori Ana Yemekler olanlar — zeytinyağlı/yoğurtlu zaten üstte yakalandı)
-      if (kat.includes('yemek') && alt !== 'yoğurt - z.yağlı') { sebze.push(p); }
+      if (kat.includes('yemek'))          { sebze.push(p); }
     });
 
     return [
@@ -184,6 +187,7 @@ export default function MutfakPaneli({ data }) {
   }, [categories]);
 
   // ── State ──
+  const [activeTab, setActiveTab]          = useState('fis'); // 'fis' | 'akordiyon'
   const [selectedIds, setSelectedIds]     = useState(() => new Set());
   const [openGroups, setOpenGroups]       = useState(() => {
     // Sadece "et" grubu açık başlar
@@ -217,8 +221,9 @@ export default function MutfakPaneli({ data }) {
   }
   function toggleGroup(id) {
     setOpenGroups((prev) => {
-      if (prev.has(id)) return new Set();
-      return new Set([id]);
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
     });
   }
 
@@ -315,6 +320,27 @@ export default function MutfakPaneli({ data }) {
   // ── JSX ──
   return (
     <div className="mp-shell">
+      {/* ── SEKME ÇUBUĞU ── */}
+      <div className="mp-tabs">
+        <button
+          className={`mp-tab ${activeTab === 'fis' ? 'active' : ''}`}
+          onClick={() => setActiveTab('fis')}
+        >
+          📋 Fiş Görünüm
+        </button>
+        <button
+          className={`mp-tab ${activeTab === 'akordiyon' ? 'active' : ''}`}
+          onClick={() => setActiveTab('akordiyon')}
+        >
+          ☰ Akordiyon
+        </button>
+      </div>
+
+      {/* ── FİŞ GÖRÜNÜMü SEKMESİ ── */}
+      {activeTab === 'fis' && <FisMenü data={data} />}
+
+      {/* ── AKORDİYON SEKMESİ ── */}
+      {activeTab === 'akordiyon' && <>
       {/* ── AKORDIYON LİSTE ── */}
       <div className="mp-list">
         {gruplar.map((grup) => {
@@ -489,6 +515,7 @@ export default function MutfakPaneli({ data }) {
       )}
 
       {toast && <div className="mp-toast">{toast}</div>}
+      </>}
     </div>
   );
 }
