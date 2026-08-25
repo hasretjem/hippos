@@ -1801,14 +1801,14 @@ export default function useHipposData(scope = 'full') {
     return id;
   }
 
-  function addCariOdeme(cariId, { tutar, tur }) {
+  async function addCariOdeme(cariId, { tutar, tur }) {
     const id = Date.now() + Math.floor(Math.random() * 1000);
     const ts = Date.now();
     setCariOdemeler((prev) => [...prev, { id, cariId, ts, tutar, tur }]);
-    supabase
+    const { error } = await supabase
       .from('cari_odemeler')
-      .insert({ id, cari_id: cariId, ts, tutar, tur })
-      .then(({ error }) => { if (error) console.error('cari ödemesi kaydedilemedi:', error.message); });
+      .insert({ id, cari_id: cariId, ts, tutar, tur });
+    if (error) console.error('cari ödemesi kaydedilemedi:', error.message);
     return id;
   }
 

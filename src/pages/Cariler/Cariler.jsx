@@ -114,11 +114,11 @@ export default function Cariler({ data, onNavigate }) {
     setOdemeModalOpen(true);
   }
 
-  function submitOdeme() {
+  async function submitOdeme() {
     const tutar = parseFloat(String(odemeTutar).replace(',', '.')) || 0;
     if (tutar <= 0 || !selectedCari) return;
-    addCariOdeme(selectedCari.id, { tutar, tur: odemeTur });
     const kalan = Math.max(0, getCariBakiye(selectedCari.id) - tutar);
+    await addCariOdeme(selectedCari.id, { tutar, tur: odemeTur });
     setLastOdemeKalan(kalan);
     setOdemeModalOpen(false);
     setOdemeShareText(
@@ -126,7 +126,7 @@ export default function Cariler({ data, onNavigate }) {
     );
     setOdemeShareOpen(true);
     if (kalan === 0) {
-      setTimeout(() => archiveCari(selectedCari.id), 400);
+      archiveCari(selectedCari.id);
     }
   }
 
