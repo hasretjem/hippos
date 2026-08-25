@@ -666,9 +666,8 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
         </div>
 
         <aside className="tb-packages">
-          <h2 className="tb-section-title">Paketler</h2>
-          <div className={`tb-package-list ${packages.length > 8 ? 'ultra-compact' : packages.length > 4 ? 'compact' : ''}`}>
-            {packages.map((p) => renderTableCard(p.name, p.name, true))}
+          <div className="tb-packages-header">
+            <h2 className="tb-section-title">Paketler</h2>
             <button
               className="tb-add-package"
               onClick={() => {
@@ -681,6 +680,9 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
               </div>
               <span>Yeni Paket</span>
             </button>
+          </div>
+          <div className={`tb-package-list ${packages.length > 8 ? 'ultra-compact' : packages.length > 4 ? 'compact' : ''}`}>
+            {packages.map((p) => renderTableCard(p.name, p.name, true))}
           </div>
         </aside>
       </div>
