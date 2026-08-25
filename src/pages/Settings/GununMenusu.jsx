@@ -63,22 +63,54 @@ function birlesebilirMi(a, b) {
 function urundenleriSlotlara(urunler, max) {
   const slots = urunler.slice(0, max).map((u) => [u]);
   let sigmayanSayisi = 0;
+  const sigmayanlar = [];
+
   for (let i = max; i < urunler.length; i++) {
     const yeni = urunler[i];
-    const adaylar = slots
+
+    // 1. Yeni ürünle doğrudan birleşebilecek tekli slot var mı?
+    const tekliAdaylar = slots
       .map((slot, idx) => ({ slot, idx }))
       .filter(({ slot }) => slot.length === 1 && birlesebilirMi(slot[0], yeni));
-    if (adaylar.length === 0) {
-      sigmayanSayisi++;
+
+    if (tekliAdaylar.length > 0) {
+      tekliAdaylar.sort((a, b) =>
+        turkishTitleCase(a.slot[0].ad).length - turkishTitleCase(b.slot[0].ad).length
+      );
+      slots[tekliAdaylar[0].idx] = [slots[tekliAdaylar[0].idx][0], yeni];
       continue;
     }
-    // Adı en kısa olan tekli slota ekle
-    adaylar.sort((a, b) =>
-      turkishTitleCase(a.slot[0].ad).length - turkishTitleCase(b.slot[0].ad).length
-    );
-    slots[adaylar[0].idx] = [slots[adaylar[0].idx][0], yeni];
+
+    // 2. Doğrudan eşleşme yok — mevcut tekli slotlar kendi aralarında birleşebiliyorsa
+    //    en kısa adlı çifti birleştir, boşalan yere yeni ürünü koy.
+    const tekliSlotlar = slots
+      .map((slot, idx) => ({ slot, idx }))
+      .filter(({ slot }) => slot.length === 1);
+
+    let birlestirildi = false;
+    outer: for (let a = 0; a < tekliSlotlar.length; a++) {
+      for (let b = a + 1; b < tekliSlotlar.length; b++) {
+        const sa = tekliSlotlar[a];
+        const sb = tekliSlotlar[b];
+        if (birlesebilirMi(sa.slot[0], sb.slot[0])) {
+          const [kisa, uzun] =
+            turkishTitleCase(sa.slot[0].ad).length <= turkishTitleCase(sb.slot[0].ad).length
+              ? [sa, sb] : [sb, sa];
+          slots[kisa.idx] = [kisa.slot[0], uzun.slot[0]];
+          slots[uzun.idx] = [yeni];
+          birlestirildi = true;
+          break outer;
+        }
+      }
+    }
+
+    if (!birlestirildi) {
+      sigmayanSayisi++;
+      sigmayanlar.push(urunler[i]);
+    }
   }
-  return { slots, sigmayanSayisi };
+
+  return { slots, sigmayanSayisi, sigmayanlar };
 }
 
 function loadImage(src) {
@@ -199,6 +231,11 @@ export default function GununMenusu({ data, onClose }) {
   const [yardimciAtlanan,    setYardimciAtlanan]    = useState(() => initialSlotsFor(products, 'yardimci').sigmayanSayisi);
   const [zeytinyagliAtlanan, setZeytinyagliAtlanan] = useState(() => initialSlotsFor(products, 'zeytinyagli').sigmayanSayisi);
 
+  const [corbaAtlananList,       setCorbaAtlananList]       = useState(() => initialSlotsFor(products, 'corba').sigmayanlar);
+  const [anaAtlananList,         setAnaAtlananList]         = useState(() => initialSlotsFor(products, 'ana').sigmayanlar);
+  const [yardimciAtlananList,    setYardimciAtlananList]    = useState(() => initialSlotsFor(products, 'yardimci').sigmayanlar);
+  const [zeytinyagliAtlananList, setZeytinyagliAtlananList] = useState(() => initialSlotsFor(products, 'zeytinyagli').sigmayanlar);
+
   const [pickerFor,    setPickerFor]    = useState(null); // { section, slotIdx, pozisyon: 0|1 } | null
   const [pickerSearch, setPickerSearch] = useState('');
   const [previewUrl,   setPreviewUrl]   = useState(null);
@@ -207,7 +244,9 @@ export default function GununMenusu({ data, onClose }) {
 
   const sectionSlots   = { corba: corbaSlots, ana: anaSlots, yardimci: yardimciSlots, zeytinyagli: zeytinyagliSlots };
   const sectionSetters = { corba: setCorbaSlots, ana: setAnaSlots, yardimci: setYardimciSlots, zeytinyagli: setZeytinyagliSlots };
-  const atlananSetters = { corba: setCorbaAtlanan, ana: setAnaAtlanan, yardimci: setYardimciAtlanan, zeytinyagli: setZeytinyagliAtlanan };
+  const atlananSetters     = { corba: setCorbaAtlanan, ana: setAnaAtlanan, yardimci: setYardimciAtlanan, zeytinyagli: setZeytinyagliAtlanan };
+  const atlananListSetters = { corba: setCorbaAtlananList, ana: setAnaAtlananList, yardimci: setYardimciAtlananList, zeytinyagli: setZeytinyagliAtlananList };
+  const toplamAtlananList  = [...corbaAtlananList, ...anaAtlananList, ...yardimciAtlananList, ...zeytinyagliAtlananList];
   const atlananDeger   = { corba: corbaAtlanan, ana: anaAtlanan, yardimci: yardimciAtlanan, zeytinyagli: zeytinyagliAtlanan };
 
   const toplamAtlanan = corbaAtlanan + anaAtlanan + yardimciAtlanan + zeytinyagliAtlanan;
@@ -226,8 +265,8 @@ export default function GununMenusu({ data, onClose }) {
   // Slotu tamamen kaldır
   function removeSlot(section, slotIdx) {
     sectionSetters[section]((prev) => prev.filter((_, i) => i !== slotIdx));
-    // Atlanan sayısını sıfırla (kullanıcı manuel kaldırdı, uyarı tutarsız olmasın)
     atlananSetters[section](0);
+    atlananListSetters[section]([]);
   }
 
   // Picker'dan ürün seç
@@ -256,6 +295,7 @@ export default function GununMenusu({ data, onClose }) {
     setPickerFor(null);
     setPickerSearch('');
     atlananSetters[section](0);
+    atlananListSetters[section]([]);
   }
 
   // Picker için: seçilebilecek ürünler (az varinat değil, aktif, arama eşleşmesi)
@@ -310,8 +350,13 @@ export default function GununMenusu({ data, onClose }) {
             <ImageIcon size={18} /> Günün Menüsü — Önizleme
             {toplamAtlanan > 0 && (
               <span className="gm-uyari-badge">
-                <AlertTriangle size={16} />
-                Hata — Bütün Ürünler Açılamadı! Kontrol Ediniz.
+                <AlertTriangle size={24} />
+                <span>
+                  Hata — Bütün Ürünler Açılamadı! Kontrol Ediniz.
+                  <span className="gm-uyari-urunler">
+                    {toplamAtlananList.map((u) => turkishTitleCase(u.gorunumAdi || u.ad)).join(', ')}
+                  </span>
+                </span>
               </span>
             )}
           </h2>

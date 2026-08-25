@@ -113,6 +113,9 @@
 .gm-picker-hint {
   margin: 0 18px 4px; font-size: 11px; color: #7B9D8A; font-weight: 600;
 }
+.gm-uyari-urunler {
+  display: block; font-size: 13px; font-weight: 600; color: #E5484D; margin-top: 2px;
+}
 
 /* ---- Görseli İndir — krem rengi ---- */
 .gm-download-btn { background: #0FB870; color: #EDEEDF; }
