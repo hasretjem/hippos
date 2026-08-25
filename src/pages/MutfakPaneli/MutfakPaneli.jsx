@@ -337,7 +337,7 @@ export default function MutfakPaneli({ data }) {
       </div>
 
       {/* ── FİŞ GÖRÜNÜMü SEKMESİ ── */}
-      {activeTab === 'fis' && <FisMenu data={data} />}
+      {activeTab === 'fis' && <div style={{padding:20,color:'#888'}}>Fiş görünümü yakında…</div>}
 
       {/* ── AKORDİYON SEKMESİ ── */}
       {activeTab === 'akordiyon' && <>
