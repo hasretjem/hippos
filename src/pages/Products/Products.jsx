@@ -179,20 +179,23 @@ export default function Products({ data, onNavigate }) {
   const [newCategoryModal, setNewCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newProductModal, setNewProductModal] = useState(null); // { kategori }
-  const [newProductForm, setNewProductForm] = useState({ ad: '', fiyat: '', menuSirasi: '' });
+  const [newProductForm, setNewProductForm] = useState({ ad: '', fiyat: '', menuSirasi: '', altKategori: '' });
 
   function openNewProduct(kategori) {
-    setNewProductForm({ ad: '', fiyat: '', menuSirasi: '' });
-    setNewProductModal({ kategori });
+    const subs = data.subcategories.filter((s) => s.kategori === kategori).sort((a, b) => a.menuSirasi - b.menuSirasi || a.name.localeCompare(b.name, 'tr'));
+    const ilkAlt = subs.length === 1 ? subs[0].name : '';
+    setNewProductForm({ ad: '', fiyat: '', menuSirasi: '', altKategori: ilkAlt });
+    setNewProductModal({ kategori, subs });
   }
   function submitNewProduct() {
     if (!newProductForm.ad.trim()) return;
-    localAddProduct(
-      newProductModal.kategori,
-      newProductForm.ad.trim(),
-      parseFloat(newProductForm.fiyat.replace(',', '.')) || 0,
-      newProductForm.menuSirasi ? parseInt(newProductForm.menuSirasi, 10) : undefined
-    );
+    data.addProduct({
+      kategori: newProductModal.kategori,
+      altKategori: newProductForm.altKategori || '',
+      ad: newProductForm.ad.trim(),
+      fiyat: parseFloat(newProductForm.fiyat.replace(',', '.')) || 0,
+      menuSirasi: newProductForm.menuSirasi ? parseInt(newProductForm.menuSirasi, 10) : undefined,
+    });
     setNewProductModal(null);
   }
 
@@ -437,6 +440,21 @@ matches.sort((a, b) => {
         <div className="pr-modal-overlay" onClick={() => setNewProductModal(null)}>
           <div className="pr-modal" onClick={(e) => e.stopPropagation()}>
             <h3>Yeni Ürün — {newProductModal.kategori}</h3>
+            {newProductModal.subs.length > 1 && (
+              <select
+                className="pr-modal-input"
+                value={newProductForm.altKategori}
+                onChange={(e) => setNewProductForm((f) => ({ ...f, altKategori: e.target.value }))}
+              >
+                <option value="">— Alt kategori seç —</option>
+                {newProductModal.subs.map((s) => (
+                  <option key={s.name} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+            )}
+            {newProductModal.subs.length === 0 && (
+              <p style={{ fontSize: 12, color: '#888', margin: '0 0 8px' }}>Bu kategoride alt kategori yok.</p>
+            )}
             <input
               autoFocus
               className="pr-modal-input"
