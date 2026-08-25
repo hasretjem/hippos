@@ -279,6 +279,7 @@ export default function FisMenü({ data }) {
 
   // ── Toast ──
   const [toast, setToast] = useState('');
+  const [onay, setOnay] = useState(null); // null=kapalı, {ids,relevant}=açık
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 2200); }
 
   // ── Gönder ──
@@ -326,8 +327,14 @@ export default function FisMenü({ data }) {
       })
       .forEach(id => relevant.push(id));
 
-    applyMutfakMenusu([...ids], relevant);
-    showToast('Menü gönderildi ✓ — Sıfırlamak için butona bas');
+    setOnay({ ids: [...ids], relevant });
+  }
+
+  function handleEvet() {
+    if (!onay) return;
+    applyMutfakMenusu(onay.ids, onay.relevant);
+    setOnay(null);
+    showToast('Menü gönderildi ✓');
   }
 
   // ── Render yardımcıları ──
@@ -532,6 +539,18 @@ export default function FisMenü({ data }) {
         </div>
 
       </div>
+
+      {onay && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+          <div style={{background:'#fff',border:'2.5px solid #000',padding:24,maxWidth:320,width:'100%',fontFamily:"'Inter',sans-serif",textAlign:'center'}}>
+            <p style={{fontSize:16,fontWeight:800,color:'#000',marginBottom:20}}>Göndermek istediğinize emin misiniz?</p>
+            <div style={{display:'flex',gap:8}}>
+              <button onClick={() => setOnay(null)} style={{flex:1,padding:12,fontSize:14,fontWeight:800,background:'#fff',color:'#000',border:'1.5px solid #000',cursor:'pointer'}}>İptal</button>
+              <button onClick={handleEvet} style={{flex:1,padding:12,fontSize:14,fontWeight:800,background:'#25D366',color:'#000',border:'1.5px solid #000',cursor:'pointer'}}>Evet</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div style={{ position:'fixed', bottom:80, left:'50%', transform:'translateX(-50%)', background:'#000', color:'#fff', padding:'10px 20px', borderRadius:999, fontSize:14, fontWeight:600, zIndex:400, whiteSpace:'nowrap' }}>
