@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabase';
 
+// Türkçe karakter + büyük/küçük harf duyarsız normalize
+function trNormalize(s) {
+  return (s || '')
+    .toLocaleLowerCase('tr-TR')
+    .replace(/i̇/g, 'i') // noktalı İ'nin combining-dot kalıntısını temizle
+    .replace(/ı/g, 'i')
+    .replace(/ş/g, 's')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c');
+}
+
 // ── Sabitler ────────────────────────────────────────────────────────
 const GREEN = '#25D366';
 
@@ -48,7 +61,7 @@ function AramaSlot({ placeholder, suggestions, allProducts, sel, onPick, onClear
 
   const items = q.trim()
     ? allProducts
-        .filter(p => p.name.toLocaleLowerCase('tr-TR').includes(q.toLocaleLowerCase('tr-TR')))
+        .filter(p => trNormalize(p.name).includes(trNormalize(q)))
         .slice(0, 10)
     : suggestions.slice(0, 10);
 
@@ -198,7 +211,8 @@ export default function FisMenü({ data }) {
 
   useEffect(() => {
     const dow = new Date().getDay(); // 0=Paz, 1=Pzt …
-    const since = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    // Son 4 hafta aynı gün — örn. bugün Salı ise son 4 Salı
+    const since = Date.now() - 4 * 7 * 24 * 60 * 60 * 1000;
 
     supabase
       .from('sold_items')
