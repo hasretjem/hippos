@@ -4,8 +4,9 @@ import { supabase } from '../../services/supabase';
 // Türkçe karakter + büyük/küçük harf duyarsız normalize
 function trNormalize(s) {
   return (s || '')
+    .normalize('NFD')                 // combining işaretleri ayır (İ → I + ̇)
+    .replace(/[\u0300-\u036f]/g, '')  // tüm combining işaretleri (nokta dahil) sil
     .toLocaleLowerCase('tr-TR')
-    .replace(/i̇/g, 'i') // noktalı İ'nin combining-dot kalıntısını temizle
     .replace(/ı/g, 'i')
     .replace(/ş/g, 's')
     .replace(/ğ/g, 'g')
@@ -18,7 +19,7 @@ function trNormalize(s) {
 const GREEN = '#25D366';
 
 const CORBA_SABIT = [
-  'Ezogelin Çorbası','Mercimek Çorbası','Yayla Çorbası',
+  'Ezogelin Çorbası','Merci̇mek Çorbası','Yayla Çorbası',
   'Domates Çorbası','Şehriyeli Tavuk Suyu Çorbası',
 ];
 const BAKLAGIL_SABIT = ['Kuru Fasülye','Nohut','Taze Fasülye'];
@@ -195,8 +196,8 @@ export default function FisMenü({ data }) {
   // ── Öneri verileri (isim → { id, name }) ──
   function toSug(names, pool) {
     return names.map(name => {
-      const p = pool.find(x => x.ad === name);
-      return { id: p ? p.id : null, name };
+      const p = pool.find(x => trNormalize(x.ad) === trNormalize(name));
+      return { id: p ? p.id : null, name: p ? p.ad : name };
     }).filter(x => x.id);
   }
 
@@ -305,9 +306,25 @@ export default function FisMenü({ data }) {
     // Az varyantları otomatik ekle
     [...ids].forEach(id => { if (azVariantMap[id]) ids.add(azVariantMap[id]); });
 
-    // relevantProductIds: yemek kategorisi (sabit hariç)
-    const relevant = yemekler.map(p => p.id);
-    [...Object.values(azVariantMap)].forEach(id => relevant.push(id));
+    // relevantProductIds: SADECE mutfak panelinde seçilebilir olan ürünler.
+    // Hep-açık-kalması-gereken ürünler (Mevsim Salata, Pirinç Pilavı, Meze,
+    // Yoğurt, Cacık, Yaprak Sarma, Tatlı, Ev Köftesi, Kadınbudu Köfte,
+    // Şinitsel) buraya HİÇ girmez, dolayısıyla applyMutfakMenusu onlara
+    // dokunmaz — az porsiyon durumları da dahil hiçbir alanları değişmez.
+    const KORUNAN_ADLAR = new Set(
+      ['Mevsim Salata','Pirinç Pilavı','Meze','Yoğurt','Cacık','Yaprak Sarma',
+       'Tatlı','Ev Köftesi','Kadınbudu Köfte','Şinitsel','Şinitzel']
+        .map(trNormalize)
+    );
+    const relevant = yemekler
+      .filter(p => !KORUNAN_ADLAR.has(trNormalize(p.ad)) && !p.sabit)
+      .map(p => p.id);
+    [...Object.values(azVariantMap)]
+      .filter(id => {
+        const parent = products.find(x => x.id === id);
+        return parent && !KORUNAN_ADLAR.has(trNormalize(products.find(pp => pp.id === parent.parentId)?.ad || ''));
+      })
+      .forEach(id => relevant.push(id));
 
     applyMutfakMenusu([...ids], relevant);
     showToast('Menü gönderildi ✓');
