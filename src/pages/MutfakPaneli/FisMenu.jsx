@@ -19,8 +19,8 @@ function trNormalize(s) {
 const GREEN = '#25D366';
 
 const CORBA_SABIT = [
-  'Ezogelin Çorbası','Merci̇mek Çorbası','Yayla Çorbası',
-  'Domates Çorbası','Şehriyeli Tavuk Suyu Çorbası',
+  'Ezogelin Çorbası','Mercimek Çorbası','Yayla Çorbası',
+  'Domates Çorbası','Şehriyeli Tavuk Suyu Çorbası','Ayran Çorbası',
 ];
 const BAKLAGIL_SABIT = ['Kuru Fasülye','Nohut','Taze Fasülye'];
 const FIRIN_SABIT   = ['Fırın Tavuk / Pirzola','Mücver'];
@@ -372,7 +372,7 @@ export default function FisMenü({ data }) {
     return {
       placeholder: 'Çorba ara veya seç...',
       suggestions: corbaSug,
-      allProducts: corbaYemekler.map(p => ({ id: p.id, name: p.ad })),
+      allProducts: yemekler.map(p => ({ id: p.id, name: p.ad })),
       sel: slot.sel,
       onPick: item => updSlot(setCorbaSlots, slot.key, item),
       onClear: () => updSlot(setCorbaSlots, slot.key, null),
