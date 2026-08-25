@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import './MutfakPaneli.css';
-import FisMenü from './FisMenü';
+import FisMenu from './FisMenu';
 import { Search, X, Send, ShoppingBag, ChevronDown } from 'lucide-react';
 import { resolveButtonStyle } from '../../constants/themeDefaults';
 
@@ -337,7 +337,7 @@ export default function MutfakPaneli({ data }) {
       </div>
 
       {/* ── FİŞ GÖRÜNÜMü SEKMESİ ── */}
-      {activeTab === 'fis' && <FisMenü data={data} />}
+      {activeTab === 'fis' && <FisMenu data={data} />}
 
       {/* ── AKORDİYON SEKMESİ ── */}
       {activeTab === 'akordiyon' && <>
