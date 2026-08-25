@@ -118,8 +118,8 @@ async function renderMenuCanvas({ tarihText, corbaSlots, anaSlots, yardimciSlots
   function drawSlot(slot, x, y, priceRightX) {
     const price = formatPrice(slot[0].fiyat, slot[0].azPorsiyon);
     const nameRaw = slot.length === 2
-      ? `${turkishTitleCase(slot[0].ad)} / ${turkishTitleCase(slot[1].ad)}`
-      : turkishTitleCase(slot[0].ad);
+      ? `${turkishTitleCase(slot[0].gorunumAdi || slot[0].ad)} / ${turkishTitleCase(slot[1].gorunumAdi || slot[1].ad)}`
+      : turkishTitleCase(slot[0].gorunumAdi || slot[0].ad);
 
     // Önce isim için gereken puntoyu hesapla (fiyat genişliğini sabit tutarak)
     ctx.font = `${ITEM_FONT_SIZE}px "${FONT}"`;
@@ -177,7 +177,7 @@ function initialSlotsFor(products, sectionKey) {
   const etiket = GUNUN_MENUSU_ESLESME[sectionKey];
   const eslesenler = sortByGununMenusuSira(
     products.filter((p) => p.gununMenusuKategori === etiket && p.durum === 'AKTIF' && !p.isAzVariant)
-  );
+  ).map((p) => ({ ...p, gorunumAdi: p.satisAdi || p.ad }));
   // Tümünü ver — urundenleriSlotlara kendi içinde max kontrolü yapar
   return urundenleriSlotlara(eslesenler, max);
 }
@@ -237,7 +237,7 @@ export default function GununMenusu({ data, onClose }) {
     if (!pickerFor) return;
     const { section, slotIdx, pozisyon } = pickerFor;
     const max = SECTIONS[section].max;
-    const urun = { id: product.id, ad: product.ad, fiyat: product.fiyat, azPorsiyon: product.azPorsiyon, gununMenusuSira: product.gununMenusuSira };
+    const urun = { id: product.id, ad: product.ad, gorunumAdi: product.satisAdi || product.ad, fiyat: product.fiyat, azPorsiyon: product.azPorsiyon, gununMenusuSira: product.gununMenusuSira };
 
     sectionSetters[section]((prev) => {
       let next = [...prev];
@@ -346,9 +346,9 @@ export default function GununMenusu({ data, onClose }) {
                           {slot.length === 2 ? (
                             <>
                               <span className="gm-item-name">
-                                {turkishTitleCase(slot[0].ad)}
+                                {turkishTitleCase(slot[0].gorunumAdi || slot[0].ad)}
                                 <span className="gm-slash"> / </span>
-                                {turkishTitleCase(slot[1].ad)}
+                                {turkishTitleCase(slot[1].gorunumAdi || slot[1].ad)}
                               </span>
                               {/* İkinci ürünü çıkar (slot tekli kalır) */}
                               <button
@@ -361,7 +361,7 @@ export default function GununMenusu({ data, onClose }) {
                             </>
                           ) : (
                             <>
-                              <span className="gm-item-name">{turkishTitleCase(slot[0].ad)}</span>
+                              <span className="gm-item-name">{turkishTitleCase(slot[0].gorunumAdi || slot[0].ad)}</span>
                               {/* Tekli slota ikinci ürün ekle */}
                               <button
                                 className="gm-add-second"
