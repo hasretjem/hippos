@@ -327,7 +327,7 @@ export default function FisMenü({ data }) {
       .forEach(id => relevant.push(id));
 
     applyMutfakMenusu([...ids], relevant);
-    showToast('Menü gönderildi ✓');
+    showToast('Menü gönderildi ✓ — Sıfırlamak için butona bas');
   }
 
   // ── Render yardımcıları ──
@@ -497,7 +497,26 @@ export default function FisMenü({ data }) {
         />
 
         {/* ── GÖNDER ── */}
-        <div style={{ padding:12, borderTop:'2.5px solid #000', background:'#fff' }}>
+        <div style={{ padding:12, borderTop:'2.5px solid #000', background:'#fff', display:'flex', gap:8 }}>
+          <button
+            onClick={() => {
+              setCorbaSlots([newSlot()]);
+              setAnaSlots(Array.from({length:5}, () => newSlot()));
+              setPilavSlots([newSlot()]);
+              setZeytSlots(Array.from({length:5}, () => newSlot()));
+              setBakSel(null);
+              setFireSel(null);
+              setPirincSel(null);
+              setPirincFixed(true);
+              setCacikSel(null);
+              setCacikFixed(true);
+              setYaprakSel(null);
+              setYaprakFixed(true);
+            }}
+            style={{ padding:14, fontSize:14, fontWeight:800, background:'#fff', color:'#000', border:'1.5px solid #000', cursor:'pointer', whiteSpace:'nowrap', fontFamily:"'Inter',sans-serif" }}
+            onMouseOver={e => { e.currentTarget.style.background='#000'; e.currentTarget.style.color='#fff'; }}
+            onMouseOut={e => { e.currentTarget.style.background='#fff'; e.currentTarget.style.color='#000'; }}
+          >↺ Sıfırla</button>
           <button
             onClick={handleGonder}
             style={{ width:'100%', padding:14, fontSize:17, fontWeight:800, background:GREEN, color:'#000', border:'1.5px solid #000', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, fontFamily:"'Inter',sans-serif" }}
