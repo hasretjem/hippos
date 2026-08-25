@@ -1,13 +1,19 @@
 import React, { useState, useRef, useMemo } from 'react';
 import './GununMenusu.css';
 import sablonUrl from '../../assets/gunun-menusu-sablon.png';
-import { X, Plus, Search, Download, Image as ImageIcon } from 'lucide-react';
+import { X, Plus, Search, Download, Image as ImageIcon, AlertTriangle } from 'lucide-react';
 
 // ============================================================
 // GÜNÜN MENÜSÜ — ÖNİZLEME SİSTEMİ
 // Bu ekran SADECE önizleme üretir. Hiçbir yere otomatik yayınlamaz,
 // hiçbir Supabase tablosuna yazmaz. Onay alınmadan otomasyon eklenmeyecek.
 // Figma koordinatları BİREBİR bu dosyada sabit — şablon boyutu asla değişmez.
+//
+// SLOT YAPISI:
+// Her bölüm bir "slot dizisi" tutar. Her slot 1 veya 2 ürün içerebilir.
+// 2 ürünlü slot: fiyat aynı + format aynı olmalı → "Ad1 / Ad2  Fiyat" tek satır.
+// Görsel satır sayısı = slot sayısı (max = SECTIONS[key].max).
+// Seçilebilecek toplam ürün sayısı = max × 2.
 // ============================================================
 
 const CANVAS_W = 1080;
@@ -15,22 +21,18 @@ const CANVAS_H = 1920;
 const FONT = 'Trocchi';
 
 const SECTIONS = {
-  corba: { label: 'Günün Çorbası', max: 1, startX: 125, startY: 546, priceRightX: 940, lineHeight: 0 },
-  ana: { label: 'Ana Yemekler', max: 10, startX: 125, startY: 681, priceRightX: 940, lineHeight: 51 },
-  yardimci: { label: 'Yardımcı Yemekler', max: 2, startX: 125, startY: 1310, priceRightX: 940, lineHeight: 51 },
-  zeytinyagli: { label: 'Zeytinyağlılar', max: 6, startX: 125, startY: 1509, priceRightX: 940, lineHeight: 51 },
+  corba:      { label: 'Günün Çorbası',     max: 1,  startX: 125, startY: 546,  priceRightX: 940, lineHeight: 0  },
+  ana:        { label: 'Ana Yemekler',       max: 10, startX: 125, startY: 681,  priceRightX: 940, lineHeight: 51 },
+  yardimci:   { label: 'Yardımcı Yemekler', max: 2,  startX: 125, startY: 1310, priceRightX: 940, lineHeight: 51 },
+  zeytinyagli:{ label: 'Zeytinyağlılar',    max: 6,  startX: 125, startY: 1509, priceRightX: 940, lineHeight: 51 },
 };
 const DATE_X = 781;
 const DATE_Y = 250;
 const DATE_SIZE = 33.5;
 const ITEM_FONT_SIZE = 39.5;
-const MIN_FONT_SIZE = 22; // taşma durumunda ürün adı en fazla buraya kadar küçülür
-const PRICE_GAP = 14; // isim ile fiyat arasında en az boşluk
+const MIN_FONT_SIZE = 22;
+const PRICE_GAP = 14;
 
-// Türkçe karakterleri doğru işleyen "ilk harfler büyük" dönüşümü.
-// Ayrıca "01- ", "09-" gibi iç kullanım (menü sırası) önekleri VE isim içindeki
-// "(Adet)" / "Adet" ibareleri (fiyat formatı zaten bunu otomatik gösteriyor,
-// isimde tekrar yazılmasın diye) temizlenir.
 function turkishTitleCase(raw) {
   const cleaned = raw
     .replace(/^\s*\d{1,3}\s*[-–]\s*/, '')
@@ -45,11 +47,40 @@ function turkishTitleCase(raw) {
     .join(' ');
 }
 
-// Fiyat formatı artık ELLE seçilmiyor — az porsiyonu OLMAYAN ürünler otomatik
-// "X TL/ADET", az porsiyonu OLAN ürünler "X TL" olarak yazılır.
 function formatPrice(fiyat, azPorsiyon) {
   const sayi = Math.round(fiyat);
   return azPorsiyon ? `${sayi} TL` : `${sayi} TL/ADET`;
+}
+
+// İki ürünün aynı slota girmesi için fiyat ve format ikisi de eşit olmalı.
+function birlesebilirMi(a, b) {
+  return Math.round(a.fiyat) === Math.round(b.fiyat) && !!a.azPorsiyon === !!b.azPorsiyon;
+}
+
+// Ürün listesini slot dizisine çevirir.
+// Önce komşu çiftler arasında birleştirme fırsatı arar (greedy, soldan sağa).
+// Oluşan slot sayısı max'ı geçemez — geçerse kalan ürünler "sığmayan" sayılır.
+function urundenleriSlotlara(urunler, max) {
+  const slots = [];
+  let i = 0;
+  while (i < urunler.length) {
+    if (
+      i + 1 < urunler.length &&
+      birlesebilirMi(urunler[i], urunler[i + 1]) &&
+      slots.length < max
+    ) {
+      slots.push([urunler[i], urunler[i + 1]]);
+      i += 2;
+    } else if (slots.length < max) {
+      slots.push([urunler[i]]);
+      i++;
+    } else {
+      // max doldu, kalan ürünler sığmıyor
+      break;
+    }
+  }
+  const sigmayanSayisi = urunler.length - slots.reduce((acc, s) => acc + s.length, 0);
+  return { slots, sigmayanSayisi };
 }
 
 function loadImage(src) {
@@ -61,9 +92,7 @@ function loadImage(src) {
   });
 }
 
-async function renderMenuCanvas({ tarihText, corba, ana, yardimci, zeytinyagli }) {
-  // Canvas'a yazmadan önce font GERÇEKTEN yüklenmiş olmalı — aksi halde
-  // tarayıcı sistem fontuna geri düşer (istenmeyen bir durum).
+async function renderMenuCanvas({ tarihText, corbaSlots, anaSlots, yardimciSlots, zeytinyagliSlots }) {
   await Promise.all([
     document.fonts.load(`${ITEM_FONT_SIZE}px "${FONT}"`),
     document.fonts.load(`${DATE_SIZE}px "${FONT}"`),
@@ -80,21 +109,19 @@ async function renderMenuCanvas({ tarihText, corba, ana, yardimci, zeytinyagli }
   ctx.drawImage(sablon, 0, 0, CANVAS_W, CANVAS_H);
 
   ctx.fillStyle = '#000000';
-  // Figma'daki Y koordinatları metnin ÜST kenarını gösteriyor — Canvas'ın varsayılanı
-  // ise "baseline" (harflerin oturduğu alt çizgi). İkisi karışınca her satır olması
-  // gerekenden yukarı kayıyordu (özellikle dar aralıklı Çorba bölümünde belirgindi).
-  // 'top' moduna geçince Y artık gerçekten "metnin üstü" anlamına geliyor.
   ctx.textBaseline = 'top';
 
-  // ---- Tarih ----
+  // Tarih
   ctx.font = `${DATE_SIZE}px "${FONT}"`;
   ctx.textAlign = 'left';
   ctx.fillText(tarihText.toLocaleUpperCase('tr-TR'), DATE_X, DATE_Y);
 
-  // ---- Bir ürün satırı çizer: isim taşarsa SADECE isim küçülür, fiyat sabit kalır ----
-  function drawRow(item, x, y, priceRightX) {
-    const name = turkishTitleCase(item.ad);
-    const price = formatPrice(item.fiyat, item.azPorsiyon);
+  // Bir slot çizer: tek ürünse normal, çiftse "Ad1 / Ad2" sol, fiyat sağ.
+  function drawSlot(slot, x, y, priceRightX) {
+    const price = formatPrice(slot[0].fiyat, slot[0].azPorsiyon);
+    const nameRaw = slot.length === 2
+      ? `${turkishTitleCase(slot[0].ad)} / ${turkishTitleCase(slot[1].ad)}`
+      : turkishTitleCase(slot[0].ad);
 
     ctx.textAlign = 'right';
     ctx.font = `${ITEM_FONT_SIZE}px "${FONT}"`;
@@ -104,26 +131,25 @@ async function renderMenuCanvas({ tarihText, corba, ana, yardimci, zeytinyagli }
     const availableWidth = priceRightX - priceWidth - PRICE_GAP - x;
     let size = ITEM_FONT_SIZE;
     ctx.font = `${size}px "${FONT}"`;
-    while (ctx.measureText(name).width > availableWidth && size > MIN_FONT_SIZE) {
+    while (ctx.measureText(nameRaw).width > availableWidth && size > MIN_FONT_SIZE) {
       size -= 0.5;
       ctx.font = `${size}px "${FONT}"`;
     }
     ctx.textAlign = 'left';
-    ctx.fillText(name, x, y);
+    ctx.fillText(nameRaw, x, y);
   }
 
-  if (corba) {
-    drawRow(corba, SECTIONS.corba.startX, SECTIONS.corba.startY, SECTIONS.corba.priceRightX);
+  const pairs = [
+    { slots: corbaSlots,      sec: SECTIONS.corba       },
+    { slots: anaSlots,        sec: SECTIONS.ana          },
+    { slots: yardimciSlots,   sec: SECTIONS.yardimci     },
+    { slots: zeytinyagliSlots,sec: SECTIONS.zeytinyagli  },
+  ];
+  for (const { slots, sec } of pairs) {
+    slots.forEach((slot, i) => {
+      drawSlot(slot, sec.startX, sec.startY + i * sec.lineHeight, sec.priceRightX);
+    });
   }
-  ana.forEach((item, i) => {
-    drawRow(item, SECTIONS.ana.startX, SECTIONS.ana.startY + i * SECTIONS.ana.lineHeight, SECTIONS.ana.priceRightX);
-  });
-  yardimci.forEach((item, i) => {
-    drawRow(item, SECTIONS.yardimci.startX, SECTIONS.yardimci.startY + i * SECTIONS.yardimci.lineHeight, SECTIONS.yardimci.priceRightX);
-  });
-  zeytinyagli.forEach((item, i) => {
-    drawRow(item, SECTIONS.zeytinyagli.startX, SECTIONS.zeytinyagli.startY + i * SECTIONS.zeytinyagli.lineHeight, SECTIONS.zeytinyagli.priceRightX);
-  });
 
   return canvas.toDataURL('image/png');
 }
@@ -134,9 +160,6 @@ function todayTr() {
 
 const GUNUN_MENUSU_ESLESME = { corba: 'corba', ana: 'ana_yemek', yardimci: 'yardimci_yemek', zeytinyagli: 'zeytinyagli' };
 
-// Günün Menüsü'ne özel sıralama: her bölüm kendi içinde "Günün Menüsü Sıra No"na göre
-// küçükten büyüğe sıralanır (boş/eşit olanlar alfabetik ilerler). Genel menü sırasından
-// (Menü Düzenleme'deki) BAĞIMSIZDIR.
 function sortByGununMenusuSira(list) {
   return [...list].sort((a, b) => {
     const sa = a.gununMenusuSira ?? Infinity;
@@ -145,65 +168,120 @@ function sortByGununMenusuSira(list) {
   });
 }
 
-// Ürün Yönetimi'nde etiketlenmiş ve o an AKTİF olan ürünleri, ilgili bölüme otomatik doldurur.
-function initialSelectionFor(products, sectionKey, max) {
+// Aktif + etiketli ürünleri alır, sıralar, slot dizisine çevirir.
+function initialSlotsFor(products, sectionKey) {
+  const max = SECTIONS[sectionKey].max;
   const etiket = GUNUN_MENUSU_ESLESME[sectionKey];
   const eslesenler = sortByGununMenusuSira(
     products.filter((p) => p.gununMenusuKategori === etiket && p.durum === 'AKTIF' && !p.isAzVariant)
   );
-  return eslesenler.slice(0, max).map((p) => ({ id: p.id, ad: p.ad, fiyat: p.fiyat, azPorsiyon: p.azPorsiyon, gununMenusuSira: p.gununMenusuSira }));
+  // max × 2 ürün alınır, ardından slotlara bölünür
+  const alinan = eslesenler.slice(0, max * 2);
+  return urundenleriSlotlara(alinan, max);
 }
 
 export default function GununMenusu({ data, onClose }) {
   const { products } = data;
+
   const [tarihText, setTarihText] = useState(todayTr());
-  const [corba, setCorba] = useState(() => initialSelectionFor(products, 'corba', 1)[0] || null);
-  const [ana, setAna] = useState(() => initialSelectionFor(products, 'ana', 10));
-  const [yardimci, setYardimci] = useState(() => initialSelectionFor(products, 'yardimci', 2));
-  const [zeytinyagli, setZeytinyagli] = useState(() => initialSelectionFor(products, 'zeytinyagli', 6));
-  const [pickerFor, setPickerFor] = useState(null); // 'corba' | 'ana' | 'yardimci' | 'zeytinyagli' | null
+
+  // Her bölüm için slot dizisi + kaç ürün sığmadı (uyarı için)
+  const [corbaSlots,      setCorbaSlots]      = useState(() => initialSlotsFor(products, 'corba').slots);
+  const [anaSlots,        setAnaSlots]        = useState(() => initialSlotsFor(products, 'ana').slots);
+  const [yardimciSlots,   setYardimciSlots]   = useState(() => initialSlotsFor(products, 'yardimci').slots);
+  const [zeytinyagliSlots,setZeytinyagliSlots]= useState(() => initialSlotsFor(products, 'zeytinyagli').slots);
+
+  // Başlangıçta sığmayan ürün sayısı (uyarı)
+  const [corbaAtlanan,       setCorbaAtlanan]       = useState(() => initialSlotsFor(products, 'corba').sigmayanSayisi);
+  const [anaAtlanan,         setAnaAtlanan]         = useState(() => initialSlotsFor(products, 'ana').sigmayanSayisi);
+  const [yardimciAtlanan,    setYardimciAtlanan]    = useState(() => initialSlotsFor(products, 'yardimci').sigmayanSayisi);
+  const [zeytinyagliAtlanan, setZeytinyagliAtlanan] = useState(() => initialSlotsFor(products, 'zeytinyagli').sigmayanSayisi);
+
+  const [pickerFor,    setPickerFor]    = useState(null); // { section, slotIdx, pozisyon: 0|1 } | null
   const [pickerSearch, setPickerSearch] = useState('');
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [rendering, setRendering] = useState(false);
-  const [renderError, setRenderError] = useState('');
+  const [previewUrl,   setPreviewUrl]   = useState(null);
+  const [rendering,    setRendering]    = useState(false);
+  const [renderError,  setRenderError]  = useState('');
 
-  const sectionState = { corba, ana, yardimci, zeytinyagli };
-  const sectionSetters = { corba: setCorba, ana: setAna, yardimci: setYardimci, zeytinyagli: setZeytinyagli };
+  const sectionSlots   = { corba: corbaSlots, ana: anaSlots, yardimci: yardimciSlots, zeytinyagli: zeytinyagliSlots };
+  const sectionSetters = { corba: setCorbaSlots, ana: setAnaSlots, yardimci: setYardimciSlots, zeytinyagli: setZeytinyagliSlots };
+  const atlananSetters = { corba: setCorbaAtlanan, ana: setAnaAtlanan, yardimci: setYardimciAtlanan, zeytinyagli: setZeytinyagliAtlanan };
+  const atlananDeger   = { corba: corbaAtlanan, ana: anaAtlanan, yardimci: yardimciAtlanan, zeytinyagli: zeytinyagliAtlanan };
 
-  function addItem(section, product) {
-    const withFlag = { id: product.id, ad: product.ad, fiyat: product.fiyat, azPorsiyon: product.azPorsiyon, gununMenusuSira: product.gununMenusuSira };
-    if (section === 'corba') {
-      setCorba(withFlag);
-      setPickerFor(null);
-      return;
-    }
-    const setter = sectionSetters[section];
+  const toplamAtlanan = corbaAtlanan + anaAtlanan + yardimciAtlanan + zeytinyagliAtlanan;
+
+  // Slot sayısını hesapla (picker başlığı için)
+  function slotSayisi(key) { return sectionSlots[key].length; }
+
+  // Bir slottan ikinci ürünü çıkar (slot tekli kalır)
+  function removeSecond(section, slotIdx) {
+    sectionSetters[section]((prev) => {
+      const next = prev.map((slot, i) => i === slotIdx ? [slot[0]] : slot);
+      return next;
+    });
+  }
+
+  // Slotu tamamen kaldır
+  function removeSlot(section, slotIdx) {
+    sectionSetters[section]((prev) => prev.filter((_, i) => i !== slotIdx));
+    // Atlanan sayısını sıfırla (kullanıcı manuel kaldırdı, uyarı tutarsız olmasın)
+    atlananSetters[section](0);
+  }
+
+  // Picker'dan ürün seç
+  // pickerFor.pozisyon === 0 → yeni slot ekle (en sona)
+  // pickerFor.pozisyon === 1 → mevcut slota ikinci ürün ekle
+  function addItem(product) {
+    if (!pickerFor) return;
+    const { section, slotIdx, pozisyon } = pickerFor;
     const max = SECTIONS[section].max;
-    setter((prev) => (prev.length >= max ? prev : sortByGununMenusuSira([...prev, withFlag])));
+    const urun = { id: product.id, ad: product.ad, fiyat: product.fiyat, azPorsiyon: product.azPorsiyon, gununMenusuSira: product.gununMenusuSira };
+
+    sectionSetters[section]((prev) => {
+      let next = [...prev];
+      if (pozisyon === 1) {
+        // Mevcut slota ikinci ürün ekle
+        const eskiSlot = next[slotIdx];
+        next[slotIdx] = [eskiSlot[0], urun];
+      } else {
+        // Yeni slot olarak ekle (kapasite doluysa ekleme)
+        if (next.length < max) {
+          next = [...next, [urun]];
+        }
+      }
+      return next;
+    });
+    setPickerFor(null);
+    setPickerSearch('');
+    atlananSetters[section](0);
   }
 
-  function removeItem(section, index) {
-    if (section === 'corba') {
-      setCorba(null);
-      return;
-    }
-    sectionSetters[section]((prev) => prev.filter((_, i) => i !== index));
-  }
-
+  // Picker için: seçilebilecek ürünler (az varinat değil, aktif, arama eşleşmesi)
+  // Eğer ikinci ürün ekliyorsak (pozisyon===1), sadece birleşebilir olanları göster
   const pickerResults = useMemo(() => {
     if (!pickerFor) return [];
     const q = pickerSearch.trim().toLocaleLowerCase('tr-TR');
-    return products
+    let liste = products
       .filter((p) => !p.isAzVariant && p.durum !== 'PASIF')
-      .filter((p) => !q || p.ad.toLocaleLowerCase('tr-TR').includes(q))
-      .slice(0, 60);
-  }, [products, pickerFor, pickerSearch]);
+      .filter((p) => !q || p.ad.toLocaleLowerCase('tr-TR').includes(q));
+
+    if (pickerFor.pozisyon === 1) {
+      const mevcutSlot = sectionSlots[pickerFor.section][pickerFor.slotIdx];
+      if (mevcutSlot && mevcutSlot[0]) {
+        liste = liste.filter((p) => birlesebilirMi(mevcutSlot[0], p));
+      }
+    }
+    return liste.slice(0, 60);
+  }, [products, pickerFor, pickerSearch, sectionSlots]);
 
   async function handlePreview() {
     setRendering(true);
     setRenderError('');
     try {
-      const url = await renderMenuCanvas({ tarihText, corba, ana, yardimci, zeytinyagli });
+      const url = await renderMenuCanvas({
+        tarihText,
+        corbaSlots, anaSlots, yardimciSlots, zeytinyagliSlots,
+      });
       setPreviewUrl(url);
     } catch (err) {
       setRenderError('Önizleme oluşturulamadı: ' + (err?.message || 'bilinmeyen hata'));
@@ -219,13 +297,22 @@ export default function GununMenusu({ data, onClose }) {
     a.click();
   }
 
-  const toplamSecili = (corba ? 1 : 0) + ana.length + yardimci.length + zeytinyagli.length;
+  const toplamSecili = [corbaSlots, anaSlots, yardimciSlots, zeytinyagliSlots]
+    .reduce((acc, slots) => acc + slots.reduce((a, s) => a + s.length, 0), 0);
 
   return (
     <div className="gm-overlay">
       <div className="gm-shell">
         <div className="gm-header">
-          <h2><ImageIcon size={18} /> Günün Menüsü — Önizleme</h2>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <ImageIcon size={18} /> Günün Menüsü — Önizleme
+            {toplamAtlanan > 0 && (
+              <span className="gm-uyari-badge">
+                <AlertTriangle size={16} />
+                Hata — Bütün Ürünler Açılamadı! Kontrol Ediniz.
+              </span>
+            )}
+          </h2>
           <button className="gm-close" onClick={onClose}><X size={20} /></button>
         </div>
         <p className="gm-warning">
@@ -241,23 +328,59 @@ export default function GununMenusu({ data, onClose }) {
             </div>
 
             {Object.entries(SECTIONS).map(([key, cfg]) => {
-              const items = key === 'corba' ? (corba ? [corba] : []) : sectionState[key];
+              const slots = sectionSlots[key];
+              const slotDolu = slots.length;
+              const urunsayisi = slots.reduce((a, s) => a + s.length, 0);
               return (
                 <div key={key} className="gm-section">
                   <div className="gm-section-head">
                     <h3>{cfg.label}</h3>
-                    <span>{items.length}/{cfg.max}</span>
+                    <span>{slotDolu}/{cfg.max} satır · {urunsayisi} ürün</span>
                   </div>
                   <div className="gm-item-list">
-                    {items.map((it, i) => (
-                      <div key={it.id} className="gm-item-chip">
-                        <span className="gm-item-name">{turkishTitleCase(it.ad)}</span>
-                        <span className="gm-adet-badge">{formatPrice(it.fiyat, it.azPorsiyon)}</span>
-                        <button className="gm-item-remove" onClick={() => removeItem(key, i)}><X size={13} /></button>
+                    {slots.map((slot, slotIdx) => (
+                      <div key={slotIdx} className="gm-item-chip">
+                        <div className="gm-slot-names">
+                          {slot.length === 2 ? (
+                            <>
+                              <span className="gm-item-name">
+                                {turkishTitleCase(slot[0].ad)}
+                                <span className="gm-slash"> / </span>
+                                {turkishTitleCase(slot[1].ad)}
+                              </span>
+                              {/* İkinci ürünü çıkar (slot tekli kalır) */}
+                              <button
+                                className="gm-item-remove gm-remove-second"
+                                title="İkinci ürünü çıkar"
+                                onClick={() => removeSecond(key, slotIdx)}
+                              >
+                                <X size={11} />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <span className="gm-item-name">{turkishTitleCase(slot[0].ad)}</span>
+                              {/* Tekli slota ikinci ürün ekle */}
+                              <button
+                                className="gm-add-second"
+                                title="Bu satıra ikinci ürün ekle"
+                                onClick={() => { setPickerFor({ section: key, slotIdx, pozisyon: 1 }); setPickerSearch(''); }}
+                              >
+                                <Plus size={11} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                        <span className="gm-adet-badge">{formatPrice(slot[0].fiyat, slot[0].azPorsiyon)}</span>
+                        {/* Slotu tamamen kaldır */}
+                        <button className="gm-item-remove" onClick={() => removeSlot(key, slotIdx)}><X size={13} /></button>
                       </div>
                     ))}
-                    {items.length < cfg.max && (
-                      <button className="gm-add-btn" onClick={() => { setPickerFor(key); setPickerSearch(''); }}>
+                    {slotDolu < cfg.max && (
+                      <button
+                        className="gm-add-btn"
+                        onClick={() => { setPickerFor({ section: key, slotIdx: null, pozisyon: 0 }); setPickerSearch(''); }}
+                      >
                         <Plus size={13} /> Ürün Ekle
                       </button>
                     )}
@@ -294,16 +417,23 @@ export default function GununMenusu({ data, onClose }) {
         <div className="gm-picker-overlay" onClick={() => setPickerFor(null)}>
           <div className="gm-picker" onClick={(e) => e.stopPropagation()}>
             <div className="gm-picker-head">
-              <h3>{SECTIONS[pickerFor].label} — Ürün Seç</h3>
+              <h3>
+                {pickerFor.pozisyon === 1
+                  ? `${SECTIONS[pickerFor.section].label} — İkinci Ürün Seç`
+                  : `${SECTIONS[pickerFor.section].label} — Ürün Seç`}
+              </h3>
               <button onClick={() => setPickerFor(null)}><X size={18} /></button>
             </div>
+            {pickerFor.pozisyon === 1 && (
+              <p className="gm-picker-hint">Sadece aynı fiyat ve formattaki ürünler gösterilir.</p>
+            )}
             <div className="gm-picker-search">
               <Search size={14} />
               <input autoFocus placeholder="Ürün ara..." value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} />
             </div>
             <div className="gm-picker-list">
               {pickerResults.map((p) => (
-                <button key={p.id} className="gm-picker-item" onClick={() => addItem(pickerFor, p)}>
+                <button key={p.id} className="gm-picker-item" onClick={() => addItem(p)}>
                   <span>{turkishTitleCase(p.ad)}</span>
                   <span className="gm-picker-price">{formatPrice(p.fiyat, p.azPorsiyon)}</span>
                 </button>
