@@ -114,10 +114,15 @@ function urundenleriSlotlara(urunler, max) {
     }
   }
 
-  // Zorla yerleştirilen slotları en alta taşı, items dizisine dönüştür
-  const normal       = slots.filter((s) => !s.zorla).map((s) => s.items);
-  const zorlaGirenler = slots.filter((s) =>  s.zorla).map((s) => s.items);
-  return { slots: [...normal, ...zorlaGirenler], sigmayanSayisi, sigmayanlar };
+  // Slotları ilk ürünün gununMenusuSira'sına göre sırala (null en sona)
+  const sirali = slots
+    .map((s) => s.items)
+    .sort((a, b) => {
+      const sa = a[0].gununMenusuSira ?? Infinity;
+      const sb = b[0].gununMenusuSira ?? Infinity;
+      return sa - sb;
+    });
+  return { slots: sirali, sigmayanSayisi, sigmayanlar };
 }
 
 function loadImage(src) {
