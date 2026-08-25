@@ -61,7 +61,7 @@ function birlesebilirMi(a, b) {
 // max'ı aşan her ürün için: birleşebileceği tekli slotlar arasından adı en kısa olanı seç.
 // Uygun tekli slot yoksa (fiyat/format uyumsuz veya hepsi dolu) → sığmayan sayısına ekle.
 function urundenleriSlotlara(urunler, max) {
-  const slots = urunler.slice(0, max).map((u) => [u]);
+  const slots = urunler.slice(0, max).map((u) => ({ items: [u], zorla: false }));
   let sigmayanSayisi = 0;
   const sigmayanlar = [];
 
@@ -71,46 +71,53 @@ function urundenleriSlotlara(urunler, max) {
     // 1. Yeni ürünle doğrudan birleşebilecek tekli slot var mı?
     const tekliAdaylar = slots
       .map((slot, idx) => ({ slot, idx }))
-      .filter(({ slot }) => slot.length === 1 && birlesebilirMi(slot[0], yeni));
+      .filter(({ slot }) => slot.items.length === 1 && birlesebilirMi(slot.items[0], yeni));
 
     if (tekliAdaylar.length > 0) {
       tekliAdaylar.sort((a, b) =>
-        turkishTitleCase(a.slot[0].ad).length - turkishTitleCase(b.slot[0].ad).length
+        turkishTitleCase(a.slot.items[0].ad).length - turkishTitleCase(b.slot.items[0].ad).length
       );
-      slots[tekliAdaylar[0].idx] = [slots[tekliAdaylar[0].idx][0], yeni];
+      slots[tekliAdaylar[0].idx].items.push(yeni);
       continue;
     }
 
-    // 2. Doğrudan eşleşme yok — mevcut tekli slotlar kendi aralarında birleşebiliyorsa
-    //    en kısa adlı çifti birleştir, boşalan yere yeni ürünü koy.
+    // 2. Doğrudan eşleşme yok — tekli slotlar arasında toplam ad uzunluğu en kısa çifti bul.
     const tekliSlotlar = slots
       .map((slot, idx) => ({ slot, idx }))
-      .filter(({ slot }) => slot.length === 1);
+      .filter(({ slot }) => slot.items.length === 1);
 
-    let birlestirildi = false;
-    outer: for (let a = 0; a < tekliSlotlar.length; a++) {
+    let enIyiCift = null;
+    let enIyiUzunluk = Infinity;
+    for (let a = 0; a < tekliSlotlar.length; a++) {
       for (let b = a + 1; b < tekliSlotlar.length; b++) {
         const sa = tekliSlotlar[a];
         const sb = tekliSlotlar[b];
-        if (birlesebilirMi(sa.slot[0], sb.slot[0])) {
-          const [kisa, uzun] =
-            turkishTitleCase(sa.slot[0].ad).length <= turkishTitleCase(sb.slot[0].ad).length
-              ? [sa, sb] : [sb, sa];
-          slots[kisa.idx] = [kisa.slot[0], uzun.slot[0]];
-          slots[uzun.idx] = [yeni];
-          birlestirildi = true;
-          break outer;
+        if (birlesebilirMi(sa.slot.items[0], sb.slot.items[0])) {
+          const toplam =
+            turkishTitleCase(sa.slot.items[0].ad).length +
+            turkishTitleCase(sb.slot.items[0].ad).length;
+          if (toplam < enIyiUzunluk) { enIyiUzunluk = toplam; enIyiCift = [sa, sb]; }
         }
       }
     }
 
-    if (!birlestirildi) {
+    if (enIyiCift) {
+      const [sa, sb] = enIyiCift;
+      const [kisa, uzun] =
+        turkishTitleCase(sa.slot.items[0].ad).length <= turkishTitleCase(sb.slot.items[0].ad).length
+          ? [sa, sb] : [sb, sa];
+      slots[kisa.idx].items.push(uzun.slot.items[0]);
+      slots[uzun.idx] = { items: [yeni], zorla: true };
+    } else {
       sigmayanSayisi++;
-      sigmayanlar.push(urunler[i]);
+      sigmayanlar.push(yeni);
     }
   }
 
-  return { slots, sigmayanSayisi, sigmayanlar };
+  // Zorla yerleştirilen slotları en alta taşı, items dizisine dönüştür
+  const normal       = slots.filter((s) => !s.zorla).map((s) => s.items);
+  const zorlaGirenler = slots.filter((s) =>  s.zorla).map((s) => s.items);
+  return { slots: [...normal, ...zorlaGirenler], sigmayanSayisi, sigmayanlar };
 }
 
 function loadImage(src) {
