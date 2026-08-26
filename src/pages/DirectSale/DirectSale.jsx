@@ -629,19 +629,19 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const tarihSaat = `${simdi.toLocaleDateString('tr-TR')} · ${simdi.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
     const yeniBakiye = getCariBakiye(cari.id);
     const mesaj = [
-      `🌟 ${cari.ad}`,
-      `📅 ${tarihSaat}`,
+      `\u2B50 ${cari.ad}`,
+      `\uD83D\uDCC5 ${tarihSaat}`,
       '',
-      '🛒 Siparişiniz',
-      '━━━━━━━━━━━━━━',
+      '\uD83D\uDED2 Sipari\u015finiz',
+      '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501',
       ...toClose.map((i) => `${i.ad} .. ${TL(i.fiyat)}`),
-      '━━━━━━━━━━━━━━',
-      ...(iskontoSatir ? [`🏷️ %${cariIskonto2} İskonto: -${TL(Math.round(totalPayHam2 * cariIskonto2 / 100))}`] : []),
-      `💰 Bugünkü Toplam: ${TL(totalPay2)}`,
+      '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501',
+      ...(iskontoSatir ? [`\uD83C\uDFF7\uFE0F %${cariIskonto2} \u0130skonto: -${TL(Math.round(totalPayHam2 * cariIskonto2 / 100))}`] : []),
+      `\uD83D\uDCB0 Bug\u00FCnk\u00FC Toplam: ${TL(totalPay2)}`,
       '',
-      `📊 Güncel Cari Bakiye: ${TL(yeniBakiye)}`,
+      `\uD83D\uDCCA G\u00FCncel Cari Bakiye: ${TL(yeniBakiye)}`,
       '',
-      'Afiyet olsun, iyi günler! 😇🍽️✨',
+      'Afiyet olsun, iyi g\u00FCnler! \uD83D\uDE07\uD83C\uDF7D\uFE0F\u2728',
     ].join('\n');
     waShare(mesaj, cari.telefon);
   }
@@ -662,19 +662,19 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const tarihSaat2 = `${simdi2.toLocaleDateString('tr-TR')} · ${simdi2.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
     const yeniBakiye2 = getCariBakiye(cari.id);
     const mesaj = [
-      `🌟 ${cari.ad}`,
-      `📅 ${tarihSaat2}`,
+      `\u2B50 ${cari.ad}`,
+      `\uD83D\uDCC5 ${tarihSaat2}`,
       '',
-      '🛒 Siparişiniz',
-      '━━━━━━━━━━━━━━',
+      '\uD83D\uDED2 Sipari\u015finiz',
+      '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501',
       ...toClose.map((i) => `${i.ad} .. ${TL(i.fiyat)}`),
-      '━━━━━━━━━━━━━━',
-      ...(cariIskonto3 > 0 ? [`🏷️ %${cariIskonto3} İskonto: -${TL(Math.round(totalPayHam3 * cariIskonto3 / 100))}`] : []),
-      `💰 Bugünkü Toplam: ${TL(totalPay3)}`,
+      '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501',
+      ...(cariIskonto3 > 0 ? [`\uD83C\uDFF7\uFE0F %${cariIskonto3} \u0130skonto: -${TL(Math.round(totalPayHam3 * cariIskonto3 / 100))}`] : []),
+      `\uD83D\uDCB0 Bug\u00FCnk\u00FC Toplam: ${TL(totalPay3)}`,
       '',
-      `📊 Güncel Cari Bakiye: ${TL(yeniBakiye2)}`,
+      `\uD83D\uDCCA G\u00FCncel Cari Bakiye: ${TL(yeniBakiye2)}`,
       '',
-      'Afiyet olsun, iyi günler! 😇🍽️✨',
+      'Afiyet olsun, iyi g\u00FCnler! \uD83D\uDE07\uD83C\uDF7D\uFE0F\u2728',
     ].join('\n');
     waShare(mesaj, cariWaPhoneDraft.trim());
   }
