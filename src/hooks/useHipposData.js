@@ -148,7 +148,17 @@ function rowToOdeme(r) {
   return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), tutar: Number(r.tutar), tur: r.tur };
 }
 function rowToFatura(r) {
-  return { id: r.id, cariId: r.cari_id, tarih: r.tarih, faturaNo: r.fatura_no, tutar: Number(r.tutar), eklenmeTs: Number(r.eklenme_ts) };
+  return {
+    id: r.id,
+    cariId: r.cari_id,
+    tarih: r.tarih,
+    faturaNo: r.fatura_no,
+    tutar: Number(r.tutar),
+    eklenmeTs: Number(r.eklenme_ts),
+    donemBaslangic: r.donem_baslangic || null,
+    donemBitis: r.donem_bitis || null,
+    tahsilatTutar: Number(r.tahsilat_tutar || 0),
+  };
 }
 function rowToGecmis(r) {
   return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), toplamTutar: Number(r.toplam_tutar), aciklama: r.aciklama };
@@ -1792,6 +1802,14 @@ export default function useHipposData(scope = 'full') {
   }
 
   // Bir siparişi (Masalar/Hızlı Satış'tan) bir cariye hareket olarak işler.
+  async function deleteCariHareketler(hareketIds) {
+    const idSet = new Set(hareketIds);
+    setCariHareketler((prev) => prev.filter((h) => !idSet.has(h.id)));
+    await Promise.all([...idSet].map((hid) =>
+      supabase.from('cari_hareketler').delete().eq('id', hid).then(({ error }) => { if (error) console.error(error.message); })
+    ));
+  }
+
   function addCariHareket(cariId, { urunler, toplam, mutfakNotu }) {
     const id = Date.now() + Math.floor(Math.random() * 1000);
     const ts = Date.now();
@@ -1815,15 +1833,38 @@ export default function useHipposData(scope = 'full') {
   }
 
   // Firma carilerinde: o ana kadarki faturalanmamış bakiyeyi bir faturaya bağlar.
-  function addCariFatura(cariId, { tarih, faturaNo, tutar }) {
+  function addCariFatura(cariId, { tarih, faturaNo, tutar, donemBaslangic, donemBitis }) {
     const id = Date.now() + Math.floor(Math.random() * 1000);
     const eklenmeTs = Date.now();
-    setCariFaturalar((prev) => [...prev, { id, cariId, tarih, faturaNo, tutar, eklenmeTs }]);
+    const fatura = { id, cariId, tarih, faturaNo, tutar, eklenmeTs, donemBaslangic: donemBaslangic || null, donemBitis: donemBitis || null, tahsilatTutar: 0 };
+    setCariFaturalar((prev) => [...prev, fatura]);
     supabase
       .from('cari_faturalar')
-      .insert({ id, cari_id: cariId, tarih, fatura_no: faturaNo, tutar, eklenme_ts: eklenmeTs })
+      .insert({ id, cari_id: cariId, tarih, fatura_no: faturaNo, tutar, eklenme_ts: eklenmeTs, donem_baslangic: donemBaslangic || null, donem_bitis: donemBitis || null, tahsilat_tutar: 0 })
       .then(({ error }) => { if (error) console.error('fatura kaydedilemedi:', error.message); });
     return id;
+  }
+
+  // Futura faturasına kısmi veya tam tahsilat girer.
+  // Tam ödendiyse (tahsilat >= tutar) faturayı siler VE cari_odemeler'e ekler.
+  async function futuraOdeme(faturaId, tahsilatEkleme) {
+    const fatura = cariFaturalar.find((f) => f.id === faturaId);
+    if (!fatura) return;
+    const yeniTahsilat = fatura.tahsilatTutar + tahsilatEkleme;
+    const tamOdendi = yeniTahsilat >= fatura.tutar;
+
+    if (tamOdendi) {
+      // Faturayı sil + cari_odemeler'e yaz (bakiyeden düşsün)
+      setCariFaturalar((prev) => prev.filter((f) => f.id !== faturaId));
+      supabase.from('cari_faturalar').delete().eq('id', faturaId).then(({ error }) => { if (error) console.error(error.message); });
+      await addCariOdeme(fatura.cariId, { tutar: fatura.tutar, tur: 'FATURA TAHSİLATI' });
+    } else {
+      // Kısmi — sadece tahsilat_tutar güncelle
+      setCariFaturalar((prev) => prev.map((f) => f.id === faturaId ? { ...f, tahsilatTutar: yeniTahsilat } : f));
+      supabase.from('cari_faturalar').update({ tahsilat_tutar: yeniTahsilat }).eq('id', faturaId).then(({ error }) => { if (error) console.error(error.message); });
+      // Kısmi ödemeyi de bakiyeden düş
+      await addCariOdeme(fatura.cariId, { tutar: tahsilatEkleme, tur: 'KISMI FATURA TAHSİLATI' });
+    }
   }
 
   function getCariFaturalanmamisTutar(cariId) {
@@ -2066,6 +2107,8 @@ export default function useHipposData(scope = 'full') {
     addCariHareket,
     addCariOdeme,
     addCariFatura,
+    futuraOdeme,
+    deleteCariHareketler,
     getCariFaturalanmamisTutar,
     archiveCari,
     paketTeslimatlari,

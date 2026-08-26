@@ -22,11 +22,94 @@ function padLine(name, price, width = 28) {
   return `${name} ${dots} ${priceStr}`;
 }
 
+function FuturaModal({ onClose, futuraBaslangic, futuraBitis, futuraGunSec, onSubmit }) {
+  const GUNLER = ['Pts', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
+  const AYLAR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  const bugun = new Date();
+  const [takvimYil, setTakvimYil] = useState(bugun.getFullYear());
+  const [takvimAy, setTakvimAy] = useState(bugun.getMonth());
+
+  function buildCalendar(yil, ay) {
+    const ilkGun = new Date(yil, ay, 1);
+    const sonGun = new Date(yil, ay + 1, 0);
+    const bosluk = (ilkGun.getDay() + 6) % 7;
+    const gunler = [];
+    for (let i = 0; i < bosluk; i++) gunler.push(null);
+    for (let d = 1; d <= sonGun.getDate(); d++) gunler.push(new Date(yil, ay, d));
+    return gunler;
+  }
+  function toStr(d) { return d ? d.toISOString().slice(0, 10) : null; }
+  function gunSinif(d) {
+    if (!d) return '';
+    const s = toStr(d);
+    if (futuraBaslangic && futuraBitis && s >= futuraBaslangic && s <= futuraBitis) return 'futura-range';
+    if (s === futuraBaslangic || s === futuraBitis) return 'futura-selected';
+    return '';
+  }
+  const gunler = buildCalendar(takvimYil, takvimAy);
+  const sonrakiAy = takvimAy === 11 ? { yil: takvimYil + 1, ay: 0 } : { yil: takvimYil, ay: takvimAy + 1 };
+  const sonrakiGunler = buildCalendar(sonrakiAy.yil, sonrakiAy.ay);
+
+  return (
+    <div className="cr-modal-overlay" onClick={onClose}>
+      <div className="cr-modal cr-futura-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="cr-modal-head">
+          <h3>Tarih Aralığı Seç</h3>
+          <button className="cr-modal-x" onClick={onClose}><X size={16} /></button>
+        </div>
+        <div className="futura-cal-wrap">
+          <div className="futura-cal">
+            <div className="futura-cal-head">
+              <button onClick={() => { if (takvimAy === 0) { setTakvimYil(y => y-1); setTakvimAy(11); } else setTakvimAy(m => m-1); }}>‹</button>
+              <span>{AYLAR[takvimAy]} {takvimYil}</span>
+              <span />
+            </div>
+            <div className="futura-cal-grid">
+              {GUNLER.map((g) => <div key={g} className="futura-cal-label">{g}</div>)}
+              {gunler.map((d, i) => (
+                <button key={i} className={`futura-cal-day ${d ? gunSinif(d) : 'futura-empty'}`}
+                  disabled={!d} onClick={() => d && futuraGunSec(toStr(d))}>
+                  {d ? d.getDate() : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="futura-cal">
+            <div className="futura-cal-head">
+              <span />
+              <span>{AYLAR[sonrakiAy.ay]} {sonrakiAy.yil}</span>
+              <button onClick={() => { if (takvimAy === 11) { setTakvimYil(y => y+1); setTakvimAy(0); } else setTakvimAy(m => m+1); }}>›</button>
+            </div>
+            <div className="futura-cal-grid">
+              {GUNLER.map((g) => <div key={g} className="futura-cal-label">{g}</div>)}
+              {sonrakiGunler.map((d, i) => (
+                <button key={i} className={`futura-cal-day ${d ? gunSinif(d) : 'futura-empty'}`}
+                  disabled={!d} onClick={() => d && futuraGunSec(toStr(d))}>
+                  {d ? d.getDate() : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        {futuraBaslangic && (
+          <div className="futura-secim-info">
+            {futuraBaslangic} {futuraBitis ? `→ ${futuraBitis}` : '→ (bitiş seçin)'}
+          </div>
+        )}
+        <div className="cr-modal-footer">
+          <button className="cr-secondary" onClick={onClose}>Vazgeç</button>
+          <button className="cr-primary" disabled={!futuraBaslangic || !futuraBitis} onClick={onSubmit}>Faturalandır</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Cariler({ data, onNavigate }) {
   const {
     cariler, cariHareketler, cariOdemeler, cariFaturalar, cariGecmis,
     getCariBakiye, getCariSonHareket, getCariSonOdeme,
-    addCari, updateCari, deleteCari, addCariOdeme, addCariFatura, getCariFaturalanmamisTutar, archiveCari,
+    addCari, updateCari, deleteCari, addCariOdeme, addCariFatura, futuraOdeme, deleteCariHareketler, getCariFaturalanmamisTutar, archiveCari,
     cariTeslimatBildirimleri, onaylaCariTeslimatBildirim, reddetCariTeslimatBildirim,
   } = data;
 
@@ -182,6 +265,68 @@ export default function Cariler({ data, onNavigate }) {
     addCariFatura(selectedCari.id, { tarih: faturaForm.tarih, faturaNo: faturaForm.faturaNo.trim(), tutar });
     setFaturaModalOpen(false);
     showToast('Faturalandırıldı');
+  }
+
+  // ---- Futura (tarih aralıklı faturalandırma) ----
+  const [futuraOpen, setFuturaOpen] = useState(false);
+  const [futuraBaslangic, setFuturaBaslangic] = useState(null); // 'YYYY-MM-DD'
+  const [futuraBitis, setFuturaBitis] = useState(null);         // 'YYYY-MM-DD'
+  const [futuraTahsilatModal, setFuturaTahsilatModal] = useState(null); // { faturaId, kalan }
+  const [futuraTahsilatInput, setFuturaTahsilatInput] = useState('');
+
+  function futuraDonemStr(f) {
+    if (!f.donemBaslangic || !f.donemBitis) return '';
+    return `${f.donemBaslangic} – ${f.donemBitis}`;
+  }
+  function futuraBekleyenGun(f) {
+    const gun = Math.floor((Date.now() - f.eklenmeTs) / 86400000);
+    return gun;
+  }
+  function futuraKalanTutar(f) {
+    return Math.max(0, f.tutar - f.tahsilatTutar);
+  }
+
+  function futuraGunSec(gunStr) {
+    // Takvimde gün seçimi: ilk tık başlangıç, ikinci tık bitiş (başlangıç > bitiş ise sıfırla)
+    if (!futuraBaslangic || (futuraBaslangic && futuraBitis)) {
+      setFuturaBaslangic(gunStr);
+      setFuturaBitis(null);
+    } else {
+      if (gunStr < futuraBaslangic) {
+        setFuturaBaslangic(gunStr);
+        setFuturaBitis(null);
+      } else {
+        setFuturaBitis(gunStr);
+      }
+    }
+  }
+
+  async function submitFutura() {
+    if (!selectedCari || !futuraBaslangic || !futuraBitis) return;
+    const bas = new Date(futuraBaslangic + 'T00:00:00').getTime();
+    const bit = new Date(futuraBitis + 'T23:59:59').getTime();
+    const hareketler = cariHareketler.filter((h) => h.cariId === selectedCari.id && h.ts >= bas && h.ts <= bit);
+    if (hareketler.length === 0) { showToast('Bu aralıkta hareket yok'); return; }
+    const tutar = hareketler.reduce((s, h) => s + h.toplam, 0);
+    const tarih = new Date().toISOString().slice(0, 10);
+    // Hareketleri sil
+    const hareketIds = hareketler.map((h) => h.id);
+    await deleteCariHareketler(hareketIds);
+    // Faturayı oluştur
+    addCariFatura(selectedCari.id, { tarih, faturaNo: '', tutar, donemBaslangic: futuraBaslangic, donemBitis: futuraBitis });
+    setFuturaOpen(false);
+    setFuturaBaslangic(null);
+    setFuturaBitis(null);
+    showToast('Faturalandırıldı');
+  }
+
+  async function submitFuturaTahsilat() {
+    const tutar = parseFloat(String(futuraTahsilatInput).replace(',', '.')) || 0;
+    if (!futuraTahsilatModal || tutar <= 0) return;
+    await futuraOdeme(futuraTahsilatModal.faturaId, tutar);
+    setFuturaTahsilatModal(null);
+    setFuturaTahsilatInput('');
+    showToast('Tahsilat kaydedildi');
   }
 
   // ---- Cari Özeti Oluştur (firma) ----
@@ -408,6 +553,9 @@ export default function Cariler({ data, onNavigate }) {
               <div className="cr-detail-tabs">
                 <button className={detailTab === 'hareketler' ? 'active' : ''} onClick={() => setDetailTab('hareketler')}>Hareketler</button>
                 <button className={detailTab === 'bilgiler' ? 'active' : ''} onClick={() => setDetailTab('bilgiler')}>Cari Bilgileri</button>
+                {selectedCari.tip === 'firma' && (
+                  <button className={detailTab === 'fatura' ? 'active' : ''} onClick={() => setDetailTab('fatura')}>Fatura</button>
+                )}
                 <button className="cr-dokum-btn" onClick={openDokumModal}><Download size={13} /> Hareket Dökümü</button>
               </div>
 
@@ -448,6 +596,44 @@ export default function Cariler({ data, onNavigate }) {
                     )}
                   </div>
                 )}
+
+                {detailTab === 'fatura' && selectedCari.tip === 'firma' && (() => {
+                  const futuraFaturalar = cariFaturalar
+                    .filter((f) => f.cariId === selectedCari.id)
+                    .sort((a, b) => b.eklenmeTs - a.eklenmeTs);
+                  return (
+                    <div className="cr-futura-wrap">
+                      <button className="cr-fatura-btn" onClick={() => { setFuturaBaslangic(null); setFuturaBitis(null); setFuturaOpen(true); }}>
+                        + Tarih Aralığı Faturalandır
+                      </button>
+                      {futuraFaturalar.length === 0 && <p className="cr-empty">Henüz fatura yok</p>}
+                      {futuraFaturalar.map((f) => {
+                        const kalan = futuraKalanTutar(f);
+                        const gun = futuraBekleyenGun(f);
+                        return (
+                          <div key={f.id} className="cr-futura-card">
+                            <div className="cr-futura-donem">{futuraDonemStr(f) || f.tarih}</div>
+                            <div className="cr-futura-info">
+                              <span className="cr-futura-gun">{gun} gündür ödeme bekliyor</span>
+                              <strong className="cr-futura-tutar">{TL(f.tutar)}</strong>
+                            </div>
+                            {f.tahsilatTutar > 0 && (
+                              <div className="cr-futura-kismi">
+                                Kısmi Ödendi — Kalan: <strong>{TL(kalan)}</strong>
+                              </div>
+                            )}
+                            <button
+                              className="cr-tahsilat-btn"
+                              onClick={() => { setFuturaTahsilatModal({ faturaId: f.id, kalan }); setFuturaTahsilatInput(''); }}
+                            >
+                              Tahsilat Gir
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
 
                 {detailTab === 'bilgiler' && (
                   <div className="cr-bilgi-form">
@@ -602,6 +788,154 @@ export default function Cariler({ data, onNavigate }) {
       )}
 
       {/* FATURALANDIR */}
+      {/* FUTURA — tarih aralığı seçici */}
+      {futuraOpen && selectedCari && (() => {
+        const bugun = new Date();
+        const [takvimYil, setTakvimYil] = useState(bugun.getFullYear());
+        const [takvimAy, setTakvimAy] = useState(bugun.getMonth());
+        const GUNLER = ['Pts', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
+        const AYLAR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+
+        function buildCalendar(yil, ay) {
+          const ilkGun = new Date(yil, ay, 1);
+          const sonGun = new Date(yil, ay + 1, 0);
+          const bosluk = (ilkGun.getDay() + 6) % 7; // Pazartesi = 0
+          const gunler = [];
+          for (let i = 0; i < bosluk; i++) gunler.push(null);
+          for (let d = 1; d <= sonGun.getDate(); d++) gunler.push(new Date(yil, ay, d));
+          return gunler;
+        }
+
+        function toStr(d) { return d ? d.toISOString().slice(0, 10) : null; }
+
+        function gunSinif(d) {
+          if (!d) return '';
+          const s = toStr(d);
+          if (futuraBaslangic && futuraBitis && s >= futuraBaslangic && s <= futuraBitis) return 'futura-range';
+          if (s === futuraBaslangic || s === futuraBitis) return 'futura-selected';
+          return '';
+        }
+
+        const gunler = buildCalendar(takvimYil, takvimAy);
+        const sonrakiAy = takvimAy === 11 ? { yil: takvimYil + 1, ay: 0 } : { yil: takvimYil, ay: takvimAy + 1 };
+        const sonrakiGunler = buildCalendar(sonrakiAy.yil, sonrakiAy.ay);
+
+        return (
+          <div className="cr-modal-overlay" onClick={() => setFuturaOpen(false)}>
+            <div className="cr-modal cr-futura-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="cr-modal-head">
+                <h3>Tarih Aralığı Seç</h3>
+                <button className="cr-modal-x" onClick={() => setFuturaOpen(false)}><X size={16} /></button>
+              </div>
+              <div className="futura-cal-wrap">
+                {/* Sol ay */}
+                <div className="futura-cal">
+                  <div className="futura-cal-head">
+                    <button onClick={() => { if (takvimAy === 0) { setTakvimYil(y => y - 1); setTakvimAy(11); } else setTakvimAy(m => m - 1); }}>‹</button>
+                    <span>{AYLAR[takvimAy]} {takvimYil}</span>
+                    <span />
+                  </div>
+                  <div className="futura-cal-grid">
+                    {GUNLER.map((g) => <div key={g} className="futura-cal-label">{g}</div>)}
+                    {gunler.map((d, i) => (
+                      <button key={i} className={`futura-cal-day ${d ? gunSinif(d) : 'futura-empty'}`}
+                        disabled={!d} onClick={() => d && futuraGunSec(toStr(d))}>
+                        {d ? d.getDate() : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Sağ ay */}
+                <div className="futura-cal">
+                  <div className="futura-cal-head">
+                    <span />
+                    <span>{AYLAR[sonrakiAy.ay]} {sonrakiAy.yil}</span>
+                    <button onClick={() => { if (takvimAy === 11) { setTakvimYil(y => y + 1); setTakvimAy(0); } else setTakvimAy(m => m + 1); }}>›</button>
+                  </div>
+                  <div className="futura-cal-grid">
+                    {GUNLER.map((g) => <div key={g} className="futura-cal-label">{g}</div>)}
+                    {sonrakiGunler.map((d, i) => (
+                      <button key={i} className={`futura-cal-day ${d ? gunSinif(d) : 'futura-empty'}`}
+                        disabled={!d} onClick={() => d && futuraGunSec(toStr(d))}>
+                        {d ? d.getDate() : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {futuraBaslangic && (
+                <div className="futura-secim-info">
+                  {futuraBaslangic} {futuraBitis ? `→ ${futuraBitis}` : '→ (bitiş seçin)'}
+                </div>
+              )}
+              <div className="cr-modal-footer">
+                <button className="cr-secondary" onClick={() => setFuturaOpen(false)}>Vazgeç</button>
+                <button className="cr-primary" disabled={!futuraBaslangic || !futuraBitis} onClick={submitFutura}>Faturalandır</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* FUTURA — tahsilat gir */}
+      {futuraTahsilatModal && (
+        <div className="cr-modal-overlay" onClick={() => setFuturaTahsilatModal(null)}>
+          <div className="cr-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="cr-modal-head">
+              <h3>Tahsilat Gir</h3>
+              <button className="cr-modal-x" onClick={() => setFuturaTahsilatModal(null)}><X size={16} /></button>
+            </div>
+            <p className="cr-futura-kalan-info">Kalan: <strong>{TL(futuraTahsilatModal.kalan)}</strong></p>
+            <input
+              className="cr-modal-input"
+              type="number"
+              placeholder="Tahsilat tutarı"
+              value={futuraTahsilatInput}
+              onChange={(e) => setFuturaTahsilatInput(e.target.value)}
+              autoFocus
+            />
+            <div className="cr-modal-footer">
+              <button className="cr-secondary" onClick={() => setFuturaTahsilatModal(null)}>Vazgeç</button>
+              <button className="cr-primary" onClick={submitFuturaTahsilat}>Kaydet</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {futuraOpen && selectedCari && (
+        <FuturaModal
+          onClose={() => setFuturaOpen(false)}
+          futuraBaslangic={futuraBaslangic}
+          futuraBitis={futuraBitis}
+          futuraGunSec={futuraGunSec}
+          onSubmit={submitFutura}
+        />
+      )}
+
+      {futuraTahsilatModal && (
+        <div className="cr-modal-overlay" onClick={() => setFuturaTahsilatModal(null)}>
+          <div className="cr-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="cr-modal-head">
+              <h3>Tahsilat Gir</h3>
+              <button className="cr-modal-x" onClick={() => setFuturaTahsilatModal(null)}><X size={16} /></button>
+            </div>
+            <p style={{marginBottom: '8px'}}>Kalan: <strong>{TL(futuraTahsilatModal.kalan)}</strong></p>
+            <input
+              className="cr-modal-input"
+              type="number"
+              placeholder="Tahsilat tutarı"
+              value={futuraTahsilatInput}
+              onChange={(e) => setFuturaTahsilatInput(e.target.value)}
+              autoFocus
+            />
+            <div className="cr-modal-footer">
+              <button className="cr-secondary" onClick={() => setFuturaTahsilatModal(null)}>Vazgeç</button>
+              <button className="cr-primary" onClick={submitFuturaTahsilat}>Kaydet</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {faturaModalOpen && selectedCari && (
         <div className="cr-modal-overlay" onClick={() => setFaturaModalOpen(false)}>
           <div className="cr-modal" onClick={(e) => e.stopPropagation()}>
