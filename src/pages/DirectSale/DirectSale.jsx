@@ -47,6 +47,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     addCari,
     updateCari,
     addCariHareket,
+    getCariBakiye,
   } = data;
 
   // Ürünün bağlı olduğu kategori objesini bulur — renk/italik/ikon fallback zinciri için.
@@ -623,8 +624,25 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const totalPayHam2 = toClose.reduce((s, i) => s + i.fiyat, 0);
     const totalPay2 = cariIskonto2 > 0 ? Math.round(totalPayHam2 * (1 - cariIskonto2 / 100)) : totalPayHam2;
     const iskontoSatir = cariIskonto2 > 0 ? `\n🏷️ %${cariIskonto2} İskonto: -${TL(Math.round(totalPayHam2 * cariIskonto2 / 100))}` : '';
-    const mesaj = `${cari.ad}\n\n${toClose.map((i) => `${i.ad} .. ${TL(i.fiyat)}`).join('\n')}${iskontoSatir}\n\nToplam: ${TL(totalPay2)}`;
     handlePayToCari(cari.id);
+    const simdi = new Date();
+    const tarihSaat = `${simdi.toLocaleDateString('tr-TR')} · ${simdi.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
+    const yeniBakiye = getCariBakiye(cari.id);
+    const mesaj = [
+      `🌟 ${cari.ad}`,
+      `📅 ${tarihSaat}`,
+      '',
+      '🛒 Siparişiniz',
+      '━━━━━━━━━━━━━━',
+      ...toClose.map((i) => `${i.ad} .. ${TL(i.fiyat)}`),
+      '━━━━━━━━━━━━━━',
+      ...(iskontoSatir ? [`🏷️ %${cariIskonto2} İskonto: -${TL(Math.round(totalPayHam2 * cariIskonto2 / 100))}`] : []),
+      `💰 Bugünkü Toplam: ${TL(totalPay2)}`,
+      '',
+      `📊 Güncel Cari Bakiye: ${TL(yeniBakiye)}`,
+      '',
+      'Afiyet olsun, iyi günler! 😇🍽️✨',
+    ].join('\n');
     waShare(mesaj, cari.telefon);
   }
 
@@ -639,8 +657,25 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const totalPayHam3 = toClose.reduce((s, i) => s + i.fiyat, 0);
     const totalPay3 = cariIskonto3 > 0 ? Math.round(totalPayHam3 * (1 - cariIskonto3 / 100)) : totalPayHam3;
     const iskontoSatir3 = cariIskonto3 > 0 ? `\n🏷️ %${cariIskonto3} İskonto: -${TL(Math.round(totalPayHam3 * cariIskonto3 / 100))}` : '';
-    const mesaj = `${cari.ad}\n\n${toClose.map((i) => `${i.ad} .. ${TL(i.fiyat)}`).join('\n')}${iskontoSatir3}\n\nToplam: ${TL(totalPay3)}`;
     handlePayToCari(cari.id);
+    const simdi2 = new Date();
+    const tarihSaat2 = `${simdi2.toLocaleDateString('tr-TR')} · ${simdi2.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
+    const yeniBakiye2 = getCariBakiye(cari.id);
+    const mesaj = [
+      `🌟 ${cari.ad}`,
+      `📅 ${tarihSaat2}`,
+      '',
+      '🛒 Siparişiniz',
+      '━━━━━━━━━━━━━━',
+      ...toClose.map((i) => `${i.ad} .. ${TL(i.fiyat)}`),
+      '━━━━━━━━━━━━━━',
+      ...(cariIskonto3 > 0 ? [`🏷️ %${cariIskonto3} İskonto: -${TL(Math.round(totalPayHam3 * cariIskonto3 / 100))}`] : []),
+      `💰 Bugünkü Toplam: ${TL(totalPay3)}`,
+      '',
+      `📊 Güncel Cari Bakiye: ${TL(yeniBakiye2)}`,
+      '',
+      'Afiyet olsun, iyi günler! 😇🍽️✨',
+    ].join('\n');
     waShare(mesaj, cariWaPhoneDraft.trim());
   }
 
