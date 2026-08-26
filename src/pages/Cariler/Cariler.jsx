@@ -410,24 +410,25 @@ export default function Cariler({ data, onNavigate }) {
     const urunSatirlari = [];
     bugunkuHareketler.forEach((h) => h.urunler.forEach((u) => urunSatirlari.push(padLine(u.ad, u.fiyat))));
 
+    const simdi = new Date();
+    const tarihSaat = `${simdi.toLocaleDateString('tr-TR')} · ${simdi.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
     const text = [
-      `⭐ ${selectedCari.ad}`,
+      `🌟 ${selectedCari.ad}`,
+      `📅 ${tarihSaat}`,
       '',
-      'Önceki Cari',
+      '📋 Önceki Cari Bakiye',
       TL(Math.max(0, oncekiCari)),
       '',
-      'Bugünkü Siparişler',
-      '',
+      '🛒 Bugünkü Siparişler',
+      '━━━━━━━━━━━━━━',
       ...(urunSatirlari.length ? urunSatirlari : ['(bugün sipariş yok)']),
+      '━━━━━━━━━━━━━━',
+      ...(iskonto > 0 ? [`🏷️ %${iskonto} İskonto: -${TL(Math.round(bugunToplamHam * (iskonto / 100)))}`, ''] : []),
+      `💰 Bugünkü Toplam: ${TL(bugunToplam)}`,
       '',
-      ...(iskonto > 0 ? [`🏷️ %${iskonto} İskonto`, TL(Math.round(bugunToplamHam * (iskonto / 100)) * -1), ''] : []),
-      '🟢 Bugünkü Toplam',
-      TL(bugunToplam),
+      `📊 Güncel Cari Bakiye: ${TL(getCariBakiye(selectedCari.id))}`,
       '',
-      'Yeni Cari',
-      TL(getCariBakiye(selectedCari.id)),
-      '',
-      'Afiyet Olsun 😇',
+      'Afiyet olsun, iyi günler! 😇🍽️✨',
     ].join('\n');
     setOzetText(text);
     setOzetModalOpen(true);
