@@ -830,41 +830,6 @@ export default function Cariler({ data, onNavigate }) {
         />
       )}
 
-      {/* FUTURA — tahsilat gir */}
-      {futuraTahsilatModal && (
-        <div className="cr-modal-overlay" onClick={() => setFuturaTahsilatModal(null)}>
-          <div className="cr-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="cr-modal-head">
-              <h3>Tahsilat Gir</h3>
-              <button className="cr-modal-x" onClick={() => setFuturaTahsilatModal(null)}><X size={16} /></button>
-            </div>
-            <p className="cr-futura-kalan-info">Kalan: <strong>{TL(futuraTahsilatModal.kalan)}</strong></p>
-            <input
-              className="cr-modal-input"
-              type="number"
-              placeholder="Tahsilat tutarı"
-              value={futuraTahsilatInput}
-              onChange={(e) => setFuturaTahsilatInput(e.target.value)}
-              autoFocus
-            />
-            <div className="cr-modal-footer">
-              <button className="cr-secondary" onClick={() => setFuturaTahsilatModal(null)}>Vazgeç</button>
-              <button className="cr-primary" onClick={submitFuturaTahsilat}>Kaydet</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {futuraOpen && selectedCari && (
-        <FuturaModal
-          onClose={() => setFuturaOpen(false)}
-          futuraBaslangic={futuraBaslangic}
-          futuraBitis={futuraBitis}
-          futuraGunSec={futuraGunSec}
-          onSubmit={submitFutura}
-        />
-      )}
-
       {futuraTahsilatModal && (
         <div className="cr-modal-overlay" onClick={() => setFuturaTahsilatModal(null)}>
           <div className="cr-modal" onClick={(e) => e.stopPropagation()}>
