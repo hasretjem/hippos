@@ -812,3 +812,23 @@
 .cr-tahsilat-btn:hover {
   opacity: 0.88;
 }
+.cr-futura-butonlar {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.cr-futura-butonlar .cr-tahsilat-btn {
+  flex: 1;
+}
+
+.cr-tahsilat-kismi {
+  background: var(--panel-2) !important;
+  color: var(--ink) !important;
+  border: 1px solid var(--border) !important;
+}
+
+.cr-futura-kalan {
+  font-weight: 700;
+  background: #fef3c7;
+}
