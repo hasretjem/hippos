@@ -38,7 +38,13 @@ function FuturaModal({ onClose, futuraBaslangic, futuraBitis, futuraGunSec, onSu
     for (let d = 1; d <= sonGun.getDate(); d++) gunler.push(new Date(yil, ay, d));
     return gunler;
   }
-  function toStr(d) { return d ? d.toISOString().slice(0, 10) : null; }
+  function toStr(d) {
+    if (!d) return null;
+    const yil = d.getFullYear();
+    const ay = String(d.getMonth() + 1).padStart(2, '0');
+    const gun = String(d.getDate()).padStart(2, '0');
+    return `${yil}-${ay}-${gun}`;
+  }
   function gunSinif(d) {
     if (!d) return '';
     const s = toStr(d);
@@ -91,11 +97,14 @@ function FuturaModal({ onClose, futuraBaslangic, futuraBitis, futuraGunSec, onSu
             </div>
           </div>
         </div>
-        {futuraBaslangic && (
-          <div className="futura-secim-info">
-            {futuraBaslangic} {futuraBitis ? `→ ${futuraBitis}` : '→ (bitiş seçin)'}
-          </div>
-        )}
+        {futuraBaslangic && (() => {
+          function trFmt(s) { const [y,m,d] = s.split('-'); return `${d}.${m}.${y}`; }
+          return (
+            <div className="futura-secim-info">
+              {trFmt(futuraBaslangic)} {futuraBitis ? `→ ${trFmt(futuraBitis)}` : '→ (bitiş seçin)'}
+            </div>
+          );
+        })()}
         <div className="cr-modal-footer">
           <button className="cr-secondary" onClick={onClose}>Vazgeç</button>
           <button className="cr-primary" disabled={!futuraBaslangic || !futuraBitis} onClick={onSubmit}>Faturalandır</button>
@@ -276,7 +285,11 @@ export default function Cariler({ data, onNavigate }) {
 
   function futuraDonemStr(f) {
     if (!f.donemBaslangic || !f.donemBitis) return '';
-    return `${f.donemBaslangic} – ${f.donemBitis}`;
+    function trFmt(s) {
+      const [y, m, d] = s.split('-');
+      return `${d}.${m}.${y}`;
+    }
+    return `${trFmt(f.donemBaslangic)} – ${trFmt(f.donemBitis)}`;
   }
   function futuraBekleyenGun(f) {
     const gun = Math.floor((Date.now() - f.eklenmeTs) / 86400000);
