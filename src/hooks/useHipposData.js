@@ -1847,12 +1847,18 @@ export default function useHipposData(scope = 'full') {
     return id;
   }
 
-  // Futura: tam tahsilat — faturayı siler, bakiye otomatik düşer (getCariBakiye fatura üzerinden hesaplar)
+  // Futura: tam tahsilat — faturayı siler, bakiye 0 ise hareketleri de arşivler
   async function futuraTamOde(faturaId) {
     const fatura = cariFaturalar.find((f) => f.id === faturaId);
     if (!fatura) return;
     setCariFaturalar((prev) => prev.filter((f) => f.id !== faturaId));
-    supabase.from('cari_faturalar').delete().eq('id', faturaId).then(({ error }) => { if (error) console.error(error.message); });
+    await supabase.from('cari_faturalar').delete().eq('id', faturaId).then(({ error }) => { if (error) console.error(error.message); });
+    // Fatura silindikten sonra bu carinin başka faturası ve hareketi kalmadıysa arşivle
+    const kalanFatura = cariFaturalar.filter((f) => f.cariId === fatura.cariId && f.id !== faturaId);
+    const kalanHareket = cariHareketler.filter((h) => h.cariId === fatura.cariId);
+    if (kalanFatura.length === 0 && kalanHareket.length === 0) {
+      archiveCari(fatura.cariId);
+    }
   }
 
   // Futura: kısmi ödeme — sadece fatura üzerindeki tahsilat artar, log'a eklenir
