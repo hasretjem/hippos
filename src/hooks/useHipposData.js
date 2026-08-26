@@ -1847,17 +1847,15 @@ export default function useHipposData(scope = 'full') {
     return id;
   }
 
-  // Futura: tam tahsilat — faturayı siler, bakiyeden düşer
+  // Futura: tam tahsilat — faturayı siler, bakiye otomatik düşer (getCariBakiye fatura üzerinden hesaplar)
   async function futuraTamOde(faturaId) {
     const fatura = cariFaturalar.find((f) => f.id === faturaId);
     if (!fatura) return;
-    const kalan = fatura.tutar - (fatura.tahsilatTutar || 0);
     setCariFaturalar((prev) => prev.filter((f) => f.id !== faturaId));
     supabase.from('cari_faturalar').delete().eq('id', faturaId).then(({ error }) => { if (error) console.error(error.message); });
-    await addCariOdeme(fatura.cariId, { tutar: kalan, tur: 'FATURA TAHSİLATI' });
   }
 
-  // Futura: kısmi ödeme — bakiyeden düşer, fatura açık kalır, log'a eklenir
+  // Futura: kısmi ödeme — sadece fatura üzerindeki tahsilat artar, log'a eklenir
   async function futuraKismiOde(faturaId, tutar) {
     const fatura = cariFaturalar.find((f) => f.id === faturaId);
     if (!fatura) return;
@@ -1871,7 +1869,6 @@ export default function useHipposData(scope = 'full') {
       .update({ tahsilat_tutar: yeniTahsilat, odeme_log: yeniLog })
       .eq('id', faturaId)
       .then(({ error }) => { if (error) console.error(error.message); });
-    await addCariOdeme(fatura.cariId, { tutar, tur: 'KISMİ FATURA TAHSİLATI' });
   }
 
   function getCariFaturalanmamisTutar(cariId) {
