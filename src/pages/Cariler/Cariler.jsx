@@ -214,7 +214,14 @@ export default function Cariler({ data, onNavigate }) {
     setLastOdemeKalan(kalan);
     setOdemeModalOpen(false);
     setOdemeShareText(
-      `Merhaba ${selectedCari.ad}, ${TL(tutar)} tahsilatınız alınmıştır.\nKalan bakiyeniz: ${TL(kalan)}.\nTeşekkürler.`
+      [
+        `💚 Merhaba ${selectedCari.ad},`,
+        '',
+        `✅ ${TL(tutar)} tutarındaki tahsilatınız alınmıştır.`,
+        `📊 Güncel bakiyeniz: ${TL(kalan)}`,
+        '',
+        'Teşekkürler, iyi günler! 🙏✨',
+      ].join('\n')
     );
     setOdemeShareOpen(true);
     if (kalan === 0) {
@@ -595,7 +602,20 @@ export default function Cariler({ data, onNavigate }) {
                         <div key={`s-${entry.data.id}`} className="cr-hareket-card">
                           <div className="cr-hareket-head">
                             <span>{fmtDateTime(entry.data.ts)}</span>
-                            <strong>{TL(entry.data.toplam)}</strong>
+                            {(() => {
+                              const isk = selectedCari.iskonto || 0;
+                              if (isk <= 0) return <strong>{TL(entry.data.toplam)}</strong>;
+                              const ham = Math.round(entry.data.toplam / (1 - isk / 100));
+                              const indirim = ham - entry.data.toplam;
+                              return (
+                                <div className="cr-hareket-iskonto-wrap">
+                                  <span className="cr-hareket-iskonto-detay">
+                                    {TL(ham)} × %{isk} = -{TL(indirim)}
+                                  </span>
+                                  <strong>{TL(entry.data.toplam)}</strong>
+                                </div>
+                              );
+                            })()}
                           </div>
                           <div className="cr-hareket-items">
                             {entry.data.urunler.map((u, i) => (
