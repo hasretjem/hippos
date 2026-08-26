@@ -559,7 +559,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const selected = payable.filter((i) => i.selected);
     const toClose = selected.length > 0 ? selected : payable;
     const closedIds = new Set(toClose.map((i) => i.id));
-    const totalPay = toClose.reduce((s, i) => s + i.fiyat, 0);
+    const totalPayHam = toClose.reduce((s, i) => s + i.fiyat, 0);
+    const cariObj = (cariler || []).find((c) => c.id === cariId);
+    const cariIskonto = cariObj?.iskonto || 0;
+    const totalPay = cariIskonto > 0 ? Math.round(totalPayHam * (1 - cariIskonto / 100)) : totalPayHam;
     const mutfakNotu = currentOrder.filter((i) => i.note).map((i) => i.ad).join(' · ');
 
     setSalesHistory((prev) => [
@@ -616,7 +619,11 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const selected = payable.filter((i) => i.selected);
     const toClose = selected.length > 0 ? selected : payable;
     const totalPay = toClose.reduce((s, i) => s + i.fiyat, 0);
-    const mesaj = `${cari.ad}\n\n${toClose.map((i) => `${i.ad} .. ${TL(i.fiyat)}`).join('\n')}\n\nToplam: ${TL(totalPay)}`;
+    const cariIskonto2 = cari.iskonto || 0;
+    const totalPayHam2 = toClose.reduce((s, i) => s + i.fiyat, 0);
+    const totalPay2 = cariIskonto2 > 0 ? Math.round(totalPayHam2 * (1 - cariIskonto2 / 100)) : totalPayHam2;
+    const iskontoSatir = cariIskonto2 > 0 ? `\n🏷️ %${cariIskonto2} İskonto: -${TL(Math.round(totalPayHam2 * cariIskonto2 / 100))}` : '';
+    const mesaj = `${cari.ad}\n\n${toClose.map((i) => `${i.ad} .. ${TL(i.fiyat)}`).join('\n')}${iskontoSatir}\n\nToplam: ${TL(totalPay2)}`;
     handlePayToCari(cari.id);
     waShare(mesaj, cari.telefon);
   }
@@ -628,8 +635,11 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const payable = currentOrder.filter((i) => !i.note);
     const selected = payable.filter((i) => i.selected);
     const toClose = selected.length > 0 ? selected : payable;
-    const totalPay = toClose.reduce((s, i) => s + i.fiyat, 0);
-    const mesaj = `${cari.ad}\n\n${toClose.map((i) => `${i.ad} .. ${TL(i.fiyat)}`).join('\n')}\n\nToplam: ${TL(totalPay)}`;
+    const cariIskonto3 = cari.iskonto || 0;
+    const totalPayHam3 = toClose.reduce((s, i) => s + i.fiyat, 0);
+    const totalPay3 = cariIskonto3 > 0 ? Math.round(totalPayHam3 * (1 - cariIskonto3 / 100)) : totalPayHam3;
+    const iskontoSatir3 = cariIskonto3 > 0 ? `\n🏷️ %${cariIskonto3} İskonto: -${TL(Math.round(totalPayHam3 * cariIskonto3 / 100))}` : '';
+    const mesaj = `${cari.ad}\n\n${toClose.map((i) => `${i.ad} .. ${TL(i.fiyat)}`).join('\n')}${iskontoSatir3}\n\nToplam: ${TL(totalPay3)}`;
     handlePayToCari(cari.id);
     waShare(mesaj, cariWaPhoneDraft.trim());
   }

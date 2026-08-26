@@ -237,7 +237,9 @@ export default function Cariler({ data, onNavigate }) {
     const bugunBaslangic = new Date().setHours(0, 0, 0, 0);
     const bugunkuHareketler = cariHareketler.filter((h) => h.cariId === selectedCari.id && h.ts >= bugunBaslangic);
     const bugunkuOdemeler = cariOdemeler.filter((o) => o.cariId === selectedCari.id && o.ts >= bugunBaslangic);
-    const bugunToplam = bugunkuHareketler.reduce((s, h) => s + h.toplam, 0);
+    const iskonto = selectedCari.iskonto || 0;
+    const bugunToplamHam = bugunkuHareketler.reduce((s, h) => s + h.toplam, 0);
+    const bugunToplam = iskonto > 0 ? Math.round(bugunToplamHam * (1 - iskonto / 100)) : bugunToplamHam;
     const oncekiCari = getCariBakiye(selectedCari.id) - bugunToplam + bugunkuOdemeler.reduce((s, o) => s + o.tutar, 0);
 
     const urunSatirlari = [];
@@ -253,6 +255,7 @@ export default function Cariler({ data, onNavigate }) {
       '',
       ...(urunSatirlari.length ? urunSatirlari : ['(bugün sipariş yok)']),
       '',
+      ...(iskonto > 0 ? [`🏷️ %${iskonto} İskonto`, TL(Math.round(bugunToplamHam * (iskonto / 100)) * -1), ''] : []),
       '🟢 Bugünkü Toplam',
       TL(bugunToplam),
       '',
@@ -325,10 +328,12 @@ export default function Cariler({ data, onNavigate }) {
                 const b = getCariBakiye(c.id);
                 const sh = getCariSonHareket(c.id);
                 const bekleyen = bekleyenBildirim(c.id);
+                const bugunBaslangic = new Date().setHours(0, 0, 0, 0);
+                const bugunYeni = sh && sh.ts >= bugunBaslangic;
                 return (
                   <button key={c.id} className={`cr-item ${selectedCariId === c.id ? 'active' : ''}`} onClick={() => { setSelectedCariId(c.id); setDetailTab('hareketler'); }}>
                     <div className="cr-item-top">
-                      <span className="cr-item-name">{c.ad}</span>
+                      <span className="cr-item-name">{c.ad}{bugunYeni && <span className="cr-yeni-badge"> 🆕</span>}</span>
                       <span className="cr-item-balance">{TL(b)}</span>
                     </div>
                     {c.telefon
@@ -463,6 +468,22 @@ export default function Cariler({ data, onNavigate }) {
                     <input value={selectedCari.aciklama} onChange={(e) => updateCari(selectedCari.id, { aciklama: e.target.value })} />
                     <label>Not</label>
                     <input value={selectedCari.not} onChange={(e) => updateCari(selectedCari.id, { not: e.target.value })} />
+
+                    {selectedCari.tip === 'firma' && (
+                      <>
+                      <label>İskonto (%)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={selectedCari.iskonto || 0}
+                        onChange={(e) => {
+                          const v = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                          updateCari(selectedCari.id, { iskonto: v });
+                        }}
+                      />
+                      </>
+                    )}
 
                     {selectedCari.tip === 'firma' && (
                       <div className="cr-fatura-block">
