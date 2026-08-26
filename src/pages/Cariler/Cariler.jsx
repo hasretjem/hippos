@@ -478,7 +478,7 @@ export default function Cariler({ data, onNavigate }) {
                 return (
                   <button key={c.id} className={`cr-item ${selectedCariId === c.id ? 'active' : ''}`} onClick={() => { setSelectedCariId(c.id); setDetailTab('hareketler'); }}>
                     <div className="cr-item-top">
-                      <span className="cr-item-name">{c.ad}{bugunYeni && <span className="cr-yeni-badge"> 🆕</span>}</span>
+                      <span className="cr-item-name">{c.ad}{bugunYeni && <span className="cr-yeni-badge">YENİ</span>}</span>
                       <span className="cr-item-balance">{TL(b)}</span>
                     </div>
                     {c.telefon
