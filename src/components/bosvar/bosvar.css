@@ -144,6 +144,27 @@
 .bv-bosum-btn--loading,
 .bv-bosum-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
+/* Kasiyer tiklemedi ama paketçi fark edip kendi işaretlemek istiyor */
+.bv-paketci-isaretle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 0;
+  font-size: 14px;
+  font-weight: 700;
+  background: transparent;
+  color: #4a8800;
+  border: 1.5px dashed #74d600;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-bottom: 4px;
+  transition: background 0.15s;
+}
+.bv-paketci-isaretle-btn:hover:not(:disabled) { background: rgba(116, 214, 0, 0.1); }
+.bv-paketci-isaretle-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
 /* Gönderildi satırı + geri al butonu yan yana */
 .bv-gonderildi-row {
   display: flex;

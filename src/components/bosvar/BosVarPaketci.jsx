@@ -10,12 +10,28 @@ export default function BosVarPaketci({
   bosvarBildirimleri = [],
   submitBosvarBildirim,
   deleteBosvarBildirim,
+  setBosvarTik,
   showToast,
 }) {
   const [loading, setLoading] = useState(false);
   const tikVar = bosvarTikliler.includes(paketAdi);
 
-  if (!tikVar) return null;
+  if (!tikVar) {
+    // Kasiyer henüz tiklemedi — paketçi kendi de fark edip işaretleyebilsin.
+    if (mod !== 'detay' || !setBosvarTik) return null;
+    async function handlePaketciTikler() {
+      if (loading) return;
+      setLoading(true);
+      await setBosvarTik(paketAdi, true);
+      showToast?.('Boş Var işaretlendi');
+      setLoading(false);
+    }
+    return (
+      <button className="bv-paketci-isaretle-btn" onClick={handlePaketciTikler} disabled={loading}>
+        <PackageOpen size={15} /> {loading ? 'İşaretleniyor…' : 'Boş Var mı? İşaretle'}
+      </button>
+    );
+  }
 
   if (mod === 'ikaz') {
     return (

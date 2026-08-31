@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 
 const ODEME_YONTEMLERI = ['Nakit', 'Kredi Kartı', 'Yemek Kartı', 'Diğer'];
+const PAKET_TESLIM_ODEME_YONTEMLERI = ['Nakit', 'Kredi Kartı', 'Yemek Kartı', 'Cari'];
 
 export default function Paketci({ data }) {
   const {
@@ -18,7 +19,7 @@ export default function Paketci({ data }) {
     uploadTeslimatFoto, submitPaketTeslimat, submitCariTeslimatBildirim,
     deletePaketTeslimat, deleteCariTeslimatBildirim,
     bosvarBildirimleri, submitBosvarBildirim, deleteBosvarBildirim,
-    tableBosvars,
+    tableBosvars, setBosvarTik,
     bosvarKayitlari, paketciBosvarAldi, paketciBosvarAlamadi,
   } = data;
 
@@ -170,10 +171,10 @@ export default function Paketci({ data }) {
               return (
                 <button key={p.name} className="pk-list-item" onClick={() => setSelectedPaket(p.name)}>
                   <div className="pk-list-item-top">
-                    <span className="pk-list-item-name">{p.name}</span>
+                    <span className="pk-list-item-name">{tableNotes[p.name] || p.name}</span>
                     <span className="pk-list-item-total">{TL(paketTutar(p.name))}</span>
                   </div>
-                  {tableNotes[p.name] && <div className="pk-list-item-note"><StickyNote size={11} /> {tableNotes[p.name]}</div>}
+                  {tableNotes[p.name] && <div className="pk-list-item-note"><StickyNote size={11} /> {p.name}</div>}
                   {p.hasIcecek && <div className="pk-drink-warning"><CupSoda size={13} /> Siparişte İçecek Var!</div>}
                   <BosVarPaketci mod="ikaz" paketAdi={p.name} bosvarTikliler={Object.keys(tableBosvars)} />
                   {durumEtiketi && <div className={`pk-status-tag ${durumEtiketi.cls}`}>{durumEtiketi.text}</div>}
@@ -202,6 +203,7 @@ export default function Paketci({ data }) {
             submitBosvarBildirim={submitBosvarBildirim}
             deleteBosvarBildirim={deleteBosvarBildirim}
             tableBosvars={tableBosvars}
+            setBosvarTik={setBosvarTik}
             showToast={showToast}
           />
         )}
@@ -269,7 +271,7 @@ export default function Paketci({ data }) {
   );
 }
 
-function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, submitBosvarBildirim, deleteBosvarBildirim, showToast, tableBosvars }) {
+function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, submitBosvarBildirim, deleteBosvarBildirim, showToast, tableBosvars, setBosvarTik }) {
   const hasIcecek = paket.items.some((i) => i.kategori === 'İÇECEKLER');
   return (
     <div className="pk-detail">
@@ -277,9 +279,20 @@ function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, s
       {hasIcecek && (
         <div className="pk-drink-warning-big"><CupSoda size={18} /> Siparişte İçecek Var!</div>
       )}
+      <BosVarPaketci
+        mod="detay"
+        paketAdi={paket.name}
+        paketciAdi={paketciAdi}
+        bosvarTikliler={Object.keys(tableBosvars)}
+        bosvarBildirimleri={bosvarBildirimleri}
+        submitBosvarBildirim={submitBosvarBildirim}
+        deleteBosvarBildirim={deleteBosvarBildirim}
+        setBosvarTik={setBosvarTik}
+        showToast={showToast}
+      />
       <div className="pk-detail-card">
-        <h2>{paket.name}</h2>
-        {paket.not && <div className="pk-detail-note"><StickyNote size={13} /> {paket.not}</div>}
+        <h2>{paket.not || paket.name}</h2>
+        {paket.not && <div className="pk-detail-note"><StickyNote size={13} /> {paket.name}</div>}
         <div className="pk-detail-items">
           {paket.items.map((i) => (
             <div key={i.id} className="pk-detail-item">
@@ -300,7 +313,7 @@ function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, s
           {paket.hareketler.map((h) => (
             <div key={h.id} className={`pk-history-item ${h.durum}`}>
               <div className="pk-history-top">
-                <span>{h.tip === 'teslim_edildi' ? 'Teslim Edildi' : `Kısmi Ödeme: ${TL(h.tutar)}`}</span>
+                <span>{h.tip === 'teslim_edildi' ? `Teslim Edildi${h.odemeYontemi ? ` (${h.odemeYontemi})` : ''}` : `Kısmi Ödeme: ${TL(h.tutar)}`}</span> 
                 <span className={`pk-status-tag ${h.durum === 'bekliyor' ? 'wait' : h.durum === 'reddedildi' ? 'reject' : 'ok'}`}>
                   {h.durum === 'bekliyor' ? 'Onay bekliyor' : h.durum === 'reddedildi' ? 'Reddedildi' : 'Onaylandı'}
                 </span>
@@ -311,17 +324,6 @@ function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, s
           ))}
         </div>
       )}
-
-      <BosVarPaketci
-        mod="detay"
-        paketAdi={paket.name}
-        paketciAdi={paketciAdi}
-        bosvarTikliler={Object.keys(tableBosvars)}
-        bosvarBildirimleri={bosvarBildirimleri}
-        submitBosvarBildirim={submitBosvarBildirim}
-        deleteBosvarBildirim={deleteBosvarBildirim}
-        showToast={showToast}
-      />
 
       <div className="pk-action-row">
         <button className="pk-deliver-btn" onClick={() => onAction('teslim_edildi')}>
@@ -437,9 +439,12 @@ function CariDetay({ cari, onBack, onAction }) {
 function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitted, submitPaketTeslimat, submitCariTeslimatBildirim }) {
   const isKismi = modal.tip === 'kismi_odeme';
   const isCari = modal.hedefTip === 'cari';
+  // Paket TAM teslimatında (teslim_edildi) artık ödeme yöntemi seçimi var — yönteme göre
+  // farklı kanıt isteniyor (Nakit/Cari→not, Kredi Kartı/Yemek Kartı→fotoğraf zorunlu).
+  const isPaketTeslim = modal.hedefTip === 'paket' && modal.tip === 'teslim_edildi';
 
   const [tutar, setTutar] = useState('');
-  const [odemeYontemi, setOdemeYontemi] = useState(isCari ? '' : 'Nakit');
+  const [odemeYontemi, setOdemeYontemi] = useState(isCari ? '' : isPaketTeslim ? '' : 'Nakit');
   const [notMetni, setNotMetni] = useState('');
   const [evidenceType, setEvidenceType] = useState(null); // 'fis' | 'yemek_karti' | 'not'
   const [fotoFile, setFotoFile] = useState(null);
@@ -456,14 +461,23 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
     setFotoPreview(URL.createObjectURL(file));
   }
 
+  // Paket TAM teslimde yönteme göre hangi kanıt gerekiyor:
+  //  Nakit / Cari → not zorunlu (Cari'de not "neden cari" bilgisini taşır)
+  //  Kredi Kartı / Yemek Kartı → fotoğraf zorunlu
+  const paketTeslimFotoGerek = isPaketTeslim && (odemeYontemi === 'Kredi Kartı' || odemeYontemi === 'Yemek Kartı');
+  const paketTeslimNotGerek = isPaketTeslim && (odemeYontemi === 'Nakit' || odemeYontemi === 'Cari');
+
   const parsedTutar = parseFloat(tutar.replace(',', '.'));
   const tutarAsimVar = isKismi && !isNaN(parsedTutar) && modal.ustTutar != null && parsedTutar > modal.ustTutar;
   const tutarGecerli = !isKismi || (!isNaN(parsedTutar) && parsedTutar > 0 && !tutarAsimVar);
   const notZorunluTamam = evidenceType === 'not' ? notMetni.trim().length > 0 : true;
-  const kismiNotZorunlu = isKismi ? notMetni.trim().length > 0 : true;
-  const kanitVar = evidenceType === 'not' ? notMetni.trim().length > 0 : !!fotoFile;
-  const odemeYontemiSecili = !isCari || !isKismi ? true : !!odemeYontemi; // cari kısmi ödemede zorunlu
-  const canSubmit = tutarGecerli && kanitVar && notZorunluTamam && (isKismi ? notMetni.trim().length > 0 && !!odemeYontemi : true) && !uploading;
+  const kanitVar = isPaketTeslim
+    ? (paketTeslimFotoGerek ? !!fotoFile : paketTeslimNotGerek ? notMetni.trim().length > 0 : false)
+    : (evidenceType === 'not' ? notMetni.trim().length > 0 : !!fotoFile);
+  const canSubmit = tutarGecerli && kanitVar && notZorunluTamam
+    && (isKismi ? notMetni.trim().length > 0 && !!odemeYontemi : true)
+    && (isPaketTeslim ? !!odemeYontemi : true)
+    && !uploading;
 
   async function handleSubmit() {
     if (!canSubmit) return;
@@ -479,7 +493,7 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
         paketAdi: modal.hedefId,
         tip: modal.tip,
         tutar: isKismi ? parsedTutar : null,
-        odemeYontemi: isKismi ? odemeYontemi : null,
+        odemeYontemi: isKismi || isPaketTeslim ? odemeYontemi : null,
         notMetni: notMetni.trim() || null,
         fotoUrl,
         paketciAdi,
@@ -543,32 +557,76 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
             </div>
           </div>
         )}
-
-        <div className="pk-modal-section">
-          <label>{isKismi ? 'Not (zorunlu)' : 'Kanıt (en az biri gerekli)'}</label>
-          <div className="pk-evidence-row">
-            <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-              onChange={(e) => handleFile(e.target.files[0], 'fis')} />
-            <input ref={galleryInputRef} type="file" accept="image/*" style={{ display: 'none' }}
-              onChange={(e) => handleFile(e.target.files[0], 'fis')} />
-            <input ref={yemekKartiInputRef} type="file" accept="image/*" style={{ display: 'none' }}
-              onChange={(e) => handleFile(e.target.files[0], 'yemek_karti')} />
-            <button onClick={() => cameraInputRef.current?.click()}><Camera size={15} /> Fiş Çek</button>
-            <button onClick={() => galleryInputRef.current?.click()}><ImageIcon size={15} /> Galeriden</button>
-            <button onClick={() => yemekKartiInputRef.current?.click()}><Wallet size={15} /> Yemek Kartı Ekranı</button>
-          </div>
-          {fotoPreview && (
-            <div className="pk-foto-preview">
-              <img src={fotoPreview} alt="önizleme" />
-              <span>{evidenceType === 'yemek_karti' ? 'Yemek kartı ödemesi' : 'Fiş fotoğrafı'} eklendi</span>
+        {isPaketTeslim && (
+          <div className="pk-modal-section">
+            <label>Ödeme Yöntemi</label>
+            <div className="pk-method-row">
+              {PAKET_TESLIM_ODEME_YONTEMLERI.map((m) => (
+                <button key={m} className={odemeYontemi === m ? 'active' : ''} onClick={() => { setOdemeYontemi(m); setFotoFile(null); setFotoPreview(null); setEvidenceType(null); }}>{m}</button>
+              ))}
             </div>
-          )}
-          <textarea
-            placeholder={isKismi ? 'Örn: 90 TL nakit aldı, kalanı sonra gelecek' : 'Not (fotoğraf yoksa zorunlu) — örn: Kapıda nakit aldı'}
-            value={notMetni}
-            onChange={(e) => { setNotMetni(e.target.value); if (!fotoFile) setEvidenceType(e.target.value.trim() ? 'not' : null); }}
-          />
-        </div>
+          </div>
+        )}
+
+        {isPaketTeslim ? (
+          <>
+            {paketTeslimFotoGerek && (
+              <div className="pk-modal-section">
+                <label>{odemeYontemi === 'Yemek Kartı' ? 'Ekran Görüntüsü (zorunlu)' : 'Fiş Fotoğrafı (zorunlu)'}</label>
+                <div className="pk-evidence-row">
+                  <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                    onChange={(e) => handleFile(e.target.files[0], odemeYontemi === 'Yemek Kartı' ? 'yemek_karti' : 'fis')} />
+                  <input ref={galleryInputRef} type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={(e) => handleFile(e.target.files[0], odemeYontemi === 'Yemek Kartı' ? 'yemek_karti' : 'fis')} />
+                  <button onClick={() => cameraInputRef.current?.click()}><Camera size={15} /> {odemeYontemi === 'Yemek Kartı' ? 'Ekranı Çek' : 'Fiş Çek'}</button>
+                  <button onClick={() => galleryInputRef.current?.click()}><ImageIcon size={15} /> Galeriden</button>
+                </div>
+                {fotoPreview && (
+                  <div className="pk-foto-preview">
+                    <img src={fotoPreview} alt="önizleme" />
+                    <span>{evidenceType === 'yemek_karti' ? 'Yemek kartı ödemesi' : 'Fiş fotoğrafı'} eklendi</span>
+                  </div>
+                )}
+              </div>
+            )}
+            {paketTeslimNotGerek && (
+              <div className="pk-modal-section">
+                <label>{odemeYontemi === 'Cari' ? 'Not (neden cari — zorunlu)' : 'Not (zorunlu)'}</label>
+                <textarea
+                  placeholder={odemeYontemi === 'Cari' ? 'Örn: Müşteri sonra ödeyecek, tanıdık' : 'Örn: Kapıda nakit aldı'}
+                  value={notMetni}
+                  onChange={(e) => setNotMetni(e.target.value)}
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="pk-modal-section">
+            <label>{isKismi ? 'Not (zorunlu)' : 'Kanıt (en az biri gerekli)'}</label>
+            <div className="pk-evidence-row">
+              <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+                onChange={(e) => handleFile(e.target.files[0], 'fis')} />
+              <input ref={galleryInputRef} type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={(e) => handleFile(e.target.files[0], 'fis')} />
+              <input ref={yemekKartiInputRef} type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={(e) => handleFile(e.target.files[0], 'yemek_karti')} />
+              <button onClick={() => cameraInputRef.current?.click()}><Camera size={15} /> Fiş Çek</button>
+              <button onClick={() => galleryInputRef.current?.click()}><ImageIcon size={15} /> Galeriden</button>
+              <button onClick={() => yemekKartiInputRef.current?.click()}><Wallet size={15} /> Yemek Kartı Ekranı</button>
+            </div>
+            {fotoPreview && (
+              <div className="pk-foto-preview">
+                <img src={fotoPreview} alt="önizleme" />
+                <span>{evidenceType === 'yemek_karti' ? 'Yemek kartı ödemesi' : 'Fiş fotoğrafı'} eklendi</span>
+              </div>
+            )}
+            <textarea
+              placeholder={isKismi ? 'Örn: 90 TL nakit aldı, kalanı sonra gelecek' : 'Not (fotoğraf yoksa zorunlu) — örn: Kapıda nakit aldı'}
+              value={notMetni}
+              onChange={(e) => { setNotMetni(e.target.value); if (!fotoFile) setEvidenceType(e.target.value.trim() ? 'not' : null); }}
+            />
+          </div>
+        )}
 
         {!canSubmit && (
           <p className="pk-modal-warning">
@@ -576,7 +634,10 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
             {isKismi && !tutarAsimVar && !tutarGecerli && 'Geçerli bir tutar gir. '}
             {isKismi && !odemeYontemi && 'Ödeme yöntemi seç. '}
             {isKismi && !notMetni.trim() && 'Kısmi ödemede not zorunlu. '}
-            {!isKismi && !kanitVar && 'Fotoğraf yükle veya not yaz.'}
+            {isPaketTeslim && !odemeYontemi && 'Ödeme yöntemi seç. '}
+            {isPaketTeslim && odemeYontemi && paketTeslimFotoGerek && !fotoFile && 'Fotoğraf/ekran görüntüsü yükle. '}
+            {isPaketTeslim && odemeYontemi && paketTeslimNotGerek && !notMetni.trim() && 'Not yaz. '}
+            {!isKismi && !isPaketTeslim && !kanitVar && 'Fotoğraf yükle veya not yaz.'}
           </p>
         )}
 
