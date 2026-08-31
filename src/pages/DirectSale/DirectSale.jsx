@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import './DirectSale.css';
 import { TL, QUICK_SALE } from '../../hooks/useHipposData';
+import { supabase } from '../../services/supabase';
 import {
   Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote, PackageOpen,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
@@ -211,15 +212,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
   // Mutfağa not hızlı notlarını çek
   React.useEffect(() => {
-    supabase.from('ds_kitchen_quick_notes').select('*').order('created_at', { ascending: false }).then(({ data }) => {
-      if (data) setKitchenQuickNotes(data);
+    supabase.from('ds_kitchen_quick_notes').select('*').order('created_at', { ascending: false }).then(({ data: qdata }) => {
+      if (qdata) setKitchenQuickNotes(qdata);
     });
   }, [kitchenNoteModal]);
 
   async function saveKitchenQuickNote() {
     if (!kitchenNoteText.trim()) return;
-    const { data } = await supabase.from('ds_kitchen_quick_notes').insert({ note: kitchenNoteText.trim() }).select().single();
-    if (data) setKitchenQuickNotes((prev) => [data, ...prev]);
+    const { data: qdata } = await supabase.from('ds_kitchen_quick_notes').insert({ note: kitchenNoteText.trim() }).select().single();
+    if (qdata) setKitchenQuickNotes((prev) => [qdata, ...prev]);
   }
 
   async function deleteKitchenQuickNote(id) {
