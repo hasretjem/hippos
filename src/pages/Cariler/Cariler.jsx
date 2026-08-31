@@ -725,28 +725,6 @@ export default function Cariler({ data, onNavigate }) {
                       </>
                     )}
 
-                    {selectedCari.tip === 'firma' && (
-                      <div className="cr-fatura-block">
-                        <div className="cr-fatura-head">
-                          <span>Faturalandırılmadı</span>
-                          <strong>{TL(faturalanmamis)}</strong>
-                        </div>
-                        <button className="cr-fatura-btn" disabled={faturalanmamis <= 0} onClick={openFaturaModal}>
-                          Faturalandır
-                        </button>
-                        {faturalarListe.length > 0 && (
-                          <div className="cr-fatura-list">
-                            {faturalarListe.map((f) => (
-                              <div key={f.id} className="cr-fatura-row">
-                                <span>{fmtDate(new Date(f.tarih).getTime())} · No: {f.faturaNo}</span>
-                                <strong>{TL(f.tutar)}</strong>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
                     <button className="cr-delete-cari-btn" onClick={() => askDeleteCari(selectedCari)}>
                       <Trash2 size={14} /> Cariyi Sil
                     </button>
