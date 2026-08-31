@@ -138,6 +138,7 @@ function rowToCari(r) {
     not: r.kisa_not || '',
     aciklama: r.aciklama || '',
     iskonto: r.iskonto || 0,
+    onOdeme: r.on_odeme || 0,
     olusturmaTs: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
   };
 }
@@ -1772,6 +1773,7 @@ export default function useHipposData(scope = 'full') {
     if (patch.not !== undefined) dbPatch.kisa_not = patch.not;
     if (patch.ad !== undefined) dbPatch.ad = patch.ad;
     if (patch.iskonto !== undefined) dbPatch.iskonto = patch.iskonto;
+    if (patch.onOdeme !== undefined) dbPatch.on_odeme = patch.onOdeme;
     if (Object.keys(dbPatch).length === 0) return;
     supabase.from('cariler').update(dbPatch).eq('id', id).then(({ error }) => {
       if (error) console.error('cari güncellenemedi:', error.message);

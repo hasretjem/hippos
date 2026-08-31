@@ -725,6 +725,17 @@ export default function Cariler({ data, onNavigate }) {
                       </>
                     )}
 
+                    <label>Ön Ödeme (₺)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={selectedCari.onOdeme || 0}
+                      onChange={(e) => {
+                        const v = Math.max(0, parseInt(e.target.value) || 0);
+                        updateCari(selectedCari.id, { onOdeme: v });
+                      }}
+                    />
+
                     <button className="cr-delete-cari-btn" onClick={() => askDeleteCari(selectedCari)}>
                       <Trash2 size={14} /> Cariyi Sil
                     </button>

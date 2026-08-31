@@ -507,6 +507,29 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     setPayMode(false);
   }
 
+  function handleOnOdemeKalanOde(method) {
+    if (!onOdemeKalan) return;
+    const { tutar } = onOdemeKalan;
+    setSalesHistory((prev) => [
+      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedTable, amount: tutar, method, itemsCount: 0, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+      ...prev,
+    ]);
+    writeReceiptToSheets({
+      tur: 'Ön Ödeme Kalan',
+      masa: selectedTable,
+      toplam: tutar,
+      odemeTuru: method,
+      urunler: [],
+    });
+    setOnOdemeKalan(null);
+    setPayMode(false);
+    setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
+    updateTableNote(selectedTable, '');
+    setTableNoteDraft('');
+    if (selectedTable.startsWith('Paket ')) data.removePackageRecord(selectedTable);
+    showToast(`${method} ile ${TL(tutar)} alındı`);
+  }
+
   async function handleSend() {
     if (selectedTable !== QUICK_SALE) {
       const result = await saveTableNoteNow(selectedTable, tableNoteDraft);
@@ -523,6 +546,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [cariSearch, setCariSearch] = useState('');
   const [cariYeniForm, setCariYeniForm] = useState(null); // { ad, telefon, adres }
   const [cariConfirm, setCariConfirm] = useState(null); // { cari }
+  const [onOdemeKalan, setOnOdemeKalan] = useState(null); // { tutar, cariId } — ön ödemeden kalan
   const [cariEditRowId, setCariEditRowId] = useState(null); // bireysel listede "Düzenle" açık olan satır
   const [cariEditDraft, setCariEditDraft] = useState({ telefon: '', adres: '' });
   const [cariWaPhoneEntry, setCariWaPhoneEntry] = useState(false);
@@ -563,41 +587,62 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const totalPayHam = toClose.reduce((s, i) => s + i.fiyat, 0);
     const cariObj = (cariler || []).find((c) => c.id === cariId);
     const cariIskonto = cariObj?.iskonto || 0;
-    const totalPay = cariIskonto > 0 ? Math.round(totalPayHam * (1 - cariIskonto / 100)) : totalPayHam;
+    const cariOnOdeme = cariObj?.onOdeme || 0;
+    const totalPayIskontoSonrasi = cariIskonto > 0 ? Math.round(totalPayHam * (1 - cariIskonto / 100)) : totalPayHam;
+
+    // Ön ödeme: cariye en fazla onOdeme kadar yaz, kalan personelden alınacak
+    const cariPay = cariOnOdeme > 0 ? Math.min(totalPayIskontoSonrasi, cariOnOdeme) : totalPayIskontoSonrasi;
+    const kalan = totalPayIskontoSonrasi - cariPay;
+
     const mutfakNotu = currentOrder.filter((i) => i.note).map((i) => i.ad).join(' · ');
 
+    // Cariye yazılacak tutar
     setSalesHistory((prev) => [
-      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedTable, amount: totalPay, method: 'CARİ', itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedTable, amount: totalPayIskontoSonrasi, method: 'CARİ', itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
     logSoldItems(toClose, selectedTable);
     addCariHareket(cariId, {
       urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
-      toplam: totalPay,
+      toplam: cariPay,
       mutfakNotu,
     });
-    const cariAdi = (cariler || []).find((c) => c.id === cariId)?.ad || 'Cari';
+    const cariAdi = cariObj?.ad || 'Cari';
     writeReceiptToSheets({
       tur: 'Cari',
       masa: cariAdi,
-      toplam: totalPay,
+      toplam: cariPay,
       odemeTuru: 'CARİ',
       urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
     });
 
-    const remaining = currentOrder.filter((i) => !closedIds.has(i.id) && !i.note);
-    setDraftItems(remaining);
-    if (remaining.length === 0) {
-      setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
-      updateTableNote(selectedTable, '');
-      setTableNoteDraft('');
-      if (selectedTable.startsWith('Paket ')) data.removePackageRecord(selectedTable);
-    }
     setCariPickerOpen(false);
-    setPayMode(false);
     setCariConfirm(null);
-    showToast('Cariye gönderildi');
-    return { toClose, totalPay };
+
+    if (kalan > 0) {
+      // Kalan tutar var — masayı/siparişi güncelle, ödeme ekranı çıksın
+      setDraftItems((prev) => prev.map((item) =>
+        closedIds.has(item.id) ? { ...item, fiyat: 0, kapandi: true } : item
+      ).filter((item) => !item.kapandi || false));
+      // Kapalı ürünleri siparişten çıkar, kalan tutarı ödeme modunda göster
+      const remaining = currentOrder.filter((i) => !closedIds.has(i.id) && !i.note);
+      setDraftItems(remaining);
+      setOnOdemeKalan({ tutar: kalan, cariId });
+      showToast(`${cariAdi}'ya ${TL(cariPay)} yazıldı — ${TL(kalan)} kaldı`);
+    } else {
+      // Kalan yok — normal kapat
+      const remaining = currentOrder.filter((i) => !closedIds.has(i.id) && !i.note);
+      setDraftItems(remaining);
+      if (remaining.length === 0) {
+        setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
+        updateTableNote(selectedTable, '');
+        setTableNoteDraft('');
+        if (selectedTable.startsWith('Paket ')) data.removePackageRecord(selectedTable);
+      }
+      setPayMode(false);
+      showToast('Cariye gönderildi');
+    }
+    return { toClose, totalPay: cariPay };
   }
 
   // Onayla — sadece cariye işler, WhatsApp'a hiç dokunmaz
@@ -1380,6 +1425,42 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       )}
 
       {/* ÖDEME YÖNTEMİ MODALI */}
+      {onOdemeKalan && (
+        <div className="ds-modal-overlay" onClick={() => {
+          // Geri — cariye yazılanı iptal et
+          // addCariHareket'i geri almak için son hareketi sil
+          data.deleteCariHareketler && data.deleteCariHareketler([]);
+          setOnOdemeKalan(null);
+          showToast('İptal edildi');
+        }}>
+          <div className="ds-pay-modal-wrap" onClick={(e) => e.stopPropagation()}>
+            <div className="ds-modal ds-pay-modal">
+              <div className="ds-modal-head">
+                <h3>Kalan Tutar</h3>
+              </div>
+              <div className="ds-pay-modal-total">
+                <span>Personelden Alınacak</span>
+                <strong>{TL(onOdemeKalan.tutar)}</strong>
+              </div>
+              <div className="ds-pay-grid">
+                <button className="cash" onClick={() => handleOnOdemeKalanOde('NAKİT')}>
+                  <Banknote size={36} /><span className="lbl">Nakit</span>
+                </button>
+                <button className="card" onClick={() => handleOnOdemeKalanOde('KREDİ KARTI')}>
+                  <CreditCard size={36} /><span className="lbl">Kredi Kartı</span>
+                </button>
+                <button className="meal" onClick={() => handleOnOdemeKalanOde('YEMEK KARTI')}>
+                  <UtensilsCrossed size={36} /><span className="lbl">Yemek Kartı</span>
+                </button>
+              </div>
+              <button className="ds-pay-back-btn" onClick={() => setOnOdemeKalan(null)}>
+                <Undo2 size={28} /> Geri (İptal)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {payMode && (
         <div className="ds-modal-overlay" onClick={() => setPayMode(false)}>
           <div className="ds-pay-modal-wrap" onClick={(e) => e.stopPropagation()}>
