@@ -507,27 +507,40 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     setPayMode(false);
   }
 
-  function handleOnOdemeKalanOde(method) {
+  function handleOnOdemeKalanOde(method, kalaniCariId) {
     if (!onOdemeKalan) return;
-    const { tutar } = onOdemeKalan;
+    const { tutar, toClose, closedIds, cariAdi, cariPay, totalPayIskontoSonrasi, mutfakNotu } = onOdemeKalan;
+
+    if (kalaniCariId) {
+      // Kalan tutar da cariye atılıyor
+      addCariHareket(kalaniCariId, {
+        urunler: [],
+        toplam: tutar,
+        mutfakNotu: 'Ön ödeme kalanı',
+      });
+    }
+
+    // Şimdi siparişi kapat
     setSalesHistory((prev) => [
-      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedTable, amount: tutar, method, itemsCount: 0, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedTable, amount: totalPayIskontoSonrasi, method: `CARİ + ${method}`, itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
+    logSoldItems(toClose, selectedTable);
     writeReceiptToSheets({
-      tur: 'Ön Ödeme Kalan',
-      masa: selectedTable,
-      toplam: tutar,
-      odemeTuru: method,
-      urunler: [],
+      tur: 'Cari + Ön Ödeme', masa: cariAdi, toplam: totalPayIskontoSonrasi, odemeTuru: `CARİ + ${method}`,
+      urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
     });
+
+    const remaining = currentOrder.filter((i) => !closedIds.has(i.id) && !i.note);
+    setDraftItems(remaining);
+    if (remaining.length === 0) {
+      setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
+      updateTableNote(selectedTable, '');
+      setTableNoteDraft('');
+      if (selectedTable.startsWith('Paket ')) data.removePackageRecord(selectedTable);
+    }
     setOnOdemeKalan(null);
-    setPayMode(false);
-    setTableDiscounts((prev) => ({ ...prev, [selectedTable]: { type: null, value: 0 } }));
-    updateTableNote(selectedTable, '');
-    setTableNoteDraft('');
-    if (selectedTable.startsWith('Paket ')) data.removePackageRecord(selectedTable);
-    showToast(`${method} ile ${TL(tutar)} alındı`);
+    showToast(`${TL(cariPay)} cariye + ${TL(tutar)} ${method} ile alındı`);
   }
 
   async function handleSend() {
@@ -546,7 +559,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [cariSearch, setCariSearch] = useState('');
   const [cariYeniForm, setCariYeniForm] = useState(null); // { ad, telefon, adres }
   const [cariConfirm, setCariConfirm] = useState(null); // { cari }
-  const [onOdemeKalan, setOnOdemeKalan] = useState(null); // { tutar, cariId } — ön ödemeden kalan
+  const [onOdemeKalan, setOnOdemeKalan] = useState(null); // { tutar, cariId, ... }
+  const [cariPickerMod, setCariPickerMod] = useState('normal'); // 'normal' | 'onOdemeKalan'
   const [cariEditRowId, setCariEditRowId] = useState(null); // bireysel listede "Düzenle" açık olan satır
   const [cariEditDraft, setCariEditDraft] = useState({ telefon: '', adres: '' });
   const [cariWaPhoneEntry, setCariWaPhoneEntry] = useState(false);
@@ -568,13 +582,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     if (!win) showToast('Tarayıcı pencereyi engelledi — popup iznini kontrol et');
   }
 
-  function openCariPicker() {
+  function openCariPicker(mod = 'normal') {
     setCariSearch('');
     setCariYeniForm(null);
     setCariConfirm(null);
     setCariEditRowId(null);
     setCariWaPhoneEntry(false);
     setCariWaPhoneDraft('');
+    setCariPickerMod(mod);
     setCariPickerOpen(true);
   }
 
@@ -589,48 +604,38 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const cariIskonto = cariObj?.iskonto || 0;
     const cariOnOdeme = cariObj?.onOdeme || 0;
     const totalPayIskontoSonrasi = cariIskonto > 0 ? Math.round(totalPayHam * (1 - cariIskonto / 100)) : totalPayHam;
-
-    // Ön ödeme: cariye en fazla onOdeme kadar yaz, kalan personelden alınacak
     const cariPay = cariOnOdeme > 0 ? Math.min(totalPayIskontoSonrasi, cariOnOdeme) : totalPayIskontoSonrasi;
     const kalan = totalPayIskontoSonrasi - cariPay;
-
     const mutfakNotu = currentOrder.filter((i) => i.note).map((i) => i.ad).join(' · ');
+    const cariAdi = cariObj?.ad || 'Cari';
 
-    // Cariye yazılacak tutar
-    setSalesHistory((prev) => [
-      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedTable, amount: totalPayIskontoSonrasi, method: 'CARİ', itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
-      ...prev,
-    ]);
-    logSoldItems(toClose, selectedTable);
-    addCariHareket(cariId, {
+    // Cariye hareketi yaz
+    const hareketId = addCariHareket(cariId, {
       urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
       toplam: cariPay,
       mutfakNotu,
     });
-    const cariAdi = cariObj?.ad || 'Cari';
-    writeReceiptToSheets({
-      tur: 'Cari',
-      masa: cariAdi,
-      toplam: cariPay,
-      odemeTuru: 'CARİ',
-      urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
-    });
 
     setCariPickerOpen(false);
     setCariConfirm(null);
+    setPayMode(false);
 
     if (kalan > 0) {
-      // Kalan tutar var — masayı/siparişi güncelle, ödeme ekranı çıksın
-      setDraftItems((prev) => prev.map((item) =>
-        closedIds.has(item.id) ? { ...item, fiyat: 0, kapandi: true } : item
-      ).filter((item) => !item.kapandi || false));
-      // Kapalı ürünleri siparişten çıkar, kalan tutarı ödeme modunda göster
-      const remaining = currentOrder.filter((i) => !closedIds.has(i.id) && !i.note);
-      setDraftItems(remaining);
-      setOnOdemeKalan({ tutar: kalan, cariId });
+      // Sipariş açık kalır, kalan tutar modalı çıkar
+      // toClose ve hareketId saklanır — iptal edilirse geri alınır
+      setOnOdemeKalan({ tutar: kalan, cariId, cariAdi, cariPay, toClose: [...toClose], closedIds, mutfakNotu, hareketId, totalPayIskontoSonrasi });
       showToast(`${cariAdi}'ya ${TL(cariPay)} yazıldı — ${TL(kalan)} kaldı`);
     } else {
       // Kalan yok — normal kapat
+      setSalesHistory((prev) => [
+        { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedTable, amount: totalPayIskontoSonrasi, method: 'CARİ', itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+        ...prev,
+      ]);
+      logSoldItems(toClose, selectedTable);
+      writeReceiptToSheets({
+        tur: 'Cari', masa: cariAdi, toplam: cariPay, odemeTuru: 'CARİ',
+        urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
+      });
       const remaining = currentOrder.filter((i) => !closedIds.has(i.id) && !i.note);
       setDraftItems(remaining);
       if (remaining.length === 0) {
@@ -639,10 +644,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
         setTableNoteDraft('');
         if (selectedTable.startsWith('Paket ')) data.removePackageRecord(selectedTable);
       }
-      setPayMode(false);
       showToast('Cariye gönderildi');
     }
-    return { toClose, totalPay: cariPay };
   }
 
   // Onayla — sadece cariye işler, WhatsApp'a hiç dokunmaz
@@ -1426,17 +1429,11 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
       {/* ÖDEME YÖNTEMİ MODALI */}
       {onOdemeKalan && (
-        <div className="ds-modal-overlay" onClick={() => {
-          // Geri — cariye yazılanı iptal et
-          // addCariHareket'i geri almak için son hareketi sil
-          data.deleteCariHareketler && data.deleteCariHareketler([]);
-          setOnOdemeKalan(null);
-          showToast('İptal edildi');
-        }}>
+        <div className="ds-modal-overlay" onClick={(e) => e.stopPropagation()}>
           <div className="ds-pay-modal-wrap" onClick={(e) => e.stopPropagation()}>
             <div className="ds-modal ds-pay-modal">
               <div className="ds-modal-head">
-                <h3>Kalan Tutar</h3>
+                <h3>Kalan Tutar — {onOdemeKalan.cariAdi}</h3>
               </div>
               <div className="ds-pay-modal-total">
                 <span>Personelden Alınacak</span>
@@ -1452,8 +1449,18 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 <button className="meal" onClick={() => handleOnOdemeKalanOde('YEMEK KARTI')}>
                   <UtensilsCrossed size={36} /><span className="lbl">Yemek Kartı</span>
                 </button>
+                <button className="credit" onClick={() => openCariPicker('onOdemeKalan')}>
+                  <BookOpen size={36} /><span className="lbl">Cari</span>
+                </button>
               </div>
-              <button className="ds-pay-back-btn" onClick={() => setOnOdemeKalan(null)}>
+              <button className="ds-pay-back-btn" onClick={() => {
+                // İptal — cariye yazılan hareketi sil, sipariş olduğu gibi kalır
+                if (onOdemeKalan.hareketId) {
+                  data.deleteCariHareketler([onOdemeKalan.hareketId]);
+                }
+                setOnOdemeKalan(null);
+                showToast('İptal edildi');
+              }}>
                 <Undo2 size={28} /> Geri (İptal)
               </button>
             </div>
@@ -1625,7 +1632,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                     <span className="ds-cari-section-label"><Building2 size={11} /> Firmalar</span>
                     <div className="ds-cari-firma-grid">
                       {firmaCariler.map((c) => (
-                        <button key={c.id} className="ds-cari-firma-btn" onClick={() => setCariConfirm({ cari: c })}>
+                        <button key={c.id} className="ds-cari-firma-btn" onClick={() => {
+                    if (cariPickerMod === 'onOdemeKalan') {
+                      setCariPickerOpen(false);
+                      handleOnOdemeKalanOde('CARİ', c.id);
+                    } else {
+                      setCariConfirm({ cari: c });
+                    }
+                  }}>
                           {c.ad}
                         </button>
                       ))}
@@ -1662,7 +1676,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                         </div>
                       ) : (
                         <>
-                          <button className="ds-cari-bireysel-main" onClick={() => setCariConfirm({ cari: c })}>
+                          <button className="ds-cari-bireysel-main" onClick={() => {
+                            if (cariPickerMod === 'onOdemeKalan') {
+                              setCariPickerOpen(false);
+                              handleOnOdemeKalanOde('CARİ', c.id);
+                            } else {
+                              setCariConfirm({ cari: c });
+                            }
+                          }}>
                             <span className="name">{c.ad}</span>
                             <span className="meta">{c.telefon || 'Numara yok'}</span>
                           </button>
