@@ -667,6 +667,33 @@
   overflow-y: auto;
 }
 .tb-package-list { display: flex; flex-direction: column; gap: 10px; }
+
+.tb-bosvar-package-card {
+  background: var(--danger, #E5484D); border-radius: 12px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.tb-bosvar-package-top {
+  display: flex; align-items: center; gap: 6px;
+  color: #fff; font-weight: 700; font-size: 13px;
+}
+.tb-bosvar-package-not { font-size: 11.5px; color: #FDE2E2; }
+.tb-bosvar-package-row { display: flex; gap: 8px; }
+.tb-bosvar-package-aldi, .tb-bosvar-package-alamadi {
+  flex: 1; height: 32px; border-radius: 8px; border: none; font-weight: 700; font-size: 12.5px; cursor: pointer;
+}
+.tb-bosvar-package-aldi { background: #fff; color: var(--danger, #E5484D); }
+.tb-bosvar-package-alamadi { background: rgba(0,0,0,0.22); color: #fff; }
+.tb-bosvar-package-form { display: flex; flex-direction: column; gap: 6px; }
+.tb-bosvar-package-form textarea {
+  border: none; border-radius: 8px; padding: 8px 10px; font-size: 12.5px; resize: none; font-family: inherit;
+}
+.tb-bosvar-package-form-row { display: flex; gap: 8px; }
+.tb-bosvar-package-form-row button {
+  flex: 1; height: 30px; border-radius: 8px; border: none; font-weight: 700; font-size: 12px; cursor: pointer;
+  background: rgba(0,0,0,0.22); color: #fff;
+}
+.tb-bosvar-package-form-row button.primary { background: #fff; color: var(--danger, #E5484D); }
+.tb-bosvar-package-form-row button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .tb-packages-header {
   display: flex;
   flex-direction: column;

@@ -10,7 +10,7 @@ const TLKart = (n) => Math.round(n || 0).toLocaleString('tr-TR') + ' ₺';
 import {
   MoreVertical, Plus, ClipboardPaste, ArrowLeftRight, Link2, XCircle,
   Undo2, Banknote, CreditCard, UtensilsCrossed, BookOpen, X, Check, Zap, Lock,
-  StickyNote, MessageCircle, Trash2, Printer, Copy,
+  StickyNote, MessageCircle, Trash2, Printer, Copy, PackageOpen,
 } from 'lucide-react';
 
 // Ekmek stok kritik seviyeye düşünce önerilecek sipariş listesi (kopyala-yapıştır için) —
@@ -51,6 +51,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     ekmekStoktanDus,
     bosvarKayitlari,
     paketciBosvarAldi,
+    paketciBosvarAlamadi,
     bosvarBildirimleri,
   } = data;
 
@@ -72,7 +73,9 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
 
   // ---- Cari Uyarı paneli: gün sonu firmalara toplu WhatsApp + numarası eksik bireysel uyarısı ----
   const [cariUyariOpen, setCariUyariOpen] = useState(false);
-  const [cariUyariTab, setCariUyariTab] = useState('firma'); // 'firma' | 'bireysel' | 'bosvar'
+  const [cariUyariTab, setCariUyariTab] = useState('firma'); // 'firma' | 'bireysel'
+  const [bosvarAlamadiFormFor, setBosvarAlamadiFormFor] = useState(null); // hangi bosvar kaydının "Alamadım" notu açık
+  const [bosvarAlamadiNotu, setBosvarAlamadiNotu] = useState('');
   const bosvarKayitListesi = useMemo(
     () => (bosvarKayitlari || []).filter((b) => b.durum === 'bekliyor').sort((a, b) => b.ts - a.ts),
     [bosvarKayitlari]
@@ -700,6 +703,44 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
             </button>
           </div>
           <div className={`tb-package-list ${packages.length > 8 ? 'ultra-compact' : packages.length > 4 ? 'compact' : ''}`}>
+            {bosvarKayitListesi.map((b) => (
+              <div key={`bv-${b.id}`} className="tb-bosvar-package-card">
+                <div className="tb-bosvar-package-top">
+                  <PackageOpen size={13} /> <span>{b.adresNot}</span>
+                </div>
+                {b.paketciNotu && <div className="tb-bosvar-package-not">{b.paketciNotu}</div>}
+                {bosvarAlamadiFormFor === b.id ? (
+                  <div className="tb-bosvar-package-form" onClick={(e) => e.stopPropagation()}>
+                    <textarea
+                      autoFocus
+                      rows={2}
+                      placeholder="Neden alamadı, ne zaman alacak?"
+                      value={bosvarAlamadiNotu}
+                      onChange={(e) => setBosvarAlamadiNotu(e.target.value)}
+                    />
+                    <div className="tb-bosvar-package-form-row">
+                      <button onClick={() => setBosvarAlamadiFormFor(null)}>Vazgeç</button>
+                      <button
+                        className="primary"
+                        disabled={!bosvarAlamadiNotu.trim()}
+                        onClick={() => {
+                          paketciBosvarAlamadi(b.id, bosvarAlamadiNotu.trim());
+                          setBosvarAlamadiFormFor(null);
+                          setBosvarAlamadiNotu('');
+                        }}
+                      >
+                        Gönder
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="tb-bosvar-package-row">
+                    <button className="tb-bosvar-package-aldi" onClick={() => paketciBosvarAldi(b.id)}>Aldı</button>
+                    <button className="tb-bosvar-package-alamadi" onClick={() => { setBosvarAlamadiFormFor(b.id); setBosvarAlamadiNotu(''); }}>Alamadı</button>
+                  </div>
+                )}
+              </div>
+            ))}
             {packages.map((p) => renderTableCard(p.name, p.name, true))}
           </div>
         </aside>
@@ -716,27 +757,9 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
             <div className="tb-cari-uyari-tabs">
               <button className={cariUyariTab === 'firma' ? 'active' : ''} onClick={() => setCariUyariTab('firma')}>Firmalar</button>
               <button className={cariUyariTab === 'bireysel' ? 'active' : ''} onClick={() => setCariUyariTab('bireysel')}>Bireysel (Numara Eksik)</button>
-              <button className={cariUyariTab === 'bosvar' ? 'active' : ''} onClick={() => setCariUyariTab('bosvar')}>
-                Boş Var {bosvarKayitListesi.length > 0 && <span className="tb-history-badge">{bosvarKayitListesi.length}</span>}
-              </button>
             </div>
 
-            {cariUyariTab === 'bosvar' ? (
-              <div className="tb-cari-uyari-list">
-                {bosvarKayitListesi.length === 0 && <p className="tb-history-empty">Açık boş var kaydı yok.</p>}
-                {bosvarKayitListesi.map((b) => (
-                  <div key={b.id} className="tb-cari-uyari-row">
-                    <div className="info">
-                      <span className="ad">{b.adresNot}</span>
-                      {b.paketciNotu && <span className="tb-bosvar-not">{b.paketciNotu}</span>}
-                    </div>
-                    <button className="tb-cari-uyari-aldim" onClick={() => paketciBosvarAldi(b.id)}>
-                      Aldım İşaretle
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : cariUyariTab === 'firma' ? (
+            {cariUyariTab === 'firma' ? (
               <div className="tb-cari-uyari-list">
                 {bugunFirmaListesi.length === 0 && <p className="tb-history-empty">Bugün cariye giden firma siparişi yok</p>}
                 {bugunFirmaListesi.map(({ cari, tutar }) => (
