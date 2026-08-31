@@ -159,7 +159,7 @@ export default function Paketci({ data }) {
                   <span className="pk-list-item-name">{b.adresNot}</span>
                   <span className="pk-bosvar-tag"><PackageOpen size={12} /> Boş var</span>
                 </div>
-                <div className="pk-bosvar-sub"><Check size={12} /> Ödeme alındı — kap toplanacak</div>
+                <div className="pk-bosvar-sub"><Check size={12} /> Ödeme alındı — BOŞ VAR!</div>
                 {b.paketciNotu && <div className="pk-bosvar-sub"><StickyNote size={12} /> {b.paketciNotu}</div>}
               </button>
             ))}
@@ -380,7 +380,7 @@ function BosvarKaydiDetay({ kayit, onBack, onAldim, onAlamadim }) {
           />
           {hata && <div className="pk-bosvar-hata">{hata}</div>}
           <div className="pk-action-row">
-            <button className="pk-back-btn" onClick={() => setAlamadımAcik(false)}>Vazgeç</button>
+            <button className="pk-bosvar-vazgec-btn" onClick={() => setAlamadımAcik(false)}>Vazgeç</button>
             <button className="pk-partial-btn" onClick={handleAlamadimGonder}>Gönder</button>
           </div>
         </div>

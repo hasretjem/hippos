@@ -926,7 +926,7 @@ export default function useHipposData(scope = 'full') {
       paket_teslimatlari: need(['paketci']),
       cari_teslimat_bildirimleri: need([]),             // ← OLMALI (full + paketci, yani herkes)
       bosvar_bildirimleri: need(['paketci']),
-      bosvar_kayitlari: need([]),
+      bosvar_kayitlari: need(['paketci']),
       mutfak_hazir_notlar: need([]),
     };
 

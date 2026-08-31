@@ -893,12 +893,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
   function openBosvarPrompt() {
     setGenericModal({
-      title: 'Boş Var — adres/not',
-      placeholder: 'Örn: Karagöz Sokak No:4',
+      title: 'Boş Var',
+      placeholder: 'Adres...',
       showInput: true,
-      onConfirm: async (text) => {
-        if (!text.trim()) return;
-        const result = await submitBosvarKaydi(text.trim());
+      showSecondInput: true,
+      secondPlaceholder: 'Not (opsiyonel)...',
+      onConfirm: async (adres, not) => {
+        if (!adres.trim()) return;
+        const adresNot = not.trim() ? `${adres.trim()} — ${not.trim()}` : adres.trim();
+        const result = await submitBosvarKaydi(adresNot);
         if (!result?.success) showToast('Kaydedilemedi, tekrar dene');
       },
     });
@@ -1044,9 +1047,11 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   onTikDegis={(val) => setBosvarTik(selectedTable, val)}
                 />
               )}
-              <button className="ds-bosvar-kaydi-btn" onClick={openBosvarPrompt} title="Boş var — adres/not gir">
-                <PackageOpen size={14} /> Boş var
-              </button>
+              {!isPaketEkrani && (
+                <button className="bv-tik-btn" onClick={openBosvarPrompt} title="Boş var — adres/not gir">
+                  <PackageOpen size={16} /> Boş Var!
+                </button>
+              )}
             </div>
           </header>
 
@@ -1839,10 +1844,11 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
 function GenericModal({ modal, onClose }) {
   const [inputVal, setInputVal] = useState(modal.defaultValue || '');
+  const [secondInputVal, setSecondInputVal] = useState('');
   const [selectVal, setSelectVal] = useState(modal.selectOptions?.[0]?.value || '');
 
   function confirm() {
-    if (modal.onConfirm) modal.onConfirm(inputVal, selectVal);
+    if (modal.onConfirm) modal.onConfirm(inputVal, modal.showSecondInput ? secondInputVal : selectVal);
     onClose();
   }
 
@@ -1857,6 +1863,20 @@ function GenericModal({ modal, onClose }) {
             placeholder={modal.placeholder || 'Metin yazın...'}
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !modal.showSecondInput) {
+                e.preventDefault();
+                confirm();
+              }
+            }}
+          />
+        )}
+        {modal.showSecondInput && (
+          <textarea
+            rows={2}
+            placeholder={modal.secondPlaceholder || 'Not (opsiyonel)...'}
+            value={secondInputVal}
+            onChange={(e) => setSecondInputVal(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
