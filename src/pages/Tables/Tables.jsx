@@ -51,6 +51,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     ekmekStoktanDus,
     bosvarKayitlari,
     paketciBosvarAldi,
+    bosvarBildirimleri,
   } = data;
 
   // Renk-zaman kademesi her 30 dk'da bir değişsin diye periyodik yeniden çizim
@@ -457,6 +458,10 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     const sonTeslimat = paketTeslimatlari
       .filter((h) => h.paketAdi === table)
       .sort((a, b) => b.ts - a.ts)[0];
+    // Paketçinin "Boşu Aldım" dediği son bildirim (varsa) — kartta ayrı bir etiket olarak gösterilir.
+    const sonBosvarBildirim = bosvarBildirimleri
+      .filter((b) => b.paketAdi === table)
+      .sort((a, b) => b.ts - a.ts)[0];
 
     const noteEditRow = isEditing && (
       <div className="tb-note-edit" onClick={(e) => e.stopPropagation()}>
@@ -490,6 +495,11 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
           : sonTeslimat.durum === 'onaylandi' ? `✓ Kısmi ödeme onaylandı`
           : sonTeslimat.durum === 'reddedildi' ? '✕ Kısmi ödeme reddedildi'
           : 'Kısmi ödeme bildirildi'}
+      </div>
+    );
+    const bosvarTag = sonBosvarBildirim && (
+      <div className="tb-bosvar-alindi-tag">
+        📦 {sonBosvarBildirim.paketciAdi} — Boşu Aldım
       </div>
     );
 
@@ -553,6 +563,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
             )
           )}
           {deliveryTag}
+          {bosvarTag}
           {lockedOverlay}
         </div>
       );
@@ -592,6 +603,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
         )}
 
         {deliveryTag}
+        {bosvarTag}
         {lockedOverlay}
       </div>
     );
