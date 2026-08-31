@@ -204,7 +204,35 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [numpadValue, setNumpadValue] = useState('');
 
   const [priceModal, setPriceModal] = useState(null); // { item, value }
-  const [genericModal, setGenericModal] = useState(null); // { title, showInput, showSelect, selectOptions, placeholder, onConfirm }
+  const [genericModal, setGenericModal] = useState(null);
+  const [kitchenNoteModal, setKitchenNoteModal] = useState(false);
+  const [kitchenNoteText, setKitchenNoteText] = useState('');
+  const [kitchenQuickNotes, setKitchenQuickNotes] = useState([]);
+
+  // Mutfağa not hızlı notlarını çek
+  React.useEffect(() => {
+    supabase.from('ds_kitchen_quick_notes').select('*').order('created_at', { ascending: false }).then(({ data }) => {
+      if (data) setKitchenQuickNotes(data);
+    });
+  }, [kitchenNoteModal]);
+
+  async function saveKitchenQuickNote() {
+    if (!kitchenNoteText.trim()) return;
+    const { data } = await supabase.from('ds_kitchen_quick_notes').insert({ note: kitchenNoteText.trim() }).select().single();
+    if (data) setKitchenQuickNotes((prev) => [data, ...prev]);
+  }
+
+  async function deleteKitchenQuickNote(id) {
+    await supabase.from('ds_kitchen_quick_notes').delete().eq('id', id);
+    setKitchenQuickNotes((prev) => prev.filter((n) => n.id !== id));
+  }
+
+  function confirmKitchenNote() {
+    if (!kitchenNoteText.trim()) return;
+    setDraftItems((prev) => [...prev, { id: Date.now() + Math.random(), ad: kitchenNoteText.trim(), fiyat: 0, selected: false, note: true }]);
+    setKitchenNoteText('');
+    setKitchenNoteModal(false);
+  } // { title, showInput, showSelect, selectOptions, placeholder, onConfirm }
   const [favModalOpen, setFavModalOpen] = useState(false);
   const [favModalCategory, setFavModalCategory] = useState('Tümü');
   const [favModalSearch, setFavModalSearch] = useState('');
@@ -329,15 +357,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
   // ---- Mutfak notu ekleme (genel modal ile) ----
   function openKitchenNoteModal() {
-    setGenericModal({
-      title: 'Mutfağa Not Ekle (Fiyatsız Satır)',
-      placeholder: 'Örn: Acısız olsun / Paket saat 13:00',
-      showInput: true,
-      onConfirm: (text) => {
-        if (!text.trim()) return;
-        setDraftItems((prev) => [...prev, { id: Date.now() + Math.random(), ad: text.trim(), fiyat: 0, selected: false, note: true }]);
-      },
-    });
+    setKitchenNoteText('');
+    setKitchenNoteModal(true);
   }
 
   function editNoteItem(item) {
@@ -372,10 +393,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     setPriceModal((pm) => {
       if (!pm) return pm;
       if (val === ',' && pm.value.includes(',')) return pm;
+      // İlk rakama basınca mevcut değeri sil, yeni rakamdan başla
+      if (!pm.firstKeyPressed && val !== ',') {
+        return { ...pm, value: val, firstKeyPressed: true };
+      }
       const next = pm.value === '0' && val !== ',' ? val : pm.value + val;
-      return { ...pm, value: next };
+      return { ...pm, value: next, firstKeyPressed: true };
     });
-  }
+  } 
   function confirmPriceModal() {
     if (!priceModal) return;
     const parsed = parseFloat(priceModal.value.replace(',', '.'));
@@ -1698,11 +1723,47 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                     </p>
                   )}
                 </div>
-                <button className="ds-primary-btn" style={{ width: '100%', marginTop: '10px' }} onClick={() => setCariYeniForm({ ad: '', telefon: '', adres: '' })}>
+                <button className="ds-primary-btn" style={{ width: '100%', marginTop: '10px', color: '#F3F1E6' }} onClick={() => setCariYeniForm({ ad: '', telefon: '', adres: '' })}>
                   + Yeni Cari
                 </button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MUTFAĞA NOT MODALI */}
+      {kitchenNoteModal && (
+        <div className="ds-modal-overlay" onClick={() => setKitchenNoteModal(false)}>
+          <div className="ds-modal ds-kitchen-note-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ds-modal-head">
+              <h3>Mutfağa Not Ekle (Fiyatsız Satır)</h3>
+              <button className="ds-modal-x" onClick={() => setKitchenNoteModal(false)}><X size={16} /></button>
+            </div>
+            <textarea
+              autoFocus
+              rows={3}
+              className="ds-kitchen-note-textarea"
+              placeholder="Örn: Acısız olsun / Paket saat 13:00"
+              value={kitchenNoteText}
+              onChange={(e) => setKitchenNoteText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); confirmKitchenNote(); } }}
+            />
+            {kitchenQuickNotes.length > 0 && (
+              <div className="ds-kitchen-quick-list">
+                {kitchenQuickNotes.map((n) => (
+                  <div key={n.id} className="ds-kitchen-quick-item">
+                    <button className="ds-kitchen-quick-btn" onClick={() => setKitchenNoteText(n.note)}>{n.note}</button>
+                    <button className="ds-kitchen-quick-del" onClick={() => deleteKitchenQuickNote(n.id)}><X size={11} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button className="ds-kitchen-save-quick" onClick={saveKitchenQuickNote}>+ Bu notu kaydet</button>
+            <div className="ds-modal-footer two">
+              <button className="ds-secondary-btn" onClick={() => setKitchenNoteModal(false)}>Vazgeç</button>
+              <button className="ds-primary-btn" onClick={confirmKitchenNote}>Onayla</button>
+            </div>
           </div>
         </div>
       )}
@@ -1731,11 +1792,11 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
         </div>
         <div className="print-items">
           {currentOrder.map((item) => (
-            <div key={item.id} className="print-row">
+            <div key={item.id} className={`print-row${item.note ? ' note-row' : ''}`}>
               <span>
                 {item.bicakGerekli && <span className="print-bicak-mark">🔪</span>}
                 {item.ekmekGerekli && <span className="print-ekmek-mark">🥖</span>}
-                {item.note ? `• ${item.ad}` : item.ad}
+                {item.note ? `"${item.ad}"` : item.ad}
               </span>
               <span>{item.note ? '' : TL(item.fiyat)}</span>
             </div>

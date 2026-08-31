@@ -203,13 +203,44 @@
 .ds-table-select-mini span { color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ds-table-select-mini svg { color: #fff; flex-shrink: 0; }
 .ds-table-select-mini:hover { background: var(--olive); }
-.ds-table-picker-modal { max-width: 380px; max-height: 78vh; display: flex; flex-direction: column; padding-bottom: 12px; }
+.ds-table-picker-modal { max-width: 700px; max-height: 85vh; display: flex; flex-direction: column; padding-bottom: 12px; }
+
+.ds-kitchen-note-modal { max-width: 640px; width: 90vw; }
+.ds-kitchen-note-textarea {
+  width: 100%; padding: 12px; border: 1px solid var(--border);
+  border-radius: var(--r-input); font-size: 14px; resize: none;
+  margin-bottom: 10px; background: var(--panel-2); color: var(--ink);
+}
+.ds-kitchen-note-textarea:focus { outline: none; border-color: var(--olive); background: #fff; }
+.ds-kitchen-quick-list {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 200px; overflow-y: auto; margin-bottom: 8px;
+}
+.ds-kitchen-quick-item { display: flex; align-items: center; gap: 6px; }
+.ds-kitchen-quick-btn {
+  flex: 1; text-align: left; background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 7px 12px; font-size: 13px; color: var(--ink);
+  cursor: pointer; transition: background 120ms;
+}
+.ds-kitchen-quick-btn:hover { background: #fff; }
+.ds-kitchen-quick-del {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 7px;
+  border: 1px solid var(--border); background: #fff; color: var(--ink-muted);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.ds-kitchen-quick-del:hover { background: var(--danger-soft); color: var(--danger); }
+.ds-kitchen-save-quick {
+  width: 100%; height: 34px; border: 1px dashed var(--border);
+  background: var(--panel-2); border-radius: 8px; font-size: 12px;
+  font-weight: 600; color: var(--ink-muted); cursor: pointer; margin-bottom: 10px;
+}
+.ds-kitchen-save-quick:hover { background: #fff; }
 .ds-table-picker-list {
   flex: 1;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
   padding-right: 2px;
 }
 .ds-table-picker-list button {
@@ -217,8 +248,8 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  background: none;
-  border: none;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
   text-align: left;
   padding: 10px 12px;
   border-radius: 10px;
@@ -234,14 +265,14 @@
 .ds-table-picker-scrollbtns { display: flex; gap: 8px; padding-top: 10px; flex-shrink: 0; }
 
 /* ---- Cari modalı — firma butonları / bireysel arama+düzenle / onay ekranı ---- */
-.ds-cari-modal { max-width: 420px; }
+.ds-cari-modal { max-width: 780px; width: 90vw; font-size: 16px; }
 .ds-cari-section-label {
   display: flex; align-items: center; gap: 5px;
   font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
   color: var(--ink-muted); margin: 10px 0 6px;
 }
 .ds-cari-firma-section { margin-bottom: 4px; }
-.ds-cari-firma-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; max-height: 160px; overflow-y: auto; }
+.ds-cari-firma-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; max-height: 200px; overflow-y: auto; }
 .ds-cari-firma-btn {
   height: 42px;
   border-radius: 10px;
@@ -260,7 +291,7 @@
 }
 .ds-cari-firma-btn:hover { background: #fff; border-color: var(--olive); }
 
-.ds-cari-bireysel-list { max-height: 220px; }
+.ds-cari-bireysel-list { max-height: 220px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
 .ds-cari-bireysel-row { display: flex; align-items: center; gap: 4px; }
 .ds-cari-bireysel-main {
   flex: 1; min-width: 0;
@@ -1421,6 +1452,7 @@
   .print-meta { display: flex; justify-content: space-between; font-size: 11px; border-bottom: 1px dashed #000; padding-bottom: 6px; margin-bottom: 8px; }
   .print-items { font-size: 12px; line-height: 1.5; margin-bottom: 8px; font-weight: 600; }
   .print-row { display: flex; justify-content: space-between; gap: 8px; }
+  .print-row.note-row span:first-child { font-style: italic; }
   .print-row span:first-child { min-width: 0; overflow-wrap: break-word; word-break: break-word; }
   .print-row span:last-child { flex-shrink: 0; }
   .print-bicak-mark { font-size: 20px; margin-right: 5px; vertical-align: -3px; }
