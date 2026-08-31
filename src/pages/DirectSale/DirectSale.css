@@ -265,7 +265,8 @@
 .ds-table-picker-scrollbtns { display: flex; gap: 8px; padding-top: 10px; flex-shrink: 0; }
 
 /* ---- Cari modalı — firma butonları / bireysel arama+düzenle / onay ekranı ---- */
-.ds-cari-modal { max-width: 780px; width: 90vw; font-size: 16px; }
+.ds-cari-modal { max-width: 780px !important; width: 90vw !important; font-size: 16px; }
+.ds-kitchen-note-modal { max-width: 640px !important; width: 90vw !important; }
 .ds-cari-section-label {
   display: flex; align-items: center; gap: 5px;
   font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
@@ -291,8 +292,8 @@
 }
 .ds-cari-firma-btn:hover { background: #fff; border-color: var(--olive); }
 
-.ds-cari-bireysel-list { max-height: 220px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
-.ds-cari-bireysel-row { display: flex; align-items: center; gap: 4px; }
+.ds-cari-bireysel-list { max-height: 300px; overflow-y: auto; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.ds-cari-bireysel-row { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
 .ds-cari-bireysel-main {
   flex: 1; min-width: 0;
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
