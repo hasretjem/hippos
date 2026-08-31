@@ -783,6 +783,12 @@
 .tb-cari-uyari-row .info { display: flex; flex-direction: column; gap: 2px; }
 .tb-cari-uyari-row .ad { font-size: 12px; font-weight: 700; color: var(--ink); }
 .tb-cari-uyari-row .tutar { font-size: 12.5px; font-weight: 800; color: var(--olive-dark); }
+.tb-bosvar-not { font-size: 11px; color: var(--ink-muted); }
+.tb-cari-uyari-aldim {
+  flex-shrink: 0; display: flex; align-items: center; gap: 5px;
+  height: 30px; padding: 0 10px; border-radius: 8px; border: none;
+  background: #A32D2D; color: #FCEBEB; font-size: 10.5px; font-weight: 700; cursor: pointer;
+}
 .tb-cari-uyari-wa {
   flex-shrink: 0; display: flex; align-items: center; gap: 5px;
   height: 30px; padding: 0 10px; border-radius: 8px; border: none;

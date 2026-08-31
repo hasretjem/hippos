@@ -49,6 +49,8 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     deleteMutfakHazirNot,
     ekmekStok,
     ekmekStoktanDus,
+    bosvarKayitlari,
+    paketciBosvarAldi,
   } = data;
 
   // Renk-zaman kademesi her 30 dk'da bir değişsin diye periyodik yeniden çizim
@@ -69,7 +71,11 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
 
   // ---- Cari Uyarı paneli: gün sonu firmalara toplu WhatsApp + numarası eksik bireysel uyarısı ----
   const [cariUyariOpen, setCariUyariOpen] = useState(false);
-  const [cariUyariTab, setCariUyariTab] = useState('firma'); // 'firma' | 'bireysel'
+  const [cariUyariTab, setCariUyariTab] = useState('firma'); // 'firma' | 'bireysel' | 'bosvar'
+  const bosvarKayitListesi = useMemo(
+    () => (bosvarKayitlari || []).filter((b) => b.durum === 'bekliyor').sort((a, b) => b.ts - a.ts),
+    [bosvarKayitlari]
+  );
   const [cariUyariEditId, setCariUyariEditId] = useState(null);
   const [cariUyariPhoneDraft, setCariUyariPhoneDraft] = useState('');
 
@@ -698,9 +704,27 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
             <div className="tb-cari-uyari-tabs">
               <button className={cariUyariTab === 'firma' ? 'active' : ''} onClick={() => setCariUyariTab('firma')}>Firmalar</button>
               <button className={cariUyariTab === 'bireysel' ? 'active' : ''} onClick={() => setCariUyariTab('bireysel')}>Bireysel (Numara Eksik)</button>
+              <button className={cariUyariTab === 'bosvar' ? 'active' : ''} onClick={() => setCariUyariTab('bosvar')}>
+                Boş Var {bosvarKayitListesi.length > 0 && <span className="tb-history-badge">{bosvarKayitListesi.length}</span>}
+              </button>
             </div>
 
-            {cariUyariTab === 'firma' ? (
+            {cariUyariTab === 'bosvar' ? (
+              <div className="tb-cari-uyari-list">
+                {bosvarKayitListesi.length === 0 && <p className="tb-history-empty">Açık boş var kaydı yok.</p>}
+                {bosvarKayitListesi.map((b) => (
+                  <div key={b.id} className="tb-cari-uyari-row">
+                    <div className="info">
+                      <span className="ad">{b.adresNot}</span>
+                      {b.paketciNotu && <span className="tb-bosvar-not">{b.paketciNotu}</span>}
+                    </div>
+                    <button className="tb-cari-uyari-aldim" onClick={() => paketciBosvarAldi(b.id)}>
+                      Aldım İşaretle
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : cariUyariTab === 'firma' ? (
               <div className="tb-cari-uyari-list">
                 {bugunFirmaListesi.length === 0 && <p className="tb-history-empty">Bugün cariye giden firma siparişi yok</p>}
                 {bugunFirmaListesi.map(({ cari, tutar }) => (

@@ -5,7 +5,7 @@ import '../../components/bosvar/bosvar.css';
 import { TL } from '../../hooks/useHipposData';
 import {
   Package, Users, Camera, Image as ImageIcon, StickyNote, Check, X,
-  ChevronLeft, Wallet, Undo2, Clock, User, AlertTriangle, CupSoda,
+  ChevronLeft, Wallet, Undo2, Clock, User, AlertTriangle, CupSoda, PackageOpen,
 } from 'lucide-react';
 
 const ODEME_YONTEMLERI = ['Nakit', 'Kredi Kartı', 'Yemek Kartı', 'Diğer'];
@@ -19,6 +19,7 @@ export default function Paketci({ data }) {
     deletePaketTeslimat, deleteCariTeslimatBildirim,
     bosvarBildirimleri, submitBosvarBildirim, deleteBosvarBildirim,
     tableBosvars,
+    bosvarKayitlari, paketciBosvarAldi, paketciBosvarAlamadi,
   } = data;
 
   // ---- Paketçi adı (bir kez sorulur, cihazda saklanır) ----
@@ -65,6 +66,17 @@ export default function Paketci({ data }) {
       .filter((p) => !p.teslimEdildiOnayli)
       .sort((a, b) => a.num - b.num);
   }, [packages, paketTeslimatlari, orders]);
+
+  // Boş Var kayıtları: satıştan bağımsız, ödeme sonrası açılan "kap toplama" kayıtları —
+  // paket listesiyle karışık gösteriliyor, sadece açık ('bekliyor') olanlar.
+  const bosvarKayitListesi = useMemo(() => {
+    return (bosvarKayitlari || []).filter((b) => b.durum === 'bekliyor').sort((a, b) => b.ts - a.ts);
+  }, [bosvarKayitlari]);
+
+  const [selectedBosvarId, setSelectedBosvarId] = useState(null);
+  const selectedBosvarKaydi = selectedBosvarId
+    ? bosvarKayitListesi.find((b) => b.id === selectedBosvarId) || null
+    : null;
 
   function paketTutar(name) {
     const items = orders[name] || [];
@@ -130,7 +142,7 @@ export default function Paketci({ data }) {
 
       <div className="pk-tabs">
         <button className={tab === 'paketler' ? 'active' : ''} onClick={() => setTab('paketler')}>
-          <Package size={16} /> Paketler {paketListesi.length > 0 && <span className="pk-badge">{paketListesi.length}</span>}
+          <Package size={16} /> Paketler {(paketListesi.length + bosvarKayitListesi.length) > 0 && <span className="pk-badge">{paketListesi.length + bosvarKayitListesi.length}</span>}
         </button>
         <button className={tab === 'cariler' ? 'active' : ''} onClick={() => setTab('cariler')}>
           <Users size={16} /> Cariler
@@ -138,9 +150,19 @@ export default function Paketci({ data }) {
       </div>
 
       <div className="pk-body">
-        {tab === 'paketler' && !selectedPaket && (
+        {tab === 'paketler' && !selectedPaket && !selectedBosvarKaydi && (
           <div className="pk-list">
-            {paketListesi.length === 0 && <div className="pk-empty">Şu an açık teslimat yok.</div>}
+            {paketListesi.length === 0 && bosvarKayitListesi.length === 0 && <div className="pk-empty">Şu an açık teslimat yok.</div>}
+            {bosvarKayitListesi.map((b) => (
+              <button key={`bv-${b.id}`} className="pk-list-item pk-bosvar-item" onClick={() => setSelectedBosvarId(b.id)}>
+                <div className="pk-list-item-top">
+                  <span className="pk-list-item-name">{b.adresNot}</span>
+                  <span className="pk-bosvar-tag"><PackageOpen size={12} /> Boş var</span>
+                </div>
+                <div className="pk-bosvar-sub"><Check size={12} /> Ödeme alındı — kap toplanacak</div>
+                {b.paketciNotu && <div className="pk-bosvar-sub"><StickyNote size={12} /> {b.paketciNotu}</div>}
+              </button>
+            ))}
             {paketListesi.map((p) => {
               const durumEtiketi =
                 p.sonHareket?.durum === 'bekliyor' ? { text: 'Onay bekliyor', cls: 'wait' } :
@@ -159,6 +181,15 @@ export default function Paketci({ data }) {
               );
             })}
           </div>
+        )}
+
+        {tab === 'paketler' && selectedBosvarKaydi && (
+          <BosvarKaydiDetay
+            kayit={selectedBosvarKaydi}
+            onBack={() => setSelectedBosvarId(null)}
+            onAldim={() => { paketciBosvarAldi(selectedBosvarKaydi.id); setSelectedBosvarId(null); showToast('Boş var alındı olarak işaretlendi'); }}
+            onAlamadim={(not) => { paketciBosvarAlamadi(selectedBosvarKaydi.id, not); setSelectedBosvarId(null); showToast('Not gönderildi'); }}
+          />
         )}
 
         {tab === 'paketler' && selectedPaketData && (
@@ -300,6 +331,60 @@ function PaketDetay({ paket, onBack, onAction, paketciAdi, bosvarBildirimleri, s
           <Wallet size={16} /> Kısmi Ödeme Aldım
         </button>
       </div>
+    </div>
+  );
+}
+
+function BosvarKaydiDetay({ kayit, onBack, onAldim, onAlamadim }) {
+  const [alamadımAcik, setAlamadımAcik] = useState(false);
+  const [notMetni, setNotMetni] = useState('');
+  const [hata, setHata] = useState('');
+
+  function handleAlamadimGonder() {
+    if (!notMetni.trim()) {
+      setHata('Sebep ve ne zaman alınacağını yaz');
+      return;
+    }
+    onAlamadim(notMetni.trim());
+  }
+
+  return (
+    <div className="pk-detail">
+      <button className="pk-back-btn" onClick={onBack}><ChevronLeft size={16} /> Listeye dön</button>
+      <div className="pk-bosvar-detail-card">
+        <div className="pk-bosvar-detail-tag">BOŞ VAR</div>
+        <h2>{kayit.adresNot}</h2>
+        <div className="pk-bosvar-detail-time">
+          <Clock size={12} /> {new Date(kayit.ts).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}'de eklendi
+        </div>
+        {kayit.paketciNotu && <div className="pk-detail-note"><StickyNote size={13} /> {kayit.paketciNotu}</div>}
+      </div>
+
+      {!alamadımAcik ? (
+        <div className="pk-action-row">
+          <button className="pk-deliver-btn" onClick={onAldim}>
+            <Check size={16} /> Aldım
+          </button>
+          <button className="pk-partial-btn" onClick={() => setAlamadımAcik(true)}>
+            <X size={16} /> Alamadım
+          </button>
+        </div>
+      ) : (
+        <div className="pk-bosvar-alamadim-form">
+          <textarea
+            autoFocus
+            rows={2}
+            placeholder="Neden alamadın, ne zaman alacaksın?"
+            value={notMetni}
+            onChange={(e) => { setNotMetni(e.target.value); setHata(''); }}
+          />
+          {hata && <div className="pk-bosvar-hata">{hata}</div>}
+          <div className="pk-action-row">
+            <button className="pk-back-btn" onClick={() => setAlamadımAcik(false)}>Vazgeç</button>
+            <button className="pk-partial-btn" onClick={handleAlamadimGonder}>Gönder</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

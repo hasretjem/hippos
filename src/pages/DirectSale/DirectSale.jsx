@@ -43,6 +43,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     bosvarBildirimleri,
     tableBosvars,
     setBosvarTik,
+    submitBosvarKaydi,
     presenceMap,
     cariler,
     addCari,
@@ -890,6 +891,19 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     : [];
   const bekleyenHareket = paketciHareketleri.find((h) => h.durum === 'bekliyor');
 
+  function openBosvarPrompt() {
+    setGenericModal({
+      title: 'Boş Var — adres/not',
+      placeholder: 'Örn: Karagöz Sokak No:4',
+      showInput: true,
+      onConfirm: async (text) => {
+        if (!text.trim()) return;
+        const result = await submitBosvarKaydi(text.trim());
+        if (!result?.success) showToast('Kaydedilemedi, tekrar dene');
+      },
+    });
+  }
+
   function openRejectPrompt(hareketId) {
     setGenericModal({
       title: 'Teslimatı reddet — sebep yaz',
@@ -1030,6 +1044,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   onTikDegis={(val) => setBosvarTik(selectedTable, val)}
                 />
               )}
+              <button className="ds-bosvar-kaydi-btn" onClick={openBosvarPrompt} title="Boş var — adres/not gir">
+                <PackageOpen size={14} /> Boş var
+              </button>
             </div>
           </header>
 
@@ -1712,8 +1729,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                           }}>
                             <span className="name">{c.ad}</span>
                             <span className="meta">{c.telefon || 'Numara yok'}</span>
-                            <button className="ds-cari-edit-btn" onClick={(e) => { e.stopPropagation(); openCariEditRow(c); }} title="Düzenle"><Pencil size={16} /></button>
                           </button>
+                          <button className="ds-cari-edit-btn" onClick={() => openCariEditRow(c)} title="Düzenle"><Pencil size={13} /></button>
                         </>
                       )}
                     </div>

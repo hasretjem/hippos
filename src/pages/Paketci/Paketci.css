@@ -82,6 +82,33 @@
 .pk-status-tag.reject { background: #FDE2E2; color: var(--danger); }
 .pk-status-tag.ok { background: #CFF5E1; color: var(--olive); }
 
+.pk-bosvar-item {
+  background: #A32D2D; border: none;
+}
+.pk-bosvar-item .pk-list-item-name { color: #FCEBEB; }
+.pk-bosvar-tag {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700;
+  padding: 3px 9px; border-radius: 999px; background: #791F1F; color: #FCEBEB; white-space: nowrap;
+}
+.pk-bosvar-sub {
+  display: flex; align-items: center; gap: 4px; font-size: 12px; color: #F7C1C1;
+}
+
+.pk-bosvar-detail-card {
+  background: #A32D2D; border-radius: 18px; padding: 18px; color: #FCEBEB;
+}
+.pk-bosvar-detail-tag { font-size: 11px; font-weight: 700; color: #F7C1C1; margin-bottom: 4px; }
+.pk-bosvar-detail-card h2 { margin: 0 0 6px; font-size: 19px; color: #FCEBEB; }
+.pk-bosvar-detail-time { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #F7C1C1; }
+.pk-bosvar-detail-card .pk-detail-note { color: #FCEBEB; margin-top: 8px; margin-bottom: 0; }
+
+.pk-bosvar-alamadim-form { display: flex; flex-direction: column; gap: 8px; }
+.pk-bosvar-alamadim-form textarea {
+  border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; font-size: 14px;
+  background: var(--panel); resize: none; font-family: inherit;
+}
+.pk-bosvar-hata { font-size: 12px; color: var(--danger); }
+
 .pk-drink-warning {
   display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
   background: #FDEBD3; color: #A9631A; font-size: 12px; font-weight: 800;

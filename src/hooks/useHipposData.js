@@ -190,6 +190,14 @@ function rowToBosvar(r) {
     ts: Number(r.ts), onayTs: r.onay_ts ? Number(r.onay_ts) : null,
   };
 }
+// Salon/Alt Salon/Hızlı Satış'tan ödeme SONRASI açılan bağımsız "boş var" kayıtları —
+// table_state/paket'ten kopuk, kendi ömrü var (satış/paket kapansa bile silinmez).
+function rowToBosvarKaydi(r) {
+  return {
+    id: r.id, adresNot: r.adres_not, durum: r.durum, paketciNotu: r.paketci_notu,
+    ts: Number(r.ts), updatedTs: r.updated_ts ? Number(r.updated_ts) : null,
+  };
+}
 
 // Tüm sayfaların (DirectSale, Tables, Reports...) paylaştığı tek veri kaynağı.
 // App.jsx içinde BİR KEZ çağrılır, sonuçlar prop olarak sayfalara aktarılır.
@@ -565,6 +573,7 @@ export default function useHipposData(scope = 'full') {
   const [paketTeslimatlari, setPaketTeslimatlari] = useState([]);
   const [cariTeslimatBildirimleri, setCariTeslimatBildirimleri] = useState([]);
   const [bosvarBildirimleri, setBosvarBildirimleri] = useState([]);
+  const [bosvarKayitlari, setBosvarKayitlari] = useState([]);
   const [mutfakHazirNotlar, setMutfakHazirNotlar] = useState([]);
   // Ekmek Stok — Yönetim Paneli'nde elle eklenir (Ekmek Stok Ekleme), Masalar'daki
   // Mutfağa Not > Ekmek Gönderme'de mutfağa fiilen giden miktar kadar düşülür. Supabase'de
@@ -818,7 +827,7 @@ export default function useHipposData(scope = 'full') {
     let cancelled = false;
 
     async function loadAll() {
-      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn, ss, bv] = await Promise.all([
+      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn, ss, bv, bvk] = await Promise.all([
         supabase.from('table_state').select('*'),
         supabase.from('packages').select('*'),
         supabase.from('package_meta').select('*').eq('id', 1).maybeSingle(),
@@ -838,6 +847,7 @@ export default function useHipposData(scope = 'full') {
         supabase.from('mutfak_hazir_notlar').select('*').order('created_at', { ascending: true }),
         supabase.from('store_settings').select('*').eq('id', 1).maybeSingle(),
         supabase.from('bosvar_bildirimleri').select('*'),
+        supabase.from('bosvar_kayitlari').select('*'),
       ]);
       if (cancelled) return;
 
@@ -853,6 +863,7 @@ export default function useHipposData(scope = 'full') {
       setPaketTeslimatlari((pt.data || []).map(rowToPaketTeslimat).sort((a, b) => b.ts - a.ts));
       setCariTeslimatBildirimleri((ctb.data || []).map(rowToCariTeslimatBildirim).sort((a, b) => b.ts - a.ts));
       setBosvarBildirimleri((bv.data || []).map(rowToBosvar).sort((a, b) => b.ts - a.ts));
+      setBosvarKayitlari((bvk.data || []).map(rowToBosvarKaydi).sort((a, b) => b.ts - a.ts));
       setMutfakHazirNotlar((mhn.data || []).map((r) => ({ id: r.id, metin: r.metin })));
       refetchEkmekStok(); // Sheets'ten — Supabase'in loadAll'ından bağımsız.
       refetchHarcamaTaslagi(); // Supabase'ten — kendi bağımsız fetch'i.
@@ -915,6 +926,7 @@ export default function useHipposData(scope = 'full') {
       paket_teslimatlari: need(['paketci']),
       cari_teslimat_bildirimleri: need([]),             // ← OLMALI (full + paketci, yani herkes)
       bosvar_bildirimleri: need(['paketci']),
+      bosvar_kayitlari: need([]),
       mutfak_hazir_notlar: need([]),
     };
 
@@ -1089,6 +1101,19 @@ export default function useHipposData(scope = 'full') {
         }
         const row = rowToBosvar(payload.new);
         setBosvarBildirimleri((prev) =>
+          prev.some((b) => b.id === row.id) ? prev.map((b) => (b.id === row.id ? row : b)) : [row, ...prev]
+        );
+      });
+    }
+    if (wants.bosvar_kayitlari) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'bosvar_kayitlari' }, (payload) => {
+        bumpUsageCounter('bosvar_kayitlari', summarizeRealtimePayload('bosvar_kayitlari', payload));
+        if (payload.eventType === 'DELETE') {
+          setBosvarKayitlari((prev) => prev.filter((b) => b.id !== payload.old.id));
+          return;
+        }
+        const row = rowToBosvarKaydi(payload.new);
+        setBosvarKayitlari((prev) =>
           prev.some((b) => b.id === row.id) ? prev.map((b) => (b.id === row.id ? row : b)) : [row, ...prev]
         );
       });
@@ -1998,6 +2023,31 @@ export default function useHipposData(scope = 'full') {
     setOrderItemsRemote(paketAdi, orders[paketAdi] || [], { bosvar: deger });
   }
 
+  // ---- Boş Var kayıtları (Salon/Alt Salon/Hızlı Satış — ödeme sonrası, satıştan bağımsız) ----
+  async function submitBosvarKaydi(adresNot) {
+    const id = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+    const ts = Date.now();
+    const row = { id, adres_not: adresNot, durum: 'bekliyor', ts };
+    setBosvarKayitlari((prev) => [rowToBosvarKaydi(row), ...prev]);
+    const { error } = await supabase.from('bosvar_kayitlari').insert(row);
+    if (error) console.error('boş var kaydedilemedi:', error.message);
+    return { success: !error };
+  }
+  function paketciBosvarAldi(id) {
+    const updated_ts = Date.now();
+    setBosvarKayitlari((prev) => prev.map((b) => (b.id === id ? { ...b, durum: 'alindi', updatedTs: updated_ts } : b)));
+    supabase.from('bosvar_kayitlari').update({ durum: 'alindi', updated_ts }).eq('id', id).then(({ error }) => {
+      if (error) console.error('boş var güncellenemedi:', error.message);
+    });
+  }
+  function paketciBosvarAlamadi(id, not) {
+    const updated_ts = Date.now();
+    setBosvarKayitlari((prev) => prev.map((b) => (b.id === id ? { ...b, durum: 'bekliyor', paketciNotu: not, updatedTs: updated_ts } : b)));
+    supabase.from('bosvar_kayitlari').update({ durum: 'bekliyor', paketci_notu: not, updated_ts }).eq('id', id).then(({ error }) => {
+      if (error) console.error('boş var güncellenemedi:', error.message);
+    });
+  }
+
   // Mutfağa Not ekranındaki hazır not butonları — tüm cihazlarda görünür.
   function addMutfakHazirNot(metin) {
     if (!metin.trim()) return;
@@ -2145,6 +2195,10 @@ export default function useHipposData(scope = 'full') {
     onaylaCariTeslimatBildirim,
     reddetCariTeslimatBildirim,
     bosvarBildirimleri,
+    bosvarKayitlari,
+    submitBosvarKaydi,
+    paketciBosvarAldi,
+    paketciBosvarAlamadi,
     submitBosvarBildirim,
     deleteBosvarBildirim,
     tableBosvars,

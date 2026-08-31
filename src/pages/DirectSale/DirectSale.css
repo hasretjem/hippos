@@ -265,7 +265,7 @@
 .ds-table-picker-scrollbtns { display: flex; gap: 8px; padding-top: 10px; flex-shrink: 0; }
 
 /* ---- Cari modalı — firma butonları / bireysel arama+düzenle / onay ekranı ---- */
-.ds-cari-modal { max-width: 1000px !important; width: 95vw !important; font-size: 15.5px; }
+.ds-cari-modal { max-width: 780px !important; width: 90vw !important; font-size: 16px; }
 .ds-kitchen-note-modal { max-width: 640px !important; width: 90vw !important; }
 .ds-cari-section-label {
   display: flex; align-items: center; gap: 5px;
@@ -273,49 +273,43 @@
   color: var(--ink-muted); margin: 10px 0 6px;
 }
 .ds-cari-firma-section { margin-bottom: 4px; }
-.ds-cari-firma-grid { display: flex; flex-wrap: wrap; gap: 8px; max-height: none; }
+.ds-cari-firma-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; max-height: 200px; overflow-y: auto; }
 .ds-cari-firma-btn {
-  height: auto;
-  min-height: 42px;
+  height: 42px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--panel-2);
   color: var(--ink);
-  font-size: 15.5px;
+  font-size: 12.5px;
   font-weight: 700;
   cursor: pointer;
-  padding: 8px 14px;
+  padding: 0 10px;
   text-align: left;
-  white-space: normal;
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   transition: background 120ms var(--ease), border-color 120ms var(--ease);
 }
 .ds-cari-firma-btn:hover { background: #fff; border-color: var(--olive); }
 
 .ds-cari-bireysel-list { max-height: 300px; overflow-y: auto; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
-.ds-cari-bireysel-row { display: flex; flex-direction: column; align-items: stretch; gap: 0; position: relative; }
+.ds-cari-bireysel-row { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
 .ds-cari-bireysel-main {
   flex: 1; min-width: 0;
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  background: var(--panel-2); border: 1px solid var(--border); text-align: left;
-  padding: 9px 10px 44px 10px; border-radius: 10px; cursor: pointer;
-  position: relative;
+  background: none; border: none; text-align: left;
+  padding: 9px 10px; border-radius: 10px; cursor: pointer;
   transition: background 120ms var(--ease);
 }
 .ds-cari-bireysel-main:hover { background: var(--panel-2); }
 .ds-cari-bireysel-main .name { font-size: 13.5px; font-weight: 700; color: var(--ink); }
 .ds-cari-bireysel-main .meta { font-size: 11px; color: var(--ink-muted); }
 .ds-cari-edit-btn {
-  position: absolute; bottom: 8px; right: 8px;
-  width: 32px; height: 32px; border-radius: 9px;
-  border: none !important;
-  background: var(--danger) !important;
-  color: #F3F1E6 !important;
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px;
+  border: 1px solid var(--border); background: #fff; color: var(--ink-muted);
   display: flex; align-items: center; justify-content: center; cursor: pointer;
-  z-index: 2;
 }
-.ds-cari-edit-btn svg { color: #F3F1E6 !important; stroke: #F3F1E6 !important; width: 16px; height: 16px; }
-.ds-cari-edit-btn:hover { filter: brightness(1.1); }
+.ds-cari-edit-btn:hover { background: var(--panel-2); color: var(--ink); }
 .ds-cari-edit-row { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: var(--panel-2); border-radius: 10px; }
 .ds-cari-edit-row input { height: 34px; border-radius: 8px; border: 1px solid var(--border); padding: 0 10px; font-size: 12.5px; background: #fff; }
 .ds-cari-edit-row-actions { display: flex; gap: 6px; justify-content: flex-end; }
@@ -407,6 +401,26 @@
 .ds-paste-btn svg { color: #E94F37; stroke: #E94F37; }
 .ds-paste-btn:hover { background: #EAE3D0; transform: translateY(-1px); }
 .ds-paste-btn:active { transform: scale(0.92); transition-duration: var(--t-press); }
+
+.ds-bosvar-kaydi-btn {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: none;
+  background: #A32D2D;
+  color: #FCEBEB;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: background var(--t-hover) var(--ease), transform var(--t-hover) var(--ease);
+}
+.ds-bosvar-kaydi-btn svg { color: #FCEBEB; stroke: #FCEBEB; }
+.ds-bosvar-kaydi-btn:hover { background: #8A2626; transform: translateY(-1px); }
+.ds-bosvar-kaydi-btn:active { transform: scale(0.92); transition-duration: var(--t-press); }
 /* ---- Kategori sekmeleri: aktif dolgu, pasif border-only ---- */
 .ds-category-strip {
   display: flex;
