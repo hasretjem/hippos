@@ -13,6 +13,15 @@ import {
   StickyNote, MessageCircle, Trash2, Printer, Copy, PackageOpen,
 } from 'lucide-react';
 
+// Sipariş kartlarında ürün metninin sonuna eklenen marka etiketi — kaynak siparisMetni
+// (useHipposData.js) değiştirilmedi, sadece görüntülemede ekleniyor.
+const EKMEK_SIPARIS_MARKA = {
+  buyukBeyaz: 'UNO',
+  kucukBeyaz: 'LA LORRAINE',
+  domatesli: 'LA LORRAINE',
+  kucukKepek: 'UNO',
+};
+
 const PAIR_SECOND = new Set(TABLE_PAIRS.map((p) => p[1]));
 const PAIR_FIRST = new Map(TABLE_PAIRS.map((p) => [p[0], p[1]]));
 
@@ -1013,7 +1022,8 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
                             onKeyDown={(e) => e.key === 'Enter' && ekmekEnterNext(t.key)}
                           />
                           <span className={dusuk ? 'tb-ekmek-stok-pill dusuk' : 'tb-ekmek-stok-pill'}>
-                            {dusuk && '⚠️ '}Stok: {ekmekStok[t.key] ?? 0}
+                            Stok: {ekmekStok[t.key] ?? 0}
+                            {dusuk && <span className="tb-ekmek-stok-uyari"> ⚠️ {stokBilgi.uyariMesaji}</span>}
                           </span>
                         </div>
                       );
@@ -1034,7 +1044,9 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
                       <div className="tb-ekmek-siparis-grid">
                         {ekmekDusukStoklar.map((t) => (
                           <div key={t.key} className="tb-ekmek-siparis-kart">
-                            <span className="tb-ekmek-siparis-kart-text">{t.siparisMetni}</span>
+                            <span className="tb-ekmek-siparis-kart-text">
+                              {t.siparisMetni} <span className="tb-ekmek-siparis-marka">{EKMEK_SIPARIS_MARKA[t.key]}</span>
+                            </span>
                             <button
                               className="tb-ekmek-siparis-kopyala-btn"
                               title="Kopyala"
@@ -1073,9 +1085,13 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
                           ) : (
                             <>
                               <span className="saat">{rec.saat}</span>
-                              <span className="ozet">
-                                {EKMEK_TURLERI.filter((t) => rec[t.key] > 0).map((t) => `${t.label.replace(' Ekmeği', '')}: ${rec[t.key]}`).join(' · ')}
-                              </span>
+                              <div className="ozet-liste">
+                                {EKMEK_TURLERI.filter((t) => rec[t.key] > 0).map((t) => (
+                                  <span key={t.key} className="ozet-satir">
+                                    {t.label.replace(' Ekmeği', '')}: {rec[t.key]}
+                                  </span>
+                                ))}
+                              </div>
                               <button className="tb-ekmek-duzenle-btn" onClick={() => openEkmekEdit(rec)}>Düzenle</button>
                             </>
                           )}

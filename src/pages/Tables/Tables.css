@@ -213,16 +213,16 @@
 .tb-ekmek-col-left { display: flex; flex-direction: column; }
 .tb-ekmek-form { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
 .tb-ekmek-row { display: flex; align-items: center; gap: 10px; }
-.tb-ekmek-label { font-size: 12.5px; font-weight: 700; color: var(--ink); flex: 1; }
+.tb-ekmek-label { font-size: 12.5px; font-weight: 700; color: var(--ink); flex: 0 0 auto; }
 .tb-ekmek-input {
   width: 64px; height: 38px; border-radius: 9px; border: 1px solid var(--border);
   background: var(--panel-2); text-align: center; font-size: 15px; font-weight: 800; color: #E94F37 !important;
+  flex-shrink: 0;
 }
 .tb-ekmek-input:focus { outline: none; border-color: var(--tier2); background: #fff; }
 
 .tb-ekmek-stok-pill {
-  flex-shrink: 0;
-  min-width: 150px;
+  flex: 1;
   text-align: left;
   font-size: 11.5px;
   font-weight: 700;
@@ -239,6 +239,7 @@
   background: rgba(233, 79, 55, 0.1);
   border-color: #E94F37;
 }
+.tb-ekmek-stok-uyari { font-weight: 600; }
 
 .tb-ekmek-print-btn {
   width: 100%;
@@ -285,10 +286,13 @@
   padding: 8px 9px;
 }
 .tb-ekmek-siparis-kart-text {
-  font-weight: 400;
+  font-weight: 600;
   color: #393E41 !important;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.35;
+}
+.tb-ekmek-siparis-marka {
+  font-weight: 800;
 }
 .tb-ekmek-siparis-kopyala-btn {
   display: flex;
@@ -314,11 +318,15 @@
   .tb-ekmek-kayit-grid { grid-template-columns: 1fr; }
 }
 .tb-ekmek-kayit-row {
-  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  padding: 6px 0; border-bottom: 1px solid var(--border-soft); font-size: 10.5px;
+  display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap;
+  padding: 6px 0; border-bottom: 1px solid var(--border-soft); font-size: 12.5px; font-weight: 600;
 }
 .tb-ekmek-kayit-row .saat { flex-shrink: 0; font-weight: 800; color: var(--contour); }
-.tb-ekmek-kayit-row .ozet { flex: 1; color: var(--ink-muted); min-width: 100%; }
+.tb-ekmek-kayit-row .ozet-liste {
+  flex: 1; min-width: 100%;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.tb-ekmek-kayit-row .ozet-satir { color: var(--ink-muted); font-weight: 600; line-height: 1.25; }
 .tb-ekmek-duzenle-btn {
   flex-shrink: 0; height: 24px; padding: 0 8px; border-radius: 7px; border: 1px solid #E0C3BB;
   background: var(--danger-soft); color: #E94F37 !important; font-size: 9.5px; font-weight: 700; cursor: pointer;
