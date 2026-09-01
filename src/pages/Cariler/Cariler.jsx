@@ -327,11 +327,23 @@ export default function Cariler({ data, onNavigate }) {
     const bit = new Date(futuraBitis + 'T23:59:59').getTime();
     const hareketler = cariHareketler.filter((h) => h.cariId === selectedCari.id && h.ts >= bas && h.ts <= bit);
     if (hareketler.length === 0) { showToast('Bu aralıkta hareket yok'); return; }
-    const tutar = hareketler.reduce((s, h) => s + h.toplam, 0);
+    const toplamHareket = hareketler.reduce((s, h) => s + h.toplam, 0);
+    // Aynı dönemdeki ödemeleri de hesaba kat
+    const donemOdemeleri = cariOdemeler.filter((o) => o.cariId === selectedCari.id && o.ts >= bas && o.ts <= bit);
+    const toplamOdeme = donemOdemeleri.reduce((s, o) => s + o.tutar, 0);
+    const tutar = Math.max(0, toplamHareket - toplamOdeme);
     const tarih = new Date().toISOString().slice(0, 10);
     // Hareketleri sil
     const hareketIds = hareketler.map((h) => h.id);
     await deleteCariHareketler(hareketIds);
+    // Dönemdeki ödemeleri de sil (fatura tutarına dahil edildi)
+    if (donemOdemeleri.length > 0) {
+      const odemeIds = donemOdemeleri.map((o) => o.id);
+      setCariOdemeler((prev) => prev.filter((o) => !odemeIds.includes(o.id)));
+      await Promise.all(odemeIds.map((oid) =>
+        supabase.from('cari_odemeler').delete().eq('id', oid).then(({ error }) => { if (error) console.error(error.message); })
+      ));
+    }
     // Faturayı oluştur
     addCariFatura(selectedCari.id, { tarih, faturaNo: '', tutar, donemBaslangic: futuraBaslangic, donemBitis: futuraBitis });
     setFuturaOpen(false);
