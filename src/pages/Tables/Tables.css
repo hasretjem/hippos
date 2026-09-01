@@ -674,26 +674,26 @@
 }
 .tb-bosvar-package-top {
   display: flex; align-items: center; gap: 6px;
-  color: #fff; font-weight: 800; font-size: 12.5px;
+  color: #fff; font-weight: 800; font-size: 14.5px;
 }
-.tb-bosvar-package-not { font-size: 11px; font-style: italic; font-weight: 700; color: #FDE2E2; }
+.tb-bosvar-package-not { font-size: 13px; font-style: italic; font-weight: 700; color: #FDE2E2; }
 .tb-bosvar-package-not-time { font-style: normal; font-weight: 500; opacity: 0.85; }
 .tb-bosvar-package-row { display: flex; gap: 6px; }
 .tb-bosvar-package-aldi, .tb-bosvar-package-alamadi {
-  flex: 1; height: 26px; border-radius: 7px; border: none; font-weight: 700; font-size: 11.5px; cursor: pointer;
+  flex: 1; height: 26px; border-radius: 7px; border: none; font-weight: 700; font-size: 13.5px; cursor: pointer;
 }
-.tb-bosvar-package-aldi { background: #F1E9D2; color: #2b1d0e; }
+.tb-bosvar-package-aldi { background: #F1E9D2 !important; color: #2b1d0e !important; }
 .tb-bosvar-package-alamadi { background: rgba(0,0,0,0.22); color: #fff; }
 .tb-bosvar-package-form { display: flex; flex-direction: column; gap: 5px; }
 .tb-bosvar-package-form textarea {
-  border: none; border-radius: 7px; padding: 6px 8px; font-size: 11.5px; resize: none; font-family: inherit;
+  border: none; border-radius: 7px; padding: 6px 8px; font-size: 13.5px; resize: none; font-family: inherit;
 }
 .tb-bosvar-package-form-row { display: flex; gap: 6px; }
 .tb-bosvar-package-form-row button {
-  flex: 1; height: 26px; border-radius: 7px; border: none; font-weight: 700; font-size: 11px; cursor: pointer;
+  flex: 1; height: 26px; border-radius: 7px; border: none; font-weight: 700; font-size: 13px; cursor: pointer;
   background: rgba(0,0,0,0.22); color: #fff;
 }
-.tb-bosvar-package-form-row button.primary { background: #F1E9D2; color: #2b1d0e; }
+.tb-bosvar-package-form-row button.primary { background: #F1E9D2 !important; color: #2b1d0e !important; }
 .tb-bosvar-package-form-row button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Paketler paneli header: Yeni Paket daralt + yanına Boş Var butonu */
@@ -702,8 +702,9 @@
 .tb-bosvar-header-btn {
   flex-shrink: 0;
   display: flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 0 12px; border-radius: 10px; border: none;
-  background: #74d600; color: #1c3d00; font-weight: 700; font-size: 13px; cursor: pointer;
+  padding: 0 12px; border-radius: 10px;
+  border: 2px dashed #1c3d00;
+  background: #74d600; color: #1c3d00 !important; font-weight: 700; font-size: 13px; cursor: pointer;
 }
 .tb-bosvar-header-btn:hover { filter: brightness(1.06); }
 
