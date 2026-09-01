@@ -439,12 +439,12 @@ function CariDetay({ cari, onBack, onAction }) {
 function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitted, submitPaketTeslimat, submitCariTeslimatBildirim }) {
   const isKismi = modal.tip === 'kismi_odeme';
   const isCari = modal.hedefTip === 'cari';
-  // Paket TAM teslimatında (teslim_edildi) artık ödeme yöntemi seçimi var — yönteme göre
+  // Paket ödemesinde (tam teslim VEYA kısmi ödeme) ödeme yöntemi seçimi var — yönteme göre
   // farklı kanıt isteniyor (Nakit/Cari→not, Kredi Kartı/Yemek Kartı→fotoğraf zorunlu).
-  const isPaketTeslim = modal.hedefTip === 'paket' && modal.tip === 'teslim_edildi';
+  const isPaketOdeme = modal.hedefTip === 'paket';
 
   const [tutar, setTutar] = useState('');
-  const [odemeYontemi, setOdemeYontemi] = useState(isCari ? '' : isPaketTeslim ? '' : 'Nakit');
+  const [odemeYontemi, setOdemeYontemi] = useState(isCari ? '' : isPaketOdeme ? '' : 'Nakit');
   const [notMetni, setNotMetni] = useState('');
   const [evidenceType, setEvidenceType] = useState(null); // 'fis' | 'yemek_karti' | 'not'
   const [fotoFile, setFotoFile] = useState(null);
@@ -461,22 +461,22 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
     setFotoPreview(URL.createObjectURL(file));
   }
 
-  // Paket TAM teslimde yönteme göre hangi kanıt gerekiyor:
+  // Paket ödemesinde (tam veya kısmi) yönteme göre hangi kanıt gerekiyor:
   //  Nakit / Cari → not zorunlu (Cari'de not "neden cari" bilgisini taşır)
   //  Kredi Kartı / Yemek Kartı → fotoğraf zorunlu
-  const paketTeslimFotoGerek = isPaketTeslim && (odemeYontemi === 'Kredi Kartı' || odemeYontemi === 'Yemek Kartı');
-  const paketTeslimNotGerek = isPaketTeslim && (odemeYontemi === 'Nakit' || odemeYontemi === 'Cari');
+  const paketOdemeFotoGerek = isPaketOdeme && (odemeYontemi === 'Kredi Kartı' || odemeYontemi === 'Yemek Kartı');
+  const paketOdemeNotGerek = isPaketOdeme && (odemeYontemi === 'Nakit' || odemeYontemi === 'Cari');
 
   const parsedTutar = parseFloat(tutar.replace(',', '.'));
   const tutarAsimVar = isKismi && !isNaN(parsedTutar) && modal.ustTutar != null && parsedTutar > modal.ustTutar;
   const tutarGecerli = !isKismi || (!isNaN(parsedTutar) && parsedTutar > 0 && !tutarAsimVar);
   const notZorunluTamam = evidenceType === 'not' ? notMetni.trim().length > 0 : true;
-  const kanitVar = isPaketTeslim
-    ? (paketTeslimFotoGerek ? !!fotoFile : paketTeslimNotGerek ? notMetni.trim().length > 0 : false)
+  const kanitVar = isPaketOdeme
+    ? (paketOdemeFotoGerek ? !!fotoFile : paketOdemeNotGerek ? notMetni.trim().length > 0 : false)
     : (evidenceType === 'not' ? notMetni.trim().length > 0 : !!fotoFile);
   const canSubmit = tutarGecerli && kanitVar && notZorunluTamam
-    && (isKismi ? notMetni.trim().length > 0 && !!odemeYontemi : true)
-    && (isPaketTeslim ? !!odemeYontemi : true)
+    && (isKismi && !isPaketOdeme ? notMetni.trim().length > 0 && !!odemeYontemi : true)
+    && (isPaketOdeme ? !!odemeYontemi : true)
     && !uploading;
 
   async function handleSubmit() {
@@ -493,7 +493,7 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
         paketAdi: modal.hedefId,
         tip: modal.tip,
         tutar: isKismi ? parsedTutar : null,
-        odemeYontemi: isKismi || isPaketTeslim ? odemeYontemi : null,
+        odemeYontemi: isKismi || isPaketOdeme ? odemeYontemi : null,
         notMetni: notMetni.trim() || null,
         fotoUrl,
         paketciAdi,
@@ -547,7 +547,7 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
             )}
           </div>
         )}
-        {(isKismi || isCari) && (
+        {((isKismi && !isPaketOdeme) || isCari) && (
           <div className="pk-modal-section">
             <label>Ödeme Yöntemi</label>
             <div className="pk-method-row">
@@ -557,7 +557,7 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
             </div>
           </div>
         )}
-        {isPaketTeslim && (
+        {isPaketOdeme && (
           <div className="pk-modal-section">
             <label>Ödeme Yöntemi</label>
             <div className="pk-method-row">
@@ -568,9 +568,9 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
           </div>
         )}
 
-        {isPaketTeslim ? (
+        {isPaketOdeme ? (
           <>
-            {paketTeslimFotoGerek && (
+            {paketOdemeFotoGerek && (
               <div className="pk-modal-section">
                 <label>{odemeYontemi === 'Yemek Kartı' ? 'Ekran Görüntüsü (zorunlu)' : 'Fiş Fotoğrafı (zorunlu)'}</label>
                 <div className="pk-evidence-row">
@@ -589,7 +589,7 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
                 )}
               </div>
             )}
-            {paketTeslimNotGerek && (
+            {paketOdemeNotGerek && (
               <div className="pk-modal-section">
                 <label>{odemeYontemi === 'Cari' ? 'Not (neden cari — zorunlu)' : 'Not (zorunlu)'}</label>
                 <textarea
@@ -632,12 +632,12 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
           <p className="pk-modal-warning">
             {isKismi && tutarAsimVar && 'Girilen tutar toplamı aşamaz. '}
             {isKismi && !tutarAsimVar && !tutarGecerli && 'Geçerli bir tutar gir. '}
-            {isKismi && !odemeYontemi && 'Ödeme yöntemi seç. '}
-            {isKismi && !notMetni.trim() && 'Kısmi ödemede not zorunlu. '}
-            {isPaketTeslim && !odemeYontemi && 'Ödeme yöntemi seç. '}
-            {isPaketTeslim && odemeYontemi && paketTeslimFotoGerek && !fotoFile && 'Fotoğraf/ekran görüntüsü yükle. '}
-            {isPaketTeslim && odemeYontemi && paketTeslimNotGerek && !notMetni.trim() && 'Not yaz. '}
-            {!isKismi && !isPaketTeslim && !kanitVar && 'Fotoğraf yükle veya not yaz.'}
+            {isKismi && !isPaketOdeme && !odemeYontemi && 'Ödeme yöntemi seç. '}
+            {isKismi && !isPaketOdeme && !notMetni.trim() && 'Kısmi ödemede not zorunlu. '}
+            {isPaketOdeme && !odemeYontemi && 'Ödeme yöntemi seç. '}
+            {isPaketOdeme && odemeYontemi && paketOdemeFotoGerek && !fotoFile && 'Fotoğraf/ekran görüntüsü yükle. '}
+            {isPaketOdeme && odemeYontemi && paketOdemeNotGerek && !notMetni.trim() && 'Not yaz. '}
+            {!isKismi && !isPaketOdeme && !kanitVar && 'Fotoğraf yükle veya not yaz.'}
           </p>
         )}
 

@@ -6,7 +6,7 @@ import {
   Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote, PackageOpen,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
   Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp, ArrowLeft, Package, Calculator, Delete,
-  MessageCircle, Building2, User, MapPin, Phone,
+  MessageCircle, Building2, User, MapPin, Phone, ZoomIn, ZoomOut, Maximize2,
 } from 'lucide-react';
 import ProductButton, { getDisplayName } from '../../components/ProductButton';
 import { resolveButtonStyle } from '../../constants/themeDefaults';
@@ -1797,12 +1797,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       )}
 
       {photoModalUrl && (
-        <div className="ds-modal-overlay" onClick={() => setPhotoModalUrl(null)}>
-          <div className="ds-photo-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="ds-modal-x" onClick={() => setPhotoModalUrl(null)}><X size={18} /></button>
-            <img src={photoModalUrl} alt="Paketçi fotoğrafı" />
-          </div>
-        </div>
+        <PhotoZoomModal url={photoModalUrl} onClose={() => setPhotoModalUrl(null)} />
       )}
 
       {/* YAZDIRMA ŞABLONU */}
@@ -1836,6 +1831,94 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             <span>TOPLAM</span>
             <span>{TL(finalTotal)}</span>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Paketçi fotoğrafını büyütüp inceleme: fare tekerleği/pinch ile zoom, sürükleyerek pan ----
+function PhotoZoomModal({ url, onClose }) {
+  const [scale, setScale] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const dragRef = useRef(null); // { startX, startY, origX, origY }
+  const containerRef = useRef(null);
+
+  const MIN_SCALE = 1;
+  const MAX_SCALE = 5;
+
+  function clampScale(s) {
+    return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
+  }
+
+  function zoomBy(delta, centerX, centerY) {
+    setScale((prevScale) => {
+      const next = clampScale(prevScale + delta);
+      if (next === prevScale) return prevScale;
+      // Zoom merkezini (fare/dokunuş noktasını) sabit tutmak için pos'u orantılı kaydır.
+      if (containerRef.current && centerX != null && centerY != null) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const cx = centerX - rect.left - rect.width / 2;
+        const cy = centerY - rect.top - rect.height / 2;
+        const ratio = next / prevScale - 1;
+        setPos((p) => ({ x: p.x - cx * ratio, y: p.y - cy * ratio }));
+      }
+      if (next === MIN_SCALE) setPos({ x: 0, y: 0 });
+      return next;
+    });
+  }
+
+  function handleWheel(e) {
+    e.preventDefault();
+    zoomBy(e.deltaY < 0 ? 0.3 : -0.3, e.clientX, e.clientY);
+  }
+
+  function handleMouseDown(e) {
+    if (scale <= MIN_SCALE) return;
+    dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
+  }
+  function handleMouseMove(e) {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    setPos({ x: dragRef.current.origX + dx, y: dragRef.current.origY + dy });
+  }
+  function handleMouseUp() {
+    dragRef.current = null;
+  }
+
+  function resetView() {
+    setScale(1);
+    setPos({ x: 0, y: 0 });
+  }
+
+  return (
+    <div className="ds-modal-overlay" onClick={onClose}>
+      <div className="ds-photo-modal" onClick={(e) => e.stopPropagation()}>
+        <button className="ds-modal-x" onClick={onClose}><X size={18} /></button>
+        <div
+          ref={containerRef}
+          className="ds-photo-zoom-container"
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
+          <img
+            src={url}
+            alt="Paketçi fotoğrafı"
+            draggable={false}
+            style={{
+              transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`,
+              cursor: scale > MIN_SCALE ? 'grab' : 'default',
+            }}
+          />
+        </div>
+        <div className="ds-photo-zoom-controls">
+          <button onClick={() => zoomBy(-0.4)} title="Küçült"><ZoomOut size={18} /></button>
+          <button onClick={resetView} title="İlk boyut"><Maximize2 size={16} /></button>
+          <button onClick={() => zoomBy(0.4)} title="Büyüt"><ZoomIn size={18} /></button>
         </div>
       </div>
     </div>
