@@ -1310,7 +1310,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 <div className="ds-courier-pending">
                   <div className="ds-courier-row">
                     <span className="ds-courier-tag wait">Onay bekliyor</span>
-                    <span>{bekleyenHareket.tip === 'teslim_edildi' ? 'Teslim Edildi' : `Kısmi Ödeme: ${TL(bekleyenHareket.tutar)} (${bekleyenHareket.odemeYontemi})`}</span>
+                    <span>{bekleyenHareket.tip === 'teslim_edildi' ? `Teslim Edildi${bekleyenHareket.odemeYontemi ? ` (${bekleyenHareket.odemeYontemi})` : ''}` : `Kısmi Ödeme: ${TL(bekleyenHareket.tutar)} (${bekleyenHareket.odemeYontemi})`}</span>
                   </div>
                   <div className="ds-courier-meta">
                     <Package size={11} /> {bekleyenHareket.paketciAdi} — {new Date(bekleyenHareket.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
@@ -1337,7 +1337,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                     <span className={`ds-courier-tag ${h.durum}`}>
                       {h.durum === 'bekliyor' ? 'Bekliyor' : h.durum === 'onaylandi' ? 'Onaylandı' : 'Reddedildi'}
                     </span>
-                    <span>{h.tip === 'teslim_edildi' ? 'Teslim Edildi' : `Kısmi: ${TL(h.tutar)}`} — {h.paketciAdi}</span>
+                    <span>{h.tip === 'teslim_edildi' ? `Teslim Edildi${h.odemeYontemi ? ` (${h.odemeYontemi})` : ''}` : `Kısmi: ${TL(h.tutar)}`} — {h.paketciAdi}</span>
                     {h.fotoUrl && (
                       <button className="ds-courier-history-foto" onClick={() => setPhotoModalUrl(h.fotoUrl)}>Foto</button>
                     )}
