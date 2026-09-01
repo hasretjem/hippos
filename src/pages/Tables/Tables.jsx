@@ -1009,7 +1009,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
                       const stokBilgi = EKMEK_TURLERI_STOK.find((s) => s.key === t.key);
                       const dusuk = stokBilgi && (ekmekStok[t.key] || 0) < stokBilgi.esik;
                       return (
-                        <div key={t.key} className="tb-ekmek-row">
+                        <React.Fragment key={t.key}>
                           <span className="tb-ekmek-label">{t.label}:</span>
                           <input
                             ref={(el) => { ekmekInputRefs.current[t.key] = el; }}
@@ -1021,11 +1021,11 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
                             onChange={(e) => setEkmekMiktar((prev) => ({ ...prev, [t.key]: e.target.value }))}
                             onKeyDown={(e) => e.key === 'Enter' && ekmekEnterNext(t.key)}
                           />
-                          <span className={dusuk ? 'tb-ekmek-stok-pill dusuk' : 'tb-ekmek-stok-pill'}>
-                            Stok: {ekmekStok[t.key] ?? 0}
-                            {dusuk && <span className="tb-ekmek-stok-uyari"> ⚠️ {stokBilgi.uyariMesaji}</span>}
+                          <span className="tb-ekmek-stok-cell">Stok: {ekmekStok[t.key] ?? 0}</span>
+                          <span className={dusuk ? 'tb-ekmek-uyari-cell dusuk' : 'tb-ekmek-uyari-cell'}>
+                            {dusuk && <>⚠️ {stokBilgi.uyariMesaji}</>}
                           </span>
-                        </div>
+                        </React.Fragment>
                       );
                     })}
                   </div>
