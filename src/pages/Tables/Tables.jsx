@@ -13,15 +13,6 @@ import {
   StickyNote, MessageCircle, Trash2, Printer, Copy, PackageOpen,
 } from 'lucide-react';
 
-// Ekmek stok kritik seviyeye düşünce önerilecek sipariş listesi (kopyala-yapıştır için) —
-// Settings.jsx'teki Ekmek Stok Ekleme modalıyla aynı liste.
-const EKMEK_SIPARIS_LISTESI = [
-  { kod: '1027053', metin: '2 Koli 1027053  Don.Baget Fransız  YP 1/2 (40*160 Gr) Ulker Marifet' },
-  { kod: '4400064', metin: '2 Koli 4400064  1/3 Baget Sade 95 Gr. 50/36' },
-  { kod: '1033506', metin: '1 Koli 1033506 1/3 Küçük Tahıl Ekmek (70 Ad )' },
-  { kod: '4400191', metin: '1 Koli 4400191  1/2 Artısan Baget Domates&Fesleğen' },
-];
-
 const PAIR_SECOND = new Set(TABLE_PAIRS.map((p) => p[1]));
 const PAIR_FIRST = new Map(TABLE_PAIRS.map((p) => [p[0], p[1]]));
 
@@ -999,33 +990,35 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
               </div>
             </div>
 
-            {/* Ekmek Gönderme — artık 2 kolonlu: sol giriş listesi, sağ ikaz/sipariş kopyalama */}
+            {/* Ekmek Gönderme — stok+ikaz artık ilgili ekmek satırının yanında, sipariş kartları yan yana grid */}
             <div className="tb-modal tb-ekmek-modal">
-              <h3><UtensilsCrossed size={16} /> Ekmek Gönderme</h3>
+              <h3 className="tb-ekmek-modal-title"><UtensilsCrossed size={16} /> Ekmek Gönderme</h3>
 
-              <div className="tb-ekmek-cols">
-                {/* SOL: giriş listesi + yazdır + geçmiş kayıtlar */}
-                <div className="tb-ekmek-col-left">
+              <div className="tb-ekmek-col-left">
                   <div className="tb-ekmek-form">
-                    {EKMEK_TURLERI.map((t) => (
-                      <div key={t.key} className="tb-ekmek-row">
-                        <span className="tb-ekmek-label">{t.label}:</span>
-                        <input
-                          ref={(el) => { ekmekInputRefs.current[t.key] = el; }}
-                          type="number"
-                          min={0}
-                          inputMode="numeric"
-                          className="tb-ekmek-input"
-                          value={ekmekMiktar[t.key]}
-                          onChange={(e) => setEkmekMiktar((prev) => ({ ...prev, [t.key]: e.target.value }))}
-                          onKeyDown={(e) => e.key === 'Enter' && ekmekEnterNext(t.key)}
-                        />
-                      </div>
-                    ))}
+                    {EKMEK_TURLERI.map((t) => {
+                      const stokBilgi = EKMEK_TURLERI_STOK.find((s) => s.key === t.key);
+                      const dusuk = stokBilgi && (ekmekStok[t.key] || 0) < stokBilgi.esik;
+                      return (
+                        <div key={t.key} className="tb-ekmek-row">
+                          <span className="tb-ekmek-label">{t.label}:</span>
+                          <input
+                            ref={(el) => { ekmekInputRefs.current[t.key] = el; }}
+                            type="number"
+                            min={0}
+                            inputMode="numeric"
+                            className="tb-ekmek-input"
+                            value={ekmekMiktar[t.key]}
+                            onChange={(e) => setEkmekMiktar((prev) => ({ ...prev, [t.key]: e.target.value }))}
+                            onKeyDown={(e) => e.key === 'Enter' && ekmekEnterNext(t.key)}
+                          />
+                          <span className={dusuk ? 'tb-ekmek-stok-pill dusuk' : 'tb-ekmek-stok-pill'}>
+                            {dusuk && '⚠️ '}Stok: {ekmekStok[t.key] ?? 0}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <p className="tb-ekmek-stok-info">
-                    Stokta: {EKMEK_TURLERI.map((t) => `${t.label.replace(' Ekmeği', '')}: ${ekmekStok[t.key] ?? 0}`).join(' · ')}
-                  </p>
 
                   <button
                     className="tb-primary tb-ekmek-print-btn"
@@ -1035,69 +1028,61 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
                     <Printer size={14} /> Yazdır
                   </button>
 
+                  {ekmekDusukStoklar.length > 0 && (
+                    <div className="tb-ekmek-siparis-section">
+                      <span className="tb-ekmek-siparis-baslik">Sipariş Edilecekler</span>
+                      <div className="tb-ekmek-siparis-grid">
+                        {ekmekDusukStoklar.map((t) => (
+                          <div key={t.key} className="tb-ekmek-siparis-kart">
+                            <span className="tb-ekmek-siparis-kart-text">{t.siparisMetni}</span>
+                            <button
+                              className="tb-ekmek-siparis-kopyala-btn"
+                              title="Kopyala"
+                              onClick={() => ekmekKopyalaSiparis(t.siparisMetni, t.key)}
+                            >
+                              {ekmekKopyalananKod === t.key ? <Check size={13} /> : <Copy size={13} />}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="tb-ekmek-kayitlar">
                     <span className="tb-hazir-notlar-label">Bugünkü Kayıtlar</span>
                     {ekmekKayitlar.length === 0 && <p className="tb-history-empty">Bugün henüz kayıt yok</p>}
-                    {ekmekKayitlar.map((rec) => (
-                      <div key={rec.id} className="tb-ekmek-kayit-row">
-                        {ekmekEditId === rec.id ? (
-                          <div className="tb-ekmek-edit">
-                            <span className="saat">{rec.saat}</span>
-                            {EKMEK_TURLERI.map((t) => (
-                              <input
-                                key={t.key}
-                                type="number"
-                                min={0}
-                                title={t.label}
-                                value={ekmekEditDraft[t.key]}
-                                onChange={(e) => setEkmekEditDraft((d) => ({ ...d, [t.key]: e.target.value }))}
-                              />
-                            ))}
-                            <button className="vazgec" onClick={() => setEkmekEditId(null)}>Vazgeç</button>
-                            <button className="kaydet" onClick={saveEkmekEdit}>Kaydet</button>
-                          </div>
-                        ) : (
-                          <>
-                            <span className="saat">{rec.saat}</span>
-                            <span className="ozet">
-                              {EKMEK_TURLERI.filter((t) => rec[t.key] > 0).map((t) => `${t.label.replace(' Ekmeği', '')}: ${rec[t.key]}`).join(' · ')}
-                            </span>
-                            <button className="tb-ekmek-duzenle-btn" onClick={() => openEkmekEdit(rec)}>Düzenle</button>
-                          </>
-                        )}
-                      </div>
-                    ))}
+                    <div className="tb-ekmek-kayit-grid">
+                      {ekmekKayitlar.map((rec) => (
+                        <div key={rec.id} className="tb-ekmek-kayit-row">
+                          {ekmekEditId === rec.id ? (
+                            <div className="tb-ekmek-edit">
+                              <span className="saat">{rec.saat}</span>
+                              {EKMEK_TURLERI.map((t) => (
+                                <input
+                                  key={t.key}
+                                  type="number"
+                                  min={0}
+                                  title={t.label}
+                                  value={ekmekEditDraft[t.key]}
+                                  onChange={(e) => setEkmekEditDraft((d) => ({ ...d, [t.key]: e.target.value }))}
+                                />
+                              ))}
+                              <button className="vazgec" onClick={() => setEkmekEditId(null)}>Vazgeç</button>
+                              <button className="kaydet" onClick={saveEkmekEdit}>Kaydet</button>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="saat">{rec.saat}</span>
+                              <span className="ozet">
+                                {EKMEK_TURLERI.filter((t) => rec[t.key] > 0).map((t) => `${t.label.replace(' Ekmeği', '')}: ${rec[t.key]}`).join(' · ')}
+                              </span>
+                              <button className="tb-ekmek-duzenle-btn" onClick={() => openEkmekEdit(rec)}>Düzenle</button>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-
-                {/* SAĞ: sadece stok ikazı + sipariş kopyalama, giriş yok — burada kritiğe
-                    düşen ekmek varsa görünür, yoksa sütun boş/ok mesajıyla kalır */}
-                <div className="tb-ekmek-col-right">
-                  {ekmekDusukStoklar.length === 0 ? (
-                    <p className="tb-ekmek-stok-ok">✅ Tüm ekmek stokları yeterli</p>
-                  ) : (
-                    <>
-                      <span className="tb-ekmek-uyari-baslik">Stok İkazı</span>
-                      {ekmekDusukStoklar.map((t) => (
-                        <div key={t.key} className="tb-ekmek-uyari-satir">
-                          ⚠️ {t.label} &lt; {t.esik} ({ekmekStok[t.key] || 0} kaldı)
-                        </div>
-                      ))}
-                      <span className="tb-ekmek-siparis-baslik">Sipariş edilecekler</span>
-                      {EKMEK_SIPARIS_LISTESI.map((s) => (
-                        <div key={s.kod} className="tb-ekmek-siparis-satir">
-                          <span>{s.metin}</span>
-                          <button
-                            className="tb-ekmek-siparis-kopyala-btn"
-                            onClick={() => ekmekKopyalaSiparis(s.metin, s.kod)}
-                          >
-                            {ekmekKopyalananKod === s.kod ? (<><Check size={11} /> Kopyalandı</>) : (<><Copy size={11} /> Kopyala</>)}
-                          </button>
-                        </div>
-                      ))}
-                    </>
-                  )}
-                </div>
               </div>
             </div>
           </div>

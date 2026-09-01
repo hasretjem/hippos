@@ -196,30 +196,50 @@
 
 /* ---- Ekmek Gönderme ---- */
 .tb-ekmek-modal {
-  min-width: 520px;
-  max-width: 640px;
+  min-width: 620px;
+  max-width: 760px;
   max-height: 90vh;
   overflow-y: auto;
 }
-.tb-ekmek-cols {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
-  align-items: start;
+.tb-ekmek-modal-title {
+  font-family: 'Geom-BlackItalic', sans-serif;
+  font-weight: normal;
+  font-style: normal;
+  font-size: 27px;
 }
-@media (max-width: 640px) {
+@media (max-width: 700px) {
   .tb-ekmek-modal { min-width: 0; }
-  .tb-ekmek-cols { grid-template-columns: 1fr; }
 }
 .tb-ekmek-col-left { display: flex; flex-direction: column; }
 .tb-ekmek-form { display: flex; flex-direction: column; gap: 8px; margin: 14px 0; }
-.tb-ekmek-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tb-ekmek-row { display: flex; align-items: center; gap: 10px; }
 .tb-ekmek-label { font-size: 12.5px; font-weight: 700; color: var(--ink); flex: 1; }
 .tb-ekmek-input {
   width: 64px; height: 38px; border-radius: 9px; border: 1px solid var(--border);
   background: var(--panel-2); text-align: center; font-size: 15px; font-weight: 800; color: #E94F37 !important;
 }
 .tb-ekmek-input:focus { outline: none; border-color: var(--tier2); background: #fff; }
+
+.tb-ekmek-stok-pill {
+  flex-shrink: 0;
+  min-width: 150px;
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #393E41 !important;
+  opacity: 0.75;
+  background: #F6F7EB;
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  padding: 5px 9px;
+}
+.tb-ekmek-stok-pill.dusuk {
+  opacity: 1;
+  color: #E94F37 !important;
+  background: rgba(233, 79, 55, 0.1);
+  border-color: #E94F37;
+}
+
 .tb-ekmek-print-btn {
   width: 100%;
   height: 44px;
@@ -235,49 +255,7 @@
   margin-bottom: 14px;
 }
 
-.tb-ekmek-stok-info {
-  font-size: 11.5px;
-  color: #393E41 !important;
-  opacity: 0.8;
-  margin: 6px 0 10px;
-  line-height: 1.5;
-}
-
-.tb-ekmek-kayitlar { padding-top: 12px; border-top: 1px dashed var(--border); }
-.tb-ekmek-kayit-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 0; border-bottom: 1px solid var(--border-soft); font-size: 11px;
-}
-.tb-ekmek-kayit-row .saat { flex-shrink: 0; font-weight: 800; color: var(--contour); }
-.tb-ekmek-kayit-row .ozet { flex: 1; color: var(--ink-muted); }
-.tb-ekmek-duzenle-btn {
-  flex-shrink: 0; height: 26px; padding: 0 10px; border-radius: 7px; border: 1px solid #E0C3BB;
-  background: var(--danger-soft); color: #E94F37 !important; font-size: 10px; font-weight: 700; cursor: pointer;
-}
-.tb-ekmek-edit { display: flex; align-items: center; gap: 5px; flex: 1; flex-wrap: wrap; }
-.tb-ekmek-edit .saat { flex-shrink: 0; font-weight: 800; color: var(--contour); }
-.tb-ekmek-edit input { width: 38px; height: 26px; border-radius: 6px; border: 1px solid var(--border); text-align: center; font-size: 11px; color: #E94F37 !important; }
-.tb-ekmek-edit button { flex-shrink: 0; height: 26px; padding: 0 8px; border-radius: 6px; border: none; font-size: 10px; font-weight: 700; cursor: pointer; }
-.tb-ekmek-edit button.vazgec { background: var(--border); color: var(--ink); }
-.tb-ekmek-edit button.kaydet { background: var(--tier1); color: #fff; }
-
-/* ---- SAĞ KOLON: sadece ikaz + sipariş kopyalama ---- */
-.tb-ekmek-col-right {
-  background: #F6F7EB;
-  border-radius: 10px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-self: stretch;
-}
-.tb-ekmek-stok-ok {
-  color: #393E41 !important;
-  font-size: 13px;
-  font-weight: 600;
-  margin: 0;
-}
-.tb-ekmek-uyari-baslik,
+.tb-ekmek-siparis-section { margin-bottom: 14px; }
 .tb-ekmek-siparis-baslik {
   font-size: 11px;
   font-weight: 700;
@@ -285,45 +263,72 @@
   opacity: 0.7;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  margin-top: 4px;
+  display: block;
+  margin-bottom: 8px;
 }
-.tb-ekmek-uyari-satir {
-  padding: 6px 8px;
-  background: rgba(233, 79, 55, 0.1);
-  border: 1px solid #E94F37;
-  border-radius: 8px;
-  color: #E94F37 !important;
-  font-weight: 600;
-  font-size: 11.5px;
-  line-height: 1.4;
+.tb-ekmek-siparis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
 }
-.tb-ekmek-siparis-satir {
+@media (max-width: 700px) {
+  .tb-ekmek-siparis-grid { grid-template-columns: 1fr; }
+}
+.tb-ekmek-siparis-kart {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: #fff;
-  border-radius: 6px;
-  padding: 6px 8px;
+  background: #F6F7EB;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 8px 9px;
+}
+.tb-ekmek-siparis-kart-text {
   font-weight: 400;
   color: #393E41 !important;
   font-size: 11px;
+  line-height: 1.35;
 }
 .tb-ekmek-siparis-kopyala-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
   flex-shrink: 0;
+  width: 26px;
+  height: 26px;
   background: #393E41;
   color: #F6F7EB !important;
   border: none;
   border-radius: 6px;
-  padding: 5px 9px;
-  font-size: 11px;
-  font-weight: 600;
   cursor: pointer;
-  white-space: nowrap;
 }
+
+.tb-ekmek-kayitlar { padding-top: 12px; border-top: 1px dashed var(--border); }
+.tb-ekmek-kayit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 10px;
+}
+@media (max-width: 700px) {
+  .tb-ekmek-kayit-grid { grid-template-columns: 1fr; }
+}
+.tb-ekmek-kayit-row {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 6px 0; border-bottom: 1px solid var(--border-soft); font-size: 10.5px;
+}
+.tb-ekmek-kayit-row .saat { flex-shrink: 0; font-weight: 800; color: var(--contour); }
+.tb-ekmek-kayit-row .ozet { flex: 1; color: var(--ink-muted); min-width: 100%; }
+.tb-ekmek-duzenle-btn {
+  flex-shrink: 0; height: 24px; padding: 0 8px; border-radius: 7px; border: 1px solid #E0C3BB;
+  background: var(--danger-soft); color: #E94F37 !important; font-size: 9.5px; font-weight: 700; cursor: pointer;
+}
+.tb-ekmek-edit { display: flex; align-items: center; gap: 5px; flex: 1; flex-wrap: wrap; }
+.tb-ekmek-edit .saat { flex-shrink: 0; font-weight: 800; color: var(--contour); }
+.tb-ekmek-edit input { width: 38px; height: 26px; border-radius: 6px; border: 1px solid var(--border); text-align: center; font-size: 11px; color: #E94F37 !important; }
+.tb-ekmek-edit button { flex-shrink: 0; height: 26px; padding: 0 8px; border-radius: 6px; border: none; font-size: 10px; font-weight: 700; cursor: pointer; }
+.tb-ekmek-edit button.vazgec { background: var(--border); color: var(--ink); }
+.tb-ekmek-edit button.kaydet { background: var(--tier1); color: #fff; }
 
 .tb-mutfak-not-textarea {
   width: 100%; min-height: 110px; resize: vertical;
