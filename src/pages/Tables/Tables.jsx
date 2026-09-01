@@ -52,6 +52,7 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     bosvarKayitlari,
     paketciBosvarAldi,
     paketciBosvarAlamadi,
+    submitBosvarKaydi,
     bosvarBildirimleri,
   } = data;
 
@@ -76,6 +77,9 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
   const [cariUyariTab, setCariUyariTab] = useState('firma'); // 'firma' | 'bireysel'
   const [bosvarAlamadiFormFor, setBosvarAlamadiFormFor] = useState(null); // hangi bosvar kaydının "Alamadım" notu açık
   const [bosvarAlamadiNotu, setBosvarAlamadiNotu] = useState('');
+  const [bosvarPromptOpen, setBosvarPromptOpen] = useState(false);
+  const [bosvarPromptAdres, setBosvarPromptAdres] = useState('');
+  const [bosvarPromptNot, setBosvarPromptNot] = useState('');
   const bosvarKayitListesi = useMemo(
     () => (bosvarKayitlari || []).filter((b) => b.durum === 'bekliyor').sort((a, b) => b.ts - a.ts),
     [bosvarKayitlari]
@@ -689,26 +693,73 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
         <aside className="tb-packages">
           <div className="tb-packages-header">
             <h2 className="tb-section-title">Paketler</h2>
-            <button
-              className="tb-add-package"
-              onClick={() => {
-                const name = openPackage();
-                openTable(name);
-              }}
-            >
-              <div className="tb-add-package-plus-wrap">
-                <div className="tb-add-package-plus"><Plus size={18} /></div>
-              </div>
-              <span>Yeni Paket</span>
-            </button>
+            <div className="tb-packages-header-btns">
+              <button
+                className="tb-add-package tb-add-package-narrow"
+                onClick={() => {
+                  const name = openPackage();
+                  openTable(name);
+                }}
+              >
+                <div className="tb-add-package-plus-wrap">
+                  <div className="tb-add-package-plus"><Plus size={18} /></div>
+                </div>
+                <span>Yeni Paket</span>
+              </button>
+              <button className="tb-bosvar-header-btn" onClick={() => { setBosvarPromptOpen(true); setBosvarPromptAdres(''); setBosvarPromptNot(''); }}>
+                <PackageOpen size={16} /> Boş Var!
+              </button>
+            </div>
           </div>
+          {bosvarPromptOpen && (
+            <div className="tb-bosvar-prompt-overlay" onClick={() => setBosvarPromptOpen(false)}>
+              <div className="tb-bosvar-prompt-modal" onClick={(e) => e.stopPropagation()}>
+                <h3>Boş Var</h3>
+                <textarea
+                  autoFocus
+                  rows={2}
+                  placeholder="Adres..."
+                  value={bosvarPromptAdres}
+                  onChange={(e) => setBosvarPromptAdres(e.target.value)}
+                />
+                <textarea
+                  rows={2}
+                  placeholder="Not (opsiyonel)..."
+                  value={bosvarPromptNot}
+                  onChange={(e) => setBosvarPromptNot(e.target.value)}
+                />
+                <div className="tb-bosvar-prompt-actions">
+                  <button onClick={() => setBosvarPromptOpen(false)}>Vazgeç</button>
+                  <button
+                    className="primary"
+                    disabled={!bosvarPromptAdres.trim()}
+                    onClick={async () => {
+                      const adres = bosvarPromptAdres.trim();
+                      const not = bosvarPromptNot.trim();
+                      const adresNot = not ? `${adres} — ${not}` : adres;
+                      await submitBosvarKaydi(adresNot);
+                      setBosvarPromptOpen(false);
+                    }}
+                  >
+                    Kaydet
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <div className={`tb-package-list ${packages.length > 8 ? 'ultra-compact' : packages.length > 4 ? 'compact' : ''}`}>
+            {packages.map((p) => renderTableCard(p.name, p.name, true))}
             {bosvarKayitListesi.map((b) => (
               <div key={`bv-${b.id}`} className="tb-bosvar-package-card">
                 <div className="tb-bosvar-package-top">
-                  <PackageOpen size={13} /> <span>{b.adresNot}</span>
+                  <PackageOpen size={12} /> <span>{b.adresNot}</span>
                 </div>
-                {b.paketciNotu && <div className="tb-bosvar-package-not">{b.paketciNotu}</div>}
+                {b.paketciNotu && (
+                  <div className="tb-bosvar-package-not">
+                    "{b.paketciNotu}"
+                    {b.updatedTs && <span className="tb-bosvar-package-not-time"> — {new Date(b.updatedTs).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>}
+                  </div>
+                )}
                 {bosvarAlamadiFormFor === b.id ? (
                   <div className="tb-bosvar-package-form" onClick={(e) => e.stopPropagation()}>
                     <textarea
@@ -735,13 +786,12 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
                   </div>
                 ) : (
                   <div className="tb-bosvar-package-row">
-                    <button className="tb-bosvar-package-aldi" onClick={() => paketciBosvarAldi(b.id)}>Aldı</button>
-                    <button className="tb-bosvar-package-alamadi" onClick={() => { setBosvarAlamadiFormFor(b.id); setBosvarAlamadiNotu(''); }}>Alamadı</button>
+                    <button className="tb-bosvar-package-aldi" onClick={() => paketciBosvarAldi(b.id)}>Alındı</button>
+                    <button className="tb-bosvar-package-alamadi" onClick={() => { setBosvarAlamadiFormFor(b.id); setBosvarAlamadiNotu(''); }}>Alınamadı</button>
                   </div>
                 )}
               </div>
             ))}
-            {packages.map((p) => renderTableCard(p.name, p.name, true))}
           </div>
         </aside>
       </div>
