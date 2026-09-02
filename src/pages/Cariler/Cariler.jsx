@@ -422,8 +422,10 @@ export default function Cariler({ data, onNavigate }) {
     const bugunkuHareketler = cariHareketler.filter((h) => h.cariId === selectedCari.id && h.ts >= bugunBaslangic);
     const bugunkuOdemeler = cariOdemeler.filter((o) => o.cariId === selectedCari.id && o.ts >= bugunBaslangic);
     const iskonto = selectedCari.iskonto || 0;
-    const bugunToplamHam = bugunkuHareketler.reduce((s, h) => s + h.toplam, 0);
-    const bugunToplam = iskonto > 0 ? Math.round(bugunToplamHam * (1 - iskonto / 100)) : bugunToplamHam;
+    // h.toplam zaten iskontolu kaydedildiği için tekrar iskonto uygulanmaz
+    const bugunToplam = bugunkuHareketler.reduce((s, h) => s + h.toplam, 0);
+    // Ham tutar = iskontolu tutardan geri hesaplanır (sadece şablon gösterimi için)
+    const bugunToplamHam = iskonto > 0 ? Math.round(bugunToplam / (1 - iskonto / 100)) : bugunToplam;
     const oncekiCari = getCariBakiye(selectedCari.id) - bugunToplam + bugunkuOdemeler.reduce((s, o) => s + o.tutar, 0);
 
     const urunSatirlari = [];

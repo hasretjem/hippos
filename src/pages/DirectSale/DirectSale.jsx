@@ -702,7 +702,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     handlePayToCari(cari.id);
     const simdi = new Date();
     const tarihSaat = `${simdi.toLocaleDateString('tr-TR')} · ${simdi.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
-    const yeniBakiye = getCariBakiye(cari.id);
+    const yeniBakiye = getCariBakiye(cari.id) + totalPay2;
     const mesaj = [
       `\u2B50 ${cari.ad}`,
       `\uD83D\uDCC5 ${tarihSaat}`,
@@ -735,7 +735,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     handlePayToCari(cari.id);
     const simdi2 = new Date();
     const tarihSaat2 = `${simdi2.toLocaleDateString('tr-TR')} · ${simdi2.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
-    const yeniBakiye2 = getCariBakiye(cari.id);
+    const yeniBakiye2 = getCariBakiye(cari.id) + totalPay3;
     const mesaj = [
       `\u2B50 ${cari.ad}`,
       `\uD83D\uDCC5 ${tarihSaat2}`,
