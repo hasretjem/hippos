@@ -166,7 +166,15 @@ export default function Cariler({ data, onNavigate }) {
       .filter((c) => c.tip === activeTab)
       .filter((c) => showAllCariler || getCariBakiye(c.id) > 0) // "Hepsini Göster" kapalıyken pasif (borcu sıfır) cariler gizlenir
       .filter((c) => !q || c.ad.toLowerCase().includes(q) || (c.telefon || '').includes(q) || (c.not || '').toLowerCase().includes(q))
-      .sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
+      .sort((a, b) => {
+        const bugunBaslangic = new Date().setHours(0, 0, 0, 0);
+        const aHareket = getCariSonHareket(a.id);
+        const bHareket = getCariSonHareket(b.id);
+        const aYeni = aHareket && aHareket.ts >= bugunBaslangic ? 1 : 0;
+        const bYeni = bHareket && bHareket.ts >= bugunBaslangic ? 1 : 0;
+        if (bYeni !== aYeni) return bYeni - aYeni;
+        return a.ad.localeCompare(b.ad, 'tr');
+      });
   }, [cariler, activeTab, searchQuery, cariHareketler, cariOdemeler, showAllCariler]);
 
   const selectedCari = cariler.find((c) => c.id === selectedCariId) || null;
