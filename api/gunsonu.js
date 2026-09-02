@@ -149,7 +149,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const { tarih } = req.body || {};
       if (!tarih) return res.status(400).json({ error: 'tarih gerekli' });
-      const saat = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+      const saat = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
 
       // Aynı tarihe ait kayıt varsa üzerine yaz (o gün birden fazla kez kaydedilebilsin diye).
       const existing = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${TAB}!A2:A` });

@@ -220,7 +220,7 @@ export default async function handler(req, res) {
         const { ad, birim } = req.body || {};
         if (!ad || !birim) return res.status(400).json({ error: 'ad ve birim gerekli' });
         const id = String(Date.now());
-        const olusturulmaTarihi = new Date().toLocaleDateString('tr-TR');
+        const olusturulmaTarihi = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
         await appendRow(sheets, TABS.malzeme, [id, ad, birim, 'TRUE', olusturulmaTarihi]);
         return res.status(200).json({ ok: true, record: { id, ad, birim, aktif: true, olusturulmaTarihi } });
       }
@@ -241,7 +241,7 @@ export default async function handler(req, res) {
           return res.status(400).json({ error: 'malzemeId, miktar, birim, toplamFiyat gerekli' });
         }
         const id = String(Date.now());
-        const tarih = new Date().toLocaleDateString('tr-TR');
+        const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
         const miktarNum = ondalikParse(miktar);
         const toplamNum = ondalikParse(toplamFiyat);
         if (miktarNum <= 0) return res.status(400).json({ error: 'Miktar 0\'dan büyük olmalı' });
@@ -280,13 +280,13 @@ export default async function handler(req, res) {
               spreadsheetId: SHEET_ID,
               range: `${TABS.receteGecmisi.tab}!E${sheetRow}:G${sheetRow}`,
               valueInputOption: 'USER_ENTERED',
-              requestBody: { values: [['FALSE', eskiAktif.baslangic, new Date().toLocaleDateString('tr-TR')]] },
+              requestBody: { values: [['FALSE', eskiAktif.baslangic, new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' })]] },
             });
           }
         }
 
         const receteId = String(Date.now());
-        const baslangic = new Date().toLocaleDateString('tr-TR');
+        const baslangic = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
         await appendRow(sheets, TABS.receteGecmisi, [receteId, urunId, urunAdi || '', yeniVersiyon, 'TRUE', baslangic, '']);
 
         for (const kalem of kalemler) {

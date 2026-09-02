@@ -50,7 +50,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const result = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${TAB}!A2:G` });
       const rows = result.data.values || [];
-      const bugun = new Date().toLocaleDateString('tr-TR');
+      const bugun = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
       const records = rows.filter((r) => r[0] && r[1] === bugun).map(rowToRecord).reverse();
       return res.status(200).json({ records });
     }
@@ -59,8 +59,8 @@ export default async function handler(req, res) {
       const { buyukBeyaz = 0, kucukBeyaz = 0, domatesli = 0, kucukKepek = 0 } = req.body || {};
       const now = new Date();
       const id = String(Date.now());
-      const tarih = now.toLocaleDateString('tr-TR');
-      const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+      const tarih = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+      const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
       await sheets.spreadsheets.values.append({
         spreadsheetId: SHEET_ID,
         range: `${TAB}!A2`,

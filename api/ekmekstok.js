@@ -68,8 +68,8 @@ export default async function handler(req, res) {
       }
 
       const now = new Date();
-      const tarih = now.toLocaleDateString('tr-TR');
-      const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+      const tarih = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+      const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
 
       const rowValues = hareketler
         .filter((h) => h.tur && Number(h.degisim) !== 0)

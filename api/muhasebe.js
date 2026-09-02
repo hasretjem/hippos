@@ -94,8 +94,8 @@ export default async function handler(req, res) {
         if (!faturaId || !urunAdi) return res.status(400).json({ error: 'faturaId ve urunAdi gerekli' });
         const id = String(Date.now());
         const now = new Date();
-        const tarih = now.toLocaleDateString('tr-TR');
-        const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+        const tarih = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+        const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
         // KRİTİK: Number("0,5") -> NaN döner (Türkçe ondalık virgülü) — bu adet/birimFiyat
         // alanları kg/gr/litre gibi ondalıklı miktarlar da taşıyabildiği için virgülü noktaya
         // çevirip ayrıştırıyoruz, yoksa 0,5 gibi bir miktar sessizce 0 kabul edilirdi.
@@ -142,8 +142,8 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       const now = new Date();
-      const tarih = now.toLocaleDateString('tr-TR');
-      const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+      const tarih = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+      const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
       const id = String(Date.now());
       const rowValues = [id, tarih, saat, ...tipConfig.fields.map((f) => req.body[f] ?? '')];
 

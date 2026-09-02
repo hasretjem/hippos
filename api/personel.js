@@ -89,8 +89,8 @@ export default async function handler(req, res) {
         const { personelId, personelAdi, tarih, tutar, tur, aciklama } = req.body || {};
         if (!personelId || !tutar) return res.status(400).json({ error: 'personelId ve tutar gerekli' });
         const id = String(Date.now());
-        const saat = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-        const rowValues = [id, personelId, personelAdi || '', tarih || new Date().toLocaleDateString('tr-TR'), tutar, tur || '', aciklama || '', saat];
+        const saat = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
+        const rowValues = [id, personelId, personelAdi || '', tarih || new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' }), tutar, tur || '', aciklama || '', saat];
         await sheets.spreadsheets.values.append({
           spreadsheetId: SHEET_ID, range: `${ODEME_TAB}!A2`, valueInputOption: 'USER_ENTERED',
           insertDataOption: 'INSERT_ROWS', requestBody: { values: [rowValues] },
@@ -102,7 +102,7 @@ export default async function handler(req, res) {
       const { adSoyad, iseBaslamaTarihi, maas, sigortali, cepNo, not: notu } = req.body || {};
       if (!adSoyad) return res.status(400).json({ error: 'adSoyad gerekli' });
       const id = String(Date.now());
-      const tarih = new Date().toLocaleDateString('tr-TR');
+      const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
       const rowValues = [id, adSoyad, iseBaslamaTarihi || '', maas || 0, sigortali ? 'Evet' : 'Hayır', cepNo || '', 'aktif', '', notu || '', tarih];
       await sheets.spreadsheets.values.append({
         spreadsheetId: SHEET_ID, range: `${PERSONEL_TAB}!A2`, valueInputOption: 'USER_ENTERED',

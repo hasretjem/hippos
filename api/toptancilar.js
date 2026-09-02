@@ -67,7 +67,7 @@ export default async function handler(req, res) {
       const { firmaAdi, kategori, telefon, yetkiliKisi, adres, not: notu, bakiye } = req.body || {};
       if (!firmaAdi) return res.status(400).json({ error: 'firmaAdi gerekli' });
       const id = String(Date.now());
-      const tarih = new Date().toLocaleDateString('tr-TR');
+      const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
       const rowValues = [id, firmaAdi, kategori || '', telefon || '', yetkiliKisi || '', adres || '', notu || '', bakiye || 0, tarih, 'aktif'];
       await sheets.spreadsheets.values.append({
         spreadsheetId: SHEET_ID,
