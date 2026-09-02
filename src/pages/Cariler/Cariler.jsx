@@ -295,7 +295,7 @@ export default function Cariler({ data, onNavigate }) {
   const [futuraOpen, setFuturaOpen] = useState(false);
   const [futuraBaslangic, setFuturaBaslangic] = useState(null); // 'YYYY-MM-DD'
   const [futuraBitis, setFuturaBitis] = useState(null);         // 'YYYY-MM-DD'
-  const [futuraTahsilatModal, setFuturaTahsilatModal] = useState(null); // { faturaId, kalan, mod: 'tam'|'kismi' }
+  const [futuraTahsilatModal, setFuturaTahsilatModal] = useState(null); // { faturaId, kalan, mod: 'tam'|'kismi', odemeTur }
   const [futuraTahsilatInput, setFuturaTahsilatInput] = useState('');
 
   function futuraDonemStr(f) {
@@ -360,17 +360,17 @@ export default function Cariler({ data, onNavigate }) {
     showToast('Faturalandırıldı');
   }
 
-  async function submitFuturaTamOde() {
-    if (!futuraTahsilatModal) return;
-    await futuraTamOde(futuraTahsilatModal.faturaId);
+  async function submitFuturaTamOde(odemeTur) {
+    if (!futuraTahsilatModal || !odemeTur) return;
+    await futuraTamOde(futuraTahsilatModal.faturaId, odemeTur);
     setFuturaTahsilatModal(null);
     showToast('Fatura tahsil edildi');
   }
 
-  async function submitFuturaKismiOde() {
+  async function submitFuturaKismiOde(odemeTur) {
     const tutar = parseFloat(String(futuraTahsilatInput).replace(',', '.')) || 0;
-    if (!futuraTahsilatModal || tutar <= 0) return;
-    await futuraKismiOde(futuraTahsilatModal.faturaId, tutar);
+    if (!futuraTahsilatModal || tutar <= 0 || !odemeTur) return;
+    await futuraKismiOde(futuraTahsilatModal.faturaId, tutar, odemeTur);
     setFuturaTahsilatModal(null);
     setFuturaTahsilatInput('');
     showToast('Kısmi ödeme kaydedildi');
@@ -898,11 +898,7 @@ export default function Cariler({ data, onNavigate }) {
               <button className="cr-modal-x" onClick={() => setFuturaTahsilatModal(null)}><X size={16} /></button>
             </div>
             <p style={{marginBottom: '12px'}}>Kalan tutar: <strong>{TL(futuraTahsilatModal.kalan)}</strong></p>
-            {futuraTahsilatModal.mod === 'tam' ? (
-              <p style={{fontSize: '13px', color: 'var(--ink-muted)', marginBottom: '8px'}}>
-                Fatura tam olarak tahsil edilecek ve listeden kaldırılacak.
-              </p>
-            ) : (
+            {futuraTahsilatModal.mod === 'kismi' && (
               <input
                 className="cr-modal-input"
                 type="number"
@@ -910,13 +906,23 @@ export default function Cariler({ data, onNavigate }) {
                 value={futuraTahsilatInput}
                 onChange={(e) => setFuturaTahsilatInput(e.target.value)}
                 autoFocus
+                style={{marginBottom: '12px'}}
               />
             )}
+            <p style={{fontSize: '12px', color: 'var(--ink-muted)', marginBottom: '8px'}}>Ödeme yöntemi seç:</p>
+            <div className="cr-odeme-tur-grid">
+              {['NAKİT', 'KREDİ KARTI', 'HAVALE', 'ÇEK'].map((tur) => (
+                <button
+                  key={tur}
+                  className="cr-odeme-tur-btn"
+                  onClick={() => futuraTahsilatModal.mod === 'tam' ? submitFuturaTamOde(tur) : submitFuturaKismiOde(tur)}
+                >
+                  {tur}
+                </button>
+              ))}
+            </div>
             <div className="cr-modal-footer">
               <button className="cr-secondary" onClick={() => setFuturaTahsilatModal(null)}>Vazgeç</button>
-              <button className="cr-primary" onClick={futuraTahsilatModal.mod === 'tam' ? submitFuturaTamOde : submitFuturaKismiOde}>
-                {futuraTahsilatModal.mod === 'tam' ? 'Onayla' : 'Kaydet'}
-              </button>
             </div>
           </div>
         </div>

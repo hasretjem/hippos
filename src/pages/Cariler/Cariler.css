@@ -868,7 +868,7 @@
   gap: 6px;
 }
 .cr-wa-etiket {
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 700;
   padding: 4px 10px;
   border-radius: 99px;
@@ -896,4 +896,28 @@
 .cr-ozet-gonderildi-btn.aktif {
   background: #dcfce7;
   color: #16a34a;
+}
+.cr-odeme-tur-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cr-odeme-tur-btn {
+  padding: 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-btn);
+  background: var(--panel-2);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--ink);
+  transition: background 0.12s;
+}
+
+.cr-odeme-tur-btn:hover {
+  background: var(--olive);
+  color: #fff;
+  border-color: var(--olive);
 }

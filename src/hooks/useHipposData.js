@@ -1877,7 +1877,7 @@ export default function useHipposData(scope = 'full') {
   }
 
   // Futura: tam tahsilat — faturayı siler, bakiye 0 ise hareketleri de arşivler
-  async function futuraTamOde(faturaId) {
+  async function futuraTamOde(faturaId, odemeTur = 'NAKİT') {
     const fatura = cariFaturalar.find((f) => f.id === faturaId);
     if (!fatura) return;
     setCariFaturalar((prev) => prev.filter((f) => f.id !== faturaId));
@@ -1891,12 +1891,12 @@ export default function useHipposData(scope = 'full') {
   }
 
   // Futura: kısmi ödeme — sadece fatura üzerindeki tahsilat artar, log'a eklenir
-  async function futuraKismiOde(faturaId, tutar) {
+  async function futuraKismiOde(faturaId, tutar, odemeTur = 'NAKİT') {
     const fatura = cariFaturalar.find((f) => f.id === faturaId);
     if (!fatura) return;
     const yeniTahsilat = (fatura.tahsilatTutar || 0) + tutar;
     const tarihStr = new Date().toLocaleDateString('tr-TR');
-    const yeniLog = [...(fatura.odemeLog || []), { tutar, tarih: tarihStr }];
+    const yeniLog = [...(fatura.odemeLog || []), { tutar, tarih: tarihStr, tur: odemeTur }];
     setCariFaturalar((prev) => prev.map((f) =>
       f.id === faturaId ? { ...f, tahsilatTutar: yeniTahsilat, odemeLog: yeniLog } : f
     ));
