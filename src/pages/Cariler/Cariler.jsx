@@ -455,7 +455,24 @@ export default function Cariler({ data, onNavigate }) {
       ...(iskonto > 0 ? [`🏷️ %${iskonto} İskonto: -${TL(Math.round(bugunToplamHam * (iskonto / 100)))}`, ''] : []),
       `💰 Bugünkü Toplam: ${TL(bugunToplam)}`,
       '',
-      `📊 Güncel Cari Bakiye: ${TL(getCariBakiye(selectedCari.id))}`,
+      ...(() => {
+        if (selectedCari.tip !== 'firma') {
+          return [`\uD83D\uDCCA G\u00FCncel Cari Bakiye: ${TL(getCariBakiye(selectedCari.id))}`];
+        }
+        const faturaEdilmis = cariFaturalar
+          .filter((f) => f.cariId === selectedCari.id)
+          .reduce((s, f) => s + (f.tutar - (f.tahsilatTutar || 0)), 0);
+        const faturaEdilmemis = cariHareketler
+          .filter((h) => h.cariId === selectedCari.id)
+          .reduce((s, h) => s + h.toplam, 0)
+          - cariOdemeler.filter((o) => o.cariId === selectedCari.id).reduce((s, o) => s + o.tutar, 0);
+        const toplam = getCariBakiye(selectedCari.id);
+        const satirlar = [];
+        if (faturaEdilmis > 0) satirlar.push(`\uD83D\uDCCB Fatura Edilmi\u015f Bakiye: ${TL(faturaEdilmis)}`);
+        if (faturaEdilmemis > 0) satirlar.push(`\uD83D\uDCDD Hen\u00FCz Fatura Edilmemi\u015f Bakiye: ${TL(faturaEdilmemis)}`);
+        satirlar.push(`\uD83D\uDCCA Toplam G\u00FCncel Bakiye: ${TL(toplam)}`);
+        return satirlar;
+      })(),
       '',
       'Afiyet olsun, iyi günler! 😇🍽️✨',
     ].join('\n');
