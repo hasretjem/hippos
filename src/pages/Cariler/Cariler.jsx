@@ -525,10 +525,22 @@ export default function Cariler({ data, onNavigate }) {
                 const bekleyen = bekleyenBildirim(c.id);
                 const bugunBaslangic = new Date().setHours(0, 0, 0, 0);
                 const bugunYeni = sh && sh.ts >= bugunBaslangic;
+                const bugunStr = new Date().toISOString().slice(0, 10);
+                const ozetGonderildi = c.ozetTarih === bugunStr;
                 return (
                   <button key={c.id} className={`cr-item ${selectedCariId === c.id ? 'active' : ''}`} onClick={() => { setSelectedCariId(c.id); setDetailTab('hareketler'); }}>
                     <div className="cr-item-top">
-                      <span className="cr-item-name">{c.ad}{bugunYeni && <span className="cr-yeni-badge">YENİ</span>}</span>
+                      <span className="cr-item-name">
+                        {c.ad}
+                        {bugunYeni && <span className="cr-yeni-badge">BUGÜN</span>}
+                        {bugunYeni && (
+                          c.telefon
+                            ? <span className={`cr-wa-durum ${ozetGonderildi ? 'gonderildi' : 'gonderilmedi'}`} title={ozetGonderildi ? 'Özet gönderildi' : 'Özet gönderilmedi'}>
+                                {ozetGonderildi ? '\u2713' : '\u2717'}
+                              </span>
+                            : <span className="cr-wa-durum gri" title="Telefon numarası yok">—</span>
+                        )}
+                      </span>
                       <span className="cr-item-balance">{TL(b)}</span>
                     </div>
                     {c.telefon
@@ -582,7 +594,25 @@ export default function Cariler({ data, onNavigate }) {
                     <span className="cr-summary-tip">{selectedCari.tip === 'firma' ? 'Firma' : 'Bireysel'}</span>
                   </div>
                   <div className="cr-summary-actions">
-                    <button className="cr-ozet-btn" onClick={openOzet}><FileText size={14} /> Cari Özeti Oluştur</button>
+                    <div className="cr-ozet-btn-wrap">
+                      <button className="cr-ozet-btn" onClick={openOzet}><FileText size={14} /> Cari Özeti Oluştur</button>
+                      {(() => {
+                        const bugunStr = new Date().toISOString().slice(0, 10);
+                        const gonderildi = selectedCari.ozetTarih === bugunStr;
+                        if (!selectedCari.telefon) return (
+                          <span className="cr-wa-etiket gri" title="Telefon yok">—</span>
+                        );
+                        return (
+                          <button
+                            className={`cr-wa-etiket ${gonderildi ? 'gonderildi' : 'gonderilmedi'}`}
+                            title={gonderildi ? 'Gönderildi — iptal etmek için tıkla' : 'Gönderilmedi — tıkla işaretle'}
+                            onClick={() => updateCari(selectedCari.id, { ozetTarih: gonderildi ? null : bugunStr })}
+                          >
+                            {gonderildi ? '\u2705 Gönderildi' : '\u274C Gönderilmedi'}
+                          </button>
+                        );
+                      })()}
+                    </div>
                     <button className="cr-pay-btn" onClick={openOdemeModal}><Wallet size={15} /> Ödeme Al</button>
                   </div>
                 </div>
@@ -924,6 +954,18 @@ export default function Cariler({ data, onNavigate }) {
               <button onClick={() => copyText(ozetText)}><Copy size={14} /> Kopyala</button>
               <button className="whatsapp" onClick={() => whatsappShare(ozetText, selectedCari.telefon)}><MessageCircle size={14} /> WhatsApp ile Paylaş</button>
             </div>
+            {(() => {
+              const bugunStr = new Date().toISOString().slice(0, 10);
+              const gonderildi = selectedCari.ozetTarih === bugunStr;
+              return (
+                <button
+                  className={`cr-ozet-gonderildi-btn ${gonderildi ? 'aktif' : ''}`}
+                  onClick={() => updateCari(selectedCari.id, { ozetTarih: gonderildi ? null : bugunStr })}
+                >
+                  {gonderildi ? '\u2705 Gönderildi olarak işaretlendi — iptal et' : '\u274C Gönderildi olarak işaretle'}
+                </button>
+              );
+            })()}
           </div>
         </div>
       )}
