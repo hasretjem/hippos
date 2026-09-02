@@ -275,19 +275,19 @@
 .ds-cari-firma-section { margin-bottom: 4px; }
 .ds-cari-firma-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; max-height: 200px; overflow-y: auto; }
 .ds-cari-firma-btn {
-  height: 42px;
+  height: auto;
+  min-height: 42px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--panel-2);
   color: var(--ink);
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
-  padding: 0 10px;
+  padding: 8px 14px;
   text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
   transition: background 120ms var(--ease), border-color 120ms var(--ease);
 }
 .ds-cari-firma-btn:hover { background: #fff; border-color: var(--olive); }
@@ -298,7 +298,8 @@
   width: 100%; min-width: 0;
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
   background: transparent; border: none; text-align: left;
-  padding: 9px 10px 40px 10px; border-radius: 10px; cursor: pointer;
+  padding: 9px 10px 48px 10px; border-radius: 10px; cursor: pointer;
+  min-height: 80px;
   transition: background 120ms var(--ease);
 }
 .ds-cari-bireysel-main:hover { background: var(--panel-2); }
@@ -309,7 +310,7 @@
   width: 32px; height: 32px; border-radius: 9px;
   border: none; background: var(--danger) !important; color: #F3F1E6 !important;
   display: flex; align-items: center; justify-content: center; cursor: pointer;
-  z-index: 2;
+  z-index: 2; flex-shrink: 0;
 }
 .ds-cari-edit-btn svg { color: #F3F1E6 !important; stroke: #F3F1E6 !important; width: 16px; height: 16px; }
 .ds-cari-edit-btn:hover { filter: brightness(1.1); }
