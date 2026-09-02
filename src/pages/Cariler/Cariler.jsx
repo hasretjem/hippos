@@ -582,9 +582,7 @@ export default function Cariler({ data, onNavigate }) {
                     <span className="cr-summary-tip">{selectedCari.tip === 'firma' ? 'Firma' : 'Bireysel'}</span>
                   </div>
                   <div className="cr-summary-actions">
-                    {selectedCari.tip === 'firma' && (
-                      <button className="cr-ozet-btn" onClick={openOzet}><FileText size={14} /> Cari Özeti Oluştur</button>
-                    )}
+                    <button className="cr-ozet-btn" onClick={openOzet}><FileText size={14} /> Cari Özeti Oluştur</button>
                     <button className="cr-pay-btn" onClick={openOdemeModal}><Wallet size={15} /> Ödeme Al</button>
                   </div>
                 </div>
@@ -921,7 +919,7 @@ export default function Cariler({ data, onNavigate }) {
               <h3><FileText size={15} /> Cari Özeti</h3>
               <button className="cr-modal-x" onClick={() => setOzetModalOpen(false)}><X size={16} /></button>
             </div>
-            <textarea className="cr-share-textarea mono" rows={12} value={ozetText} onChange={(e) => setOzetText(e.target.value)} />
+            <textarea className="cr-share-textarea mono" rows={20} value={ozetText} onChange={(e) => setOzetText(e.target.value)} />
             <div className="cr-share-actions">
               <button onClick={() => copyText(ozetText)}><Copy size={14} /> Kopyala</button>
               <button className="whatsapp" onClick={() => whatsappShare(ozetText, selectedCari.telefon)}><MessageCircle size={14} /> WhatsApp ile Paylaş</button>
