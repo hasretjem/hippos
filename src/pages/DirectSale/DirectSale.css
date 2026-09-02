@@ -293,23 +293,26 @@
 .ds-cari-firma-btn:hover { background: #fff; border-color: var(--olive); }
 
 .ds-cari-bireysel-list { max-height: 300px; overflow-y: auto; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
-.ds-cari-bireysel-row { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
+.ds-cari-bireysel-row { position: relative; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .ds-cari-bireysel-main {
-  flex: 1; min-width: 0;
+  width: 100%; min-width: 0;
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  background: none; border: none; text-align: left;
-  padding: 9px 10px; border-radius: 10px; cursor: pointer;
+  background: transparent; border: none; text-align: left;
+  padding: 9px 10px 40px 10px; border-radius: 10px; cursor: pointer;
   transition: background 120ms var(--ease);
 }
 .ds-cari-bireysel-main:hover { background: var(--panel-2); }
 .ds-cari-bireysel-main .name { font-size: 13.5px; font-weight: 700; color: var(--ink); }
 .ds-cari-bireysel-main .meta { font-size: 11px; color: var(--ink-muted); }
 .ds-cari-edit-btn {
-  flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px;
-  border: 1px solid var(--border); background: #fff; color: var(--ink-muted);
+  position: absolute; bottom: 8px; right: 8px;
+  width: 32px; height: 32px; border-radius: 9px;
+  border: none; background: var(--danger) !important; color: #F3F1E6 !important;
   display: flex; align-items: center; justify-content: center; cursor: pointer;
+  z-index: 2;
 }
-.ds-cari-edit-btn:hover { background: var(--panel-2); color: var(--ink); }
+.ds-cari-edit-btn svg { color: #F3F1E6 !important; stroke: #F3F1E6 !important; width: 16px; height: 16px; }
+.ds-cari-edit-btn:hover { filter: brightness(1.1); }
 .ds-cari-edit-row { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: var(--panel-2); border-radius: 10px; }
 .ds-cari-edit-row input { height: 34px; border-radius: 8px; border: 1px solid var(--border); padding: 0 10px; font-size: 12.5px; background: #fff; }
 .ds-cari-edit-row-actions { display: flex; gap: 6px; justify-content: flex-end; }

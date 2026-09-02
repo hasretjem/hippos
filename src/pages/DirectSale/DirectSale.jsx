@@ -1735,7 +1735,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                             <span className="name">{c.ad}</span>
                             <span className="meta">{c.telefon || 'Numara yok'}</span>
                           </button>
-                          <button className="ds-cari-edit-btn" onClick={() => openCariEditRow(c)} title="Düzenle"><Pencil size={13} /></button>
+                          <button className="ds-cari-edit-btn" onClick={(e) => { e.stopPropagation(); openCariEditRow(c); }} title="Düzenle"><Pencil size={16} /></button>
                         </>
                       )}
                     </div>
