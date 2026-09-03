@@ -46,18 +46,33 @@ const DETAY_LAST_COL = 'M';
 // Log: her başarıyla parse edilen fatura burada "görüldü" olarak işaretlenir
 // (gerçek muhasebe kaydından BAĞIMSIZ) — böylece mükerrer zip yüklemesi hemen yakalanır.
 const XML_LOG_TAB = { tab: 'Fatura İçe Aktarma Log', headers: ['ID', 'UUID', 'Fatura No', 'Tedarikçi Adı', 'Toplam Tutar', 'Görülme Tarihi'] };
-// Tedarikçi bazlı öğrenen kategori önerisi — malzeme|gider ikilisi DEĞİL, Toptancılar
-// sayfasındaki mevcut kategori sözlüğü kullanılıyor (api/toptancilar.js ile senkron tutulmalı).
-// Bu sadece FATURA SEVİYESİNDE varsayılan öneri; her satır kendi kategorisini
-// (frontend'de) bağımsız değiştirebiliyor, tek bir fatura birden fazla kategoriye yayılabiliyor.
-export const TOPTANCI_KATEGORILERI = [
+// Kategori sözlüğü artık SABİT DEĞİL — Sheets'te kalıcı, kullanıcı arayüzden yeni
+// kategori ekleyebiliyor (en sona eklenir). Bu liste sadece sekme ilk oluşturulurken
+// tohumlanan varsayılan kategoriler (api/toptancilar.js TOPTANCI_KATEGORILERI ile aynı).
+const VARSAYILAN_KATEGORILER = [
   'Manav', 'Kırmızı Et', 'Tavuk Eti', 'Ambalaj',
   'Baget Ekmek', 'Fırın Ekmeği', 'Kahvaltı ve Sandviç Malzemesi', 'Sulu Yemek Malzemesi',
 ];
+const KATEGORI_TAB = { tab: 'Kategori Sözlüğü', headers: ['ID', 'Kategori Adı', 'Tarih'] };
+// Tedarikçi bazlı öğrenen kategori önerisi — fatura seviyesinde varsayılan, ama her
+// satır kendi kategorisini (frontend'de) bağımsız değiştirebiliyor.
 const TEDARIKCI_TAB = { tab: 'Tedarikçi Kategori Sözlüğü', headers: ['ID', 'Tedarikçi Adı', 'Kategori', 'Tarih'] };
 // Öğrenen eşleştirme sözlüğü: tedarikçinin ürün kodu/adı -> kendi malzeme kaydımız.
 const ESLESTIRME_TAB = { tab: 'Malzeme Eşleştirme Sözlüğü', headers: ['ID', 'Tedarikçi Adı', 'Ürün Kodu', 'Ürün Adı', 'MalzemeID', 'Malzeme Adı', 'Paket Miktarı', 'Paket Birimi', 'Tarih'] };
 
+async function ensureKategoriSeed(sheets) {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+  const exists = meta.data.sheets.some((s) => s.properties.title === KATEGORI_TAB.tab);
+  await ensureTab(sheets, KATEGORI_TAB.tab, KATEGORI_TAB.headers);
+  if (!exists) {
+    const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+    const satirlar = VARSAYILAN_KATEGORILER.map((k, i) => [String(Date.now() + i), k, tarih]);
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID, range: `${KATEGORI_TAB.tab}!A2`, valueInputOption: 'USER_ENTERED',
+      insertDataOption: 'INSERT_ROWS', requestBody: { values: satirlar },
+    });
+  }
+}
 
 async function getRows(sheets, tabConfig) {
   await ensureTab(sheets, tabConfig.tab, tabConfig.headers);
@@ -148,14 +163,16 @@ function parseInvoiceHeader(xml) {
   }
 
   const totalBlock = xml.match(/<cac:LegalMonetaryTotal>([\s\S]*?)<\/cac:LegalMonetaryTotal>/);
-  let toplamKdvHaric = null, toplamKdvDahil = null, odenecekTutar = null;
+  let toplamKdvHaric = null, toplamKdvDahil = null, odenecekTutar = null, toplamIskonto = null;
   if (totalBlock) {
     const m1 = totalBlock[1].match(/<cbc:LineExtensionAmount[^>]*>([^<]*)<\/cbc:LineExtensionAmount>/);
     const m2 = totalBlock[1].match(/<cbc:TaxInclusiveAmount[^>]*>([^<]*)<\/cbc:TaxInclusiveAmount>/);
     const m3 = totalBlock[1].match(/<cbc:PayableAmount[^>]*>([^<]*)<\/cbc:PayableAmount>/);
+    const m4 = totalBlock[1].match(/<cbc:AllowanceTotalAmount[^>]*>([^<]*)<\/cbc:AllowanceTotalAmount>/);
     toplamKdvHaric = m1 ? Number(m1[1]) : null;
     toplamKdvDahil = m2 ? Number(m2[1]) : null;
     odenecekTutar = m3 ? Number(m3[1]) : null;
+    toplamIskonto = m4 ? Number(m4[1]) : null;
   }
 
   const taxTotalBlock = xml.match(/<cac:TaxTotal>([\s\S]*?)<\/cac:TaxTotal>/);
@@ -168,7 +185,7 @@ function parseInvoiceHeader(xml) {
   return {
     faturaNo: id, uuid, tarih: issueDate, tip: typeCode,
     tedarikciAdi: supplierName, tedarikciVkn: supplierVkn,
-    toplamKdvHaric, toplamKdvDahil, toplamKdvTutari, odenecekTutar,
+    toplamKdvHaric, toplamKdvDahil, toplamKdvTutari, toplamIskonto, odenecekTutar,
   };
 }
 
@@ -362,12 +379,35 @@ export default async function handler(req, res) {
       });
     }
 
-    // ---- Tedarikçi kategori önerisi kaydet (mevcut Toptancı kategorileri sözlüğünden) ----
+    // ---- Kategori sözlüğü (Kategori Sözlüğü sekmesi — sabit değil, kullanıcı ekleyebiliyor) ----
+    if (resource === 'kategoriler') {
+      if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+      await ensureKategoriSeed(sheets);
+      const rows = await getRows(sheets, KATEGORI_TAB);
+      return res.status(200).json({ kategoriler: rows.map((r) => r[1]).filter(Boolean) });
+    }
+
+    if (resource === 'kategoriEkle') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { kategori } = req.body || {};
+      const temiz = String(kategori || '').trim();
+      if (!temiz) return res.status(400).json({ error: 'kategori gerekli' });
+      await ensureKategoriSeed(sheets);
+      const rows = await getRows(sheets, KATEGORI_TAB);
+      const zatenVar = rows.some((r) => metinNormalize(r[1]) === metinNormalize(temiz));
+      if (!zatenVar) {
+        const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+        await appendRow(sheets, KATEGORI_TAB, [String(Date.now()), temiz, tarih]);
+      }
+      return res.status(200).json({ ok: true, kategori: temiz });
+    }
+
+    // ---- Tedarikçi kategori önerisi kaydet (Kategori Sözlüğü'ndeki herhangi bir kategori olabilir) ----
     if (resource === 'tedarikciKategoriKaydet') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
       const { tedarikciAdi, kategori } = req.body || {};
-      if (!tedarikciAdi || !TOPTANCI_KATEGORILERI.includes(kategori)) {
-        return res.status(400).json({ error: 'tedarikciAdi ve geçerli bir kategori gerekli' });
+      if (!tedarikciAdi || !String(kategori || '').trim()) {
+        return res.status(400).json({ error: 'tedarikciAdi ve kategori gerekli' });
       }
       const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
       await appendRow(sheets, TEDARIKCI_TAB, [String(Date.now()), tedarikciAdi, kategori, tarih]);

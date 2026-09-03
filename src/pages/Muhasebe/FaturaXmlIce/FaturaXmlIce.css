@@ -208,3 +208,60 @@
   padding: 3px 4px;
   max-width: 160px;
 }
+
+.fxi-yeni-kategori-btn {
+  background: transparent;
+  border: 1px dashed #4a7fd6;
+  color: #4a7fd6;
+}
+
+.fxi-eslesme-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 170px;
+}
+
+.fxi-eslesme-input {
+  font-size: 12px;
+  padding: 3px 5px;
+  max-width: 160px;
+}
+
+.fxi-paket-etiket {
+  font-size: 11px;
+  color: #888;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fxi-paket-input {
+  width: 55px;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.fxi-eslesme-form-btns {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.fxi-eslesme-form-btns .fxi-tip-btn {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.fxi-duzenle-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  color: #4a7fd6;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  width: fit-content;
+}
