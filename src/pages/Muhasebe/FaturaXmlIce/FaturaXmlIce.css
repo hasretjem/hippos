@@ -179,11 +179,22 @@
 }
 
 .fxi-eslesme-ok {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fxi-eslesme-ok > span:first-child {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   color: #2a7;
   font-weight: 600;
+}
+
+.fxi-fiyat-onizleme {
+  font-size: 11px;
+  color: #888;
 }
 
 .fxi-eslesme-select {

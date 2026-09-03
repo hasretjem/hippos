@@ -86,8 +86,33 @@ export default function FaturaXmlIce({ showToast }) {
     }
   };
 
-  const satirEslestir = async (fIdx, sIdx, fatura, satir, malzemeId) => {
-    const malzeme = malzemeler.find((m) => m.id === malzemeId);
+  // Malzeme Havuzu'nda henüz karşılığı olmayan bir ürün için buradan direkt yeni
+  // malzeme kaydı açılabiliyor — sonra otomatik olarak bu satırla eşleştiriliyor.
+  const yeniMalzemeOlusturVeEslestir = async (fIdx, sIdx, fatura, satir) => {
+    const ad = window.prompt('Yeni malzeme adı:', satir.urunAdi || '');
+    if (!ad) return;
+    const birim = window.prompt('Birim (kg, gr, lt, ml, adet…):', satir.birimAdi || 'adet');
+    if (!birim) return;
+    try {
+      const res = await fetch('/api/recete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resource: 'malzemeler', ad, birim }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      const yeniMalzeme = data.record;
+      setMalzemeler((prev) => [...prev, yeniMalzeme]);
+      await satirEslestir(fIdx, sIdx, fatura, satir, null, yeniMalzeme);
+    } catch (err) {
+      showToast('Malzeme oluşturulamadı: ' + err.message);
+    }
+  };
+
+  // malzemeId (havuzdan seçilen) veya malzemeObj (az önce oluşturulan, henüz state'e
+  // işlenmemiş olabileceği için id'den aramak yerine direkt obje geçiliyor) — biri gerekli.
+  const satirEslestir = async (fIdx, sIdx, fatura, satir, malzemeId, malzemeObj) => {
+    const malzeme = malzemeObj || malzemeler.find((m) => m.id === malzemeId);
     if (!malzeme) return;
     try {
       const res = await fetch('/api/muhasebe', {
@@ -236,16 +261,26 @@ export default function FaturaXmlIce({ showToast }) {
                       {f.tedarikciTipi === 'malzeme' && (
                         <td>
                           {s.eslesme ? (
-                            <span className="fxi-eslesme-ok">
-                              <Check size={12} /> {s.eslesme.malzemeAdi}
-                            </span>
+                            <div className="fxi-eslesme-ok">
+                              <span><Check size={12} /> {s.eslesme.malzemeAdi}</span>
+                              <span className="fxi-fiyat-onizleme">
+                                {TL(s.birimFiyat)} / {s.birimAdi} olarak kaydedilecek
+                              </span>
+                            </div>
                           ) : (
                             <select
                               defaultValue=""
-                              onChange={(e) => e.target.value && satirEslestir(fIdx, sIdx, f, s, e.target.value)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (!val) return;
+                                if (val === '__yeni__') yeniMalzemeOlusturVeEslestir(fIdx, sIdx, f, s);
+                                else satirEslestir(fIdx, sIdx, f, s, val);
+                                e.target.value = '';
+                              }}
                               className="fxi-eslesme-select"
                             >
                               <option value="" disabled>Malzeme seç…</option>
+                              <option value="__yeni__">+ Yeni Malzeme Oluştur</option>
                               {malzemeler.map((m) => (
                                 <option key={m.id} value={m.id}>{m.ad}</option>
                               ))}
