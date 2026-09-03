@@ -35,10 +35,10 @@ export default function FaturaXmlIce({ showToast }) {
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
       const zipBase64 = btoa(binary);
 
-      const res = await fetch('/api/fatura-xml-import', {
+      const res = await fetch('/api/muhasebe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ zipBase64 }),
+        body: JSON.stringify({ resource: 'xmlImport', zipBase64 }),
       });
       const data = await res.json();
       if (!res.ok) {
