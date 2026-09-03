@@ -6,12 +6,6 @@ import AdmZip from 'adm-zip';
 // "veriyi doğru okuyor muyuz" sorusunu doğrulamak.
 // ============================================================
 
-export const config = {
-  api: {
-    bodyParser: { sizeLimit: '15mb' }, // birkaç yüz XML'lik zip için yeterli pay
-  },
-};
-
 function getTag(xml, tag) {
   const re = new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`);
   const m = xml.match(re);
