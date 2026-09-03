@@ -320,3 +320,24 @@
   padding-top: 10px;
   border-top: 1px solid #ddd;
 }
+
+.fxi-tumunu-kaydet-satir {
+  position: sticky;
+  bottom: 0;
+  padding: 14px 0;
+  margin-top: 8px;
+  background: var(--mh-panel-bg, #f7f6ee);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.fxi-tumunu-kaydet-btn {
+  font-size: 14px;
+  padding: 10px 24px;
+  font-weight: 700;
+}
+
+.fxi-tumunu-kaydet-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

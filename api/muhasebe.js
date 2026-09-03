@@ -234,7 +234,11 @@ function parseInvoiceLines(xml) {
     let urunAdi = null, urunKodu = null;
     if (itemBlock) {
       const nameMatch = itemBlock[1].match(/<cbc:Name>([^<]*)<\/cbc:Name>/);
-      urunAdi = nameMatch ? nameMatch[1].trim() : null;
+      const descMatch = itemBlock[1].match(/<cbc:Description>([^<]*)<\/cbc:Description>/);
+      // Çoğu tedarikçide cbc:Name gerçek ürün adı. Ama bazıları (örn. Beşler Et) buraya
+      // ürün KODUNU yazıp asıl adı cbc:Description'a koyuyor — Description doluysa
+      // onu tercih ediyoruz, boşsa Name'e düşüyoruz.
+      urunAdi = (descMatch && descMatch[1].trim()) ? descMatch[1].trim() : (nameMatch ? nameMatch[1].trim() : null);
       const kodMatch = itemBlock[1].match(/<cac:SellersItemIdentification>\s*<cbc:ID[^>]*>([^<]*)<\/cbc:ID>/);
       urunKodu = kodMatch ? kodMatch[1].trim() : null;
     }
@@ -262,11 +266,21 @@ function parseInvoiceLines(xml) {
     if (allowanceBlock) {
       const factorMatch = allowanceBlock[1].match(/<cbc:MultiplierFactorNumeric>([^<]*)<\/cbc:MultiplierFactorNumeric>/);
       const amountMatch = allowanceBlock[1].match(/<cbc:Amount[^>]*>([^<]*)<\/cbc:Amount>/);
-      // DÜZELTME: UBL-TR'de bu alan doğrudan yüzde olarak geliyor (ör. "27.00" = %27),
-      // 0-1 arası bir çarpan DEĞİL — önceki ×100 çarpımı yanlıştı ve %27'lik bir
-      // iskontoyu %2700 olarak hesaplıyordu.
-      iskontoOrani = factorMatch ? Number(factorMatch[1]) : 0;
+      const baseAmountMatch = allowanceBlock[1].match(/<cbc:BaseAmount[^>]*>([^<]*)<\/cbc:BaseAmount>/);
       iskontoTutari = amountMatch ? Number(amountMatch[1]) : 0;
+      const baseAmount = baseAmountMatch ? Number(baseAmountMatch[1]) : null;
+      // DÜZELTME: cbc:MultiplierFactorNumeric'in yüzde mi (27.00 = %27) yoksa 0-1 arası
+      // bir çarpan mı (0.10 = %10) olduğu TEDARİKÇİYE GÖRE DEĞİŞİYOR — sabit bir kural
+      // (×100 ya da ×1) her zaman doğru sonuç vermiyor. En güvenilir yöntem: Amount ve
+      // BaseAmount ikisi de gerçek TL tutarı olduğu için, oranlarından (Amount/BaseAmount)
+      // gerçek yüzdeyi hesaplamak — bu, tedarikçinin MultiplierFactorNumeric'i nasıl
+      // yazdığından tamamen bağımsız ve her koşulda doğru.
+      if (baseAmount) {
+        iskontoOrani = Math.round((iskontoTutari / baseAmount) * 10000) / 100;
+      } else if (factorMatch) {
+        const factor = Number(factorMatch[1]);
+        iskontoOrani = factor <= 1 ? factor * 100 : factor; // BaseAmount yoksa son çare tahmin
+      }
     }
 
     // Tutarlılık kontrolü: miktar × birim fiyat × (1-iskonto), NET satır tutarını
