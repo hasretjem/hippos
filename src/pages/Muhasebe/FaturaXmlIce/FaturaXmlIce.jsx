@@ -3,9 +3,10 @@ import './FaturaXmlIce.css';
 import { TL } from '../../../hooks/useHipposData';
 import { Upload, AlertTriangle, RotateCcw, Check, Pencil, X } from 'lucide-react';
 
-// Malzeme Havuzu'nda yeni malzeme açarken seçilebilecek birimler — recete.js'teki
-// birim dönüşüm kelime dağarcığıyla (kg/gr/ml/litre/adet/porsiyon) uyumlu tutuldu.
-const BIRIMLER = ['Adet', 'kg', 'gr', 'lt', 'ml', 'Paket', 'Kutu', 'Porsiyon'];
+// Malzeme Havuzu'nda yeni malzeme açarken seçilebilecek birimler — gr/ml BİLİNÇLİ olarak
+// yok: alış faturalarındaki her malzeme Adet, kg veya lt (litre) olarak kaydediliyor.
+// Reçetelerde gram bazlı yazmak istenirse dönüşüm reçete tarafında yapılır.
+const BIRIMLER = ['Adet', 'kg', 'lt', 'Paket', 'Kutu', 'Porsiyon'];
 
 function metinNormalize(s) {
   return String(s || '').trim().toLocaleLowerCase('tr').replace(/\s+/g, ' ');
@@ -305,9 +306,10 @@ export default function FaturaXmlIce({ showToast }) {
   return (
     <div className="mh-panel fxi-wrap">
       <p className="fxi-intro">
-        Uyumsoft'tan indirdiğin fatura zip dosyasını yükle. Bu adımda henüz Fatura Detaylı
-        Giriş'e kayıt yapılmaz — mükerrer kontrolü, tedarikçi kategorisi ve malzeme
-        eşleştirmesi burada hazırlanır.
+        Uyumsoft'tan indirdiğin fatura zip dosyasını yükle. Yükleyince hiçbir yere kayıt
+        yapılmaz — önce mükerrer kontrolü, tedarikçi kategorisi ve malzeme eşleştirmesini
+        burada gözden geçirip düzeltiyorsun. En alttaki "Tümünü Kaydet" butonuna basınca
+        faturalar Alış/Satış Faturası ve Fatura Detaylı Giriş'e kalıcı olarak yazılır.
       </p>
 
       <label className="fxi-upload-btn">
