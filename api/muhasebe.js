@@ -218,31 +218,42 @@ function parseInvoiceLines(xml) {
     }
 
     const taxBlock = block.match(/<cac:TaxTotal>([\s\S]*?)<\/cac:TaxTotal>/);
-    let kdvOrani = null, kdvTutari = null;
+    let kdvOrani = null, kdvTutari = null, netSatirTutari = null;
     if (taxBlock) {
       const percentMatch = taxBlock[1].match(/<cbc:Percent>([^<]*)<\/cbc:Percent>/);
       const amountMatch = taxBlock[1].match(/<cbc:TaxAmount[^>]*>([^<]*)<\/cbc:TaxAmount>/);
+      // TaxableAmount = KDV matrahı = iskonto düşüldükten SONRAKİ net tutar. Bazı
+      // tedarikçiler (örn. G2Meksper) cbc:LineExtensionAmount alanına iskonto
+      // öncesi BRÜT tutarı yazıyor (ayrı bir AllowanceCharge ile iskontoyu belirtip
+      // KDV'yi zaten net tutar üzerinden hesaplıyor); bazıları (örn. Güneşoğlu) net
+      // tutarı yazıyor. TaxableAmount her iki durumda da UBL standardı gereği doğru
+      // net (KDV hariç) tutar olduğu için satirTutari yerine BUNU esas alıyoruz.
+      const taxableMatch = taxBlock[1].match(/<cbc:TaxableAmount[^>]*>([^<]*)<\/cbc:TaxableAmount>/);
       kdvOrani = percentMatch ? Number(percentMatch[1]) : null;
       kdvTutari = amountMatch ? Number(amountMatch[1]) : null;
+      netSatirTutari = taxableMatch ? Number(taxableMatch[1]) : null;
     }
+    if (netSatirTutari == null) netSatirTutari = satirTutari; // KDV bloğu yoksa (nadir) ham tutara düş
 
     const allowanceBlock = block.match(/<cac:AllowanceCharge>([\s\S]*?)<\/cac:AllowanceCharge>/);
     let iskontoOrani = 0, iskontoTutari = 0;
     if (allowanceBlock) {
       const factorMatch = allowanceBlock[1].match(/<cbc:MultiplierFactorNumeric>([^<]*)<\/cbc:MultiplierFactorNumeric>/);
       const amountMatch = allowanceBlock[1].match(/<cbc:Amount[^>]*>([^<]*)<\/cbc:Amount>/);
-      iskontoOrani = factorMatch ? Number(factorMatch[1]) * 100 : 0;
+      // DÜZELTME: UBL-TR'de bu alan doğrudan yüzde olarak geliyor (ör. "27.00" = %27),
+      // 0-1 arası bir çarpan DEĞİL — önceki ×100 çarpımı yanlıştı ve %27'lik bir
+      // iskontoyu %2700 olarak hesaplıyordu.
+      iskontoOrani = factorMatch ? Number(factorMatch[1]) : 0;
       iskontoTutari = amountMatch ? Number(amountMatch[1]) : 0;
     }
 
-    // Tutarlılık kontrolü: miktar × birim fiyat × (1-iskonto) satır tutarını
-    // tutmuyorsa satır "şüpheli" işaretlenir — akış durmaz, kullanıcı onay
-    // ekranında düzeltir.
+    // Tutarlılık kontrolü: miktar × birim fiyat × (1-iskonto), NET satır tutarını
+    // (KDV matrahını) tutmuyorsa satır "şüpheli" işaretlenir.
     let supheliMiktar = false;
     let hesaplananSatirTutari = null;
     if (miktar != null && birimFiyat != null) {
       hesaplananSatirTutari = miktar * birimFiyat * (1 - iskontoOrani / 100);
-      if (satirTutari != null && Math.abs(hesaplananSatirTutari - satirTutari) > 0.5) {
+      if (netSatirTutari != null && Math.abs(hesaplananSatirTutari - netSatirTutari) > 0.5) {
         supheliMiktar = true;
       }
     } else {
@@ -250,13 +261,12 @@ function parseInvoiceLines(xml) {
     }
 
     // İSKONTO + KDV: "Birim Fiyat" olarak XML'deki ham cbc:PriceAmount değil, iskonto
-    // düşülmüş ve KDV eklenmiş EFEKTİF birim fiyat kullanılıyor — kullanıcının fiilen
-    // ödediği, malzeme maliyetine yansıması gereken rakam bu. satirTutari zaten UBL'de
-    // iskonto sonrası net (KDV hariç) tutar olduğu için doğrudan miktara bölünüyor.
-    const efektifBirimFiyatKdvDahil = (miktar && satirTutari != null)
-      ? Math.round(((satirTutari + (kdvTutari || 0)) / miktar) * 100) / 100
+    // düşülmüş (netSatirTutari) ve KDV eklenmiş EFEKTİF birim fiyat kullanılıyor —
+    // kullanıcının fiilen ödediği, malzeme maliyetine yansıması gereken rakam bu.
+    const efektifBirimFiyatKdvDahil = (miktar && netSatirTutari != null)
+      ? Math.round(((netSatirTutari + (kdvTutari || 0)) / miktar) * 100) / 100
       : null;
-    const satirTutariKdvDahil = satirTutari != null ? Math.round((satirTutari + (kdvTutari || 0)) * 100) / 100 : null;
+    const satirTutariKdvDahil = netSatirTutari != null ? Math.round((netSatirTutari + (kdvTutari || 0)) * 100) / 100 : null;
 
     return {
       siraNo, urunAdi, urunKodu, not: note, miktar,
