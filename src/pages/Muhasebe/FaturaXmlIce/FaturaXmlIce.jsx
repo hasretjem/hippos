@@ -3,13 +3,22 @@ import './FaturaXmlIce.css';
 import { TL } from '../../../hooks/useHipposData';
 import { Upload, AlertTriangle, RotateCcw, Check } from 'lucide-react';
 
+// Toptancılar sayfasındaki mevcut kategori sözlüğüyle AYNI liste (api/toptancilar.js
+// TOPTANCI_KATEGORILERI) — ikisi birbirinden bağımsız güncellenmemeli.
+const KATEGORILER = [
+  'Manav', 'Kırmızı Et', 'Tavuk Eti', 'Ambalaj',
+  'Baget Ekmek', 'Fırın Ekmeği', 'Kahvaltı ve Sandviç Malzemesi', 'Sulu Yemek Malzemesi',
+];
+
 // ============================================================
 // ADIM 1+2+3: Fatura XML İçe Aktarma.
 // Adım 1: zip'i parse edip göster (hâlâ hiçbir muhasebe kaydı YOK).
 // Adım 2: aynı faturanın (UUID bazlı) daha önce görülüp görülmediği
 //         backend'de kontrol edilip "mükerrer" olarak işaretleniyor.
-// Adım 3: tedarikçi bazlı öğrenen sınıflandırma (malzeme|gider) +
-//         malzeme tedarikçileri için satır bazlı eşleştirme sözlüğü.
+// Adım 3: tedarikçi bazlı öğrenen KATEGORİ önerisi (Toptancılar'daki mevcut
+//         kategori sözlüğü) — fatura seviyesinde varsayılan, ama her satır
+//         bağımsız değiştirilebiliyor. Malzeme eşleştirmesi kategoriden
+//         bağımsız: her satırda isteğe bağlı.
 // Fatura Detaylı Giriş / Malzeme Maliyet Geçmişi'ne gerçek kayıt
 // HÂLÂ yapılmıyor — bu Adım 4'te olacak.
 //
@@ -66,24 +75,37 @@ export default function FaturaXmlIce({ showToast }) {
     }
   };
 
-  // Bir tedarikçi malzeme/gider olarak sınıflandırılınca aynı isimdeki TÜM faturalara
-  // (bu yüklemede birden fazla faturası varsa) uygulanır — sözlük tedarikçi bazlı.
-  const tedarikciSiniflandir = async (tedarikciAdi, tip) => {
+  // Fatura seviyesinde varsayılan kategori seçimi — aynı isimdeki tedarikçi için
+  // öğrenilir (bir sonraki faturada tekrar sorulmaz), ama her satır ayrı ayrı
+  // değiştirilebildiği için burada sadece "varsayılanı" güncelliyoruz.
+  const tedarikciKategoriSec = async (tedarikciAdi, kategori) => {
     try {
       const res = await fetch('/api/muhasebe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resource: 'tedarikciTipiKaydet', tedarikciAdi, tip }),
+        body: JSON.stringify({ resource: 'tedarikciKategoriKaydet', tedarikciAdi, kategori }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
       setSonuc((prev) => ({
         ...prev,
-        faturalar: prev.faturalar.map((f) => (f.tedarikciAdi === tedarikciAdi ? { ...f, tedarikciTipi: tip } : f)),
+        faturalar: prev.faturalar.map((f) => (f.tedarikciAdi === tedarikciAdi
+          ? { ...f, tedarikciKategoriOnerisi: kategori, satirlar: f.satirlar.map((s) => ({ ...s, kategori })) }
+          : f)),
       }));
-      showToast(`${tedarikciAdi} → "${tip === 'malzeme' ? 'Malzeme' : 'Gider'}" olarak kaydedildi`);
+      showToast(`${tedarikciAdi} → "${kategori}" olarak kaydedildi`);
     } catch (err) {
       showToast('Kaydedilemedi: ' + err.message);
     }
+  };
+
+  // Bir satırın kategorisi tedarikçi varsayılanından bağımsız olarak değiştirilebiliyor
+  // (aynı faturada birden fazla kategori olabildiği için) — sadece bu fatura için, yerelde.
+  const satirKategoriDegistir = (fIdx, sIdx, kategori) => {
+    setSonuc((prev) => {
+      const kopya = { ...prev, faturalar: prev.faturalar.map((f) => ({ ...f, satirlar: [...f.satirlar] })) };
+      kopya.faturalar[fIdx].satirlar[sIdx] = { ...kopya.faturalar[fIdx].satirlar[sIdx], kategori };
+      return kopya;
+    });
   };
 
   // Malzeme Havuzu'nda henüz karşılığı olmayan bir ürün için buradan direkt yeni
@@ -208,21 +230,14 @@ export default function FaturaXmlIce({ showToast }) {
                 </div>
               </div>
 
-              {f.tedarikciTipi === null && (
+              {f.tedarikciKategoriOnerisi === null && (
                 <div className="fxi-siniflandirma-sor">
-                  <span>Bu tedarikçiyi nasıl sınıflandırayım?</span>
-                  <button className="fxi-tip-btn fxi-tip-malzeme" onClick={() => tedarikciSiniflandir(f.tedarikciAdi, 'malzeme')}>
-                    Malzeme
-                  </button>
-                  <button className="fxi-tip-btn fxi-tip-gider" onClick={() => tedarikciSiniflandir(f.tedarikciAdi, 'gider')}>
-                    Gider
-                  </button>
-                </div>
-              )}
-
-              {f.tedarikciTipi === 'gider' && (
-                <div className="fxi-gider-etiket">
-                  Gider olarak sınıflandırılmış — malzeme eşleştirmesi gerekmiyor.
+                  <span>Bu tedarikçi için varsayılan kategori seç:</span>
+                  {KATEGORILER.map((k) => (
+                    <button key={k} className="fxi-tip-btn fxi-kategori-btn" onClick={() => tedarikciKategoriSec(f.tedarikciAdi, k)}>
+                      {k}
+                    </button>
+                  ))}
                 </div>
               )}
 
@@ -233,11 +248,12 @@ export default function FaturaXmlIce({ showToast }) {
                     <th>Ürün Kodu</th>
                     <th>Miktar</th>
                     <th>Birim</th>
-                    <th>Birim Fiyat</th>
-                    <th>Satır Tutarı</th>
+                    <th>Birim Fiyat (KDV Dahil)</th>
+                    <th>Satır Tutarı (KDV Dahil)</th>
                     <th>KDV %</th>
                     <th>Not (ham)</th>
-                    {f.tedarikciTipi === 'malzeme' && <th>Malzeme Eşleştirme</th>}
+                    <th>Kategori</th>
+                    <th>Malzeme Eşleştirme</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -254,40 +270,50 @@ export default function FaturaXmlIce({ showToast }) {
                       </td>
                       <td>{s.miktar}</td>
                       <td>{s.birimAdi}</td>
-                      <td>{TL(s.birimFiyat)}</td>
-                      <td>{TL(s.satirTutari)}</td>
+                      <td>{TL(s.efektifBirimFiyatKdvDahil)}</td>
+                      <td>{TL(s.satirTutariKdvDahil)}</td>
                       <td>%{s.kdvOrani}</td>
                       <td className="fxi-not">{s.not || '—'}</td>
-                      {f.tedarikciTipi === 'malzeme' && (
-                        <td>
-                          {s.eslesme ? (
-                            <div className="fxi-eslesme-ok">
-                              <span><Check size={12} /> {s.eslesme.malzemeAdi}</span>
-                              <span className="fxi-fiyat-onizleme">
-                                {TL(s.birimFiyat)} / {s.birimAdi} olarak kaydedilecek
-                              </span>
-                            </div>
-                          ) : (
-                            <select
-                              defaultValue=""
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                if (!val) return;
-                                if (val === '__yeni__') yeniMalzemeOlusturVeEslestir(fIdx, sIdx, f, s);
-                                else satirEslestir(fIdx, sIdx, f, s, val);
-                                e.target.value = '';
-                              }}
-                              className="fxi-eslesme-select"
-                            >
-                              <option value="" disabled>Malzeme seç…</option>
-                              <option value="__yeni__">+ Yeni Malzeme Oluştur</option>
-                              {malzemeler.map((m) => (
-                                <option key={m.id} value={m.id}>{m.ad}</option>
-                              ))}
-                            </select>
-                          )}
-                        </td>
-                      )}
+                      <td>
+                        <select
+                          value={s.kategori || ''}
+                          onChange={(e) => satirKategoriDegistir(fIdx, sIdx, e.target.value)}
+                          className="fxi-eslesme-select"
+                        >
+                          <option value="" disabled>Kategori seç…</option>
+                          {KATEGORILER.map((k) => (
+                            <option key={k} value={k}>{k}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        {s.eslesme ? (
+                          <div className="fxi-eslesme-ok">
+                            <span><Check size={12} /> {s.eslesme.malzemeAdi}</span>
+                            <span className="fxi-fiyat-onizleme">
+                              {TL(s.efektifBirimFiyatKdvDahil)} / {s.birimAdi} olarak kaydedilecek
+                            </span>
+                          </div>
+                        ) : (
+                          <select
+                            defaultValue=""
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (!val) return;
+                              if (val === '__yeni__') yeniMalzemeOlusturVeEslestir(fIdx, sIdx, f, s);
+                              else satirEslestir(fIdx, sIdx, f, s, val);
+                              e.target.value = '';
+                            }}
+                            className="fxi-eslesme-select"
+                          >
+                            <option value="" disabled>Malzeme seç…</option>
+                            <option value="__yeni__">+ Yeni Malzeme Oluştur</option>
+                            {malzemeler.map((m) => (
+                              <option key={m.id} value={m.id}>{m.ad}</option>
+                            ))}
+                          </select>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

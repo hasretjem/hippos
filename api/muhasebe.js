@@ -46,10 +46,18 @@ const DETAY_LAST_COL = 'M';
 // Log: her başarıyla parse edilen fatura burada "görüldü" olarak işaretlenir
 // (gerçek muhasebe kaydından BAĞIMSIZ) — böylece mükerrer zip yüklemesi hemen yakalanır.
 const XML_LOG_TAB = { tab: 'Fatura İçe Aktarma Log', headers: ['ID', 'UUID', 'Fatura No', 'Tedarikçi Adı', 'Toplam Tutar', 'Görülme Tarihi'] };
-// Tedarikçi bazlı öğrenen sınıflandırma: bir tedarikçi malzeme mi gider mi.
-const TEDARIKCI_TAB = { tab: 'Tedarikçi Sınıflandırma', headers: ['ID', 'Tedarikçi Adı', 'Tip', 'Tarih'] };
+// Tedarikçi bazlı öğrenen kategori önerisi — malzeme|gider ikilisi DEĞİL, Toptancılar
+// sayfasındaki mevcut kategori sözlüğü kullanılıyor (api/toptancilar.js ile senkron tutulmalı).
+// Bu sadece FATURA SEVİYESİNDE varsayılan öneri; her satır kendi kategorisini
+// (frontend'de) bağımsız değiştirebiliyor, tek bir fatura birden fazla kategoriye yayılabiliyor.
+export const TOPTANCI_KATEGORILERI = [
+  'Manav', 'Kırmızı Et', 'Tavuk Eti', 'Ambalaj',
+  'Baget Ekmek', 'Fırın Ekmeği', 'Kahvaltı ve Sandviç Malzemesi', 'Sulu Yemek Malzemesi',
+];
+const TEDARIKCI_TAB = { tab: 'Tedarikçi Kategori Sözlüğü', headers: ['ID', 'Tedarikçi Adı', 'Kategori', 'Tarih'] };
 // Öğrenen eşleştirme sözlüğü: tedarikçinin ürün kodu/adı -> kendi malzeme kaydımız.
 const ESLESTIRME_TAB = { tab: 'Malzeme Eşleştirme Sözlüğü', headers: ['ID', 'Tedarikçi Adı', 'Ürün Kodu', 'Ürün Adı', 'MalzemeID', 'Malzeme Adı', 'Paket Miktarı', 'Paket Birimi', 'Tarih'] };
+
 
 async function getRows(sheets, tabConfig) {
   await ensureTab(sheets, tabConfig.tab, tabConfig.headers);
@@ -224,11 +232,21 @@ function parseInvoiceLines(xml) {
       supheliMiktar = true;
     }
 
+    // İSKONTO + KDV: "Birim Fiyat" olarak XML'deki ham cbc:PriceAmount değil, iskonto
+    // düşülmüş ve KDV eklenmiş EFEKTİF birim fiyat kullanılıyor — kullanıcının fiilen
+    // ödediği, malzeme maliyetine yansıması gereken rakam bu. satirTutari zaten UBL'de
+    // iskonto sonrası net (KDV hariç) tutar olduğu için doğrudan miktara bölünüyor.
+    const efektifBirimFiyatKdvDahil = (miktar && satirTutari != null)
+      ? Math.round(((satirTutari + (kdvTutari || 0)) / miktar) * 100) / 100
+      : null;
+    const satirTutariKdvDahil = satirTutari != null ? Math.round((satirTutari + (kdvTutari || 0)) * 100) / 100 : null;
+
     return {
       siraNo, urunAdi, urunKodu, not: note, miktar,
       birimKodu: unitCode,
       birimAdi: UNIT_CODE_MAP[unitCode] || unitCode, // tanımadığımız kodda ham haliyle
       birimFiyat, satirTutari, kdvOrani, kdvTutari, iskontoOrani, iskontoTutari,
+      efektifBirimFiyatKdvDahil, satirTutariKdvDahil,
       supheliMiktar,
       hesaplananSatirTutari: hesaplananSatirTutari != null ? Math.round(hesaplananSatirTutari * 100) / 100 : null,
     };
@@ -299,12 +317,12 @@ export default async function handler(req, res) {
           yeniLogSatirlari.push([String(Date.now()) + Math.floor(Math.random() * 1000), f.uuid, f.faturaNo, f.tedarikciAdi || '', f.toplamKdvDahil ?? '', simdi]);
         }
 
-        // --- tedarikçi tipi (malzeme/gider), en son karar geçerli ---
+        // --- tedarikçi kategori önerisi (Toptancılar sayfasındaki mevcut kategori sözlüğü), en son karar geçerli ---
         const tedAdNorm = metinNormalize(f.tedarikciAdi);
         const tedKayitlari = tedarikciRows.filter((r) => metinNormalize(r[1]) === tedAdNorm);
-        f.tedarikciTipi = tedKayitlari.length ? tedKayitlari[tedKayitlari.length - 1][2] : null; // 'malzeme' | 'gider' | null
+        f.tedarikciKategoriOnerisi = tedKayitlari.length ? tedKayitlari[tedKayitlari.length - 1][2] : null;
 
-        // --- satır bazlı eşleştirme önerisi (sadece tedarikçi tipi 'gider' değilse anlamlı) ---
+        // --- satır bazlı eşleştirme önerisi + varsayılan kategori (satır bazında serbestçe değiştirilebilir) ---
         f.satirlar = f.satirlar.map((s) => {
           const kodNorm = metinNormalize(s.urunKodu);
           const adNorm = metinNormalize(s.urunAdi);
@@ -315,6 +333,7 @@ export default async function handler(req, res) {
           });
           return {
             ...s,
+            kategori: f.tedarikciKategoriOnerisi,
             eslesme: eslesen
               ? { malzemeId: eslesen[4], malzemeAdi: eslesen[5], paketMiktar: eslesen[6], paketBirim: eslesen[7] }
               : null,
@@ -343,15 +362,15 @@ export default async function handler(req, res) {
       });
     }
 
-    // ---- Tedarikçi sınıflandırma kaydet (malzeme | gider) ----
-    if (resource === 'tedarikciTipiKaydet') {
+    // ---- Tedarikçi kategori önerisi kaydet (mevcut Toptancı kategorileri sözlüğünden) ----
+    if (resource === 'tedarikciKategoriKaydet') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-      const { tedarikciAdi, tip } = req.body || {};
-      if (!tedarikciAdi || !['malzeme', 'gider'].includes(tip)) {
-        return res.status(400).json({ error: 'tedarikciAdi ve tip (malzeme|gider) gerekli' });
+      const { tedarikciAdi, kategori } = req.body || {};
+      if (!tedarikciAdi || !TOPTANCI_KATEGORILERI.includes(kategori)) {
+        return res.status(400).json({ error: 'tedarikciAdi ve geçerli bir kategori gerekli' });
       }
       const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
-      await appendRow(sheets, TEDARIKCI_TAB, [String(Date.now()), tedarikciAdi, tip, tarih]);
+      await appendRow(sheets, TEDARIKCI_TAB, [String(Date.now()), tedarikciAdi, kategori, tarih]);
       return res.status(200).json({ ok: true });
     }
 

@@ -141,13 +141,19 @@
 .fxi-siniflandirma-sor {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
   background: #eef4ff;
   border: 1px solid #b8cdf0;
   border-radius: 6px;
   padding: 8px 10px;
   font-size: 13px;
   margin-bottom: 10px;
+}
+
+.fxi-kategori-btn {
+  background: #4a7fd6;
+  color: #fff;
 }
 
 .fxi-tip-btn {
