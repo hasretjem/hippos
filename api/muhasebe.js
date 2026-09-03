@@ -39,8 +39,8 @@ const BELGE_TIPLERI = {
 // Her kalem kendi satırında: hangi faturaya ait (faturaId), ürün adı, adet, birim fiyat,
 // KDV oranı, iskonto oranı. Fiyat farkı raporlaması ileride bu tablodan beslenecek.
 const DETAY_TAB = 'Fatura Detaylı Giriş';
-const DETAY_HEADERS = ['ID', 'FaturaID', 'Tedarikçi/Firma', 'Fatura No', 'Tarih', 'Saat', 'Ürün Adı', 'Adet', 'Birim Fiyat', 'KDV Oranı', 'İskonto Oranı', 'KDV Tutarı', 'Satır Tutarı'];
-const DETAY_LAST_COL = 'M';
+const DETAY_HEADERS = ['ID', 'FaturaID', 'Tedarikçi/Firma', 'Fatura No', 'Tarih', 'Saat', 'Ürün Adı', 'Adet', 'Birim Fiyat', 'KDV Oranı', 'İskonto Oranı', 'KDV Tutarı', 'Satır Tutarı', 'Kategori'];
+const DETAY_LAST_COL = 'N';
 
 // ---- Fatura XML İçe Aktarma — Adım 2+3 destek sekmeleri ----
 // Log: her başarıyla parse edilen fatura burada "görüldü" olarak işaretlenir
@@ -126,6 +126,7 @@ function rowToDetay(r) {
     id: r[0], faturaId: r[1], firma: r[2], faturaNo: r[3], tarih: r[4], saat: r[5],
     urunAdi: r[6] || '', adet: Number(r[7]) || 0, birimFiyat: Number(r[8]) || 0,
     kdvOrani: r[9] || '', iskontoOrani: r[10] || '', kdvTutari: Number(r[11]) || 0, satirTutari: Number(r[12]) || 0,
+    kategori: r[13] || '',
   };
 }
 
@@ -146,6 +147,12 @@ function xmlGetTag(xml, tag) {
   return m ? m[1].trim() : null;
 }
 
+// Şirketin kendi VKN'si — fatura satıcı/alıcı taraflarından hangisinin "biz" olduğunu
+// (dolayısıyla alış mı satış mı olduğunu) belirlemek için tek güvenilir yöntem bu.
+// XML'deki InvoiceTypeCode alanı hem alış hem satış faturalarında aynı değeri taşıyabildiği
+// için (örn. ikisi de "SATIS") ona güvenilemiyor.
+const KENDI_VKN = '0851207665';
+
 function parseInvoiceHeader(xml) {
   const id = xmlGetTag(xml, 'cbc:ID');
   const uuid = xmlGetTag(xml, 'cbc:UUID');
@@ -161,6 +168,20 @@ function parseInvoiceHeader(xml) {
     const vknMatch = supplierBlock[1].match(/<cbc:ID\s+schemeID="(?:VKN|TCKN)">([^<]*)<\/cbc:ID>/);
     supplierVkn = vknMatch ? vknMatch[1].trim() : null;
   }
+
+  const customerBlock = xml.match(/<cac:AccountingCustomerParty>([\s\S]*?)<\/cac:AccountingCustomerParty>/);
+  let customerName = null;
+  let customerVkn = null;
+  if (customerBlock) {
+    const nameMatch = customerBlock[1].match(/<cbc:Name>([^<]*)<\/cbc:Name>/);
+    customerName = nameMatch ? nameMatch[1].trim() : null;
+    const vknMatch = customerBlock[1].match(/<cbc:ID\s+schemeID="(?:VKN|TCKN)">([^<]*)<\/cbc:ID>/);
+    customerVkn = vknMatch ? vknMatch[1].trim() : null;
+  }
+
+  // yon: satıcı biz isek "satis", alıcı biz isek "alis". İkisi de değilse (VKN eşleşmezse)
+  // güvenli tarafta kalıp "alis" varsayılıyor — mevcut akış zaten alış için tasarlandı.
+  const yon = supplierVkn === KENDI_VKN ? 'satis' : 'alis';
 
   const totalBlock = xml.match(/<cac:LegalMonetaryTotal>([\s\S]*?)<\/cac:LegalMonetaryTotal>/);
   let toplamKdvHaric = null, toplamKdvDahil = null, odenecekTutar = null, toplamIskonto = null;
@@ -183,8 +204,9 @@ function parseInvoiceHeader(xml) {
   }
 
   return {
-    faturaNo: id, uuid, tarih: issueDate, tip: typeCode,
+    faturaNo: id, uuid, tarih: issueDate, tip: typeCode, yon,
     tedarikciAdi: supplierName, tedarikciVkn: supplierVkn,
+    aliciAdi: customerName, aliciVkn: customerVkn,
     toplamKdvHaric, toplamKdvDahil, toplamKdvTutari, toplamIskonto, odenecekTutar,
   };
 }
@@ -439,6 +461,59 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // ---- ADIM 4a: Alış faturasını onayla ve kaydet ----
+    // Alış Faturası (başlık) + her satır için Fatura Detaylı Giriş kaydı oluşturur.
+    // Malzeme Maliyet Geçmişi'ne kayıt YOK — o ayrı bir aşamada kurgulanacak (kullanıcı kararı).
+    if (resource === 'xmlKaydetAlis') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { tedarikciAdi, faturaNo, tarih, toplamKdvDahil, toplamKdvTutari, satirlar } = req.body || {};
+      if (!tedarikciAdi || !faturaNo || !Array.isArray(satirlar) || satirlar.length === 0) {
+        return res.status(400).json({ error: 'tedarikciAdi, faturaNo ve satirlar gerekli' });
+      }
+      const now = new Date();
+      const kayitTarih = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+      const kayitSaat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
+
+      const faturaId = String(Date.now());
+      const alisConfig = BELGE_TIPLERI.alisFaturasi;
+      await appendRow(sheets, { tab: alisConfig.tab, headers: alisConfig.headers }, [
+        faturaId, kayitTarih, kayitSaat, tedarikciAdi, faturaNo, tarih || '',
+        toplamKdvDahil ?? '', toplamKdvTutari ?? '', 'Beklemede', 'Uyumsoft XML içe aktarma',
+      ]);
+
+      const detaySatirlari = satirlar.map((s) => {
+        const id = String(Date.now()) + Math.floor(Math.random() * 1000);
+        return [
+          id, faturaId, tedarikciAdi, faturaNo, kayitTarih, kayitSaat,
+          s.urunAdi || '', s.miktar ?? '', s.birimFiyat ?? '', s.kdvOrani ?? '', s.iskontoOrani ?? '',
+          s.kdvTutari ?? '', s.satirTutari ?? '', s.kategori || '',
+        ];
+      });
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID, range: `${DETAY_TAB}!A2`, valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS', requestBody: { values: detaySatirlari },
+      });
+
+      return res.status(200).json({ ok: true, faturaId });
+    }
+
+    // ---- ADIM 4b: Satış faturasını onayla ve kaydet (sadece başlık, satır detayı yok) ----
+    if (resource === 'xmlKaydetSatis') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { aliciAdi, faturaNo, tarih, toplamKdvDahil, toplamKdvTutari } = req.body || {};
+      if (!aliciAdi || !faturaNo) return res.status(400).json({ error: 'aliciAdi ve faturaNo gerekli' });
+      const now = new Date();
+      const kayitTarih = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+      const kayitSaat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
+      const faturaId = String(Date.now());
+      const satisConfig = BELGE_TIPLERI.satisFaturasi;
+      await appendRow(sheets, { tab: satisConfig.tab, headers: satisConfig.headers }, [
+        faturaId, kayitTarih, kayitSaat, aliciAdi, faturaNo, tarih || '',
+        toplamKdvDahil ?? '', toplamKdvTutari ?? '', 'Beklemede', 'Uyumsoft XML içe aktarma',
+      ]);
+      return res.status(200).json({ ok: true, faturaId });
+    }
+
     // ---- Fatura Detaylı Giriş (kalem bazlı) ----
     if (resource === 'detay') {
       await ensureTab(sheets, DETAY_TAB, DETAY_HEADERS);
@@ -452,7 +527,7 @@ export default async function handler(req, res) {
       }
 
       if (req.method === 'POST') {
-        const { faturaId, firma, faturaNo, urunAdi, adet, birimFiyat, kdvOrani, iskontoOrani } = req.body || {};
+        const { faturaId, firma, faturaNo, urunAdi, adet, birimFiyat, kdvOrani, iskontoOrani, kategori } = req.body || {};
         if (!faturaId || !urunAdi) return res.status(400).json({ error: 'faturaId ve urunAdi gerekli' });
         const id = String(Date.now());
         const now = new Date();
@@ -469,7 +544,7 @@ export default async function handler(req, res) {
         // kdvTutari: bu matrah üzerinden hesaplanan KDV — ayrı sütunda, toplamda görünsün diye.
         const satirTutari = adetNum * fiyatNum * (1 - iskNum / 100);
         const kdvTutari = satirTutari * (kdvNum / 100);
-        const rowValues = [id, faturaId, firma || '', faturaNo || '', tarih, saat, urunAdi, adetNum, fiyatNum, kdvOrani || '', iskontoOrani || '', Math.round(kdvTutari * 100) / 100, Math.round(satirTutari * 100) / 100];
+        const rowValues = [id, faturaId, firma || '', faturaNo || '', tarih, saat, urunAdi, adetNum, fiyatNum, kdvOrani || '', iskontoOrani || '', Math.round(kdvTutari * 100) / 100, Math.round(satirTutari * 100) / 100, kategori || ''];
         await sheets.spreadsheets.values.append({
           spreadsheetId: SHEET_ID, range: `${DETAY_TAB}!A2`, valueInputOption: 'USER_ENTERED',
           insertDataOption: 'INSERT_ROWS', requestBody: { values: [rowValues] },

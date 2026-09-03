@@ -40,6 +40,8 @@ export default function FaturaXmlIce({ showToast }) {
   const [formState, setFormState] = useState({
     malzemeArama: '', malzemeSecim: '', yeniMalzemeMi: false, yeniAd: '', yeniBirim: 'Adet', paketMiktar: '1',
   });
+  const [kaydedilenler, setKaydedilenler] = useState({}); // uuid -> true (bu oturumda kaydedildi)
+  const [kaydediliyor, setKaydediliyor] = useState(null); // o an kaydedilmekte olan fatura uuid'si
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -166,6 +168,56 @@ export default function FaturaXmlIce({ showToast }) {
   };
 
   const duzenlemeyiIptalEt = () => setEditingKey(null);
+
+  // ADIM 4: onaylanan faturayı gerçekten kaydet. Yön (alış/satış) backend'de VKN
+  // karşılaştırmasıyla belirlendi (f.yon) — alışta Fatura Detaylı Giriş + Alış Faturası
+  // başlığı, satışta sadece Satış Faturası başlığı yazılıyor.
+  const faturaKaydet = async (fIdx, f) => {
+    setKaydediliyor(f.uuid);
+    try {
+      const resource = f.yon === 'satis' ? 'xmlKaydetSatis' : 'xmlKaydetAlis';
+      const body = f.yon === 'satis'
+        ? {
+          resource,
+          aliciAdi: f.aliciAdi,
+          faturaNo: f.faturaNo,
+          tarih: f.tarih,
+          toplamKdvDahil: f.toplamKdvDahil,
+          toplamKdvTutari: f.toplamKdvTutari,
+        }
+        : {
+          resource,
+          tedarikciAdi: f.tedarikciAdi,
+          faturaNo: f.faturaNo,
+          tarih: f.tarih,
+          toplamKdvDahil: f.toplamKdvDahil,
+          toplamKdvTutari: f.toplamKdvTutari,
+          satirlar: f.satirlar.map((s) => ({
+            urunAdi: s.urunAdi,
+            miktar: s.miktar,
+            birimFiyat: s.efektifBirimFiyatKdvDahil,
+            kdvOrani: s.kdvOrani,
+            iskontoOrani: s.iskontoOrani,
+            kdvTutari: s.kdvTutari,
+            satirTutari: s.satirTutariKdvDahil,
+            kategori: s.kategori || '',
+          })),
+        };
+      const res = await fetch('/api/muhasebe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setKaydedilenler((prev) => ({ ...prev, [f.uuid]: true }));
+      showToast(`${f.faturaNo} kaydedildi`);
+    } catch (err) {
+      showToast('Kaydedilemedi: ' + err.message);
+    } finally {
+      setKaydediliyor(null);
+    }
+  };
 
   // Bir satır eşleştirilince, AYNI yüklemedeki (henüz Sheets'e yansımamış) diğer
   // faturalardaki aynı tedarikçi + aynı ürün kodu/adına sahip eşleşmemiş satırlara
@@ -308,6 +360,22 @@ export default function FaturaXmlIce({ showToast }) {
                 </div>
               </div>
 
+              {f.yon === 'satis' ? (
+                <div className="fxi-kaydet-satir">
+                  {kaydedilenler[f.uuid] ? (
+                    <span className="fxi-eslesme-ok"><span><Check size={14} /> Satış Faturası olarak kaydedildi</span></span>
+                  ) : (
+                    <button
+                      className="fxi-tip-btn fxi-kategori-btn"
+                      disabled={kaydediliyor === f.uuid}
+                      onClick={() => faturaKaydet(fIdx, f)}
+                    >
+                      {kaydediliyor === f.uuid ? 'Kaydediliyor…' : 'Satış Faturası Olarak Kaydet'}
+                    </button>
+                  )}
+                </div>
+              ) : (
+              <>
               {f.tedarikciKategoriOnerisi === null && (
                 <div className="fxi-siniflandirma-sor">
                   <span>Bu tedarikçi için varsayılan kategori seç:</span>
@@ -495,6 +563,22 @@ export default function FaturaXmlIce({ showToast }) {
                   })}
                 </tbody>
               </table>
+
+              <div className="fxi-kaydet-satir">
+                {kaydedilenler[f.uuid] ? (
+                  <span className="fxi-eslesme-ok"><span><Check size={14} /> Alış Faturası olarak kaydedildi</span></span>
+                ) : (
+                  <button
+                    className="fxi-tip-btn fxi-kategori-btn"
+                    disabled={kaydediliyor === f.uuid}
+                    onClick={() => faturaKaydet(fIdx, f)}
+                  >
+                    {kaydediliyor === f.uuid ? 'Kaydediliyor…' : 'Alış Faturası Olarak Kaydet'}
+                  </button>
+                )}
+              </div>
+              </>
+              )}
             </div>
           ))}
         </div>
