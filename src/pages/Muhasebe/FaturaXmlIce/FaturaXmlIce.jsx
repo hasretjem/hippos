@@ -1,22 +1,33 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './FaturaXmlIce.css';
 import { TL } from '../../../hooks/useHipposData';
-import { Upload, AlertTriangle } from 'lucide-react';
+import { Upload, AlertTriangle, RotateCcw, Check } from 'lucide-react';
 
 // ============================================================
-// ADIM 1: Fatura XML İçe Aktarma — sadece parse edip göster.
-// Bu aşamada HİÇBİR YERE (Sheets/Supabase) yazma yok; amaç
-// parser'ın doğru okuduğunu birlikte gözle doğrulamak.
+// ADIM 1+2+3: Fatura XML İçe Aktarma.
+// Adım 1: zip'i parse edip göster (hâlâ hiçbir muhasebe kaydı YOK).
+// Adım 2: aynı faturanın (UUID bazlı) daha önce görülüp görülmediği
+//         backend'de kontrol edilip "mükerrer" olarak işaretleniyor.
+// Adım 3: tedarikçi bazlı öğrenen sınıflandırma (malzeme|gider) +
+//         malzeme tedarikçileri için satır bazlı eşleştirme sözlüğü.
+// Fatura Detaylı Giriş / Malzeme Maliyet Geçmişi'ne gerçek kayıt
+// HÂLÂ yapılmıyor — bu Adım 4'te olacak.
 //
-// Bilinçli olarak Muhasebe.jsx'ten AYRI bir modül: bu özellik
-// birkaç aşamada büyüyecek (eşleştirme sözlüğü, gerçek kayıt,
-// toptancı bakiyesi, kategori raporu). Ayrı dosyada tutmak her
-// aşamada sadece bu dosyayı okuyup değiştirmeyi sağlıyor.
+// Bilinçli olarak Muhasebe.jsx'ten AYRI bir modül (kota tasarrufu +
+// izolasyon).
 // ============================================================
 export default function FaturaXmlIce({ showToast }) {
   const [yukleniyor, setYukleniyor] = useState(false);
   const [sonuc, setSonuc] = useState(null); // { toplamDosya, basariliFatura, hataliDosya, faturalar, hatalar }
+  const [malzemeler, setMalzemeler] = useState([]);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    fetch('/api/recete?resource=malzemeler')
+      .then((r) => r.json())
+      .then((d) => setMalzemeler((d.records || []).filter((m) => m.aktif)))
+      .catch(() => {});
+  }, []);
 
   const dosyaSecildi = async (e) => {
     const file = e.target.files?.[0];
@@ -55,11 +66,64 @@ export default function FaturaXmlIce({ showToast }) {
     }
   };
 
+  // Bir tedarikçi malzeme/gider olarak sınıflandırılınca aynı isimdeki TÜM faturalara
+  // (bu yüklemede birden fazla faturası varsa) uygulanır — sözlük tedarikçi bazlı.
+  const tedarikciSiniflandir = async (tedarikciAdi, tip) => {
+    try {
+      const res = await fetch('/api/muhasebe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resource: 'tedarikciTipiKaydet', tedarikciAdi, tip }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      setSonuc((prev) => ({
+        ...prev,
+        faturalar: prev.faturalar.map((f) => (f.tedarikciAdi === tedarikciAdi ? { ...f, tedarikciTipi: tip } : f)),
+      }));
+      showToast(`${tedarikciAdi} → "${tip === 'malzeme' ? 'Malzeme' : 'Gider'}" olarak kaydedildi`);
+    } catch (err) {
+      showToast('Kaydedilemedi: ' + err.message);
+    }
+  };
+
+  const satirEslestir = async (fIdx, sIdx, fatura, satir, malzemeId) => {
+    const malzeme = malzemeler.find((m) => m.id === malzemeId);
+    if (!malzeme) return;
+    try {
+      const res = await fetch('/api/muhasebe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resource: 'eslestirmeKaydet',
+          tedarikciAdi: fatura.tedarikciAdi,
+          urunKodu: satir.urunKodu || '',
+          urunAdi: satir.urunAdi,
+          malzemeId: malzeme.id,
+          malzemeAdi: malzeme.ad,
+          paketMiktar: 1,
+          paketBirim: satir.birimAdi,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      setSonuc((prev) => {
+        const kopya = { ...prev, faturalar: prev.faturalar.map((f) => ({ ...f, satirlar: [...f.satirlar] })) };
+        kopya.faturalar[fIdx].satirlar[sIdx] = {
+          ...kopya.faturalar[fIdx].satirlar[sIdx],
+          eslesme: { malzemeId: malzeme.id, malzemeAdi: malzeme.ad, paketMiktar: 1, paketBirim: satir.birimAdi },
+        };
+        return kopya;
+      });
+    } catch (err) {
+      showToast('Eşleştirme kaydedilemedi: ' + err.message);
+    }
+  };
+
   return (
     <div className="mh-panel fxi-wrap">
       <p className="fxi-intro">
-        Uyumsoft'tan indirdiğin fatura zip dosyasını yükle. Bu adımda hiçbir kayıt yapılmaz —
-        sadece faturaların doğru okunduğunu birlikte kontrol ediyoruz.
+        Uyumsoft'tan indirdiğin fatura zip dosyasını yükle. Bu adımda henüz Fatura Detaylı
+        Giriş'e kayıt yapılmaz — mükerrer kontrolü, tedarikçi sınıflandırması ve malzeme
+        eşleştirmesi burada hazırlanır.
       </p>
 
       <label className="fxi-upload-btn">
@@ -96,8 +160,15 @@ export default function FaturaXmlIce({ showToast }) {
             </div>
           )}
 
-          {sonuc.faturalar.map((f) => (
+          {sonuc.faturalar.map((f, fIdx) => (
             <div key={f.uuid} className="fxi-fatura-kart">
+              {f.mukerrer && (
+                <div className="fxi-mukerrer-uyari">
+                  <RotateCcw size={13} />
+                  Bu fatura daha önce {f.oncekiGorulmeTarihi} tarihinde yüklenmiş — mükerrer olabilir.
+                </div>
+              )}
+
               <div className="fxi-fatura-baslik">
                 <div>
                   <b>{f.tedarikciAdi || '(Tedarikçi adı okunamadı)'}</b>
@@ -112,6 +183,24 @@ export default function FaturaXmlIce({ showToast }) {
                 </div>
               </div>
 
+              {f.tedarikciTipi === null && (
+                <div className="fxi-siniflandirma-sor">
+                  <span>Bu tedarikçiyi nasıl sınıflandırayım?</span>
+                  <button className="fxi-tip-btn fxi-tip-malzeme" onClick={() => tedarikciSiniflandir(f.tedarikciAdi, 'malzeme')}>
+                    Malzeme
+                  </button>
+                  <button className="fxi-tip-btn fxi-tip-gider" onClick={() => tedarikciSiniflandir(f.tedarikciAdi, 'gider')}>
+                    Gider
+                  </button>
+                </div>
+              )}
+
+              {f.tedarikciTipi === 'gider' && (
+                <div className="fxi-gider-etiket">
+                  Gider olarak sınıflandırılmış — malzeme eşleştirmesi gerekmiyor.
+                </div>
+              )}
+
               <table className="fxi-tablo">
                 <thead>
                   <tr>
@@ -123,11 +212,12 @@ export default function FaturaXmlIce({ showToast }) {
                     <th>Satır Tutarı</th>
                     <th>KDV %</th>
                     <th>Not (ham)</th>
+                    {f.tedarikciTipi === 'malzeme' && <th>Malzeme Eşleştirme</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {f.satirlar.map((s, i) => (
-                    <tr key={i} className={s.supheliMiktar ? 'fxi-supheli' : ''}>
+                  {f.satirlar.map((s, sIdx) => (
+                    <tr key={sIdx} className={s.supheliMiktar ? 'fxi-supheli' : ''}>
                       <td>
                         {s.supheliMiktar && (
                           <AlertTriangle size={12} className="fxi-uyari-ikon" title="Miktar/tutar tutarsız olabilir" />
@@ -143,6 +233,26 @@ export default function FaturaXmlIce({ showToast }) {
                       <td>{TL(s.satirTutari)}</td>
                       <td>%{s.kdvOrani}</td>
                       <td className="fxi-not">{s.not || '—'}</td>
+                      {f.tedarikciTipi === 'malzeme' && (
+                        <td>
+                          {s.eslesme ? (
+                            <span className="fxi-eslesme-ok">
+                              <Check size={12} /> {s.eslesme.malzemeAdi}
+                            </span>
+                          ) : (
+                            <select
+                              defaultValue=""
+                              onChange={(e) => e.target.value && satirEslestir(fIdx, sIdx, f, s, e.target.value)}
+                              className="fxi-eslesme-select"
+                            >
+                              <option value="" disabled>Malzeme seç…</option>
+                              {malzemeler.map((m) => (
+                                <option key={m.id} value={m.id}>{m.ad}</option>
+                              ))}
+                            </select>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

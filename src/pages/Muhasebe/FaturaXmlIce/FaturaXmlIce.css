@@ -125,3 +125,69 @@
 .fxi-not {
   color: #888;
 }
+.fxi-mukerrer-uyari {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff3cd;
+  border: 1px solid #e0a800;
+  color: #7a5600;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.fxi-siniflandirma-sor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #eef4ff;
+  border: 1px solid #b8cdf0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.fxi-tip-btn {
+  border: none;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fxi-tip-malzeme {
+  background: #2a7;
+  color: #fff;
+}
+
+.fxi-tip-gider {
+  background: #888;
+  color: #fff;
+}
+
+.fxi-gider-etiket {
+  background: #f2f2f2;
+  color: #666;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.fxi-eslesme-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #2a7;
+  font-weight: 600;
+}
+
+.fxi-eslesme-select {
+  font-size: 12px;
+  padding: 3px 4px;
+  max-width: 160px;
+}
