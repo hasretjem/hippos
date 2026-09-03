@@ -10,7 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "lucide-react": "^0.460.0", "googleapis": "^144.0.0",
+    "adm-zip": "^0.6.0",
+    "lucide-react": "^0.460.0",
+    "googleapis": "^144.0.0",
     "@supabase/supabase-js": "^2.110.8",
     "@mdi/js": "^7.4.47",
     "@mdi/react": "^1.6.1",

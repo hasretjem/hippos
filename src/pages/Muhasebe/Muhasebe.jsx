@@ -2,9 +2,10 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './Muhasebe.css';
 import { TL } from '../../hooks/useHipposData';
 import { supabase } from '../../services/supabase';
+import FaturaXmlIce from './FaturaXmlIce/FaturaXmlIce';
 import {
   ArrowLeft, Receipt, Truck, Users, ListPlus, Copy, MessageCircle, Plus, Trash2,
-  Lock, Delete, Check, X, Search, Pencil, ChefHat,
+  Lock, Delete, Check, X, Search, Pencil, ChefHat, Upload,
 } from 'lucide-react';
 
 const PERSONEL_PIN = '1234';
@@ -170,6 +171,9 @@ export default function Muhasebe({ onNavigate }) {
         <button className={anaTab === 'receteler' ? 'active' : ''} onClick={() => setAnaTab('receteler')}>
           <ChefHat size={15} /> Reçeteler
         </button>
+        <button className={anaTab === 'faturaXmlIce' ? 'active' : ''} onClick={() => setAnaTab('faturaXmlIce')}>
+          <Upload size={15} /> Fatura İçe Aktar (XML)
+        </button>
       </div>
 
       <div className="mh-body">
@@ -187,6 +191,9 @@ export default function Muhasebe({ onNavigate }) {
         )}
         {anaTab === 'receteler' && (
           <ReceteSekmesi showToast={showToast} />
+        )}
+        {anaTab === 'faturaXmlIce' && (
+          <FaturaXmlIce showToast={showToast} />
         )}
       </div>
 

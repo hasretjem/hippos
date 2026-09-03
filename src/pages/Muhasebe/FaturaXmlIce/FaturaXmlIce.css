@@ -1,0 +1,127 @@
+.fxi-wrap {
+  padding: 4px;
+}
+
+.fxi-intro {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 14px;
+  max-width: 640px;
+}
+
+.fxi-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: #2a7;
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.fxi-upload-btn:has(input:disabled) {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.fxi-sonuc {
+  margin-top: 20px;
+}
+
+.fxi-ozet {
+  display: flex;
+  gap: 18px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.fxi-ok {
+  color: #2a7;
+}
+
+.fxi-err {
+  color: #d33;
+}
+
+.fxi-hata-kutu {
+  background: #fee;
+  border: 1px solid #d33;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.fxi-hata-satir {
+  font-size: 13px;
+  color: #a11;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fxi-fatura-kart {
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.fxi-fatura-baslik {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.fxi-meta {
+  color: #888;
+  font-size: 13px;
+  margin-left: 8px;
+}
+
+.fxi-toplamlar {
+  font-size: 14px;
+}
+
+.fxi-tablo {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.fxi-tablo thead tr {
+  border-bottom: 1px solid #ccc;
+  text-align: left;
+}
+
+.fxi-tablo th,
+.fxi-tablo td {
+  padding: 4px 6px;
+}
+
+.fxi-tablo tbody tr {
+  border-bottom: 1px solid #eee;
+}
+
+.fxi-supheli {
+  background: #fff8e1;
+}
+
+.fxi-uyari-ikon {
+  color: #c90;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.fxi-kod-yok {
+  color: #bbb;
+}
+
+.fxi-not {
+  color: #888;
+}
