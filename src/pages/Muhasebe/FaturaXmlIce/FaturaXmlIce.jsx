@@ -306,10 +306,10 @@ export default function FaturaXmlIce({ showToast }) {
   return (
     <div className="mh-panel fxi-wrap">
       <p className="fxi-intro">
-        Uyumsoft'tan indirdiğin fatura zip dosyasını yükle. Yükleyince hiçbir yere kayıt
-        yapılmaz — önce mükerrer kontrolü, tedarikçi kategorisi ve malzeme eşleştirmesini
-        burada gözden geçirip düzeltiyorsun. En alttaki "Tümünü Kaydet" butonuna basınca
-        faturalar Alış/Satış Faturası ve Fatura Detaylı Giriş'e kalıcı olarak yazılır.
+        Uyumsoft'tan indirdiğin fatura zip dosyasını yükle. Önce mükerrer kontrolü, tedarikçi
+        kategorisi ve malzeme eşleştirmesini burada gözden geçirip düzeltirsin — bu aşamada
+        hiçbir şey otomatik kaydedilmez. Hazır olduğunda en alttaki "Tümünü Kaydet" butonuna
+        basarak faturaları Alış/Satış Faturası ve Fatura Detaylı Giriş'e kalıcı olarak yazdırırsın.
       </p>
 
       <label className="fxi-upload-btn">

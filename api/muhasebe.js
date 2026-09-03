@@ -11,6 +11,15 @@ function getAuth() {
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
+// Tüm ID üretimlerinde kullanılıyor. Salt rakamlardan oluşan uzun ID'ler (örn.
+// Date.now() + rastgele ek, 16+ hane) Google Sheets tarafından otomatik olarak
+// SAYI'ya çevrilip yuvarlanabiliyor/bilimsel gösterime dönebiliyor (15-16 hane
+// güvenli hassasiyet sınırını aşınca). Başına harf koymak Sheets'i bunu her
+// zaman METİN olarak saklamaya zorluyor, ID hiçbir zaman bozulmuyor.
+function benzersizId() {
+  return 'id' + Date.now() + Math.floor(Math.random() * 1000);
+}
+
 // 4 belge türü — her biri kendi sekmesinde, kendi sütun setiyle.
 const BELGE_TIPLERI = {
   alisFaturasi: {
@@ -244,22 +253,15 @@ function parseInvoiceLines(xml) {
     }
 
     const taxBlock = block.match(/<cac:TaxTotal>([\s\S]*?)<\/cac:TaxTotal>/);
-    let kdvOrani = null, kdvTutari = null, netSatirTutari = null;
+    let kdvOrani = null, kdvTutari = null, taxableAmountXml = null;
     if (taxBlock) {
       const percentMatch = taxBlock[1].match(/<cbc:Percent>([^<]*)<\/cbc:Percent>/);
       const amountMatch = taxBlock[1].match(/<cbc:TaxAmount[^>]*>([^<]*)<\/cbc:TaxAmount>/);
-      // TaxableAmount = KDV matrahı = iskonto düşüldükten SONRAKİ net tutar. Bazı
-      // tedarikçiler (örn. G2Meksper) cbc:LineExtensionAmount alanına iskonto
-      // öncesi BRÜT tutarı yazıyor (ayrı bir AllowanceCharge ile iskontoyu belirtip
-      // KDV'yi zaten net tutar üzerinden hesaplıyor); bazıları (örn. Güneşoğlu) net
-      // tutarı yazıyor. TaxableAmount her iki durumda da UBL standardı gereği doğru
-      // net (KDV hariç) tutar olduğu için satirTutari yerine BUNU esas alıyoruz.
       const taxableMatch = taxBlock[1].match(/<cbc:TaxableAmount[^>]*>([^<]*)<\/cbc:TaxableAmount>/);
       kdvOrani = percentMatch ? Number(percentMatch[1]) : null;
       kdvTutari = amountMatch ? Number(amountMatch[1]) : null;
-      netSatirTutari = taxableMatch ? Number(taxableMatch[1]) : null;
+      taxableAmountXml = taxableMatch ? Number(taxableMatch[1]) : null;
     }
-    if (netSatirTutari == null) netSatirTutari = satirTutari; // KDV bloğu yoksa (nadir) ham tutara düş
 
     const allowanceBlock = block.match(/<cac:AllowanceCharge>([\s\S]*?)<\/cac:AllowanceCharge>/);
     let iskontoOrani = 0, iskontoTutari = 0;
@@ -282,6 +284,21 @@ function parseInvoiceLines(xml) {
         iskontoOrani = factor <= 1 ? factor * 100 : factor; // BaseAmount yoksa son çare tahmin
       }
     }
+
+    // NET SATIR TUTARI (KDV hariç, iskonto düşülmüş): iki aday var —
+    //  (A) XML'deki TaxableAmount (çoğu tedarikçide doğru KDV matrahı)
+    //  (B) LineExtensionAmount - iskontoTutarı (brüt tutardan iskontoyu manuel düşmek)
+    // Akaryakıt (ÖTV'li) faturalarda TaxableAmount alanı bazen KDV matrahı değil,
+    // BİRİM fiyatı taşıyor (örn. "69.04" — 4125 TL'lik satır için anlamsız bir matrah).
+    // Bunu yakalamak için her adayı kdvOrani ile çarpıp gerçek TaxAmount'a en yakın
+    // olanı seçiyoruz — kör bir "TaxableAmount her zaman doğrudur" varsayımı yerine.
+    const grossMinusDiscount = satirTutari != null ? satirTutari - iskontoTutari : null;
+    const tutarli = (aday) => aday != null && kdvOrani != null && kdvTutari != null
+      && Math.abs(aday * (kdvOrani / 100) - kdvTutari) <= Math.max(0.5, Math.abs(kdvTutari) * 0.05);
+    let netSatirTutari;
+    if (tutarli(taxableAmountXml)) netSatirTutari = taxableAmountXml;
+    else if (tutarli(grossMinusDiscount)) netSatirTutari = grossMinusDiscount;
+    else netSatirTutari = taxableAmountXml ?? grossMinusDiscount ?? satirTutari; // hiçbiri tutmuyorsa son çare
 
     // Tutarlılık kontrolü: miktar × birim fiyat × (1-iskonto), NET satır tutarını
     // (KDV matrahını) tutmuyorsa satır "şüpheli" işaretlenir.
@@ -377,7 +394,7 @@ export default async function handler(req, res) {
         f.oncekiGorulmeTarihi = oncekiGorulme ? oncekiGorulme[5] : null;
         if (!oncekiGorulme) {
           const simdi = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
-          yeniLogSatirlari.push([String(Date.now()) + Math.floor(Math.random() * 1000), f.uuid, f.faturaNo, f.tedarikciAdi || '', f.toplamKdvDahil ?? '', simdi]);
+          yeniLogSatirlari.push([benzersizId(), f.uuid, f.faturaNo, f.tedarikciAdi || '', f.toplamKdvDahil ?? '', simdi]);
         }
 
         // --- tedarikçi kategori önerisi (Toptancılar sayfasındaki mevcut kategori sözlüğü), en son karar geçerli ---
@@ -443,7 +460,7 @@ export default async function handler(req, res) {
       const zatenVar = rows.some((r) => metinNormalize(r[1]) === metinNormalize(temiz));
       if (!zatenVar) {
         const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
-        await appendRow(sheets, KATEGORI_TAB, [String(Date.now()), temiz, tarih]);
+        await appendRow(sheets, KATEGORI_TAB, [benzersizId(), temiz, tarih]);
       }
       return res.status(200).json({ ok: true, kategori: temiz });
     }
@@ -456,7 +473,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'tedarikciAdi ve kategori gerekli' });
       }
       const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
-      await appendRow(sheets, TEDARIKCI_TAB, [String(Date.now()), tedarikciAdi, kategori, tarih]);
+      await appendRow(sheets, TEDARIKCI_TAB, [benzersizId(), tedarikciAdi, kategori, tarih]);
       return res.status(200).json({ ok: true });
     }
 
@@ -469,7 +486,7 @@ export default async function handler(req, res) {
       }
       const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
       await appendRow(sheets, ESLESTIRME_TAB, [
-        String(Date.now()), tedarikciAdi, urunKodu || '', urunAdi, malzemeId, malzemeAdi || '',
+        benzersizId(), tedarikciAdi, urunKodu || '', urunAdi, malzemeId, malzemeAdi || '',
         paketMiktar || '', paketBirim || '', tarih,
       ]);
       return res.status(200).json({ ok: true });
@@ -488,7 +505,7 @@ export default async function handler(req, res) {
       const kayitTarih = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
       const kayitSaat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
 
-      const faturaId = String(Date.now());
+      const faturaId = benzersizId();
       const alisConfig = BELGE_TIPLERI.alisFaturasi;
       await appendRow(sheets, { tab: alisConfig.tab, headers: alisConfig.headers }, [
         faturaId, kayitTarih, kayitSaat, tedarikciAdi, faturaNo, tarih || '',
@@ -496,7 +513,7 @@ export default async function handler(req, res) {
       ]);
 
       const detaySatirlari = satirlar.map((s) => {
-        const id = String(Date.now()) + Math.floor(Math.random() * 1000);
+        const id = benzersizId();
         return [
           id, faturaId, tedarikciAdi, faturaNo, kayitTarih, kayitSaat,
           s.urunAdi || '', s.miktar ?? '', s.birimFiyat ?? '', s.kdvOrani ?? '', s.iskontoOrani ?? '',
@@ -519,7 +536,7 @@ export default async function handler(req, res) {
       const now = new Date();
       const kayitTarih = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
       const kayitSaat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
-      const faturaId = String(Date.now());
+      const faturaId = benzersizId();
       const satisConfig = BELGE_TIPLERI.satisFaturasi;
       await appendRow(sheets, { tab: satisConfig.tab, headers: satisConfig.headers }, [
         faturaId, kayitTarih, kayitSaat, aliciAdi, faturaNo, tarih || '',
@@ -543,7 +560,7 @@ export default async function handler(req, res) {
       if (req.method === 'POST') {
         const { faturaId, firma, faturaNo, urunAdi, adet, birimFiyat, kdvOrani, iskontoOrani, kategori } = req.body || {};
         if (!faturaId || !urunAdi) return res.status(400).json({ error: 'faturaId ve urunAdi gerekli' });
-        const id = String(Date.now());
+        const id = benzersizId();
         const now = new Date();
         const tarih = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
         const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
@@ -595,7 +612,7 @@ export default async function handler(req, res) {
       const now = new Date();
       const tarih = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
       const saat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
-      const id = String(Date.now());
+      const id = benzersizId();
       const rowValues = [id, tarih, saat, ...tipConfig.fields.map((f) => req.body[f] ?? '')];
 
       await sheets.spreadsheets.values.append({
