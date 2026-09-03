@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './FaturaXmlIce.css';
 import { TL } from '../../../hooks/useHipposData';
-import { Upload, AlertTriangle, RotateCcw, Check, Pencil } from 'lucide-react';
+import { Upload, AlertTriangle, RotateCcw, Check, Pencil, X } from 'lucide-react';
 
 // Malzeme Havuzu'nda yeni malzeme açarken seçilebilecek birimler — recete.js'teki
 // birim dönüşüm kelime dağarcığıyla (kg/gr/ml/litre/adet/porsiyon) uyumlu tutuldu.
@@ -15,14 +15,16 @@ function metinNormalize(s) {
 // ADIM 1+2+3: Fatura XML İçe Aktarma.
 // Adım 1: zip'i parse edip göster (hâlâ hiçbir muhasebe kaydı YOK).
 // Adım 2: aynı faturanın (UUID bazlı) daha önce görülüp görülmediği
-//         backend'de kontrol edilip "mükerrer" olarak işaretleniyor.
+//         backend'de kontrol edilip "mükerrer" olarak işaretleniyor —
+//         kullanıcı onaylayıp listeden kaldırabiliyor.
 // Adım 3: tedarikçi bazlı öğrenen KATEGORİ önerisi (kalıcı, kullanıcı
 //         yeni kategori ekleyebiliyor) — fatura seviyesinde varsayılan,
 //         her satır bağımsız değiştirilebiliyor. Malzeme eşleştirmesi
-//         kategoriden bağımsız: her satırda isteğe bağlı, paket/birim
-//         dönüşümlü (örn. 1 PK = 50 Adet) ve sonradan düzenlenebilir.
-//         Aynı tedarikçi+ürün kodu/adıyla eşleşen diğer satırlara (aynı
-//         yüklemedeki başka faturalarda da) otomatik uygulanır.
+//         kategoriden bağımsız: her satırda aranabilir, isteğe bağlı,
+//         paket/birim dönüşümlü (örn. 1 PK = 50 Adet) ve sonradan
+//         düzenlenebilir. Aynı tedarikçi+ürün kodu/adıyla eşleşen diğer
+//         satırlara (aynı yüklemedeki başka faturalarda da) otomatik
+//         uygulanır.
 // Fatura Detaylı Giriş / Malzeme Maliyet Geçmişi'ne gerçek kayıt
 // HÂLÂ yapılmıyor — bu Adım 4'te olacak.
 //
@@ -35,7 +37,9 @@ export default function FaturaXmlIce({ showToast }) {
   const [malzemeler, setMalzemeler] = useState([]);
   const [kategoriler, setKategoriler] = useState([]);
   const [editingKey, setEditingKey] = useState(null); // `${fIdx}:${sIdx}` — o an düzenlenen malzeme eşleştirme satırı
-  const [formState, setFormState] = useState({ malzemeSecim: '', yeniAd: '', yeniBirim: 'Adet', paketMiktar: '1' });
+  const [formState, setFormState] = useState({
+    malzemeArama: '', malzemeSecim: '', yeniMalzemeMi: false, yeniAd: '', yeniBirim: 'Adet', paketMiktar: '1',
+  });
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -87,6 +91,13 @@ export default function FaturaXmlIce({ showToast }) {
       setYukleniyor(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  // Mükerrer olarak işaretlenmiş bir fatura, kullanıcı onaylayınca (X) sadece bu
+  // ekrandan/listeden kaldırılıyor — zaten log'a "görüldü" olarak yazılmıştı,
+  // burada tekrar bir yere kayıt yapılmıyor, sadece görünümden çıkarılıyor.
+  const faturayiListedenKaldir = (uuid) => {
+    setSonuc((prev) => ({ ...prev, faturalar: prev.faturalar.filter((f) => f.uuid !== uuid) }));
   };
 
   // Yeni kategori sözlüğe kalıcı olarak eklenir (Sheets'te en sona) — bundan sonraki
@@ -145,7 +156,9 @@ export default function FaturaXmlIce({ showToast }) {
   const duzenlemeyeBasla = (fIdx, sIdx, satir) => {
     setEditingKey(`${fIdx}:${sIdx}`);
     setFormState({
+      malzemeArama: '',
       malzemeSecim: satir.eslesme ? satir.eslesme.malzemeId : '',
+      yeniMalzemeMi: false,
       yeniAd: '',
       yeniBirim: 'Adet',
       paketMiktar: satir.eslesme ? String(satir.eslesme.paketMiktar || 1) : '1',
@@ -161,7 +174,7 @@ export default function FaturaXmlIce({ showToast }) {
   const kaydetEslesme = async (fIdx, sIdx, fatura, satir) => {
     let malzeme;
     try {
-      if (formState.malzemeSecim === '__yeni__') {
+      if (formState.yeniMalzemeMi) {
         if (!formState.yeniAd.trim()) { showToast('Malzeme adı gerekli'); return; }
         const res = await fetch('/api/recete', {
           method: 'POST',
@@ -174,7 +187,7 @@ export default function FaturaXmlIce({ showToast }) {
         setMalzemeler((prev) => [...prev, malzeme]);
       } else {
         malzeme = malzemeler.find((m) => m.id === formState.malzemeSecim);
-        if (!malzeme) { showToast('Bir malzeme seç'); return; }
+        if (!malzeme) { showToast('Bir malzeme seç veya "+ Yeni Malzeme Oluştur" kullan'); return; }
       }
 
       const paketMiktar = Number(String(formState.paketMiktar).replace(',', '.')) || 1;
@@ -270,6 +283,9 @@ export default function FaturaXmlIce({ showToast }) {
                 <div className="fxi-mukerrer-uyari">
                   <RotateCcw size={13} />
                   Bu fatura daha önce {f.oncekiGorulmeTarihi} tarihinde yüklenmiş — mükerrer olabilir.
+                  <button className="fxi-mukerrer-kaldir" onClick={() => faturayiListedenKaldir(f.uuid)} title="Onayla ve listeden kaldır">
+                    <X size={14} />
+                  </button>
                 </div>
               )}
 
@@ -319,6 +335,7 @@ export default function FaturaXmlIce({ showToast }) {
                     <th>Birim Fiyat (KDV Dahil)</th>
                     <th>Satır Tutarı (KDV Dahil)</th>
                     <th>KDV %</th>
+                    <th>İskonto %</th>
                     <th>Not (ham)</th>
                     <th>Kategori</th>
                     <th>Malzeme Eşleştirme</th>
@@ -328,6 +345,10 @@ export default function FaturaXmlIce({ showToast }) {
                   {f.satirlar.map((s, sIdx) => {
                     const key = `${fIdx}:${sIdx}`;
                     const duzenleniyor = editingKey === key;
+                    const secilenMalzeme = malzemeler.find((m) => m.id === formState.malzemeSecim);
+                    const aramaEslesenler = duzenleniyor && formState.malzemeArama
+                      ? malzemeler.filter((m) => metinNormalize(m.ad).includes(metinNormalize(formState.malzemeArama)))
+                      : [];
                     return (
                       <tr key={sIdx} className={s.supheliMiktar ? 'fxi-supheli' : ''}>
                         <td>
@@ -344,6 +365,7 @@ export default function FaturaXmlIce({ showToast }) {
                         <td>{TL(s.efektifBirimFiyatKdvDahil)}</td>
                         <td>{TL(s.satirTutariKdvDahil)}</td>
                         <td>%{s.kdvOrani}</td>
+                        <td>{s.iskontoOrani > 0 ? `%${s.iskontoOrani}` : '—'}</td>
                         <td className="fxi-not">{s.not || '—'}</td>
                         <td>
                           <select
@@ -379,21 +401,44 @@ export default function FaturaXmlIce({ showToast }) {
                             </div>
                           ) : (
                             <div className="fxi-eslesme-form">
-                              <select
-                                value={formState.malzemeSecim}
-                                onChange={(e) => {
-                                  if (!duzenleniyor) duzenlemeyeBasla(fIdx, sIdx, s);
-                                  setFormState((prev) => ({ ...prev, malzemeSecim: e.target.value }));
-                                }}
-                                className="fxi-eslesme-select"
-                              >
-                                <option value="" disabled>Malzeme seç…</option>
-                                <option value="__yeni__">+ Yeni Malzeme Oluştur</option>
-                                {malzemeler.map((m) => (
-                                  <option key={m.id} value={m.id}>{m.ad}</option>
-                                ))}
-                              </select>
-                              {duzenleniyor && formState.malzemeSecim === '__yeni__' && (
+                              {!formState.yeniMalzemeMi ? (
+                                <>
+                                  <input
+                                    type="text"
+                                    placeholder="Malzeme ara…"
+                                    value={duzenleniyor ? formState.malzemeArama : ''}
+                                    onFocus={() => { if (!duzenleniyor) duzenlemeyeBasla(fIdx, sIdx, s); }}
+                                    onChange={(e) => setFormState((prev) => ({ ...prev, malzemeArama: e.target.value }))}
+                                    className="fxi-eslesme-input"
+                                  />
+                                  {duzenleniyor && aramaEslesenler.length > 0 && (
+                                    <div className="fxi-arama-sonuclari">
+                                      {aramaEslesenler.slice(0, 8).map((m) => (
+                                        <div
+                                          key={m.id}
+                                          className="fxi-arama-satir"
+                                          onClick={() => setFormState((prev) => ({ ...prev, malzemeSecim: m.id, malzemeArama: '' }))}
+                                        >
+                                          {m.ad}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {duzenleniyor && secilenMalzeme && (
+                                    <div className="fxi-secili-etiket">Seçili: {secilenMalzeme.ad}</div>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="fxi-yeni-kategori-btn fxi-yeni-malzeme-btn"
+                                    onClick={() => {
+                                      if (!duzenleniyor) duzenlemeyeBasla(fIdx, sIdx, s);
+                                      setFormState((prev) => ({ ...prev, yeniMalzemeMi: true, malzemeSecim: '' }));
+                                    }}
+                                  >
+                                    + Yeni Malzeme Oluştur
+                                  </button>
+                                </>
+                              ) : (
                                 <>
                                   <input
                                     type="text"
@@ -411,9 +456,17 @@ export default function FaturaXmlIce({ showToast }) {
                                       <option key={b} value={b}>{b}</option>
                                     ))}
                                   </select>
+                                  <button
+                                    type="button"
+                                    className="fxi-duzenle-link"
+                                    onClick={() => setFormState((prev) => ({ ...prev, yeniMalzemeMi: false }))}
+                                  >
+                                    Var olan malzemeyi ara
+                                  </button>
                                 </>
                               )}
-                              {duzenleniyor && formState.malzemeSecim && (
+
+                              {duzenleniyor && (formState.malzemeSecim || (formState.yeniMalzemeMi && formState.yeniAd.trim())) && (
                                 <>
                                   <label className="fxi-paket-etiket">
                                     1 {s.birimAdi} = kaç malzeme birimi?

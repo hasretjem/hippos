@@ -265,3 +265,52 @@
   padding: 0;
   width: fit-content;
 }
+
+.fxi-mukerrer-uyari {
+  justify-content: space-between;
+}
+
+.fxi-mukerrer-kaldir {
+  background: none;
+  border: none;
+  color: #7a5600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  margin-left: auto;
+}
+
+.fxi-mukerrer-kaldir:hover {
+  color: #a11;
+}
+
+.fxi-arama-sonuclari {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.fxi-arama-satir {
+  padding: 4px 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.fxi-arama-satir:hover {
+  background: #eef4ff;
+}
+
+.fxi-secili-etiket {
+  font-size: 11px;
+  color: #2a7;
+  font-weight: 600;
+}
+
+.fxi-yeni-malzeme-btn {
+  font-size: 11px;
+  padding: 3px 8px;
+  width: fit-content;
+}
