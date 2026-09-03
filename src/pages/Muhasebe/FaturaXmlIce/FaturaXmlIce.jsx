@@ -200,6 +200,12 @@ export default function FaturaXmlIce({ showToast }) {
           kdvTutari: s.kdvTutari,
           satirTutari: s.satirTutariKdvDahil,
           kategori: s.kategori || '',
+          // Malzeme eşleşmesi varsa Malzeme Maliyet Geçmişi'ne de kayıt düşülür
+          // (backend tarafında) — Reçeteler'in "en güncel fiyat" araması buradan besleniyor.
+          malzemeId: s.eslesme ? s.eslesme.malzemeId : null,
+          malzemeAdi: s.eslesme ? s.eslesme.malzemeAdi : null,
+          paketMiktar: s.eslesme ? s.eslesme.paketMiktar : null,
+          paketBirim: s.eslesme ? s.eslesme.paketBirim : null,
         })),
       };
     const res = await fetch('/api/muhasebe', {

@@ -44,7 +44,12 @@ function ayniAileMi(a, b) {
 // güvenli ayrıştırıcı kullanılıyor: virgülü noktaya çevirip Number()'a veriyoruz.
 function ondalikParse(deger) {
   if (deger === '' || deger === null || deger === undefined) return 0;
-  const n = Number(String(deger).trim().replace(',', '.'));
+  if (typeof deger === 'number') return deger;
+  let s = String(deger).trim();
+  // Virgül varsa Türkçe biçim demektir: '.' binlik ayıracı, ',' ondalık ayıracı
+  // (ör. "12.201,00" -> 12201.00). Virgül yoksa '.' zaten ondalık noktasıdır, dokunma.
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
   return Number.isFinite(n) ? n : 0;
 }
 // birimMaliyet: kaynak birim başına TL (ör. kg başına). hedefBirim: reçetede kullanılan birim.

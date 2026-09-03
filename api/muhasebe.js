@@ -63,6 +63,19 @@ const VARSAYILAN_KATEGORILER = [
   'Baget Ekmek', 'Fırın Ekmeği', 'Kahvaltı ve Sandviç Malzemesi', 'Sulu Yemek Malzemesi',
 ];
 const KATEGORI_TAB = { tab: 'Kategori Sözlüğü', headers: ['ID', 'Kategori Adı', 'Tarih'] };
+// api/recete.js'teki TABS.maliyetGecmisi ile AYNI şema — orada "en güncel fiyat" bu
+// tablodan (fatura TARİHİNE göre, kayıt sırasına göre değil) okunuyor. Burada satır
+// bazında malzeme eşleştirmesi yapılmış her kalem için bir kayıt düşülüyor, böylece
+// Reçeteler sayfası "fiyat bulunamadı" hatası almadan en son fatura fiyatını gösterebiliyor.
+const MALIYET_TAB = { tab: 'Malzeme Maliyet Geçmişi', headers: ['ID', 'MalzemeID', 'Malzeme Adı', 'Tarih', 'Miktar', 'Birim', 'Toplam Fiyat', 'Birim Maliyet', 'FaturaID'] };
+
+// XML'den gelen tarih "YYYY-MM-DD", Malzeme Maliyet Geçmişi'ndeki Tarih sütunu ise
+// "GG.AA.YYYY" (recete.js'in trTarihiCoz'ünün beklediği format) — dönüştürüyoruz.
+function isoToTrTarih(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return '';
+  return `${m[3]}.${m[2]}.${m[1]}`;
+}
 // Tedarikçi bazlı öğrenen kategori önerisi — fatura seviyesinde varsayılan, ama her
 // satır kendi kategorisini (frontend'de) bağımsız değiştirebiliyor.
 const TEDARIKCI_TAB = { tab: 'Tedarikçi Kategori Sözlüğü', headers: ['ID', 'Tedarikçi Adı', 'Kategori', 'Tarih'] };
@@ -90,6 +103,22 @@ async function getRows(sheets, tabConfig) {
     range: `${tabConfig.tab}!A2:${lastCol(tabConfig.headers)}`,
   });
   return (result.data.values || []).filter((r) => r[0]);
+}
+
+// KRİTİK: Sheets'ten okunan hücreler (values.get varsayılan FORMATTED_VALUE modunda)
+// sayıları sayfanın yerel biçimine göre METİN olarak döndürür (Türkçe locale'de
+// "146,45" — virgüllü, binlik ayıracı '.'). Number("146,45") -> NaN olur ve || 0 ile
+// sessizce sıfıra düşer — Fatura Detaylı Giriş'te Adet/Fiyat/Tutar'ın 0 görünmesinin
+// nedeni buydu. Bu fonksiyon hem düz sayıları hem Türkçe biçimli metinleri doğru çözer.
+function sayiCoz(v) {
+  if (v === undefined || v === null || v === '') return 0;
+  if (typeof v === 'number') return v;
+  let s = String(v).trim();
+  // Virgül varsa Türkçe biçim demektir: '.' binlik ayıracı, ',' ondalık ayıracı
+  // (ör. "12.201,00" -> 12201.00). Virgül yoksa '.' zaten ondalık noktasıdır, dokunma.
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
 }
 
 async function appendRow(sheets, tabConfig, rowValues) {
@@ -133,8 +162,8 @@ function lastCol(headers) {
 function rowToDetay(r) {
   return {
     id: r[0], faturaId: r[1], firma: r[2], faturaNo: r[3], tarih: r[4], saat: r[5],
-    urunAdi: r[6] || '', adet: Number(r[7]) || 0, birimFiyat: Number(r[8]) || 0,
-    kdvOrani: r[9] || '', iskontoOrani: r[10] || '', kdvTutari: Number(r[11]) || 0, satirTutari: Number(r[12]) || 0,
+    urunAdi: r[6] || '', adet: sayiCoz(r[7]), birimFiyat: sayiCoz(r[8]),
+    kdvOrani: r[9] || '', iskontoOrani: r[10] || '', kdvTutari: sayiCoz(r[11]), satirTutari: sayiCoz(r[12]),
     kategori: r[13] || '',
   };
 }
@@ -494,7 +523,8 @@ export default async function handler(req, res) {
 
     // ---- ADIM 4a: Alış faturasını onayla ve kaydet ----
     // Alış Faturası (başlık) + her satır için Fatura Detaylı Giriş kaydı oluşturur.
-    // Malzeme Maliyet Geçmişi'ne kayıt YOK — o ayrı bir aşamada kurgulanacak (kullanıcı kararı).
+    // Ayrıca eşleştirilmiş (malzemeId'si olan) satırlar için Malzeme Maliyet Geçmişi'ne
+    // de kayıt düşer — Reçeteler sayfasının "en güncel fiyat" araması buradan besleniyor.
     if (resource === 'xmlKaydetAlis') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
       const { tedarikciAdi, faturaNo, tarih, toplamKdvDahil, toplamKdvTutari, satirlar } = req.body || {};
@@ -524,6 +554,29 @@ export default async function handler(req, res) {
         spreadsheetId: SHEET_ID, range: `${DETAY_TAB}!A2`, valueInputOption: 'USER_ENTERED',
         insertDataOption: 'INSERT_ROWS', requestBody: { values: detaySatirlari },
       });
+
+      // Malzeme eşleştirmesi yapılmış satırlar için maliyet geçmişi kaydı.
+      // miktar × paketMiktar = bu satırdan elde edilen TOPLAM malzeme birimi miktarı;
+      // birim maliyet = satirTutari (KDV dahil) / bu miktar — yani "1 malzeme birimi
+      // (örn. 1 kg) bu faturada ne kadara mal oldu".
+      const maliyetSatirlari = satirlar
+        .filter((s) => s.malzemeId && s.miktar && s.satirTutari != null)
+        .map((s) => {
+          const paketMiktar = Number(s.paketMiktar) || 1;
+          const toplamMalzemeMiktari = Math.round(Number(s.miktar) * paketMiktar * 10000) / 10000;
+          const birimMaliyet = toplamMalzemeMiktari > 0 ? Math.round((s.satirTutari / toplamMalzemeMiktari) * 10000) / 10000 : 0;
+          return [
+            benzersizId(), s.malzemeId, s.malzemeAdi || '', isoToTrTarih(tarih),
+            toplamMalzemeMiktari, s.paketBirim || '', s.satirTutari, birimMaliyet, faturaId,
+          ];
+        });
+      if (maliyetSatirlari.length) {
+        await ensureTab(sheets, MALIYET_TAB.tab, MALIYET_TAB.headers);
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID, range: `${MALIYET_TAB.tab}!A2`, valueInputOption: 'USER_ENTERED',
+          insertDataOption: 'INSERT_ROWS', requestBody: { values: maliyetSatirlari },
+        });
+      }
 
       return res.status(200).json({ ok: true, faturaId });
     }
@@ -602,7 +655,14 @@ export default async function handler(req, res) {
         .filter((r) => r[0])
         .map((r) => {
           const rec = { id: r[0], tarih: r[1], saat: r[2] };
-          tipConfig.fields.forEach((f, idx) => { rec[f] = r[idx + 3] ?? ''; });
+          tipConfig.fields.forEach((f, idx) => {
+            const ham = r[idx + 3] ?? '';
+            // 'tutar' her zaman parasal bir değer — Sheets'in FORMATTED_VALUE ile
+            // döndürdüğü virgüllü metni ("2.334,82") doğru sayıya çeviriyoruz.
+            // 'kdvOrani' ise bağlama göre hem yüzde metni ("%20", manuel giriş) hem
+            // tutar (XML içe aktarma) olabildiği için DOKUNMUYORUZ.
+            rec[f] = f === 'tutar' ? sayiCoz(ham) : ham;
+          });
           return rec;
         });
       return res.status(200).json({ records });
