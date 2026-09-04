@@ -286,11 +286,11 @@ function GiderlerSekmesi({ showToast }) {
       )}
 
       {xmlModalAcik && (
-        <div className="mh-drawer-overlay" onClick={() => setXmlModalAcik(false)}>
+        <div className="mh-drawer-overlay" onClick={() => { setXmlModalAcik(false); yukle(); }}>
           <div className="mh-modal-wide mh-modal-xxl" onClick={(e) => e.stopPropagation()}>
             <div className="mh-drawer-head">
               <span>XML Fatura Yükle</span>
-              <button onClick={() => setXmlModalAcik(false)}><X size={18} /></button>
+              <button onClick={() => { setXmlModalAcik(false); yukle(); }}><X size={18} /></button>
             </div>
             <div className="mh-drawer-body">
               <FaturaXmlIce showToast={showToast} />
@@ -418,6 +418,7 @@ function GelirlerSekmesi({ showToast }) {
   const [kategoriFiltre, setKategoriFiltre] = useState('tumu');
   const [tarihFiltre, setTarihFiltre] = useState('buAy');
   const [drawerAcik, setDrawerAcik] = useState(false);
+  const [xmlModalAcik, setXmlModalAcik] = useState(false);
 
   async function yukle() {
     setLoading(true);
@@ -498,6 +499,7 @@ function GelirlerSekmesi({ showToast }) {
             <button className={tarihFiltre === 'tumu' ? 'active' : ''} onClick={() => setTarihFiltre('tumu')}>Tümü</button>
           </div>
           <button className="mh-primary-btn" onClick={() => setDrawerAcik(true)}><Plus size={15} /> Yeni Satış Faturası Ekle</button>
+          <button className="mh-secondary-btn" onClick={() => setXmlModalAcik(true)}><Upload size={15} /> XML Fatura Yükle</button>
         </div>
       </div>
 
@@ -550,6 +552,20 @@ function GelirlerSekmesi({ showToast }) {
           onClose={() => setDrawerAcik(false)}
           onSaved={(rec) => { setKayitlar((prev) => [rec, ...prev]); setDrawerAcik(false); showToast('Gelir faturası kaydedildi'); }}
         />
+      )}
+
+      {xmlModalAcik && (
+        <div className="mh-drawer-overlay" onClick={() => { setXmlModalAcik(false); yukle(); }}>
+          <div className="mh-modal-wide mh-modal-xxl" onClick={(e) => e.stopPropagation()}>
+            <div className="mh-drawer-head">
+              <span>XML Fatura Yükle</span>
+              <button onClick={() => { setXmlModalAcik(false); yukle(); }}><X size={18} /></button>
+            </div>
+            <div className="mh-drawer-body">
+              <FaturaXmlIce showToast={showToast} />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
