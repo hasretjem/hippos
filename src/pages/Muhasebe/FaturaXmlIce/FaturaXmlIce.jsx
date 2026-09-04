@@ -171,89 +171,104 @@ export default function FaturaXmlIce({ showToast }) {
 
   const duzenlemeyiIptalEt = () => setEditingKey(null);
 
-  // ADIM 4: Tüm onaylı faturaları kaydet.
-  // ÖNCEDEN: her fatura için ayrı fetch (25 fatura × 4 Sheets isteği = ~100 istek → kota patlaması).
-  // ARTIK: Alış faturaları tek toplu çağrıda (xmlKaydetAlisBatch) gönderilir — Sheets 4 istekle kapanır,
-  //        fatura sayısından bağımsız. Satış faturaları hâlâ tek tek (sayıları genellikle 1-2).
+  // Diziyi n'erli gruplara böler.
+  const chunkle = (arr, n) => {
+    const parcalar = [];
+    for (let i = 0; i < arr.length; i += n) parcalar.push(arr.slice(i, i + n));
+    return parcalar;
+  };
+
+  // Kota ve timeout sorunları için: faturalar 5'erli gruplarda gönderilir.
+  // Her grup ayrı bir batch isteği — grup başarısızsa sadece o grup "bekliyor" kalır,
+  // diğerleri zaten kaydedildi. "Tümünü Kaydet"e tekrar basınca sadece bekleyenler denenir.
+  // Gruplar arasında 800ms bekleme: Google'ın dakika başına kota sayacını rahatlatır.
+  const CHUNK_BOYUTU = 5;
+  const CHUNK_ARASI_MS = 800;
+
+  const faturaPayloadHazirla = (f) =>
+    f.yon === 'satis'
+      ? { aliciAdi: f.aliciAdi, faturaNo: f.faturaNo, tarih: f.tarih, toplamKdvDahil: f.toplamKdvDahil, toplamKdvTutari: f.toplamKdvTutari }
+      : {
+          tedarikciAdi: f.tedarikciAdi, faturaNo: f.faturaNo, tarih: f.tarih,
+          toplamKdvDahil: f.toplamKdvDahil, toplamKdvTutari: f.toplamKdvTutari,
+          satirlar: f.satirlar.map((s) => ({
+            urunAdi: s.urunAdi, miktar: s.miktar, birimFiyat: s.efektifBirimFiyatKdvDahil,
+            kdvOrani: s.kdvOrani, iskontoOrani: s.iskontoOrani, kdvTutari: s.kdvTutari,
+            satirTutari: s.satirTutariKdvDahil, kategori: s.kategori || '',
+            malzemeId: s.eslesme ? s.eslesme.malzemeId : null,
+            malzemeAdi: s.eslesme ? s.eslesme.malzemeAdi : null,
+            paketMiktar: s.eslesme ? s.eslesme.paketMiktar : null,
+            paketBirim: s.eslesme ? s.eslesme.paketBirim : null,
+          })),
+        };
+
+  // ADIM 4: Kaydedilmemiş faturaları 5'erli gruplarda kaydet.
+  // Her grup ayrı batch → bir grup timeout'a girerse sadece o grup yeniden denenir,
+  // kaydedilenler state'te tutulur, sayfa kapatılmadan "Tümünü Kaydet" tekrar çalışır.
   const tumunuKaydet = async () => {
     const kaydedilecekler = sonuc.faturalar.filter((f) => !kaydedilenler[f.uuid]);
     if (kaydedilecekler.length === 0) return;
     setKaydediliyor(true);
     setKaydedilenSayisi(0);
-    let hataSayisi = 0;
+    let basarili = 0, basarisiz = 0;
 
     const alislar = kaydedilecekler.filter((f) => f.yon !== 'satis');
     const satislar = kaydedilecekler.filter((f) => f.yon === 'satis');
 
-    // --- Alış faturaları: TEK toplu istek ---
-    if (alislar.length > 0) {
+    // --- Alış grupları ---
+    for (const grup of chunkle(alislar, CHUNK_BOYUTU)) {
       try {
         const res = await fetch('/api/muhasebe', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            resource: 'xmlKaydetAlisBatch',
-            faturalar: alislar.map((f) => ({
-              tedarikciAdi: f.tedarikciAdi, faturaNo: f.faturaNo, tarih: f.tarih,
-              toplamKdvDahil: f.toplamKdvDahil, toplamKdvTutari: f.toplamKdvTutari,
-              satirlar: f.satirlar.map((s) => ({
-                urunAdi: s.urunAdi, miktar: s.miktar, birimFiyat: s.efektifBirimFiyatKdvDahil,
-                kdvOrani: s.kdvOrani, iskontoOrani: s.iskontoOrani, kdvTutari: s.kdvTutari,
-                satirTutari: s.satirTutariKdvDahil, kategori: s.kategori || '',
-                malzemeId: s.eslesme ? s.eslesme.malzemeId : null,
-                malzemeAdi: s.eslesme ? s.eslesme.malzemeAdi : null,
-                paketMiktar: s.eslesme ? s.eslesme.paketMiktar : null,
-                paketBirim: s.eslesme ? s.eslesme.paketBirim : null,
-              })),
-            })),
-          }),
+          body: JSON.stringify({ resource: 'xmlKaydetAlisBatch', faturalar: grup.map(faturaPayloadHazirla) }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
-        // Tüm alışları kaydedildi olarak işaretle.
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        // Sadece bu gruptakileri kaydedildi işaretle — diğerleri dokunulmaz.
         setKaydedilenler((prev) => {
           const yeni = { ...prev };
-          alislar.forEach((f) => { yeni[f.uuid] = true; });
+          grup.forEach((f) => { yeni[f.uuid] = true; });
           return yeni;
         });
-        setKaydedilenSayisi((prev) => prev + alislar.length);
+        basarili += grup.length;
       } catch (err) {
-        hataSayisi += alislar.length;
-        showToast(`Alış faturaları kaydedilemedi: ${err.message}`);
-        setKaydedilenSayisi((prev) => prev + alislar.length);
+        basarisiz += grup.length;
+        showToast(`${grup.length} fatura kaydedilemedi: ${err.message} — Tekrar dene`);
       }
+      setKaydedilenSayisi((prev) => prev + grup.length);
+      // Gruplar arası bekleme — Google Sheets kota sayacını rahatlatır.
+      if (CHUNK_ARASI_MS > 0) await new Promise((r) => setTimeout(r, CHUNK_ARASI_MS));
     }
 
-    // --- Satış faturaları: tek toplu istek ---
-    if (satislar.length > 0) {
+    // --- Satış grupları ---
+    for (const grup of chunkle(satislar, CHUNK_BOYUTU)) {
       try {
         const res = await fetch('/api/muhasebe', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            resource: 'xmlKaydetSatisBatch',
-            faturalar: satislar.map((f) => ({
-              aliciAdi: f.aliciAdi, faturaNo: f.faturaNo, tarih: f.tarih,
-              toplamKdvDahil: f.toplamKdvDahil, toplamKdvTutari: f.toplamKdvTutari,
-            })),
-          }),
+          body: JSON.stringify({ resource: 'xmlKaydetSatisBatch', faturalar: grup.map(faturaPayloadHazirla) }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
         setKaydedilenler((prev) => {
           const yeni = { ...prev };
-          satislar.forEach((f) => { yeni[f.uuid] = true; });
+          grup.forEach((f) => { yeni[f.uuid] = true; });
           return yeni;
         });
-        setKaydedilenSayisi((prev) => prev + satislar.length);
+        basarili += grup.length;
       } catch (err) {
-        hataSayisi += satislar.length;
-        showToast(`Satış faturaları kaydedilemedi: ${err.message}`);
-        setKaydedilenSayisi((prev) => prev + satislar.length);
+        basarisiz += grup.length;
+        showToast(`Satış grubu kaydedilemedi: ${err.message} — Tekrar dene`);
       }
+      setKaydedilenSayisi((prev) => prev + grup.length);
+      if (CHUNK_ARASI_MS > 0) await new Promise((r) => setTimeout(r, CHUNK_ARASI_MS));
     }
 
     setKaydediliyor(false);
-    if (hataSayisi === 0) showToast(`${kaydedilecekler.length} fatura kaydedildi`);
-    else showToast(`${kaydedilecekler.length - hataSayisi} fatura kaydedildi, ${hataSayisi} tanesi başarısız`);
+    if (basarisiz === 0) {
+      showToast(`${basarili} fatura kaydedildi ✓`);
+    } else {
+      showToast(`${basarili} kaydedildi, ${basarisiz} başarısız — "Tümünü Kaydet"e tekrar bas`);
+    }
   };
 
   // Bir satır eşleştirilince, AYNI yüklemedeki (henüz Sheets'e yansımamış) diğer
@@ -608,12 +623,28 @@ export default function FaturaXmlIce({ showToast }) {
 
           {sonuc.faturalar.length > 0 && (
             <div className="fxi-tumunu-kaydet-satir">
+              {/* Başarısız fatura varsa uyarı + tekrar deneme rehberi */}
+              {!kaydediliyor && sonuc.faturalar.some((f) => !kaydedilenler[f.uuid]) && Object.keys(kaydedilenler).length > 0 && (
+                <p className="fxi-tekrar-uyari">
+                  ⚠️ {sonuc.faturalar.filter((f) => !kaydedilenler[f.uuid]).length} fatura kaydedilemedi.
+                  Kategori seçimlerin korunuyor — "Tümünü Kaydet"e tekrar basarak devam edebilirsin.
+                </p>
+              )}
               <button
                 className="fxi-tip-btn fxi-kategori-btn fxi-tumunu-kaydet-btn"
                 disabled={kaydediliyor || sonuc.faturalar.every((f) => kaydedilenler[f.uuid])}
                 onClick={tumunuKaydet}
               >
-                {kaydediliyor ? `Kaydediliyor… (${kaydedilenSayisi}/${sonuc.faturalar.length})` : 'Tümünü Kaydet'}
+                {kaydediliyor
+                  ? `Kaydediliyor… (${kaydedilenSayisi}/${sonuc.faturalar.length})`
+                  : (() => {
+                      const kalan = sonuc.faturalar.filter((f) => !kaydedilenler[f.uuid]).length;
+                      const toplam = sonuc.faturalar.length;
+                      if (kalan === toplam) return `Tümünü Kaydet (${toplam} fatura)`;
+                      if (kalan === 0) return '✓ Tümü Kaydedildi';
+                      return `Kalanları Kaydet (${kalan}/${toplam})`;
+                    })()
+                }
               </button>
             </div>
           )}
