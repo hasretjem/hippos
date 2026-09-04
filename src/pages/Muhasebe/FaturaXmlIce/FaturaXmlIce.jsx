@@ -171,64 +171,76 @@ export default function FaturaXmlIce({ showToast }) {
 
   const duzenlemeyiIptalEt = () => setEditingKey(null);
 
-  // Tek bir faturayı kaydeder (başarısızsa fırlatır) — "Tümünü Kaydet" tarafından
-  // sırayla çağrılıyor, kendi başına toast/hata göstermiyor, onu çağıran yönetiyor.
-  const faturaKaydetTek = async (f) => {
-    const resource = f.yon === 'satis' ? 'xmlKaydetSatis' : 'xmlKaydetAlis';
-    const body = f.yon === 'satis'
-      ? {
-        resource,
-        aliciAdi: f.aliciAdi,
-        faturaNo: f.faturaNo,
-        tarih: f.tarih,
-        toplamKdvDahil: f.toplamKdvDahil,
-        toplamKdvTutari: f.toplamKdvTutari,
-      }
-      : {
-        resource,
-        tedarikciAdi: f.tedarikciAdi,
-        faturaNo: f.faturaNo,
-        tarih: f.tarih,
-        toplamKdvDahil: f.toplamKdvDahil,
-        toplamKdvTutari: f.toplamKdvTutari,
-        satirlar: f.satirlar.map((s) => ({
-          urunAdi: s.urunAdi,
-          miktar: s.miktar,
-          birimFiyat: s.efektifBirimFiyatKdvDahil,
-          kdvOrani: s.kdvOrani,
-          iskontoOrani: s.iskontoOrani,
-          kdvTutari: s.kdvTutari,
-          satirTutari: s.satirTutariKdvDahil,
-          kategori: s.kategori || '',
-          // Malzeme eşleşmesi varsa Malzeme Maliyet Geçmişi'ne de kayıt düşülür
-          // (backend tarafında) — Reçeteler'in "en güncel fiyat" araması buradan besleniyor.
-          malzemeId: s.eslesme ? s.eslesme.malzemeId : null,
-          malzemeAdi: s.eslesme ? s.eslesme.malzemeAdi : null,
-          paketMiktar: s.eslesme ? s.eslesme.paketMiktar : null,
-          paketBirim: s.eslesme ? s.eslesme.paketBirim : null,
-        })),
-      };
+  // Tek bir satış faturasını kaydeder (alış faturası artık batch ile toplu gidiyor).
+  const satisFaturasiKaydet = async (f) => {
     const res = await fetch('/api/muhasebe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        resource: 'xmlKaydetSatis',
+        aliciAdi: f.aliciAdi, faturaNo: f.faturaNo, tarih: f.tarih,
+        toplamKdvDahil: f.toplamKdvDahil, toplamKdvTutari: f.toplamKdvTutari,
+      }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
   };
 
-  // ADIM 4: ekrandaki mükerrer OLMAYAN, henüz kaydedilmemiş tüm faturaları tek tek
-  // (sırayla, aynı anda değil — Sheets append'lerinin birbirine çarpmaması için)
-  // kaydeder. Yön (alış/satış) backend'de VKN karşılaştırmasıyla belirlendi.
+  // ADIM 4: Tüm onaylı faturaları kaydet.
+  // ÖNCEDEN: her fatura için ayrı fetch (25 fatura × 4 Sheets isteği = ~100 istek → kota patlaması).
+  // ARTIK: Alış faturaları tek toplu çağrıda (xmlKaydetAlisBatch) gönderilir — Sheets 4 istekle kapanır,
+  //        fatura sayısından bağımsız. Satış faturaları hâlâ tek tek (sayıları genellikle 1-2).
   const tumunuKaydet = async () => {
     const kaydedilecekler = sonuc.faturalar.filter((f) => !kaydedilenler[f.uuid]);
     if (kaydedilecekler.length === 0) return;
     setKaydediliyor(true);
     setKaydedilenSayisi(0);
     let hataSayisi = 0;
-    for (const f of kaydedilecekler) {
+
+    const alislar = kaydedilecekler.filter((f) => f.yon !== 'satis');
+    const satislar = kaydedilecekler.filter((f) => f.yon === 'satis');
+
+    // --- Alış faturaları: TEK toplu istek ---
+    if (alislar.length > 0) {
       try {
-        await faturaKaydetTek(f);
+        const res = await fetch('/api/muhasebe', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            resource: 'xmlKaydetAlisBatch',
+            faturalar: alislar.map((f) => ({
+              tedarikciAdi: f.tedarikciAdi, faturaNo: f.faturaNo, tarih: f.tarih,
+              toplamKdvDahil: f.toplamKdvDahil, toplamKdvTutari: f.toplamKdvTutari,
+              satirlar: f.satirlar.map((s) => ({
+                urunAdi: s.urunAdi, miktar: s.miktar, birimFiyat: s.efektifBirimFiyatKdvDahil,
+                kdvOrani: s.kdvOrani, iskontoOrani: s.iskontoOrani, kdvTutari: s.kdvTutari,
+                satirTutari: s.satirTutariKdvDahil, kategori: s.kategori || '',
+                malzemeId: s.eslesme ? s.eslesme.malzemeId : null,
+                malzemeAdi: s.eslesme ? s.eslesme.malzemeAdi : null,
+                paketMiktar: s.eslesme ? s.eslesme.paketMiktar : null,
+                paketBirim: s.eslesme ? s.eslesme.paketBirim : null,
+              })),
+            })),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        // Tüm alışları kaydedildi olarak işaretle.
+        setKaydedilenler((prev) => {
+          const yeni = { ...prev };
+          alislar.forEach((f) => { yeni[f.uuid] = true; });
+          return yeni;
+        });
+        setKaydedilenSayisi((prev) => prev + alislar.length);
+      } catch (err) {
+        hataSayisi += alislar.length;
+        showToast(`Alış faturaları kaydedilemedi: ${err.message}`);
+        setKaydedilenSayisi((prev) => prev + alislar.length);
+      }
+    }
+
+    // --- Satış faturaları: tek tek (genellikle 1-2 adet) ---
+    for (const f of satislar) {
+      try {
+        await satisFaturasiKaydet(f);
         setKaydedilenler((prev) => ({ ...prev, [f.uuid]: true }));
       } catch (err) {
         hataSayisi += 1;
@@ -236,6 +248,7 @@ export default function FaturaXmlIce({ showToast }) {
       }
       setKaydedilenSayisi((prev) => prev + 1);
     }
+
     setKaydediliyor(false);
     if (hataSayisi === 0) showToast(`${kaydedilecekler.length} fatura kaydedildi`);
     else showToast(`${kaydedilecekler.length - hataSayisi} fatura kaydedildi, ${hataSayisi} tanesi başarısız`);

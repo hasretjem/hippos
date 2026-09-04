@@ -894,12 +894,127 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // ---- ADIM 4a: Alış faturasını onayla ve kaydet ----
-    // ARTIK Fatura Detaylı Giriş/Alış Faturası'na DEĞİL — yeni Giderler sekmesine
-    // (her satır kendi kategorisiyle ayrı bir Gider kaydı) ve Toptancı Hareketleri'ne
-    // (tüm fatura tutarı tek borç satırı, tedarikçi adına göre KESİN eşleşen toptancı
-    // bulunursa) yazılıyor. Malzeme eşleştirmesi yapılmış satırlar için Malzeme Maliyet
-    // Geçmişi kaydı AYNEN korunuyor — Reçeteler'in "en güncel fiyat" araması buradan besleniyor.
+    // ---- ADIM 4a-BATCH: Tüm onaylı alış faturalarını tek seferde kaydet ----
+    // ÖNCEDEN: FaturaXmlIce her fatura için ayrı xmlKaydetAlis çağrısı yapıyordu.
+    // 25 fatura × 4 Sheets isteği = ~100 istek → dakikalık okuma kotası patladı.
+    // ARTIK: Tüm faturalar tek body'de gelir; Toptancılar 1 kez okunur, tüm yazma
+    // işlemleri 3 toplu append'te tamamlanır (Giderler, Toptancı Hareketleri, Maliyet).
+    if (resource === 'xmlKaydetAlisBatch') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { faturalar: gonderilen } = req.body || {};
+      if (!Array.isArray(gonderilen) || gonderilen.length === 0) {
+        return res.status(400).json({ error: 'faturalar dizisi boş veya eksik' });
+      }
+
+      const now = new Date();
+      const kayitZamani = now.toISOString();
+
+      // 1) Toptancılar listesini TEK SEFERDE oku — artık fatura başına ayrı sorgu yok.
+      const TOPTANCILAR_TABCONFIG = { tab: 'Toptancılar', headers: ['ID', 'Firma Adı', 'Kategori', 'Telefon', 'Yetkili Kişi', 'Adres', 'Not', 'Bakiye', 'Eklenme Tarihi', 'Durum'] };
+      const toptancilarRows = await getRows(sheets, TOPTANCILAR_TABCONFIG);
+      // Bellekteki kopya — yeni eklenenler burada da izlenir, Sheets'e ikinci kez okunmaz.
+      const toptancilarBellek = toptancilarRows.map((r) => ({ id: r[0], ad: r[1], kategori: r[2] }));
+
+      const yeniToptancilarSatirlari = [];
+      const giderSatirlariToplu = [];
+      const hareketSatirlariToplu = [];
+      const maliyetSatirlariToplu = [];
+      const faturaIdleri = {};
+
+      for (const f of gonderilen) {
+        const { tedarikciAdi, faturaNo, tarih, toplamKdvDahil, satirlar } = f;
+        if (!tedarikciAdi || !faturaNo || !Array.isArray(satirlar)) continue;
+
+        const kayitTarih = tarih ? isoToTrTarih(tarih) || tarih : now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+        const faturaId = benzersizId();
+        faturaIdleri[faturaNo] = faturaId;
+
+        // 2) Toptancı ara/oluştur — Sheets'e okuma isteği YAPMA, bellekteki listeyi kullan.
+        const tedNorm = metinNormalize(tedarikciAdi);
+        let toptanci = toptancilarBellek.find((t) => metinNormalize(t.ad) === tedNorm);
+        let toptanciId;
+        if (toptanci) {
+          toptanciId = toptanci.id;
+        } else {
+          toptanciId = benzersizId();
+          const katSayim = {};
+          satirlar.forEach((s) => { if (s.kategori) katSayim[s.kategori] = (katSayim[s.kategori] || 0) + 1; });
+          const enSikKategori = Object.entries(katSayim).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+          // Yazma listesine ekle — Sheets'e henüz yazmıyoruz.
+          yeniToptancilarSatirlari.push([toptanciId, tedarikciAdi, enSikKategori, '', '', '', 'XML faturadan otomatik oluşturuldu', 0, kayitTarih, 'aktif']);
+          // Bellekte de kaydet ki aynı tedarikçinin başka faturasında tekrar oluşturulmasın.
+          toptancilarBellek.push({ id: toptanciId, ad: tedarikciAdi, kategori: enSikKategori });
+        }
+
+        // 3) Gider satırlarını listeye ekle.
+        satirlar.forEach((s) => {
+          const id = benzersizId();
+          const tutar = Math.round((Number(s.satirTutari) || 0) * 100) / 100;
+          giderSatirlariToplu.push([id, kayitTarih, s.kategori || 'Diğer Giderler', `${tedarikciAdi} — ${s.urunAdi || ''}`, tutar, s.kdvOrani ? `%${s.kdvOrani}` : '', 'Ödeme Bekliyor', faturaNo, toptanciId, kayitZamani, faturaId]);
+        });
+
+        // 4) Tek borç hareketi.
+        const toplamTutar = toplamKdvDahil != null ? Number(toplamKdvDahil) : satirlar.reduce((acc, s) => acc + (Number(s.satirTutari) || 0), 0);
+        hareketSatirlariToplu.push([benzersizId(), toptanciId, kayitTarih, 'fatura', Math.round(toplamTutar * 100) / 100, `Fatura No: ${faturaNo}`, faturaId, '', kayitZamani]);
+
+        // 5) Malzeme maliyet geçmişi.
+        satirlar.filter((s) => s.malzemeId && s.miktar && s.satirTutari != null).forEach((s) => {
+          const paketMiktar = Number(s.paketMiktar) || 1;
+          const toplamMalzemeMiktari = Math.round(Number(s.miktar) * paketMiktar * 10000) / 10000;
+          const birimMaliyet = toplamMalzemeMiktari > 0 ? Math.round((s.satirTutari / toplamMalzemeMiktari) * 10000) / 10000 : 0;
+          maliyetSatirlariToplu.push([benzersizId(), s.malzemeId, s.malzemeAdi || '', isoToTrTarih(tarih), toplamMalzemeMiktari, s.paketBirim || '', s.satirTutari, birimMaliyet, faturaId]);
+        });
+      }
+
+      // 6) TOPLU YAZMA — her tablo için tek append (Sheets API isteği başına ücretlendirilir,
+      //    fatura sayısından bağımsız 4 istek: Toptancılar, Giderler, Hareketler, Maliyet).
+      if (yeniToptancilarSatirlari.length) {
+        await appendRow(sheets, TOPTANCILAR_TABCONFIG, yeniToptancilarSatirlari[0]);
+        // İkiden fazla yeni toptancı varsa tek batch append yapıyoruz.
+        if (yeniToptancilarSatirlari.length > 1) {
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: SHEET_ID, range: `${TOPTANCILAR_TABCONFIG.tab}!A2:J`,
+            valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
+            requestBody: { values: yeniToptancilarSatirlari.slice(1) },
+          });
+        }
+      }
+      if (giderSatirlariToplu.length) {
+        await ensureTab(sheets, GIDER_TAB.tab, GIDER_TAB.headers);
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A2:${GIDER_LAST_COL}`,
+          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
+          requestBody: { values: giderSatirlariToplu },
+        });
+      }
+      if (hareketSatirlariToplu.length) {
+        await ensureTab(sheets, TOPTANCI_HAREKET_TAB.tab, TOPTANCI_HAREKET_TAB.headers);
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID, range: `${TOPTANCI_HAREKET_TAB.tab}!A2:${TOPTANCI_HAREKET_LAST_COL}`,
+          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
+          requestBody: { values: hareketSatirlariToplu },
+        });
+      }
+      if (maliyetSatirlariToplu.length) {
+        await ensureTab(sheets, MALIYET_TAB.tab, MALIYET_TAB.headers);
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID, range: `${MALIYET_TAB.tab}!A2`,
+          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
+          requestBody: { values: maliyetSatirlariToplu },
+        });
+      }
+
+      return res.status(200).json({
+        ok: true,
+        kaydedilen: gonderilen.length,
+        yeniToptanci: yeniToptancilarSatirlari.length,
+        toplamGiderSatiri: giderSatirlariToplu.length,
+        faturaIdleri,
+      });
+    }
+
+    // ---- ADIM 4a (TEK FATURA - eski compat): Alış faturasını onayla ve kaydet ----
+    // Bu endpoint tek-fatura çağrıları için korundu; FaturaXmlIce artık batch kullanıyor.
     if (resource === 'xmlKaydetAlis') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
       const { tedarikciAdi, faturaNo, tarih, toplamKdvDahil, toplamKdvTutari, satirlar } = req.body || {};
