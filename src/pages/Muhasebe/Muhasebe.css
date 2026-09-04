@@ -559,3 +559,51 @@
 /* Form içi yardım/uyarı metni */
 .mh-field-hint { font-size: 10.5px; color: #83786B; line-height: 1.3; margin-top: 2px; }
 .mh-field-hint-err { color: #C0392B; font-weight: 600; }
+
+/* ================== ALT SEKMELER + EKSTRE (4 Eylül) ================== */
+/* Ana 5'li navigasyon bozulmasın diye alt sekmeler sayfa içinde, daha sönük bir stil */
+.mh-alt-tabs {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  border-bottom: 1px solid #E3DFCF; padding-bottom: 10px; margin-bottom: 2px;
+}
+.mh-alt-tabs button {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 36px; padding: 0 14px; border-radius: 9px;
+  border: 1px solid transparent; background: transparent;
+  color: #83786B; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.mh-alt-tabs button:hover { background: rgba(57, 62, 65, 0.05); }
+.mh-alt-tabs button.active { background: #fff; border-color: #E3DFCF; color: #393E41; }
+.mh-rozet-sayi {
+  min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px;
+  background: #C0392B; color: #fff; font-size: 10.5px; font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* Sürükle-bırak ekstre yükleme alanı */
+.mh-drop-alan {
+  display: flex; align-items: center; gap: 14px;
+  padding: 18px 20px; border-radius: 14px; cursor: pointer;
+  border: 2px dashed #D9D3C2; background: #FDFBF7; color: #83786B;
+  transition: border-color 0.15s, background 0.15s;
+}
+.mh-drop-alan:hover, .mh-drop-alan.aktif { border-color: #E94F37; background: rgba(233, 79, 55, 0.05); }
+.mh-drop-alan strong { display: block; font-size: 13.5px; color: #393E41; }
+.mh-drop-alan small { display: block; font-size: 11.5px; margin-top: 2px; line-height: 1.35; }
+
+/* Yükleme sonrası özet şeridi */
+.mh-ozet-serit {
+  display: flex; flex-wrap: wrap; gap: 8px 18px;
+  padding: 10px 14px; border-radius: 10px;
+  background: #FDFBF7; border: 1px solid #E3DFCF; font-size: 12px; color: #83786B;
+}
+.mh-ozet-serit b { color: #393E41; }
+.mh-ozet-serit .ok b { color: #2E8B57; }
+.mh-ozet-serit .uyari b { color: #C0392B; }
+
+/* Tablo içi kategori seçici (Faturası Beklenenler) */
+.mh-satir-select {
+  height: 30px; max-width: 210px; width: 100%;
+  border-radius: 7px; border: 1px solid #E3DFCF; background: #fff;
+  color: #393E41; font-size: 12px; padding: 0 6px;
+}

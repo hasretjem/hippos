@@ -144,7 +144,46 @@ export default function Muhasebe({ onNavigate }) {
 }
 
 // ================== 1) GİDERLER / ALIŞLAR ==================
+// Üç alt sekme: resmi fatura/fiş kayıtları, ham banka-kart ekstresi ve ikisi
+// arasında henüz eşleşmemiş harcamaların bekleme havuzu.
 function GiderlerSekmesi({ showToast }) {
+  const [altTab, setAltTab] = useState('faturalar');
+  // Ekstre yüklendiğinde "Faturası Beklenenler" rozetindeki sayı anında güncellensin diye
+  // sayaç üst bileşende tutuluyor (alt sekmeler arası paylaşılan tek durum bu).
+  const [bekleyenSayisi, setBekleyenSayisi] = useState(null);
+
+  async function bekleyenSayisiniTazele() {
+    try {
+      const r = await fetch('/api/muhasebe?resource=ekstre&durum=fatura_bekliyor');
+      const j = await r.json();
+      setBekleyenSayisi((j.records || []).length);
+    } catch { /* sayaç kritik değil, sessiz geç */ }
+  }
+  useEffect(() => { bekleyenSayisiniTazele(); }, []);
+
+  return (
+    <div className="mh-yeni">
+      <div className="mh-alt-tabs">
+        <button className={altTab === 'faturalar' ? 'active' : ''} onClick={() => setAltTab('faturalar')}>
+          📄 Faturalar & Fişler
+        </button>
+        <button className={altTab === 'ekstre' ? 'active' : ''} onClick={() => setAltTab('ekstre')}>
+          💳 Kredi Kartı & Banka Ekstresi
+        </button>
+        <button className={altTab === 'bekleyen' ? 'active' : ''} onClick={() => setAltTab('bekleyen')}>
+          ⏳ Faturası Beklenenler
+          {bekleyenSayisi > 0 && <span className="mh-rozet-sayi">{bekleyenSayisi}</span>}
+        </button>
+      </div>
+
+      {altTab === 'faturalar' && <FaturalarAltSekmesi showToast={showToast} />}
+      {altTab === 'ekstre' && <EkstreAltSekmesi showToast={showToast} yon="GİDEN" onDegisti={bekleyenSayisiniTazele} />}
+      {altTab === 'bekleyen' && <FaturaBekleyenlerAltSekmesi showToast={showToast} onDegisti={bekleyenSayisiniTazele} />}
+    </div>
+  );
+}
+
+function FaturalarAltSekmesi({ showToast }) {
   const [kayitlar, setKayitlar] = useState([]);
   const [toptancilar, setToptancilar] = useState([]);
   const [kategoriler, setKategoriler] = useState(GIDER_KATEGORILERI);
@@ -229,7 +268,7 @@ function GiderlerSekmesi({ showToast }) {
   }
 
   return (
-    <div className="mh-yeni">
+    <>
       <div className="mh-kpi-row">
         <div className="mh-kpi-card">
           <span className="mh-kpi-label">Bu Ayki Toplam Gider</span>
@@ -331,7 +370,7 @@ function GiderlerSekmesi({ showToast }) {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -479,8 +518,453 @@ function GiderDrawer({ toptancilar, kategoriler, onClose, onSaved }) {
 }
 
 
+
+// ---------- Ortak: ekstre satır listesi + yükleme ----------
+// Hem Giderler (GİDEN) hem Gelirler (GELEN) tarafında aynı bileşen kullanılıyor,
+// yon prop'u hangi tarafın gösterileceğini belirliyor.
+function EkstreAltSekmesi({ showToast, yon, onDegisti }) {
+  const [kayitlar, setKayitlar] = useState([]);
+  const [toptancilar, setToptancilar] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [yukleniyor, setYukleniyor] = useState(false);
+  const [surukleAktif, setSurukleAktif] = useState(false);
+  const [sonOzet, setSonOzet] = useState(null);
+  const dosyaRef = React.useRef(null);
+
+  async function yukle() {
+    setLoading(true);
+    try {
+      const [eRes, tRes] = await Promise.all([
+        fetch(`/api/muhasebe?resource=ekstre&yon=${encodeURIComponent(yon)}`),
+        fetch('/api/toptancilar'),
+      ]);
+      const eJson = await eRes.json();
+      const tJson = await tRes.json();
+      setKayitlar(eJson.records || []);
+      setToptancilar(tJson.records || []);
+    } catch {
+      showToast('Ekstre verisi yüklenemedi');
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { yukle(); }, [yon]);
+
+  async function dosyaIsle(file) {
+    if (!file) return;
+    if (!/\.xlsx?$/i.test(file.name)) { showToast('Lütfen .xlsx uzantılı ekstre dosyası seçin'); return; }
+    setYukleniyor(true);
+    setSonOzet(null);
+    try {
+      const buf = await file.arrayBuffer();
+      // Büyük dosyalarda tek seferde String.fromCharCode(...) çağrısı call-stack taşırdığı
+      // için parça parça base64'e çeviriyoruz.
+      const bytes = new Uint8Array(buf);
+      let ikili = '';
+      const parcaBoyu = 8192;
+      for (let i = 0; i < bytes.length; i += parcaBoyu) {
+        ikili += String.fromCharCode.apply(null, bytes.subarray(i, i + parcaBoyu));
+      }
+      const b64 = btoa(ikili);
+      const res = await fetch('/api/muhasebe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resource: 'ekstreYukle', dosyaBase64: b64 }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'yükleme başarısız');
+      setSonOzet(json.ozet);
+      showToast(`${json.ozet.eklenen} yeni hareket işlendi`);
+      await yukle();
+      onDegisti?.();
+    } catch (err) {
+      showToast('Yüklenemedi: ' + err.message);
+    } finally {
+      setYukleniyor(false);
+    }
+  }
+
+  const gidenMi = yon === 'GİDEN';
+  const toplam = useMemo(() => kayitlar.reduce((s, k) => s + k.tutar, 0), [kayitlar]);
+  const sirali = useMemo(() => [...kayitlar].sort(
+    (a, b) => (trTarihiCoz(b.tarih)?.getTime() || 0) - (trTarihiCoz(a.tarih)?.getTime() || 0)
+  ), [kayitlar]);
+
+  function toptanciAdi(id) {
+    const t = toptancilar.find((x) => x.id === id);
+    return t ? t.firmaAdi : null;
+  }
+
+  return (
+    <>
+      <div
+        className={`mh-drop-alan ${surukleAktif ? 'aktif' : ''}`}
+        onDragOver={(e) => { e.preventDefault(); setSurukleAktif(true); }}
+        onDragLeave={() => setSurukleAktif(false)}
+        onDrop={(e) => { e.preventDefault(); setSurukleAktif(false); dosyaIsle(e.dataTransfer.files?.[0]); }}
+        onClick={() => dosyaRef.current?.click()}
+      >
+        <Upload size={20} />
+        <div>
+          <strong>{yukleniyor ? 'İşleniyor…' : 'Ekstre dosyasını buraya sürükle'}</strong>
+          <small>kart-islemlerim.xlsx — veya tıklayıp seç. Aynı dosyayı tekrar yüklersen mükerrer kayıt oluşmaz.</small>
+        </div>
+        <input ref={dosyaRef} type="file" accept=".xlsx,.xls" hidden
+          onChange={(e) => { dosyaIsle(e.target.files?.[0]); e.target.value = ''; }} />
+      </div>
+
+      {sonOzet && (
+        <div className="mh-ozet-serit">
+          <span><b>{sonOzet.eklenen}</b> yeni</span>
+          {sonOzet.mukerrer > 0 && <span><b>{sonOzet.mukerrer}</b> mükerrer atlandı</span>}
+          {sonOzet.toptanciOdemesi > 0 && <span className="ok"><b>{sonOzet.toptanciOdemesi}</b> toptancı ödemesi işlendi</span>}
+          {sonOzet.faturaBekliyor > 0 && <span className="uyari"><b>{sonOzet.faturaBekliyor}</b> fatura bekliyor</span>}
+          {sonOzet.posHakedis > 0 && <span className="ok"><b>{sonOzet.posHakedis}</b> POS hakedişi</span>}
+        </div>
+      )}
+
+      <div className="mh-table-card">
+        {loading ? (
+          <p className="mh-empty">Yükleniyor...</p>
+        ) : sirali.length === 0 ? (
+          <p className="mh-empty">Henüz ekstre yüklenmedi.</p>
+        ) : (
+          <table className="mh-excel-table">
+            <thead>
+              <tr>
+                <th>Tarih</th><th>İşlem</th><th>{gidenMi ? 'Satıcı / Açıklama' : 'Açıklama'}</th>
+                <th>Tutar (TL)</th><th>Durum</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sirali.map((k) => (
+                <tr key={k.id}>
+                  <td>{k.tarih}</td>
+                  <td>
+                    <span className={`mh-durum ${k.islemTuru === 'PROVİZYON' ? 'mh-durum-notr' : ''}`}>
+                      {k.islemTuru === 'PROVİZYON' ? '⏱ Provizyon' : 'Gerçekleşti'}
+                    </span>
+                  </td>
+                  <td>{k.saticiAdi || k.aciklama}</td>
+                  <td className="mh-tutar-cell">{TL(k.tutar)}</td>
+                  <td>{ekstreDurumEtiketi(k, toptanciAdi)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={3}>Toplam</td>
+                <td className="mh-tutar-cell">{TL(toplam)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+    </>
+  );
+}
+
+// Ekstre satırının eşleşme durumunu okunur bir etikete çevirir.
+function ekstreDurumEtiketi(k, toptanciAdiCoz) {
+  switch (k.eslesmeDurumu) {
+    case 'toptanci_odemesi':
+      return <span className="mh-durum mh-durum-yesil">🟢 Cariye işlendi{toptanciAdiCoz?.(k.eslesenToptanciId) ? ` — ${toptanciAdiCoz(k.eslesenToptanciId)}` : ''}</span>;
+    case 'fatura_bekliyor':
+      return <span className="mh-durum mh-durum-kirmizi">⏳ Fatura bekliyor</span>;
+    case 'gidere_islendi':
+      return <span className="mh-durum mh-durum-yesil">🟢 Giderlere işlendi</span>;
+    case 'pos_hakedis':
+      return <span className="mh-durum mh-durum-yesil">🟢 POS hakedişi</span>;
+    case 'gelir_diger':
+      return <span className="mh-durum mh-durum-notr">Gelen ödeme</span>;
+    case 'yoksayildi':
+      return <span className="mh-durum mh-durum-notr">Kapsam dışı</span>;
+    default:
+      return <span className="mh-durum mh-durum-notr">—</span>;
+  }
+}
+
+// ---------- Faturası Beklenenler havuzu ----------
+// Karttan para çıkmış ama Uyumsoft'tan faturası gelmemiş harcamalar. Fatura sonradan
+// gelirse XML akışı zaten Giderler'e yazıyor; gelmeyecekse buradan elle Giderler'e aktarılır.
+function FaturaBekleyenlerAltSekmesi({ showToast, onDegisti }) {
+  const [kayitlar, setKayitlar] = useState([]);
+  const [kategoriler, setKategoriler] = useState(GIDER_KATEGORILERI);
+  const [loading, setLoading] = useState(true);
+  const [islenen, setIslenen] = useState('');
+  const [secilenKategori, setSecilenKategori] = useState({});
+
+  async function yukle() {
+    setLoading(true);
+    try {
+      const [eRes, kRes] = await Promise.all([
+        fetch('/api/muhasebe?resource=ekstre&durum=fatura_bekliyor'),
+        fetch('/api/muhasebe?resource=kategoriler'),
+      ]);
+      const eJson = await eRes.json();
+      const kJson = await kRes.json();
+      const recs = eJson.records || [];
+      setKayitlar(recs);
+      if (kJson.kategoriler?.length) setKategoriler(kJson.kategoriler);
+      // Sunucunun MCC koduna göre önerdiği kategori varsa seçili gelsin.
+      const on = {};
+      recs.forEach((r) => { if (r.kategori) on[r.id] = r.kategori; });
+      setSecilenKategori((p) => ({ ...on, ...p }));
+    } catch {
+      showToast('Bekleyenler yüklenemedi');
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { yukle(); }, []);
+
+  async function gidereIsle(kayit) {
+    const kategori = secilenKategori[kayit.id];
+    if (!kategori) { showToast('Önce kategori seçin'); return; }
+    setIslenen(kayit.id);
+    try {
+      const res = await fetch('/api/muhasebe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resource: 'ekstreGidereIsle', ekstreId: kayit.id, kategori }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'işlenemedi');
+      setKayitlar((prev) => prev.filter((k) => k.id !== kayit.id));
+      showToast('Giderlere işlendi');
+      onDegisti?.();
+    } catch (err) {
+      showToast('İşlenemedi: ' + err.message);
+    } finally {
+      setIslenen('');
+    }
+  }
+
+  async function yoksay(kayit) {
+    try {
+      await fetch('/api/muhasebe?resource=ekstre', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: kayit.id, eslesmeDurumu: 'yoksayildi' }),
+      });
+      setKayitlar((prev) => prev.filter((k) => k.id !== kayit.id));
+      showToast('Kapsam dışı bırakıldı');
+      onDegisti?.();
+    } catch {
+      showToast('Güncellenemedi');
+    }
+  }
+
+  const toplam = useMemo(() => kayitlar.reduce((s, k) => s + k.tutar, 0), [kayitlar]);
+
+  return (
+    <>
+      <div className="mh-kpi-row mh-kpi-row-2">
+        <div className="mh-kpi-card mh-kpi-warning">
+          <span className="mh-kpi-label">Faturası Beklenen Tutar</span>
+          <span className="mh-kpi-value">{TL(toplam)}</span>
+        </div>
+        <div className="mh-kpi-card">
+          <span className="mh-kpi-label">Bekleyen İşlem Sayısı</span>
+          <span className="mh-kpi-value">{kayitlar.length}</span>
+        </div>
+      </div>
+
+      <p className="mh-hint">
+        Karttan çıkmış ama Uyumsoft faturası henüz gelmemiş harcamalar. Fatura geldiğinde XML
+        içe aktarımı bunları Giderler'e yazar. Faturası hiç gelmeyecekse kategori seçip elle işleyin.
+      </p>
+
+      <div className="mh-table-card">
+        {loading ? (
+          <p className="mh-empty">Yükleniyor...</p>
+        ) : kayitlar.length === 0 ? (
+          <p className="mh-empty">Bekleyen harcama yok — her şey eşleşmiş görünüyor.</p>
+        ) : (
+          <table className="mh-excel-table">
+            <thead>
+              <tr><th>Tarih</th><th>Satıcı</th><th>Tutar (TL)</th><th>Kategori</th><th>İşlem</th></tr>
+            </thead>
+            <tbody>
+              {kayitlar.map((k) => (
+                <tr key={k.id}>
+                  <td>{k.tarih}</td>
+                  <td>{k.saticiAdi || k.aciklama}</td>
+                  <td className="mh-tutar-cell">{TL(k.tutar)}</td>
+                  <td>
+                    <select className="mh-satir-select" value={secilenKategori[k.id] || ''}
+                      onChange={(e) => setSecilenKategori((p) => ({ ...p, [k.id]: e.target.value }))}>
+                      <option value="">Seçiniz</option>
+                      {kategoriler.map((kat) => <option key={kat} value={kat}>{kat}</option>)}
+                    </select>
+                  </td>
+                  <td className="mh-islem-cell">
+                    <button className="mh-mini-btn" disabled={islenen === k.id} onClick={() => gidereIsle(k)}>
+                      {islenen === k.id ? '…' : 'Giderlere İşle'}
+                    </button>
+                    <button className="mh-mini-btn mh-mini-btn-ghost" onClick={() => yoksay(k)}>Kapsam Dışı</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr><td colSpan={2}>Toplam</td><td className="mh-tutar-cell">{TL(toplam)}</td><td colSpan={2}></td></tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ---------- Ciro & Hakediş Eşleştirme (Gelirler 3. alt sekmesi) ----------
+// Gün Sonu'nda girilen POS cirosu ile bankaya fiilen yatan hakediş arasındaki farkı
+// gösterir; fark komisyon adayıdır ve tek tıkla Giderler'e yazılabilir.
+function HakedisEslestirmeAltSekmesi({ showToast }) {
+  const [kayitlar, setKayitlar] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [islenen, setIslenen] = useState('');
+
+  async function yukle() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=hakedisEslestir');
+      const json = await res.json();
+      setKayitlar(json.records || []);
+    } catch {
+      showToast('Hakediş verisi yüklenemedi');
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { yukle(); }, []);
+
+  async function komisyonYaz(kayit) {
+    setIslenen(kayit.id);
+    try {
+      const res = await fetch('/api/muhasebe?resource=giderler', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tarih: kayit.tarih, kategori: 'Yemek Kart-Banka Masf.',
+          tedarikciAciklama: `POS komisyon kesintisi — ${kayit.ciroTarihi} cirosu`,
+          tutar: kayit.fark, odemeDurumu: 'Ödendi', belgeNo: 'Hakediş Farkı',
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'kaydedilemedi');
+      await fetch('/api/muhasebe?resource=ekstre', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: kayit.id, eslesenKayitId: json.record.id }),
+      });
+      setKayitlar((prev) => prev.map((k) => (k.id === kayit.id ? { ...k, eslesenKayitId: json.record.id } : k)));
+      showToast('Komisyon gideri kaydedildi');
+    } catch (err) {
+      showToast('Kaydedilemedi: ' + err.message);
+    } finally {
+      setIslenen('');
+    }
+  }
+
+  const kpi = useMemo(() => {
+    const eslesen = kayitlar.filter((k) => k.ciroTutari !== null);
+    const toplamHakedis = kayitlar.reduce((s, k) => s + k.tutar, 0);
+    const toplamFark = eslesen.reduce((s, k) => s + (k.fark || 0), 0);
+    const eslesmeyen = kayitlar.length - eslesen.length;
+    return { toplamHakedis, toplamFark, eslesmeyen };
+  }, [kayitlar]);
+
+  return (
+    <>
+      <div className="mh-kpi-row">
+        <div className="mh-kpi-card">
+          <span className="mh-kpi-label">Bankaya Yatan POS Hakedişi</span>
+          <span className="mh-kpi-value">{TL(kpi.toplamHakedis)}</span>
+        </div>
+        <div className="mh-kpi-card mh-kpi-warning">
+          <span className="mh-kpi-label">Toplam Kesinti / Fark</span>
+          <span className="mh-kpi-value">{TL(kpi.toplamFark)}</span>
+        </div>
+        <div className="mh-kpi-card">
+          <span className="mh-kpi-label">Ciro Eşleşmeyen</span>
+          <span className="mh-kpi-value">{kpi.eslesmeyen}</span>
+        </div>
+      </div>
+
+      <p className="mh-hint">
+        Bankaya yatan POS hakedişi ile Gün Sonu'nda girdiğiniz POS cirosu karşılaştırılır.
+        Hakediş genelde ertesi gün yattığı için aynı gün ve bir önceki günün cirosuna bakılıp
+        yakın olan eşleştirilir. Aradaki fark komisyon kesintisi adayıdır.
+      </p>
+
+      <div className="mh-table-card">
+        {loading ? (
+          <p className="mh-empty">Yükleniyor...</p>
+        ) : kayitlar.length === 0 ? (
+          <p className="mh-empty">Henüz POS hakediş kaydı yok. Ekstre yükleyince buraya düşer.</p>
+        ) : (
+          <table className="mh-excel-table">
+            <thead>
+              <tr>
+                <th>Yatış Tarihi</th><th>Bankaya Yatan</th><th>Eşleşen Ciro Günü</th>
+                <th>Gün Sonu POS Cirosu</th><th>Fark</th><th>İşlem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {kayitlar.map((k) => (
+                <tr key={k.id}>
+                  <td>{k.tarih}</td>
+                  <td className="mh-tutar-cell">{TL(k.tutar)}</td>
+                  <td>{k.ciroTarihi || <span className="mh-durum mh-durum-notr">eşleşme yok</span>}</td>
+                  <td className="mh-tutar-cell">{k.ciroTutari !== null ? TL(k.ciroTutari) : '—'}</td>
+                  <td className="mh-tutar-cell">
+                    {k.fark === null ? '—'
+                      : Math.abs(k.fark) < 0.01 ? <span className="mh-durum mh-durum-yesil">🟢 Tam</span>
+                      : <span className="mh-durum mh-durum-kirmizi">{TL(k.fark)}</span>}
+                  </td>
+                  <td>
+                    {k.eslesenKayitId
+                      ? <span className="mh-durum mh-durum-yesil">🟢 İşlendi</span>
+                      : k.fark !== null && k.fark > 0.01
+                        ? <button className="mh-mini-btn" disabled={islenen === k.id} onClick={() => komisyonYaz(k)}>
+                            {islenen === k.id ? '…' : 'Komisyonu Gidere Yaz'}
+                          </button>
+                        : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ================== 2) GELİRLER / SATIŞLAR ==================
+// Giderler tarafıyla simetrik üç alt sekme: kendi kayıtlarımız, bankaya fiilen
+// yatanlar ve ikisi arasındaki farkın çözüldüğü hakediş havuzu.
 function GelirlerSekmesi({ showToast }) {
+  const [altTab, setAltTab] = useState('satislar');
+  return (
+    <div className="mh-yeni">
+      <div className="mh-alt-tabs">
+        <button className={altTab === 'satislar' ? 'active' : ''} onClick={() => setAltTab('satislar')}>
+          📊 Satışlar & Gün Sonu
+        </button>
+        <button className={altTab === 'yatanlar' ? 'active' : ''} onClick={() => setAltTab('yatanlar')}>
+          🏦 Bankaya Yatanlar
+        </button>
+        <button className={altTab === 'hakedis' ? 'active' : ''} onClick={() => setAltTab('hakedis')}>
+          ⚖️ Ciro & Hakediş Eşleştirme
+        </button>
+      </div>
+
+      {altTab === 'satislar' && <SatislarAltSekmesi showToast={showToast} />}
+      {altTab === 'yatanlar' && <EkstreAltSekmesi showToast={showToast} yon="GELEN" />}
+      {altTab === 'hakedis' && <HakedisEslestirmeAltSekmesi showToast={showToast} />}
+    </div>
+  );
+}
+
+function SatislarAltSekmesi({ showToast }) {
   const [kayitlar, setKayitlar] = useState([]);
   const [loading, setLoading] = useState(true);
   const [kategoriFiltre, setKategoriFiltre] = useState('tumu');
@@ -537,7 +1021,7 @@ function GelirlerSekmesi({ showToast }) {
   }
 
   return (
-    <div className="mh-yeni">
+    <>
       <div className="mh-kpi-row">
         <div className="mh-kpi-card">
           <span className="mh-kpi-label">Bu Ay Kesilen Resmi Faturalar</span>
@@ -636,7 +1120,7 @@ function GelirlerSekmesi({ showToast }) {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

@@ -159,6 +159,177 @@ function rowToOrtakHareket(r) {
     kayitZamani: r[8] || '',
   };
 }
+
+// ============================================================
+// BANKA / KREDİ KARTI EKSTRESİ (kart-islemlerim.xlsx)
+// Giderler ve Gelirler sekmelerinin 2. ve 3. alt sekmelerini besleyen tablo.
+// Her satır bankadan gelen HAM bir hareket; sisteme girdikten sonra otomatik
+// sınıflandırılır ve mümkünse mevcut kayıtlarla eşleştirilir.
+//
+// eslesmeDurumu değerleri:
+//   'toptanci_odemesi' → GİDEN, tedarikçi Toptancılar'da bulundu; cari hesabına ödeme düşüldü
+//   'fatura_bekliyor'  → GİDEN, tedarikçi eşleşmedi; "Faturası Beklenenler" havuzunda
+//   'gidere_islendi'   → "Faturası Beklenenler"den manuel olarak Giderler'e aktarıldı
+//   'pos_hakedis'      → GELEN, OKC formatlı POS hakediş yatışı
+//   'gelir_diger'      → GELEN, OKC dışı (EFT, yemek kartı toplu ödemesi vb.)
+//   'yoksayildi'       → kullanıcı bu satırı kapsam dışı bıraktı
+//
+// islemHash: aynı ekstre iki kez yüklendiğinde MÜKERRER kayıt oluşmasın diye
+// tarih+yön+tutar+açıklama'dan üretilen parmak izi.
+const EKSTRE_TAB = {
+  tab: 'Ekstre Hareketleri',
+  headers: ['ID', 'Tarih', 'IslemTuru', 'Yon', 'Tutar', 'Aciklama', 'SaticiAdi', 'SaticiKodu', 'KartTipi', 'IslemHash', 'EslesmeDurumu', 'EslesenToptanciID', 'EslesenKayitID', 'Kategori', 'KayitZamani'],
+};
+const EKSTRE_LAST_COL = 'O';
+
+function rowToEkstre(r) {
+  return {
+    id: r[0], tarih: r[1] || '', islemTuru: r[2] || '', yon: r[3] || '',
+    tutar: sayiCoz(r[4]), aciklama: r[5] || '', saticiAdi: r[6] || '', saticiKodu: r[7] || '',
+    kartTipi: r[8] || '', islemHash: r[9] || '', eslesmeDurumu: r[10] || '',
+    eslesenToptanciId: r[11] || '', eslesenKayitId: r[12] || '', kategori: r[13] || '',
+    kayitZamani: r[14] || '',
+  };
+}
+
+// Banka ekstresi Türkçe karaktersiz, kısaltılmış ve satır sonunda şehir/ülke taşır
+// ("KOFTECI YUSUF IST SISLI B ISTANBUL TR"). Toptancılar'daki resmi unvanla
+// ("KÖFTECİ YUSUF HZR. YEM. ... TİC.A.Ş.") eşleştirmek için ikisini de aynı sadeleştirmeden
+// geçirip anlamlı kelimeleri karşılaştırıyoruz.
+const TR_ASCII_MAP = { 'ç':'c','ğ':'g','ı':'i','ö':'o','ş':'s','ü':'u','Ç':'c','Ğ':'g','İ':'i','I':'i','Ö':'o','Ş':'s','Ü':'u' };
+function asciiNormalize(s) {
+  return String(s || '')
+    .split('').map((c) => (TR_ASCII_MAP[c] !== undefined ? TR_ASCII_MAP[c] : c)).join('')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Firma adında ayırt edici olmayan (her unvanda geçen) kelimeler — eşleştirmede atlanır.
+const EKSTRE_GURULTU = new Set([
+  'istanbul', 'ankara', 'izmir', 'bursa', 'antalya', 'tr', 'tur', 'turkiye',
+  'ltd', 'sti', 'as', 'a', 's', 'san', 'tic', 've', 'gida', 'sanayi', 'ticaret',
+  'ith', 'ihr', 'ent', 'mam', 'hzr', 'yem', 'tmz', 'can', 'hyv', 'kurumsal',
+  'hizmetleri', 'hizmet', 'no', 'sube', 'subesi', 'merkez', 'anonim', 'limited', 'sirketi',
+]);
+
+function firmaAnlamliKelimeler(ad) {
+  return asciiNormalize(ad).split(' ').filter((k) => k.length >= 2 && !EKSTRE_GURULTU.has(k));
+}
+
+// İlk anlamlı kelime birebir aynı olmalı; ikinci kelimede kısaltma toleransı var
+// ("kaplaner muhendislik" ↔ "kaplaner muh"). Böylece kısaltmalar yakalanırken
+// "kasap serkan" ↔ "karizma besler" gibi alakasız çiftler eşleşmez.
+function firmaEslesirMi(ekstreAdi, toptanciAdi) {
+  const a = firmaAnlamliKelimeler(ekstreAdi);
+  const b = firmaAnlamliKelimeler(toptanciAdi);
+  if (!a.length || !b.length) return false;
+  if (a[0] !== b[0]) return false;
+  if (a.length === 1 || b.length === 1) return true;
+  return a[1].startsWith(b[1]) || b[1].startsWith(a[1]);
+}
+
+// Ekstre açıklamasının sonundaki şehir/ülke kuyruğunu atıp okunabilir satıcı adı üretir.
+function saticiAdiCikar(aciklama) {
+  let s = String(aciklama || '').replace(/\s+/g, ' ').trim();
+  s = s.replace(/\s+(İSTANBUL|ISTANBUL|ANKARA|IZMIR|İZMİR|BURSA|ANTALYA)\s+(TR|TUR)\s*$/i, '');
+  s = s.replace(/\s+(TR|TUR)\s*$/i, '');
+  return s.trim();
+}
+
+// GELEN satırlarda POS hakediş yatışı şu formatta gelir:
+// "1101252730007037047-G9221198082-OKC-26351.0" → OKC'den sonrası hakediş tutarı.
+function posHakedisMi(aciklama) {
+  return /-OKC-/i.test(String(aciklama || ''));
+}
+
+// Kart satıcı kodu (MCC) → varsayılan gider kategorisi tahmini. Kullanıcı her zaman
+// değiştirebilir; amaç ilk girişte doğru kategoriyi önermek.
+const MCC_KATEGORI = {
+  '5411': 'Gıda Alışı',            // market / bakkal
+  '5422': 'Kırmızı Et Alışı',      // kasap, et ürünleri
+  '5499': 'Gıda Alışı',            // muhtelif gıda
+  '5451': 'Kahvaltı Malzeme Alışı',// süt ürünleri
+  '5462': 'Kahvaltı Malzeme Alışı',// fırın
+  '5812': 'Gıda Alışı',            // yemek/restoran tedarik
+  '5541': 'Diğer Giderler',        // akaryakıt
+  '5542': 'Diğer Giderler',
+  '5399': 'Ambalaj Malzeme Alışı', // muhtelif toptan
+  '5122': 'Temizlik Malzemesi Alışı',
+  '5300': 'Gıda Alışı',
+};
+
+// xlsx = zip; sharedStrings kullanan ve kullanmayan (inline t="str") dosyaların ikisini de
+// okuyabilmek için ham XML ayrıştırılıyor. Yeni npm bağımlılığı eklemiyoruz — adm-zip zaten var.
+function xlsxSatirlariniCoz(zipBuffer) {
+  const zip = new AdmZip(zipBuffer);
+
+  const sharedEntry = zip.getEntry('xl/sharedStrings.xml');
+  const paylasilanMetinler = [];
+  if (sharedEntry) {
+    const sx = sharedEntry.getData().toString('utf8');
+    const siRe = /<si>([\s\S]*?)<\/si>/g;
+    let m;
+    while ((m = siRe.exec(sx)) !== null) {
+      // Bir <si> içinde birden çok <t> olabilir (zengin metin) — hepsi birleştirilir.
+      const parcalar = [...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((x) => xmlKacisCoz(x[1]));
+      paylasilanMetinler.push(parcalar.join(''));
+    }
+  }
+
+  // İlk çalışma sayfası
+  const sheetEntry = zip.getEntry('xl/worksheets/sheet1.xml')
+    || zip.getEntries().find((e) => /^xl\/worksheets\/sheet\d+\.xml$/.test(e.entryName));
+  if (!sheetEntry) return [];
+  const sx = sheetEntry.getData().toString('utf8');
+
+  const satirlar = [];
+  const rowRe = /<row[^>]*r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g;
+  let rm;
+  while ((rm = rowRe.exec(sx)) !== null) {
+    const hucreler = {};
+    const cRe = /<c r="([A-Z]+)(\d+)"([^>]*)>([\s\S]*?)<\/c>/g;
+    let cm;
+    while ((cm = cRe.exec(rm[2])) !== null) {
+      const sutun = cm[1];
+      const nitelik = cm[3] || '';
+      const icerik = cm[4] || '';
+      const tipMatch = nitelik.match(/t="([^"]+)"/);
+      const tip = tipMatch ? tipMatch[1] : 'n';
+      let deger = '';
+      if (tip === 'inlineStr') {
+        deger = [...icerik.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((x) => xmlKacisCoz(x[1])).join('');
+      } else {
+        const vMatch = icerik.match(/<v[^>]*>([\s\S]*?)<\/v>/);
+        const ham = vMatch ? xmlKacisCoz(vMatch[1]) : '';
+        deger = tip === 's' ? (paylasilanMetinler[Number(ham)] ?? '') : ham;
+      }
+      hucreler[sutun] = deger;
+    }
+    satirlar.push(hucreler);
+  }
+  return satirlar;
+}
+
+function xmlKacisCoz(s) {
+  return String(s || '')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+// Aynı dosyanın iki kez yüklenmesine karşı satır parmak izi.
+function ekstreHash(tarih, yon, tutar, aciklama) {
+  const ham = `${tarih}|${yon}|${Number(tutar).toFixed(2)}|${asciiNormalize(aciklama)}`;
+  let h = 0;
+  for (let i = 0; i < ham.length; i++) {
+    h = ((h << 5) - h) + ham.charCodeAt(i);
+    h |= 0;
+  }
+  return 'h' + Math.abs(h).toString(36);
+}
+
 // api/recete.js'teki TABS.maliyetGecmisi ile AYNI şema — orada "en güncel fiyat" bu
 // tablodan (fatura TARİHİNE göre, kayıt sırasına göre değil) okunuyor. Burada satır
 // bazında malzeme eşleştirmesi yapılmış her kalem için bir kayıt düşülüyor, böylece
@@ -875,6 +1046,242 @@ export default async function handler(req, res) {
     // ============================================================
     // YENİ 5 SEKME — Giderler, Gelirler, Toptancı Hareketleri, Ortaklar Hareketleri
     // ============================================================
+
+    // ============================================================
+    // EKSTRE — yükleme, listeleme, eşleştirme
+    // ============================================================
+
+    // Ekstre listesi. Alt sekmeler bunu filtreleyerek kullanır:
+    //   Kredi Kartı & Banka Ekstresi → tüm satırlar
+    //   Faturası Beklenenler         → yon=GİDEN & eslesmeDurumu=fatura_bekliyor
+    //   Bankaya Yatanlar             → yon=GELEN
+    if (resource === 'ekstre') {
+      if (req.method === 'GET') {
+        const rows = await getRows(sheets, EKSTRE_TAB);
+        let records = rows.map(rowToEkstre);
+        if (req.query.yon) records = records.filter((r) => r.yon === req.query.yon);
+        if (req.query.durum) records = records.filter((r) => r.eslesmeDurumu === req.query.durum);
+        return res.status(200).json({ records });
+      }
+      // Satırın eşleşme durumunu/kategorisini güncelle (manuel müdahale).
+      if (req.method === 'PUT') {
+        const { id, ...patch } = req.body || {};
+        if (!id) return res.status(400).json({ error: 'id gerekli' });
+        const rows = await getRows(sheets, EKSTRE_TAB);
+        const idx = rows.findIndex((r) => r[0] === id);
+        if (idx === -1) return res.status(404).json({ error: 'kayıt bulunamadı' });
+        const merged = { ...rowToEkstre(rows[idx]), ...patch };
+        const rowValues = [
+          merged.id, merged.tarih, merged.islemTuru, merged.yon, merged.tutar, merged.aciklama,
+          merged.saticiAdi, merged.saticiKodu, merged.kartTipi, merged.islemHash,
+          merged.eslesmeDurumu, merged.eslesenToptanciId, merged.eslesenKayitId, merged.kategori, merged.kayitZamani,
+        ];
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID, range: `${EKSTRE_TAB.tab}!A${idx + 2}:${EKSTRE_LAST_COL}${idx + 2}`,
+          valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
+        });
+        return res.status(200).json({ ok: true, record: rowToEkstre(rowValues) });
+      }
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // Ekstre dosyasını (kart-islemlerim.xlsx) yükle, sınıflandır ve kaydet.
+    // Mükerrer satırlar islemHash ile elenir; toptancı eşleşen GİDEN satırlar için
+    // ilgili cariye "Kredi Kartı Ödemesi" hareketi düşülür (borç anında azalır).
+    if (resource === 'ekstreYukle') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { dosyaBase64 } = req.body || {};
+      if (!dosyaBase64) return res.status(400).json({ error: 'dosyaBase64 gerekli' });
+
+      const buffer = Buffer.from(dosyaBase64, 'base64');
+      let hamSatirlar;
+      try {
+        hamSatirlar = xlsxSatirlariniCoz(buffer);
+      } catch (e) {
+        return res.status(400).json({ error: 'Excel dosyası okunamadı: ' + e.message });
+      }
+      if (!hamSatirlar.length) return res.status(400).json({ error: 'Dosyada satır bulunamadı' });
+
+      // Başlık satırından sütun harflerini bul — banka farklı sıralama kullanırsa da çalışsın.
+      const baslik = hamSatirlar[0];
+      const sutunBul = (...adaylar) => {
+        for (const [harf, deger] of Object.entries(baslik)) {
+          const d = asciiNormalize(deger);
+          if (adaylar.some((a) => d === asciiNormalize(a))) return harf;
+        }
+        return null;
+      };
+      const cTarih = sutunBul('İşlem Tarihi', 'Tarih');
+      const cTur = sutunBul('İşlem Türü', 'Islem Turu');
+      const cYon = sutunBul('Gelen-Giden', 'Yon');
+      const cTutar = sutunBul('İşlem Tutarı', 'Tutar');
+      const cAciklama = sutunBul('Açıklama', 'Aciklama');
+      const cSaticiKodu = sutunBul('Satıcı Kodu');
+      const cKartTipi = sutunBul('Kart Tipi');
+      if (!cTarih || !cYon || !cTutar || !cAciklama) {
+        return res.status(400).json({ error: 'Beklenen sütunlar bulunamadı (İşlem Tarihi / Gelen-Giden / İşlem Tutarı / Açıklama)' });
+      }
+
+      const mevcutRows = await getRows(sheets, EKSTRE_TAB);
+      const mevcutHashler = new Set(mevcutRows.map((r) => r[9]).filter(Boolean));
+
+      const TOPTANCILAR_TABCONFIG = { tab: 'Toptancılar', headers: ['ID', 'Firma Adı', 'Kategori', 'Telefon', 'Yetkili Kişi', 'Adres', 'Not', 'Bakiye', 'Eklenme Tarihi', 'Durum'] };
+      const toptancilarRows = await getRows(sheets, TOPTANCILAR_TABCONFIG);
+
+      const now = new Date();
+      const kayitZamani = now.toISOString();
+      const yeniSatirlar = [];
+      const toptanciOdemeleri = [];
+      const ozet = { toplam: 0, eklenen: 0, mukerrer: 0, toptanciOdemesi: 0, faturaBekliyor: 0, posHakedis: 0, gelirDiger: 0 };
+
+      for (let i = 1; i < hamSatirlar.length; i++) {
+        const h = hamSatirlar[i];
+        const tarih = String(h[cTarih] || '').trim();
+        if (!tarih) continue;
+        ozet.toplam++;
+
+        const yon = String(h[cYon] || '').trim().toLocaleUpperCase('tr');
+        const tutar = ondalikParseServer(h[cTutar]);
+        const aciklama = String(h[cAciklama] || '').replace(/\s+/g, ' ').trim();
+        const islemTuru = String(h[cTur] || '').trim();
+        const saticiKodu = cSaticiKodu ? String(h[cSaticiKodu] || '').trim() : '';
+        const kartTipi = cKartTipi ? String(h[cKartTipi] || '').trim() : '';
+
+        const hash = ekstreHash(tarih, yon, tutar, aciklama);
+        if (mevcutHashler.has(hash)) { ozet.mukerrer++; continue; }
+        mevcutHashler.add(hash);
+
+        const gidenMi = yon.includes('GİDEN') || yon.includes('GIDEN');
+        const saticiAdi = gidenMi ? saticiAdiCikar(aciklama) : '';
+
+        let eslesmeDurumu = '';
+        let eslesenToptanciId = '';
+        let kategori = '';
+
+        if (gidenMi) {
+          const eslesen = toptancilarRows.find((r) => firmaEslesirMi(saticiAdi, r[1]));
+          if (eslesen) {
+            eslesmeDurumu = 'toptanci_odemesi';
+            eslesenToptanciId = eslesen[0];
+            kategori = eslesen[2] || MCC_KATEGORI[saticiKodu] || '';
+            ozet.toptanciOdemesi++;
+            // Cari borcu azaltan ödeme hareketi — FIFO kapama toptanciHareket POST'unda
+            // yapıldığı gibi burada da fatura kapatma yapılmıyor, sadece bakiye düşüyor.
+            toptanciOdemeleri.push([
+              benzersizId(), eslesen[0], tarih, 'odeme', tutar,
+              `Kredi Kartı Ödemesi — ${saticiAdi}`, '', 'Kredi Kartı', kayitZamani,
+            ]);
+          } else {
+            eslesmeDurumu = 'fatura_bekliyor';
+            kategori = MCC_KATEGORI[saticiKodu] || '';
+            ozet.faturaBekliyor++;
+          }
+        } else {
+          if (posHakedisMi(aciklama)) { eslesmeDurumu = 'pos_hakedis'; ozet.posHakedis++; }
+          else { eslesmeDurumu = 'gelir_diger'; ozet.gelirDiger++; }
+        }
+
+        yeniSatirlar.push([
+          benzersizId(), tarih, islemTuru, gidenMi ? 'GİDEN' : 'GELEN', tutar, aciklama,
+          saticiAdi, saticiKodu, kartTipi, hash, eslesmeDurumu, eslesenToptanciId, '', kategori, kayitZamani,
+        ]);
+        ozet.eklenen++;
+      }
+
+      if (yeniSatirlar.length) {
+        await ensureTab(sheets, EKSTRE_TAB.tab, EKSTRE_TAB.headers);
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID, range: `${EKSTRE_TAB.tab}!A2:${EKSTRE_LAST_COL}`,
+          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
+          requestBody: { values: yeniSatirlar },
+        });
+      }
+      if (toptanciOdemeleri.length) {
+        await ensureTab(sheets, TOPTANCI_HAREKET_TAB.tab, TOPTANCI_HAREKET_TAB.headers);
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID, range: `${TOPTANCI_HAREKET_TAB.tab}!A2:${TOPTANCI_HAREKET_LAST_COL}`,
+          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
+          requestBody: { values: toptanciOdemeleri },
+        });
+      }
+
+      return res.status(200).json({ ok: true, ozet });
+    }
+
+    // "Faturası Beklenenler" havuzundaki bir satırı Giderler'e aktar (fatura hiç gelmeyecekse
+    // ya da fişle kapatılacaksa). Ekstre satırı 'gidere_islendi' olarak işaretlenir.
+    if (resource === 'ekstreGidereIsle') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { ekstreId, kategori } = req.body || {};
+      if (!ekstreId || !kategori) return res.status(400).json({ error: 'ekstreId ve kategori gerekli' });
+
+      const rows = await getRows(sheets, EKSTRE_TAB);
+      const idx = rows.findIndex((r) => r[0] === ekstreId);
+      if (idx === -1) return res.status(404).json({ error: 'ekstre kaydı bulunamadı' });
+      const kayit = rowToEkstre(rows[idx]);
+
+      const giderId = benzersizId();
+      const kayitZamani = new Date().toISOString();
+      await appendRow(sheets, GIDER_TAB, [
+        giderId, kayit.tarih, kategori, kayit.saticiAdi || kayit.aciklama, kayit.tutar, '',
+        'Ödendi', 'Kart Ekstresi', '', kayitZamani, giderId,
+      ]);
+
+      const rowValues = [...rows[idx]];
+      rowValues[10] = 'gidere_islendi';
+      rowValues[12] = giderId;
+      rowValues[13] = kategori;
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID, range: `${EKSTRE_TAB.tab}!A${idx + 2}:${EKSTRE_LAST_COL}${idx + 2}`,
+        valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
+      });
+      return res.status(200).json({ ok: true, giderId });
+    }
+
+    // Ciro & Hakediş eşleştirme: Gün Sonu'ndaki POS cirosu ile bankaya yatan OKC
+    // hakedişlerini gün gün karşılaştırır, aradaki farkı komisyon adayı olarak döner.
+    if (resource === 'hakedisEslestir') {
+      if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+      const ekstreRows = await getRows(sheets, EKSTRE_TAB);
+      const hakedisler = ekstreRows.map(rowToEkstre).filter((r) => r.eslesmeDurumu === 'pos_hakedis');
+
+      // Gün Sonu Kasa: A=Tarih, E=POS Toplamı
+      let gunSonuRows = [];
+      try {
+        const gs = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Gün Sonu Kasa!A2:E' });
+        gunSonuRows = gs.data.values || [];
+      } catch { gunSonuRows = []; }
+      const posByTarih = {};
+      gunSonuRows.forEach((r) => {
+        const t = String(r[0] || '').trim();
+        if (!t) return;
+        posByTarih[t] = (posByTarih[t] || 0) + sayiCoz(r[4]);
+      });
+
+      // Hakedişler bankaya genelde ERTESİ gün yatar — hem aynı gün hem bir önceki günün
+      // POS cirosuyla karşılaştırıp daha yakın olanı eşleştiriyoruz.
+      const oncekiGun = (trTarih) => {
+        const d = trTarihiCozServer(trTarih);
+        if (!d) return null;
+        d.setDate(d.getDate() - 1);
+        return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+      };
+
+      const sonuc = hakedisler.map((h) => {
+        const ayniGun = posByTarih[h.tarih];
+        const dunTarih = oncekiGun(h.tarih);
+        const dun = dunTarih ? posByTarih[dunTarih] : undefined;
+        let ciroTarihi = null, ciroTutari = null;
+        if (ayniGun !== undefined && dun !== undefined) {
+          ciroTarihi = Math.abs(ayniGun - h.tutar) <= Math.abs(dun - h.tutar) ? h.tarih : dunTarih;
+          ciroTutari = ciroTarihi === h.tarih ? ayniGun : dun;
+        } else if (ayniGun !== undefined) { ciroTarihi = h.tarih; ciroTutari = ayniGun; }
+        else if (dun !== undefined) { ciroTarihi = dunTarih; ciroTutari = dun; }
+        const fark = ciroTutari !== null ? Math.round((ciroTutari - h.tutar) * 100) / 100 : null;
+        return { ...h, ciroTarihi, ciroTutari, fark };
+      });
+      return res.status(200).json({ records: sonuc });
+    }
 
     // ---- Giderler/Alışlar (1. sekme) ----
     if (resource === 'giderler') {
