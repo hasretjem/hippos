@@ -240,9 +240,13 @@ function sayiCoz(v) {
 
 async function appendRow(sheets, tabConfig, rowValues) {
   await ensureTab(sheets, tabConfig.tab, tabConfig.headers);
+  // Tam sütun aralığı (A2:<lastCol>) veriliyor — sadece 'A2' gibi açık uçlu range
+  // verilirse Sheets API bazen hedef genişliği yanlış tespit edip fazla sütunları
+  // sessizce YAZMIYOR (GIDER_TAB'a FaturaID eklendiğinde yaşanan veri kaybının kök nedeni).
+  const lc = lastCol(tabConfig.headers);
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: `${tabConfig.tab}!A2`,
+    range: `${tabConfig.tab}!A2:${lc}`,
     valueInputOption: 'USER_ENTERED',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [rowValues] },
@@ -263,6 +267,23 @@ async function ensureTab(sheets, tab, headers) {
       spreadsheetId: SHEET_ID,
       requestBody: { requests: [{ addSheet: { properties: { title: tab } } }] },
     });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `${tab}!A1`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [headers] },
+    });
+    return;
+  }
+  // KRİTİK: sekme zaten varsa header'a dokunulmuyordu — şema sonradan genişletildiğinde
+  // (örn. GIDER_TAB'a FaturaID eklendi) eski sekmenin header'ı kısa kalıyor, values.append
+  // bu durumda yeni sütunları mevcut header genişliğinin (A:J gibi) dışında sayıp
+  // sessizce YAZMIYOR — veri kaybı fark edilmeden oluşuyordu. Artık mevcut header
+  // istenen headers'dan KISAYSA eksik sütun başlıkları tamamlanıyor (mevcut veri/sıra
+  // korunuyor, sadece eksik başlıklar ekleniyor).
+  const mevcut = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${tab}!1:1` });
+  const mevcutHeader = (mevcut.data.values && mevcut.data.values[0]) || [];
+  if (mevcutHeader.length < headers.length) {
     await sheets.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
       range: `${tab}!A1`,
@@ -589,6 +610,70 @@ export default async function handler(req, res) {
     }
 
     // ---- Kategori sözlüğü (Kategori Sözlüğü sekmesi — sabit değil, kullanıcı ekleyebiliyor) ----
+    // ---- BİR KERELİK ONARIM (4 Eylül 2026) — FaturaID eksik giden 20 eski Gider satırını
+    // BelgeNo'ya (fatura no) göre gruplayıp FaturaID doldurur + eksik Toptancı Hareketleri'ni
+    // oluşturur. Bu endpoint tek seferlik kullanım için, iş bitince koddan kaldırılacak.
+    if (resource === 'onarimFaturaId') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const giderRows = await getRows(sheets, GIDER_TAB);
+      const bozukSatirlar = giderRows.map((r, i) => ({ r, i })).filter(({ r }) => !r[10] && r[7]);
+      const gruplar = {};
+      bozukSatirlar.forEach(({ r, i }) => {
+        const belgeNo = r[7];
+        if (!gruplar[belgeNo]) gruplar[belgeNo] = { satirlar: [], tedarikciAdi: (r[3] || '').split(' — ')[0], tarih: r[1] };
+        gruplar[belgeNo].satirlar.push(i);
+      });
+
+      const TOPTANCILAR_TABCONFIG = { tab: 'Toptancılar', headers: ['ID', 'Firma Adı', 'Kategori', 'Telefon', 'Yetkili Kişi', 'Adres', 'Not', 'Bakiye', 'Eklenme Tarihi', 'Durum'] };
+      const toptancilarRows = await getRows(sheets, TOPTANCILAR_TABCONFIG);
+      const sonuc = [];
+
+      for (const [belgeNo, grup] of Object.entries(gruplar)) {
+        const faturaId = benzersizId();
+        // Her satırı yeni FaturaID ile güncelle.
+        for (const idx of grup.satirlar) {
+          const rowValues = [...giderRows[idx]];
+          rowValues[10] = faturaId;
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A${idx + 2}:${GIDER_LAST_COL}${idx + 2}`,
+            valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
+          });
+        }
+        // Toptancı bul/oluştur.
+        const tedNorm = metinNormalize(grup.tedarikciAdi);
+        let eslesen = toptancilarRows.find((r) => metinNormalize(r[1]) === tedNorm);
+        let toptanciId;
+        if (eslesen) {
+          toptanciId = eslesen[0];
+        } else {
+          toptanciId = benzersizId();
+          const ilkSatir = giderRows[grup.satirlar[0]];
+          await appendRow(sheets, TOPTANCILAR_TABCONFIG, [
+            toptanciId, grup.tedarikciAdi, ilkSatir[2] || '', '', '', '', 'XML faturadan otomatik oluşturuldu (onarım)', 0, grup.tarih, 'aktif',
+          ]);
+          toptancilarRows.push([toptanciId, grup.tedarikciAdi]);
+        }
+        // Gider satırlarına toptanciId'yi de yaz (9. index) + Toptancı Hareketi oluştur.
+        let toplamTutar = 0;
+        for (const idx of grup.satirlar) {
+          const rowValues = [...giderRows[idx]];
+          rowValues[8] = toptanciId;
+          rowValues[10] = faturaId;
+          toplamTutar += sayiCoz(rowValues[4]);
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A${idx + 2}:${GIDER_LAST_COL}${idx + 2}`,
+            valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
+          });
+        }
+        await ensureTab(sheets, TOPTANCI_HAREKET_TAB.tab, TOPTANCI_HAREKET_TAB.headers);
+        await appendRow(sheets, TOPTANCI_HAREKET_TAB, [
+          benzersizId(), toptanciId, grup.tarih, 'fatura', Math.round(toplamTutar * 100) / 100, `Fatura No: ${belgeNo}`, faturaId, '', new Date().toISOString(),
+        ]);
+        sonuc.push({ belgeNo, faturaId, toptanciId, kalemSayisi: grup.satirlar.length, tutar: toplamTutar });
+      }
+      return res.status(200).json({ ok: true, onarilan: sonuc });
+    }
+
     if (resource === 'kategoriler') {
       if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
       await ensureKategoriSeed(sheets);
@@ -656,11 +741,26 @@ export default async function handler(req, res) {
       const faturaId = benzersizId();
 
       // Tedarikçi adı normalize edilerek Toptancılar sekmesinde KESİN (tam) eşleşme aranır —
-      // eşleşme yoksa gider yine kaydedilir, sadece toptanciId boş kalır (hareket düşülmez).
-      const toptancilarRows = await getRows(sheets, { tab: 'Toptancılar', headers: ['ID', 'Firma Adı', 'Kategori', 'Telefon', 'Yetkili Kişi', 'Adres', 'Not', 'Bakiye', 'Eklenme Tarihi', 'Durum'] });
+      // eşleşme yoksa YENİ bir toptancı kartı OTOMATİK açılır (kullanıcı elle "Yeni Cari Kartı
+      // Aç" yapmasa bile XML'den gelen her tedarikçi bir cari kaydına sahip olsun diye — önceden
+      // bu durumda hareket sessizce hiç düşmüyordu, borç takipsiz kalıyordu).
+      const TOPTANCILAR_TABCONFIG = { tab: 'Toptancılar', headers: ['ID', 'Firma Adı', 'Kategori', 'Telefon', 'Yetkili Kişi', 'Adres', 'Not', 'Bakiye', 'Eklenme Tarihi', 'Durum'] };
+      const toptancilarRows = await getRows(sheets, TOPTANCILAR_TABCONFIG);
       const tedNorm = metinNormalize(tedarikciAdi);
-      const eslesenToptanci = toptancilarRows.find((r) => metinNormalize(r[1]) === tedNorm);
-      const toptanciId = eslesenToptanci ? eslesenToptanci[0] : '';
+      let eslesenToptanci = toptancilarRows.find((r) => metinNormalize(r[1]) === tedNorm);
+      let toptanciId;
+      if (eslesenToptanci) {
+        toptanciId = eslesenToptanci[0];
+      } else {
+        toptanciId = benzersizId();
+        // En sık geçen kategori bu faturanın varsayılan "Ana Harcama Grubu" olarak yazılır.
+        const katSayim = {};
+        satirlar.forEach((s) => { if (s.kategori) katSayim[s.kategori] = (katSayim[s.kategori] || 0) + 1; });
+        const enSikKategori = Object.entries(katSayim).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+        await appendRow(sheets, TOPTANCILAR_TABCONFIG, [
+          toptanciId, tedarikciAdi, enSikKategori, '', '', '', 'XML faturadan otomatik oluşturuldu', 0, kayitTarih, 'aktif',
+        ]);
+      }
 
       // Her satır kendi kategorisiyle ayrı bir Gider kaydı olur — KDV dahil satır tutarı kullanılır.
       // Hepsi AYNI faturaId'yi paylaşır — UI'da fatura başına tek satır olarak gruplanıp gösterilir,
@@ -673,14 +773,15 @@ export default async function handler(req, res) {
       if (giderSatirlari.length) {
         await ensureTab(sheets, GIDER_TAB.tab, GIDER_TAB.headers);
         await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A2`, valueInputOption: 'USER_ENTERED',
+          spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A2:${GIDER_LAST_COL}`, valueInputOption: 'USER_ENTERED',
           insertDataOption: 'INSERT_ROWS', requestBody: { values: giderSatirlari },
         });
       }
 
-      // Toptancı eşleştiyse TEK bir borç (fatura) hareketi düşülür — fatura toplamı,
-      // satır bazında değil (FIFO bakiye tek fatura = tek borç kalemi olarak kapanır).
-      if (toptanciId) {
+      // Toptancı artık her zaman var (eşleşme yoksa yukarıda otomatik açıldı) — TEK bir borç
+      // (fatura) hareketi düşülür, fatura toplamı üzerinden (satır bazında değil, FIFO bakiye
+      // tek fatura = tek borç kalemi olarak kapanır).
+      {
         const toplamTutar = toplamKdvDahil != null ? Number(toplamKdvDahil) : giderSatirlari.reduce((s, r) => s + r[4], 0);
         await ensureTab(sheets, TOPTANCI_HAREKET_TAB.tab, TOPTANCI_HAREKET_TAB.headers);
         await appendRow(sheets, TOPTANCI_HAREKET_TAB, [
