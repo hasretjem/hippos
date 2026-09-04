@@ -59,8 +59,19 @@ const XML_LOG_TAB = { tab: 'Fatura İçe Aktarma Log', headers: ['ID', 'UUID', '
 // kategori ekleyebiliyor (en sona eklenir). Bu liste sadece sekme ilk oluşturulurken
 // tohumlanan varsayılan kategoriler (api/toptancilar.js TOPTANCI_KATEGORILERI ile aynı).
 const VARSAYILAN_KATEGORILER = [
-  'Manav', 'Kırmızı Et', 'Tavuk Eti', 'Ambalaj',
-  'Baget Ekmek', 'Fırın Ekmeği', 'Kahvaltı ve Sandviç Malzemesi', 'Sulu Yemek Malzemesi',
+  'Gıda Alışı',
+  'Kahvaltı Malzeme Alışı',
+  'Tavuk Alışı',
+  'Kırmızı Et Alışı',
+  'İçecek Alışları',
+  'Personel Gideri',
+  'Ambalaj Malzeme Alışı',
+  'Temizlik Malzemesi Alışı',
+  'Fatura ( Elektrik + Su + Dogalgaz + Telefon + İnternet ) Gideri',
+  'Diğer Giderler',
+  'Kira + Aidat + Otopark Gideri',
+  'Vergi + Ssk + Diğer. Giderler',
+  'Yemek Kart-Banka Masf.',
 ];
 const KATEGORI_TAB = { tab: 'Kategori Sözlüğü', headers: ['ID', 'Kategori Adı', 'Tarih'] };
 // api/recete.js'teki TABS.maliyetGecmisi ile AYNI şema — orada "en güncel fiyat" bu
