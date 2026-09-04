@@ -353,3 +353,118 @@
 .rc-malzeme-ekle-wrap { position: relative; }
 .rc-malzeme-dropdown { position: absolute; top: calc(100% + 4px); left: 0; width: 280px; }
 .rc-malzeme-dropdown input { width: 100%; border: 1px solid #E3DFCF; border-radius: 8px; padding: 6px 10px; font-size: 12.5px; margin-bottom: 4px; }
+/* ================== YENİ 5 SEKME — Giderler/Gelirler/Toptancılar/Ortaklar ================== */
+.mh-yeni { display: flex; flex-direction: column; gap: 16px; }
+
+/* KPI Kartları */
+.mh-kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.mh-kpi-row-2 { grid-template-columns: repeat(2, 1fr); }
+.mh-kpi-card {
+  background: #FDFBF7; border: 1px solid #E3DFCF; border-radius: 16px; padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 6px; box-shadow: 0 1px 3px rgba(57,62,65,0.06);
+}
+.mh-kpi-card.mh-kpi-danger { border-color: rgba(192,57,43,0.35); background: rgba(192,57,43,0.05); }
+.mh-kpi-card.mh-kpi-warning { border-color: rgba(230,145,56,0.4); background: rgba(230,145,56,0.06); }
+.mh-kpi-label { font-size: 11px; font-weight: 700; color: #83786B; text-transform: uppercase; letter-spacing: 0.02em; }
+.mh-kpi-value { font-size: 22px; font-weight: 800; color: #393E41; }
+.mh-kpi-value-small { font-size: 16px; }
+.mh-partner-card { position: relative; }
+.mh-partner-son-islem { font-size: 11px; color: #83786B; margin-top: 2px; }
+
+/* Filtre barı */
+.mh-filter-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.mh-filter-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.mh-filter-pills button {
+  height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #E3DFCF;
+  background: #fff; color: #393E41; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.mh-filter-pills button.active { background: #393E41; border-color: #393E41; color: #F6F7EB; }
+.mh-filter-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.mh-date-pills { display: flex; gap: 4px; background: #fff; border: 1px solid #E3DFCF; border-radius: 10px; padding: 3px; }
+.mh-date-pills button {
+  height: 26px; padding: 0 10px; border: none; background: transparent; border-radius: 8px;
+  font-size: 11.5px; font-weight: 600; color: #83786B; cursor: pointer;
+}
+.mh-date-pills button.active { background: #393E41; color: #F6F7EB; }
+.mh-filter-left-search {
+  display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px;
+  background: #fff; border: 1px solid #E3DFCF; border-radius: 10px; color: #83786B; min-width: 220px;
+}
+.mh-filter-left-search input { border: none; outline: none; flex: 1; font-size: 13px; background: transparent; color: #393E41; }
+
+.mh-secondary-btn {
+  display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px;
+  border-radius: 10px; border: 1.5px solid #E3DFCF; background: #fff; color: #393E41;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+}
+
+/* Excel tipi tablo */
+.mh-table-card { background: #FDFBF7; border: 1px solid #E3DFCF; border-radius: 16px; padding: 4px; overflow-x: auto; }
+.mh-excel-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.mh-excel-table th {
+  text-align: left; padding: 10px 12px; font-size: 10.5px; font-weight: 700; color: #83786B;
+  text-transform: uppercase; letter-spacing: 0.02em; border-bottom: 2px solid #E3DFCF; white-space: nowrap;
+}
+.mh-excel-table td { padding: 10px 12px; border-bottom: 1px solid #EDEAE0; color: #393E41; vertical-align: middle; }
+.mh-excel-table tbody tr:hover { background: rgba(233,79,55,0.03); }
+.mh-excel-table tfoot td { padding: 12px; font-weight: 800; border-top: 2px solid #E3DFCF; border-bottom: none; color: #393E41; }
+.mh-tutar-cell { font-weight: 700; white-space: nowrap; }
+.mh-islem-cell { display: flex; gap: 6px; white-space: nowrap; }
+
+.mh-badge {
+  display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.mh-badge-mavi { background: rgba(52,109,182,0.12); color: #2C5F9E; }
+.mh-badge-mor { background: rgba(133,79,190,0.12); color: #6B3FA0; }
+
+.mh-durum { font-size: 12px; font-weight: 700; white-space: nowrap; }
+.mh-durum-kirmizi { color: #C0392B; }
+.mh-durum-yesil { color: #2E8B57; }
+.mh-durum-notr { color: #83786B; }
+
+.mh-mini-btn {
+  height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid #E94F37; background: #E94F37;
+  color: #fff; font-size: 11.5px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+}
+.mh-mini-btn-ghost { background: transparent; border-color: #E3DFCF; color: #83786B; }
+
+/* Drawer / Modal */
+.mh-drawer-overlay {
+  position: fixed; inset: 0; background: rgba(57,62,65,0.5); z-index: 200;
+  display: flex; justify-content: flex-end;
+}
+.mh-drawer {
+  width: 420px; max-width: 92vw; height: 100vh; background: #F6F7EB; color: #393E41;
+  display: flex; flex-direction: column; box-shadow: -8px 0 24px rgba(0,0,0,0.2);
+  animation: mh-drawer-in 0.18s ease-out;
+}
+@keyframes mh-drawer-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.mh-modal-wide {
+  width: 720px; max-width: 94vw; max-height: 88vh; margin: auto; background: #F6F7EB; color: #393E41;
+  border-radius: 16px; display: flex; flex-direction: column; overflow: hidden;
+}
+.mh-drawer-overlay:has(.mh-modal-wide) { align-items: center; justify-content: center; }
+.mh-drawer-head {
+  display: flex; justify-content: space-between; align-items: center; padding: 18px 20px;
+  border-bottom: 1px solid #E3DFCF; font-size: 15px; font-weight: 800;
+}
+.mh-drawer-head button { border: none; background: none; cursor: pointer; color: #393E41; display: flex; }
+.mh-drawer-body { padding: 18px 20px; overflow-y: auto; flex: 1; }
+.mh-drawer-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; }
+.mh-field-full { grid-column: 1 / -1; }
+.mh-field-rel { position: relative; }
+.mh-drawer-foot { padding: 16px 20px; border-top: 1px solid #E3DFCF; }
+.mh-drawer-foot .mh-primary-btn { width: 100%; justify-content: center; }
+
+.mh-firma-oneri {
+  position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 10;
+  background: #fff; border: 1px solid #E3DFCF; border-radius: 8px; max-height: 180px; overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.mh-firma-oneri-item { padding: 8px 10px; font-size: 12.5px; cursor: pointer; }
+.mh-firma-oneri-item:hover { background: rgba(233,79,55,0.06); }
+
+.mh-xml-fatura-card { border: 1px solid #E3DFCF; border-radius: 10px; padding: 12px; margin-bottom: 10px; background: #fff; }
+.mh-xml-fatura-card.mukerrer { border-color: rgba(230,145,56,0.5); background: rgba(230,145,56,0.05); }
+.mh-xml-fatura-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13px; }
+.mh-mukerrer-uyari { font-size: 11.5px; color: #C0392B; font-weight: 600; margin-bottom: 8px; }

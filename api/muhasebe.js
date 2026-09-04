@@ -74,6 +74,88 @@ const VARSAYILAN_KATEGORILER = [
   'Yemek Kart-Banka Masf.',
 ];
 const KATEGORI_TAB = { tab: 'Kategori Sözlüğü', headers: ['ID', 'Kategori Adı', 'Tarih'] };
+
+// ============================================================
+// YENİ MUHASEBE MODÜLÜ (5 sekme): Giderler/Alışlar, Gelirler/Satışlar,
+// Toptancılar ve Cari Takibi, Ortaklar Cari Takip, Reçeteler(mevcut).
+// Hepsi Sheets tabanlı — realtime yok, sayfa yenilemede güncellenir (kullanıcı kararı).
+// ============================================================
+
+// Gelir kategorileri sabit 3 (gider kategorileri gibi kullanıcı tarafından
+// genişletilebilir değil — sabit enum, tasarım dokümanında öyle tanımlandı).
+const GELIR_KATEGORILERI = [
+  'Kurumsal Satış / Catering Faturası',
+  'Yemek Kartı Şirket Faturası',
+  'Diğer Gelirler',
+];
+
+// Giderler sekmesi — 1. sekme. Her satır tek bir harcama/alış kaydı.
+// toptanciId doluysa bu gider aynı zamanda o toptancının hareket geçmişine
+// borç satırı olarak da düşülür (FIFO bakiye hesabı hareketlerden yapılıyor).
+const GIDER_TAB = {
+  tab: 'Giderler',
+  headers: ['ID', 'Tarih', 'Kategori', 'TedarikciAciklama', 'Tutar', 'KdvOrani', 'OdemeDurumu', 'BelgeNo', 'ToptanciID', 'KayitZamani'],
+};
+const GIDER_LAST_COL = 'J';
+
+function rowToGider(r) {
+  return {
+    id: r[0], tarih: r[1] || '', kategori: r[2] || '', tedarikciAciklama: r[3] || '',
+    tutar: sayiCoz(r[4]), kdvOrani: r[5] || '', odemeDurumu: r[6] || 'Ödendi',
+    belgeNo: r[7] || '', toptanciId: r[8] || '', kayitZamani: r[9] || '',
+  };
+}
+
+// Gelirler sekmesi — 2. sekme. Resmi satış/tabldot/yemek kartı faturaları.
+// Günlük perakende ciro (Gün Sonu modülü) ile KARIŞTIRILMAZ, ayrı akış.
+const GELIR_TAB = {
+  tab: 'Gelirler',
+  headers: ['ID', 'Tarih', 'Kategori', 'MusteriFirma', 'FaturaNo', 'Tutar', 'KdvOrani', 'VadeTarihi', 'TahsilatDurumu', 'KayitZamani'],
+};
+const GELIR_LAST_COL = 'J';
+
+function rowToGelir(r) {
+  return {
+    id: r[0], tarih: r[1] || '', kategori: r[2] || '', musteriFirma: r[3] || '',
+    faturaNo: r[4] || '', tutar: sayiCoz(r[5]), kdvOrani: r[6] || '', vadeTarihi: r[7] || '',
+    tahsilatDurumu: r[8] || 'Tahsilat Bekliyor', kayitZamani: r[9] || '',
+  };
+}
+
+// Toptancı Hareketleri — 3. sekmenin FIFO defteri. 'fatura' (borç, +) veya
+// 'odeme' (borcu kapatan, -). Bakiye HER ZAMAN bu tablodan toplanarak hesaplanır,
+// Toptancılar sekmesindeki eski 'Bakiye' sütunu artık okunmuyor.
+const TOPTANCI_HAREKET_TAB = {
+  tab: 'Toptancı Hareketleri',
+  headers: ['ID', 'ToptanciID', 'Tarih', 'Tur', 'Tutar', 'Aciklama', 'KaynakGiderID', 'OdemeYontemi', 'KayitZamani'],
+};
+const TOPTANCI_HAREKET_LAST_COL = 'I';
+
+function rowToToptanciHareket(r) {
+  return {
+    id: r[0], toptanciId: r[1] || '', tarih: r[2] || '', tur: r[3] || '',
+    tutar: sayiCoz(r[4]), aciklama: r[5] || '', kaynakGiderId: r[6] || '',
+    odemeYontemi: r[7] || '', kayitZamani: r[8] || '',
+  };
+}
+
+// Ortaklar Cari Takip — 4. sekme. Dükkanın operasyonel P&L'ini ETKİLEMEZ,
+// tamamen ayrı bir defter (ortak kâr payı çekimi / borç-alacak mahsubu).
+// yon: 'cekim' (ortağa ödendi/çekildi, borcu artar) | 'yatirim' (ortak dükkana verdi, alacağı artar)
+const ORTAK_HAREKET_TAB = {
+  tab: 'Ortaklar Hareketleri',
+  headers: ['ID', 'OrtakAdi', 'Tarih', 'IslemTuru', 'Yon', 'Tutar', 'KasaBanka', 'Aciklama', 'KayitZamani'],
+};
+const ORTAK_HAREKET_LAST_COL = 'I';
+const ORTAKLAR = ['Hasret Cem Arslan', 'Hasan Arslan'];
+
+function rowToOrtakHareket(r) {
+  return {
+    id: r[0], ortakAdi: r[1] || '', tarih: r[2] || '', islemTuru: r[3] || '',
+    yon: r[4] || '', tutar: sayiCoz(r[5]), kasaBanka: r[6] || '', aciklama: r[7] || '',
+    kayitZamani: r[8] || '',
+  };
+}
 // api/recete.js'teki TABS.maliyetGecmisi ile AYNI şema — orada "en güncel fiyat" bu
 // tablodan (fatura TARİHİNE göre, kayıt sırasına göre değil) okunuyor. Burada satır
 // bazında malzeme eşleştirmesi yapılmış her kalem için bir kayıt düşülüyor, böylece
@@ -121,6 +203,18 @@ async function getRows(sheets, tabConfig) {
 // "146,45" — virgüllü, binlik ayıracı '.'). Number("146,45") -> NaN olur ve || 0 ile
 // sessizce sıfıra düşer — Fatura Detaylı Giriş'te Adet/Fiyat/Tutar'ın 0 görünmesinin
 // nedeni buydu. Bu fonksiyon hem düz sayıları hem Türkçe biçimli metinleri doğru çözer.
+// KRİTİK: Number("1.034,50") -> NaN (Türkçe biçim) ve Number("1500,50") -> NaN (virgüllü
+// ondalık) döner. Frontend'den body ile gelen tutar/oran alanları için — kullanıcı
+// virgülle yazarsa sessizce 0'a düşmesin diye ondalikParse ile aynı mantık.
+function ondalikParseServer(v) {
+  if (v === '' || v === null || v === undefined) return 0;
+  if (typeof v === 'number') return v;
+  let s = String(v).trim();
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function sayiCoz(v) {
   if (v === undefined || v === null || v === '') return 0;
   if (typeof v === 'number') return v;
@@ -647,6 +741,141 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, record: rowToDetay(rowValues) });
       }
 
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // ============================================================
+    // YENİ 5 SEKME — Giderler, Gelirler, Toptancı Hareketleri, Ortaklar Hareketleri
+    // ============================================================
+
+    // ---- Giderler/Alışlar (1. sekme) ----
+    if (resource === 'giderler') {
+      if (req.method === 'GET') {
+        const rows = await getRows(sheets, GIDER_TAB);
+        return res.status(200).json({ records: rows.map(rowToGider) });
+      }
+      if (req.method === 'POST') {
+        const { tarih, kategori, tedarikciAciklama, tutar, kdvOrani, odemeDurumu, belgeNo, toptanciId } = req.body || {};
+        if (!kategori || tutar === undefined || tutar === null || tutar === '') {
+          return res.status(400).json({ error: 'kategori ve tutar gerekli' });
+        }
+        const id = benzersizId();
+        const now = new Date();
+        const kayitTarih = tarih || now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+        const kayitZamani = now.toISOString();
+        const tutarNum = ondalikParseServer(tutar);
+        const rowValues = [id, kayitTarih, kategori, tedarikciAciklama || '', tutarNum, kdvOrani || '', odemeDurumu || 'Ödendi', belgeNo || '', toptanciId || '', kayitZamani];
+        await appendRow(sheets, GIDER_TAB, rowValues);
+
+        // Toptancı seçildiyse hareket defterine borç (fatura) satırı düş — FIFO bakiye buradan hesaplanır.
+        if (toptanciId) {
+          await appendRow(sheets, TOPTANCI_HAREKET_TAB, [
+            benzersizId(), toptanciId, kayitTarih, 'fatura', tutarNum, tedarikciAciklama || kategori, id, '', kayitZamani,
+          ]);
+        }
+        return res.status(200).json({ ok: true, record: rowToGider(rowValues) });
+      }
+      if (req.method === 'PUT') {
+        const { id, ...patch } = req.body || {};
+        if (!id) return res.status(400).json({ error: 'id gerekli' });
+        const rows = await getRows(sheets, GIDER_TAB);
+        const idx = rows.findIndex((r) => r[0] === id);
+        if (idx === -1) return res.status(404).json({ error: 'kayıt bulunamadı' });
+        const mevcut = rowToGider(rows[idx]);
+        const merged = { ...mevcut, ...patch };
+        const rowValues = [merged.id, merged.tarih, merged.kategori, merged.tedarikciAciklama, merged.tutar, merged.kdvOrani, merged.odemeDurumu, merged.belgeNo, merged.toptanciId, merged.kayitZamani];
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A${idx + 2}:${GIDER_LAST_COL}${idx + 2}`,
+          valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
+        });
+        return res.status(200).json({ ok: true, record: rowToGider(rowValues) });
+      }
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // ---- Gelirler/Satışlar (2. sekme) ----
+    if (resource === 'gelirler') {
+      if (req.method === 'GET') {
+        const rows = await getRows(sheets, GELIR_TAB);
+        return res.status(200).json({ records: rows.map(rowToGelir), kategoriler: GELIR_KATEGORILERI });
+      }
+      if (req.method === 'POST') {
+        const { tarih, kategori, musteriFirma, faturaNo, tutar, kdvOrani, vadeTarihi, tahsilatDurumu } = req.body || {};
+        if (!kategori || !musteriFirma || tutar === undefined || tutar === null || tutar === '') {
+          return res.status(400).json({ error: 'kategori, musteriFirma ve tutar gerekli' });
+        }
+        const id = benzersizId();
+        const now = new Date();
+        const kayitTarih = tarih || now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+        const kayitZamani = now.toISOString();
+        const rowValues = [id, kayitTarih, kategori, musteriFirma, faturaNo || '', ondalikParseServer(tutar), kdvOrani || '', vadeTarihi || '', tahsilatDurumu || 'Tahsilat Bekliyor', kayitZamani];
+        await appendRow(sheets, GELIR_TAB, rowValues);
+        return res.status(200).json({ ok: true, record: rowToGelir(rowValues) });
+      }
+      if (req.method === 'PUT') {
+        const { id, ...patch } = req.body || {};
+        if (!id) return res.status(400).json({ error: 'id gerekli' });
+        const rows = await getRows(sheets, GELIR_TAB);
+        const idx = rows.findIndex((r) => r[0] === id);
+        if (idx === -1) return res.status(404).json({ error: 'kayıt bulunamadı' });
+        const mevcut = rowToGelir(rows[idx]);
+        const merged = { ...mevcut, ...patch };
+        const rowValues = [merged.id, merged.tarih, merged.kategori, merged.musteriFirma, merged.faturaNo, merged.tutar, merged.kdvOrani, merged.vadeTarihi, merged.tahsilatDurumu, merged.kayitZamani];
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID, range: `${GELIR_TAB.tab}!A${idx + 2}:${GELIR_LAST_COL}${idx + 2}`,
+          valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
+        });
+        return res.status(200).json({ ok: true, record: rowToGelir(rowValues) });
+      }
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // ---- Toptancı Hareketleri (3. sekme — FIFO defteri) ----
+    if (resource === 'toptanciHareket') {
+      if (req.method === 'GET') {
+        const rows = await getRows(sheets, TOPTANCI_HAREKET_TAB);
+        let records = rows.map(rowToToptanciHareket);
+        if (req.query.toptanciId) records = records.filter((r) => r.toptanciId === req.query.toptanciId);
+        return res.status(200).json({ records });
+      }
+      // Manuel ödeme kaydı — 'odeme' türünde, tutar borcu azaltır (FIFO kapama hesabı frontend'de/toplamda yapılır).
+      if (req.method === 'POST') {
+        const { toptanciId, tarih, tutar, odemeYontemi, aciklama } = req.body || {};
+        if (!toptanciId || tutar === undefined || tutar === null || tutar === '') {
+          return res.status(400).json({ error: 'toptanciId ve tutar gerekli' });
+        }
+        const id = benzersizId();
+        const now = new Date();
+        const kayitTarih = tarih || now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+        const kayitZamani = now.toISOString();
+        const rowValues = [id, toptanciId, kayitTarih, 'odeme', ondalikParseServer(tutar), aciklama || '', '', odemeYontemi || '', kayitZamani];
+        await appendRow(sheets, TOPTANCI_HAREKET_TAB, rowValues);
+        return res.status(200).json({ ok: true, record: rowToToptanciHareket(rowValues) });
+      }
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // ---- Ortaklar Hareketleri (4. sekme) ----
+    if (resource === 'ortakHareket') {
+      if (req.method === 'GET') {
+        const rows = await getRows(sheets, ORTAK_HAREKET_TAB);
+        let records = rows.map(rowToOrtakHareket);
+        if (req.query.ortakAdi) records = records.filter((r) => r.ortakAdi === req.query.ortakAdi);
+        return res.status(200).json({ records, ortaklar: ORTAKLAR });
+      }
+      if (req.method === 'POST') {
+        const { ortakAdi, tarih, islemTuru, yon, tutar, kasaBanka, aciklama } = req.body || {};
+        if (!ortakAdi || !yon || tutar === undefined || tutar === null || tutar === '') {
+          return res.status(400).json({ error: 'ortakAdi, yon ve tutar gerekli' });
+        }
+        const id = benzersizId();
+        const now = new Date();
+        const kayitTarih = tarih || now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+        const kayitZamani = now.toISOString();
+        const rowValues = [id, ortakAdi, kayitTarih, islemTuru || 'Diğer', yon, ondalikParseServer(tutar), kasaBanka || '', aciklama || '', kayitZamani];
+        await appendRow(sheets, ORTAK_HAREKET_TAB, rowValues);
+        return res.status(200).json({ ok: true, record: rowToOrtakHareket(rowValues) });
+      }
       return res.status(405).json({ error: 'Method not allowed' });
     }
 

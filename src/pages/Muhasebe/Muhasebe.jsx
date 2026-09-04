@@ -1,84 +1,29 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import './Muhasebe.css';
 import { TL } from '../../hooks/useHipposData';
 import { supabase } from '../../services/supabase';
-import FaturaXmlIce from './FaturaXmlIce/FaturaXmlIce';
 import {
-  ArrowLeft, Receipt, Truck, Users, ListPlus, Copy, MessageCircle, Plus, Trash2,
-  Lock, Delete, Check, X, Search, Pencil, ChefHat, Upload,
+  ArrowLeft, TrendingDown, TrendingUp, Truck, Users, ChefHat,
+  Plus, Upload, X, Check, Search, MessageCircle,
 } from 'lucide-react';
 
-const PERSONEL_PIN = '1234';
+// KRİTİK: Number("0,04") -> NaN döner (Türkçe ondalık virgülü). Tutar/oran input'larında
+// kullanıcı virgülle yazınca sessizce 0 kabul edilmesin diye tek bir güvenli ayrıştırıcı.
+function ondalikParse(deger) {
+  if (deger === '' || deger === null || deger === undefined) return 0;
+  const n = Number(String(deger).trim().replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
 
-const TOPTANCI_KATEGORILERI = [
-  'Manav', 'Kırmızı Et', 'Tavuk Eti', 'Ambalaj',
-  'Baget Ekmek', 'Fırın Ekmeği', 'Kahvaltı ve Sandviç Malzemesi', 'Sulu Yemek Malzemesi',
-];
-
-// ================== FATURA/MAKBUZ — 4 alt sekme tanımı ==================
-// firma alanı olan her sekmede o alan artık autocomplete'li (Toptancılar + aktif
-// Personel listesinden). Seçim yapılınca kategori bilgisi de otomatik notta görünür.
-const MUHASEBE_SEKMELERI = [
-  {
-    key: 'alisFaturasi',
-    label: 'Alış Faturası',
-    firmaField: 'firma',
-    fields: [
-      { key: 'firma', label: 'Tedarikçi / Firma Adı', type: 'firma' },
-      { key: 'faturaNo', label: 'Fatura No', type: 'text' },
-      { key: 'faturaTarihi', label: 'Fatura Tarihi', type: 'date' },
-      { key: 'tutar', label: 'Tutar (TL)', type: 'number' },
-      { key: 'kdvOrani', label: 'KDV Oranı', type: 'select', options: ['%1', '%10', '%20'] },
-      { key: 'odemeDurumu', label: 'Ödeme Durumu', type: 'select', options: ['Ödendi', 'Açık Hesap - Vadeli'] },
-      { key: 'aciklama', label: 'Açıklama / Kalem Detayı', type: 'textarea' },
-    ],
-    preview: (f) =>
-      `🧾 *ALIŞ FATURASI KAYDI*\n🏢 Firma: ${f.firma || '-'}\n📄 Fatura No: ${f.faturaNo || '-'} | 📅 Tarih: ${f.faturaTarihi || '-'}\n💰 Tutar: ${f.tutar || '0'} TL (KDV Dahil)\n📌 Durum: ${f.odemeDurumu || '-'}\n📝 Açıklama: ${f.aciklama || '-'}`,
-  },
-  {
-    key: 'satisFaturasi',
-    label: 'Satış Faturası',
-    firmaField: 'firma',
-    fields: [
-      { key: 'firma', label: 'Cari / Müşteri Firma Adı', type: 'firma' },
-      { key: 'faturaNo', label: 'Fatura No', type: 'text' },
-      { key: 'faturaTarihi', label: 'Fatura Tarihi', type: 'date' },
-      { key: 'tutar', label: 'Toplam Tutar (TL)', type: 'number' },
-      { key: 'kdvOrani', label: 'KDV Oranı', type: 'select', options: ['%1', '%10', '%20'] },
-      { key: 'tahsilatDurumu', label: 'Tahsilat Durumu', type: 'select', options: ['Tahsil Edildi', 'Müşteri Borcuna İşlendi'] },
-      { key: 'aciklama', label: 'Hizmet / Ürün Açıklaması', type: 'textarea' },
-    ],
-    preview: (f) =>
-      `🧾 *SATIŞ FATURASI BİLGİSİ*\n🏢 Müşteri/Cari: ${f.firma || '-'}\n📄 Fatura No: ${f.faturaNo || '-'} | 📅 Tarih: ${f.faturaTarihi || '-'}\n💰 Toplam Tutar: ${f.tutar || '0'} TL\n📌 Açıklama: ${f.aciklama || '-'}`,
-  },
-  {
-    key: 'alisMakbuzu',
-    label: 'Alış Makbuzu',
-    firmaField: 'firma',
-    fields: [
-      { key: 'firma', label: 'Ödeme Yapılan Firma/Kişi', type: 'firma' },
-      { key: 'dekontNo', label: 'İşlem / Dekont No', type: 'text' },
-      { key: 'tutar', label: 'Ödenen Tutar (TL)', type: 'number' },
-      { key: 'odemeYontemi', label: 'Ödeme Yöntemi', type: 'select', options: ['Nakit', 'Havale-EFT', 'Kredi Kartı'] },
-      { key: 'aciklama', label: 'Ödeme Açıklaması', type: 'textarea' },
-    ],
-    preview: (f) =>
-      `💸 *ÖDEME (TEDİYE) MAKBUZU*\n👤 Ödeme Yapılan: ${f.firma || '-'}\n💳 Yöntem: ${f.odemeYontemi || '-'}\n💵 Ödenen Tutar: ${f.tutar || '0'} TL\n📝 Açıklama: ${f.aciklama || '-'}`,
-  },
-  {
-    key: 'satisMakbuzu',
-    label: 'Satış Makbuzu',
-    firmaField: 'firma',
-    fields: [
-      { key: 'firma', label: 'Tahsilat Yapılan Cari / Müşteri', type: 'firma' },
-      { key: 'tutar', label: 'Alınan Tutar (TL)', type: 'number' },
-      { key: 'tahsilatYontemi', label: 'Tahsilat Yöntemi', type: 'select', options: ['Nakit', 'Havale', 'POS'] },
-      { key: 'aciklama', label: 'Açıklama', type: 'textarea' },
-    ],
-    preview: (f) =>
-      `📥 *TAHSİLAT MAKBUZU*\n👤 Cari/Müşteri: ${f.firma || '-'}\n💳 Yöntem: ${f.tahsilatYontemi || '-'}\n💵 Tahsil Edilen Tutar: ${f.tutar || '0'} TL\n📝 Açıklama: ${f.aciklama || '-'}`,
-  },
-];
+// Enter'a basınca DOM sırasındaki bir sonraki "mh-tabbable" alanına odaklanır.
+function handleTabEnter(e) {
+  if (e.key !== 'Enter') return;
+  if (e.target.tagName === 'TEXTAREA' && !e.ctrlKey && !e.metaKey) return;
+  e.preventDefault();
+  const all = Array.from(document.querySelectorAll('.mh-tabbable'));
+  const idx = all.indexOf(e.target);
+  if (idx !== -1 && idx < all.length - 1) all[idx + 1].focus();
+}
 
 function normalizeTrPhone(phone) {
   let digits = (phone || '').replace(/[^0-9]/g, '');
@@ -87,114 +32,96 @@ function normalizeTrPhone(phone) {
   return digits;
 }
 
-// KRİTİK: Number("0,04") -> NaN döner (Türkçe ondalık virgülü). Reçete/malzeme miktar
-// input'larında kullanıcı "0,04" yazınca sessizce 0 kabul edilip kalem atılıyordu (0'ın
-// üzerinde mi kontrolü NaN>0 → false çıkıyordu) — bu yüzden TEK bir güvenli ayrıştırıcı
-// kullanılıyor, virgülü noktaya çevirip Number()'a veriyor.
-function ondalikParse(deger) {
-  if (deger === '' || deger === null || deger === undefined) return 0;
-  const n = Number(String(deger).trim().replace(',', '.'));
-  return Number.isFinite(n) ? n : 0;
+// Türkçe tarih (GG.AA.YYYY veya GG/AA/YYYY) -> Date. Sıralama/filtreleme için.
+function trTarihiCoz(str) {
+  if (!str) return null;
+  const m = String(str).match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+  if (!m) return null;
+  return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
 }
 
-// Enter'a basınca DOM sırasındaki bir sonraki "mh-tabbable" alanına odaklanır —
-// sayfadaki hemen her giriş kutusunda kullanılıyor.
-function handleTabEnter(e) {
-  if (e.key !== 'Enter') return;
-  if (e.target.tagName === 'TEXTAREA' && !e.ctrlKey && !e.metaKey) return; // textarea'da normal Enter satır atlasın
-  e.preventDefault();
-  const all = Array.from(document.querySelectorAll('.mh-tabbable'));
-  const idx = all.indexOf(e.target);
-  if (idx !== -1 && idx < all.length - 1) all[idx + 1].focus();
+function bugunISO() {
+  const d = new Date();
+  return d.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
 }
+
+// "Bu Ay" / "Geçen Ay" filtresi için tarih aralığı kontrolü.
+function tarihAraliktaMi(trTarihStr, aralik) {
+  if (aralik === 'tumu') return true;
+  const tarih = trTarihiCoz(trTarihStr);
+  if (!tarih) return false;
+  const now = new Date();
+  if (aralik === 'buAy') {
+    return tarih.getFullYear() === now.getFullYear() && tarih.getMonth() === now.getMonth();
+  }
+  if (aralik === 'gecenAy') {
+    const gecenAy = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return tarih.getFullYear() === gecenAy.getFullYear() && tarih.getMonth() === gecenAy.getMonth();
+  }
+  return true;
+}
+
+const GIDER_KATEGORILERI = [
+  'Gıda Alışı',
+  'Kahvaltı Malzeme Alışı',
+  'Tavuk Alışı',
+  'Kırmızı Et Alışı',
+  'İçecek Alışları',
+  'Personel Gideri',
+  'Ambalaj Malzeme Alışı',
+  'Temizlik Malzemesi Alışı',
+  'Fatura ( Elektrik + Su + Dogalgaz + Telefon + İnternet ) Gideri',
+  'Diğer Giderler',
+  'Kira + Aidat + Otopark Gideri',
+  'Vergi + Ssk + Diğer. Giderler',
+  'Yemek Kart-Banka Masf.',
+];
+
+const GELIR_KATEGORILERI = [
+  'Kurumsal Satış / Catering Faturası',
+  'Yemek Kartı Şirket Faturası',
+  'Diğer Gelirler',
+];
+
+const ORTAKLAR = ['Hasret Cem Arslan', 'Hasan Arslan'];
+const ORTAK_ISLEM_TURLERI = ['Kasadan Nakit Çekim', 'Cepten Ödeme', 'Bağkur / Şahsi Ödeme', 'Sermaye Ekleme', 'Şahsi Kredi Kartı Ödemesi', 'Diğer'];
 
 export default function Muhasebe({ onNavigate }) {
-  const [anaTab, setAnaTab] = useState('faturaMakbuz'); // faturaMakbuz | toptancilar | personel | faturaDetay
+  const [anaTab, setAnaTab] = useState('giderler'); // giderler | gelirler | toptancilar | ortaklar | receteler
   const [toast, setToast] = useState('');
   function showToast(msg) {
     setToast(msg);
     setTimeout(() => setToast(''), 1800);
   }
 
-  // ================== ORTAK VERİ: Toptancılar + Personel (autocomplete için) ==================
-  const [toptancilar, setToptancilar] = useState([]);
-  const [personeller, setPersoneller] = useState([]);
-  const [ortakVeriLoading, setOrtakVeriLoading] = useState(true);
-
-  async function fetchToptancilar() {
-    try {
-      const res = await fetch('/api/toptancilar');
-      const json = await res.json();
-      setToptancilar(json.records || []);
-    } catch {
-      showToast('Toptancılar yüklenemedi');
-    }
-  }
-  async function fetchPersoneller() {
-    try {
-      const res = await fetch('/api/personel');
-      const json = await res.json();
-      setPersoneller(json.records || []);
-    } catch {
-      showToast('Personel listesi yüklenemedi');
-    }
-  }
-  useEffect(() => {
-    Promise.all([fetchToptancilar(), fetchPersoneller()]).finally(() => setOrtakVeriLoading(false));
-  }, []);
-
-  // "Firma" alanlarında öneri olarak gösterilecek birleşik liste: aktif toptancılar +
-  // aktif personel. Personelin kategorisi her zaman "Personel" olarak sabitlenir.
-  const firmaOnerileri = useMemo(() => {
-    const t = toptancilar.filter((x) => x.durum !== 'pasif').map((x) => ({ ad: x.firmaAdi, kategori: x.kategori, tip: 'toptanci', kaynak: x }));
-    const p = personeller.filter((x) => x.durum === 'aktif').map((x) => ({ ad: x.adSoyad, kategori: 'Personel', tip: 'personel', kaynak: x }));
-    return [...t, ...p];
-  }, [toptancilar, personeller]);
-
   return (
     <div className="mh-shell">
       <button className="mh-back" onClick={() => onNavigate('settings')}><ArrowLeft size={16} /> Geri</button>
 
       <div className="mh-tabs">
-        <button className={anaTab === 'faturaMakbuz' ? 'active' : ''} onClick={() => setAnaTab('faturaMakbuz')}>
-          <Receipt size={15} /> Fatura/Makbuz
+        <button className={anaTab === 'giderler' ? 'active' : ''} onClick={() => setAnaTab('giderler')}>
+          <TrendingDown size={15} /> Giderler/Alışlar
+        </button>
+        <button className={anaTab === 'gelirler' ? 'active' : ''} onClick={() => setAnaTab('gelirler')}>
+          <TrendingUp size={15} /> Gelirler/Satışlar
         </button>
         <button className={anaTab === 'toptancilar' ? 'active' : ''} onClick={() => setAnaTab('toptancilar')}>
-          <Truck size={15} /> Toptancılar
+          <Truck size={15} /> Toptancılar ve Cari Takibi
         </button>
-        <button className={anaTab === 'personel' ? 'active' : ''} onClick={() => setAnaTab('personel')}>
-          <Users size={15} /> Personel
-        </button>
-        <button className={anaTab === 'faturaDetay' ? 'active' : ''} onClick={() => setAnaTab('faturaDetay')}>
-          <ListPlus size={15} /> Fatura Detaylı Giriş
+        <button className={anaTab === 'ortaklar' ? 'active' : ''} onClick={() => setAnaTab('ortaklar')}>
+          <Users size={15} /> Ortaklar Cari Takip
         </button>
         <button className={anaTab === 'receteler' ? 'active' : ''} onClick={() => setAnaTab('receteler')}>
           <ChefHat size={15} /> Reçeteler
         </button>
-        <button className={anaTab === 'faturaXmlIce' ? 'active' : ''} onClick={() => setAnaTab('faturaXmlIce')}>
-          <Upload size={15} /> Fatura İçe Aktar (XML)
-        </button>
       </div>
 
       <div className="mh-body">
-        {anaTab === 'faturaMakbuz' && (
-          <FaturaMakbuzSekmesi firmaOnerileri={firmaOnerileri} showToast={showToast} />
-        )}
-        {anaTab === 'toptancilar' && (
-          <ToptancilarSekmesi toptancilar={toptancilar} loading={ortakVeriLoading} onRefresh={fetchToptancilar} showToast={showToast} />
-        )}
-        {anaTab === 'personel' && (
-          <PersonelSekmesi personeller={personeller} loading={ortakVeriLoading} onRefresh={fetchPersoneller} showToast={showToast} />
-        )}
-        {anaTab === 'faturaDetay' && (
-          <FaturaDetaySekmesi showToast={showToast} />
-        )}
-        {anaTab === 'receteler' && (
-          <ReceteSekmesi showToast={showToast} />
-        )}
-        {anaTab === 'faturaXmlIce' && (
-          <FaturaXmlIce showToast={showToast} />
-        )}
+        {anaTab === 'giderler' && <GiderlerSekmesi showToast={showToast} />}
+        {anaTab === 'gelirler' && <GelirlerSekmesi showToast={showToast} />}
+        {anaTab === 'toptancilar' && <ToptancilarCariSekmesi showToast={showToast} />}
+        {anaTab === 'ortaklar' && <OrtaklarCariSekmesi showToast={showToast} />}
+        {anaTab === 'receteler' && <ReceteSekmesi showToast={showToast} />}
       </div>
 
       {toast && <div className="mh-toast">{toast}</div>}
@@ -202,730 +129,385 @@ export default function Muhasebe({ onNavigate }) {
   );
 }
 
-// ================== 1) FATURA / MAKBUZ ==================
-function FaturaMakbuzSekmesi({ firmaOnerileri, showToast }) {
-  const [tab, setTab] = useState('alisFaturasi');
-  const [form, setForm] = useState({});
-  const [saving, setSaving] = useState(false);
-  const [waNumara, setWaNumara] = useState('');
-  const [firmaOnerAcik, setFirmaOnerAcik] = useState(false);
+// ================== 1) GİDERLER / ALIŞLAR ==================
+function GiderlerSekmesi({ showToast }) {
+  const [kayitlar, setKayitlar] = useState([]);
+  const [toptancilar, setToptancilar] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [kategoriFiltre, setKategoriFiltre] = useState('tumu');
+  const [tarihFiltre, setTarihFiltre] = useState('buAy');
+  const [drawerAcik, setDrawerAcik] = useState(false);
+  const [xmlModalAcik, setXmlModalAcik] = useState(false);
 
-  const sekme = MUHASEBE_SEKMELERI.find((s) => s.key === tab);
-  const aktifForm = form[tab] || {};
-  const onizleme = sekme.preview(aktifForm);
-
-  function updateField(fieldKey, value) {
-    setForm((prev) => ({ ...prev, [tab]: { ...(prev[tab] || {}), [fieldKey]: value } }));
-  }
-
-  const firmaQuery = (aktifForm[sekme.firmaField] || '').trim().toLocaleLowerCase('tr-TR');
-  const firmaFiltreli = useMemo(() => {
-    if (!firmaQuery) return [];
-    return firmaOnerileri.filter((f) => f.ad.toLocaleLowerCase('tr-TR').includes(firmaQuery)).slice(0, 8);
-  }, [firmaOnerileri, firmaQuery]);
-
-  function firmaSec(oneri) {
-    updateField(sekme.firmaField, oneri.ad);
-    setFirmaOnerAcik(false);
-  }
-
-  async function kaydet() {
-    setSaving(true);
+  async function yukle() {
+    setLoading(true);
     try {
-      const res = await fetch('/api/muhasebe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tip: tab, ...aktifForm }),
-      });
-      if (!res.ok) throw new Error('save failed');
-      showToast(`${sekme.label} kaydedildi`);
-      setForm((prev) => ({ ...prev, [tab]: {} }));
+      const [gRes, tRes] = await Promise.all([
+        fetch('/api/muhasebe?resource=giderler'),
+        fetch('/api/toptancilar'),
+      ]);
+      const gJson = await gRes.json();
+      const tJson = await tRes.json();
+      setKayitlar(gJson.records || []);
+      setToptancilar(tJson.records || []);
     } catch {
-      showToast('Kaydedilemedi — bağlantıyı kontrol et');
+      showToast('Veriler yüklenemedi');
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   }
-
-  async function kopyalaMetin() {
-    try {
-      await navigator.clipboard.writeText(onizleme);
-      showToast('Metin kopyalandı, WhatsApp\'a yapıştırabilirsiniz');
-    } catch {
-      showToast('Kopyalanamadı');
-    }
-  }
-
-  function whatsappAc() {
-    const digits = normalizeTrPhone(waNumara);
-    if (!digits || digits === '90') {
-      showToast('Önce bir telefon numarası gir');
-      return;
-    }
-    const win = window.open(`https://wa.me/${digits}?text=${encodeURIComponent(onizleme)}`, '_blank');
-    if (!win) showToast('Tarayıcı pencereyi engelledi — popup iznini kontrol et');
-  }
-
-  return (
-    <div className="mh-fm">
-      <div className="mh-subtabs">
-        {MUHASEBE_SEKMELERI.map((s) => (
-          <button key={s.key} className={tab === s.key ? 'active' : ''} onClick={() => setTab(s.key)}>
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="mh-fm-cols">
-        <div className="mh-fm-col-left">
-          {sekme.fields.map((f) => (
-            <div key={f.key} className="mh-field">
-              <label>{f.label}</label>
-              {f.type === 'select' ? (
-                <select className="mh-tabbable" value={aktifForm[f.key] || ''} onChange={(e) => updateField(f.key, e.target.value)} onKeyDown={handleTabEnter}>
-                  <option value="">Seç...</option>
-                  {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
-              ) : f.type === 'textarea' ? (
-                <textarea className="mh-tabbable" rows={2} value={aktifForm[f.key] || ''} onChange={(e) => updateField(f.key, e.target.value)} onKeyDown={handleTabEnter} />
-              ) : f.type === 'firma' ? (
-                <div className="mh-firma-autocomplete">
-                  <input
-                    className="mh-tabbable"
-                    type="text"
-                    value={aktifForm[f.key] || ''}
-                    onChange={(e) => { updateField(f.key, e.target.value); setFirmaOnerAcik(true); }}
-                    onFocus={() => setFirmaOnerAcik(true)}
-                    onBlur={() => setTimeout(() => setFirmaOnerAcik(false), 150)}
-                    onKeyDown={handleTabEnter}
-                    placeholder="Yazmaya başla, kayıtlı toptancı/personel listesinden seç"
-                  />
-                  {firmaOnerAcik && firmaFiltreli.length > 0 && (
-                    <div className="mh-firma-dropdown">
-                      {firmaFiltreli.map((o, i) => (
-                        <button key={i} onMouseDown={() => firmaSec(o)}>
-                          <span className="ad">{o.ad}</span>
-                          <span className="kat">{o.kategori || '-'}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <input className="mh-tabbable" type={f.type} value={aktifForm[f.key] || ''} onChange={(e) => updateField(f.key, e.target.value)} onKeyDown={handleTabEnter} />
-              )}
-            </div>
-          ))}
-          <button className="mh-primary-btn" disabled={saving} onClick={kaydet}>
-            {saving ? 'Kaydediliyor...' : 'Kaydet'}
-          </button>
-        </div>
-
-        <div className="mh-fm-col-right">
-          <span className="mh-subhead">Önizleme</span>
-          <pre className="mh-onizleme">{onizleme}</pre>
-          <button className="mh-secondary-btn" onClick={kopyalaMetin}><Copy size={13} /> Metni Kopyala</button>
-          <div className="mh-wa-row">
-            <input className="mh-tabbable" type="tel" placeholder="0532 123 45 67 (opsiyonel)" value={waNumara} onChange={(e) => setWaNumara(e.target.value)} onKeyDown={handleTabEnter} />
-            <button className="mh-wa-btn" onClick={whatsappAc}><MessageCircle size={13} /> WhatsApp'ta Aç</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ================== 2) TOPTANCILAR ==================
-function ToptancilarSekmesi({ toptancilar, loading, onRefresh, showToast }) {
-  const [search, setSearch] = useState('');
-  const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState({ firmaAdi: '', kategori: '', telefon: '', yetkiliKisi: '', adres: '', not: '' });
-  const [saving, setSaving] = useState(false);
+  useEffect(() => { yukle(); }, []);
 
   const filtreli = useMemo(() => {
-    const q = search.trim().toLocaleLowerCase('tr-TR');
-    if (!q) return toptancilar;
-    return toptancilar.filter((t) => t.firmaAdi.toLocaleLowerCase('tr-TR').includes(q) || (t.kategori || '').toLocaleLowerCase('tr-TR').includes(q));
-  }, [toptancilar, search]);
+    return kayitlar
+      .filter((k) => kategoriFiltre === 'tumu' || k.kategori === kategoriFiltre)
+      .filter((k) => tarihAraliktaMi(k.tarih, tarihFiltre))
+      .sort((a, b) => (trTarihiCoz(b.tarih)?.getTime() || 0) - (trTarihiCoz(a.tarih)?.getTime() || 0));
+  }, [kayitlar, kategoriFiltre, tarihFiltre]);
 
-  function updateForm(k, v) { setForm((prev) => ({ ...prev, [k]: v })); }
+  const kpi = useMemo(() => {
+    const buAyKayitlar = kayitlar.filter((k) => tarihAraliktaMi(k.tarih, 'buAy'));
+    const toplamGider = buAyKayitlar.reduce((s, k) => s + k.tutar, 0);
+    const bekleyen = buAyKayitlar.filter((k) => k.odemeDurumu === 'Ödeme Bekliyor').reduce((s, k) => s + k.tutar, 0);
+    const kategoriToplamlari = {};
+    buAyKayitlar.forEach((k) => { kategoriToplamlari[k.kategori] = (kategoriToplamlari[k.kategori] || 0) + k.tutar; });
+    let enYuksekKat = null, enYuksekTutar = 0;
+    Object.entries(kategoriToplamlari).forEach(([kat, t]) => { if (t > enYuksekTutar) { enYuksekTutar = t; enYuksekKat = kat; } });
+    const yuzde = toplamGider > 0 ? Math.round((enYuksekTutar / toplamGider) * 100) : 0;
+    return { toplamGider, bekleyen, enYuksekKat, yuzde };
+  }, [kayitlar]);
 
-  async function kaydet() {
-    if (!form.firmaAdi.trim()) { showToast('Firma adı gerekli'); return; }
-    setSaving(true);
+  const dipToplam = useMemo(() => filtreli.reduce((s, k) => s + k.tutar, 0), [filtreli]);
+
+  function toptanciAdi(id) {
+    const t = toptancilar.find((x) => x.id === id);
+    return t ? t.firmaAdi : null;
+  }
+
+  async function odemeDurumuDegistir(kayit) {
+    const yeniDurum = kayit.odemeDurumu === 'Ödeme Bekliyor' ? 'Ödendi' : 'Ödeme Bekliyor';
     try {
-      const res = await fetch('/api/toptancilar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+      await fetch('/api/muhasebe?resource=giderler', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: kayit.id, odemeDurumu: yeniDurum }),
       });
-      if (!res.ok) throw new Error();
-      showToast('Toptancı eklendi');
-      setForm({ firmaAdi: '', kategori: '', telefon: '', yetkiliKisi: '', adres: '', not: '' });
-      setFormOpen(false);
-      onRefresh();
-    } catch {
-      showToast('Kaydedilemedi');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="mh-toptanci">
-      <div className="mh-toptanci-head">
-        <div className="mh-search-box">
-          <Search size={14} />
-          <input placeholder="Toptancı ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-        <button className="mh-primary-btn small" onClick={() => setFormOpen((v) => !v)}>
-          <Plus size={14} /> Yeni Toptancı
-        </button>
-      </div>
-
-      {formOpen && (
-        <div className="mh-toptanci-form">
-          <div className="mh-field">
-            <label>Firma Adı</label>
-            <input className="mh-tabbable" autoFocus value={form.firmaAdi} onChange={(e) => updateForm('firmaAdi', e.target.value)} onKeyDown={handleTabEnter} />
-          </div>
-          <div className="mh-field">
-            <label>Kategori</label>
-            <select className="mh-tabbable" value={form.kategori} onChange={(e) => updateForm('kategori', e.target.value)} onKeyDown={handleTabEnter}>
-              <option value="">Seç...</option>
-              {TOPTANCI_KATEGORILERI.map((k) => <option key={k} value={k}>{k}</option>)}
-            </select>
-          </div>
-          <div className="mh-field">
-            <label>Telefon</label>
-            <input className="mh-tabbable" value={form.telefon} onChange={(e) => updateForm('telefon', e.target.value)} onKeyDown={handleTabEnter} />
-          </div>
-          <div className="mh-field">
-            <label>Yetkili Kişi</label>
-            <input className="mh-tabbable" value={form.yetkiliKisi} onChange={(e) => updateForm('yetkiliKisi', e.target.value)} onKeyDown={handleTabEnter} />
-          </div>
-          <div className="mh-field">
-            <label>Adres</label>
-            <input className="mh-tabbable" value={form.adres} onChange={(e) => updateForm('adres', e.target.value)} onKeyDown={handleTabEnter} />
-          </div>
-          <div className="mh-field">
-            <label>Not</label>
-            <textarea className="mh-tabbable" rows={2} value={form.not} onChange={(e) => updateForm('not', e.target.value)} onKeyDown={handleTabEnter} />
-          </div>
-          <button className="mh-primary-btn" disabled={saving} onClick={kaydet}>{saving ? 'Kaydediliyor...' : 'Kaydet'}</button>
-        </div>
-      )}
-
-      {loading ? (
-        <p className="mh-empty">Yükleniyor...</p>
-      ) : (
-        <div className="mh-toptanci-list">
-          {filtreli.length === 0 && <p className="mh-empty">Kayıtlı toptancı yok</p>}
-          {filtreli.map((t) => (
-            <div key={t.id} className="mh-toptanci-row">
-              <div className="mh-toptanci-info">
-                <span className="ad">{t.firmaAdi}</span>
-                <span className="kat">{t.kategori || '-'}</span>
-                {t.telefon && <span className="tel">{t.telefon}</span>}
-              </div>
-              <div className="mh-toptanci-bakiye">
-                <span className={t.bakiye > 0 ? 'borc' : t.bakiye < 0 ? 'alacak' : 'sifir'}>
-                  {t.bakiye > 0 ? `Borcumuz: ${TL(t.bakiye)}` : t.bakiye < 0 ? `Alacağımız: ${TL(-t.bakiye)}` : 'Bakiye: 0'}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ================== 3) PERSONEL (şifre korumalı) ==================
-function PersonelSekmesi({ personeller, loading, onRefresh, showToast }) {
-  const [unlocked, setUnlocked] = useState(false);
-  const [pinValue, setPinValue] = useState('');
-  const [pinError, setPinError] = useState(false);
-
-  function checkPin(digits) {
-    if (digits === PERSONEL_PIN) {
-      setUnlocked(true);
-    } else {
-      setPinError(true);
-      setTimeout(() => { setPinValue(''); setPinError(false); }, 550);
-    }
-  }
-  function pressPinDigit(d) {
-    setPinValue((prev) => {
-      if (prev.length >= 4) return prev;
-      const next = prev + d;
-      if (next.length === 4) setTimeout(() => checkPin(next), 100);
-      return next;
-    });
-  }
-
-  if (!unlocked) {
-    return (
-      <div className="mh-pin-gate">
-        <div className={`mh-pin-box ${pinError ? 'shake' : ''}`}>
-          <Lock size={20} />
-          <h3>Personel Bilgileri Korumalı</h3>
-          <div className="mh-pin-dots">
-            {[0, 1, 2, 3].map((i) => <span key={i} className={`dot ${pinValue.length > i ? 'filled' : ''}`} />)}
-          </div>
-          {pinError && <p className="mh-pin-error">Yanlış PIN</p>}
-          <div className="mh-pin-keypad">
-            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((n) => (
-              <button key={n} onClick={() => pressPinDigit(n)}>{n}</button>
-            ))}
-            <div />
-            <button onClick={() => pressPinDigit('0')}>0</button>
-            <button onClick={() => setPinValue((p) => p.slice(0, -1))}><Delete size={16} /></button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return <PersonelIcerik personeller={personeller} loading={loading} onRefresh={onRefresh} showToast={showToast} />;
-}
-
-function PersonelIcerik({ personeller, loading, onRefresh, showToast }) {
-  const [search, setSearch] = useState('');
-  const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState({ adSoyad: '', iseBaslamaTarihi: '', maas: '', sigortali: false, cepNo: '', not: '' });
-  const [saving, setSaving] = useState(false);
-  const [detayFor, setDetayFor] = useState(null); // personel objesi
-  const [odemeler, setOdemeler] = useState([]);
-  const [odemeForm, setOdemeForm] = useState({ tarih: '', tutar: '', tur: 'Avans', aciklama: '' });
-  const [odemeSaving, setOdemeSaving] = useState(false);
-
-  const filtreli = useMemo(() => {
-    const q = search.trim().toLocaleLowerCase('tr-TR');
-    if (!q) return personeller;
-    return personeller.filter((p) => p.adSoyad.toLocaleLowerCase('tr-TR').includes(q));
-  }, [personeller, search]);
-
-  function updateForm(k, v) { setForm((prev) => ({ ...prev, [k]: v })); }
-
-  async function kaydet() {
-    if (!form.adSoyad.trim()) { showToast('Ad Soyad gerekli'); return; }
-    setSaving(true);
-    try {
-      const res = await fetch('/api/personel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) throw new Error();
-      showToast('Personel eklendi');
-      setForm({ adSoyad: '', iseBaslamaTarihi: '', maas: '', sigortali: false, cepNo: '', not: '' });
-      setFormOpen(false);
-      onRefresh();
-    } catch {
-      showToast('Kaydedilemedi');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function istenAyrildi(p) {
-    try {
-      const res = await fetch('/api/personel', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: p.id, durum: 'ayrildi', istenAyrilmaTarihi: new Date().toLocaleDateString('tr-TR') }),
-      });
-      if (!res.ok) throw new Error();
-      showToast(`${p.adSoyad} işten ayrıldı olarak işaretlendi`);
-      onRefresh();
+      setKayitlar((prev) => prev.map((k) => (k.id === kayit.id ? { ...k, odemeDurumu: yeniDurum } : k)));
+      showToast(yeniDurum === 'Ödendi' ? 'Ödendi olarak işaretlendi' : 'Ödeme bekliyor olarak işaretlendi');
     } catch {
       showToast('Güncellenemedi');
     }
   }
 
-  async function openDetay(p) {
-    setDetayFor(p);
-    setOdemeForm({ tarih: new Date().toLocaleDateString('tr-TR'), tutar: '', tur: 'Avans', aciklama: '' });
-    try {
-      const res = await fetch(`/api/personel?resource=odemeler`);
-      const json = await res.json();
-      setOdemeler((json.records || []).filter((o) => o.personelId === p.id));
-    } catch {
-      showToast('Ödeme geçmişi yüklenemedi');
-    }
-  }
-
-  async function odemeKaydet() {
-    if (!odemeForm.tutar) { showToast('Tutar gerekli'); return; }
-    setOdemeSaving(true);
-    try {
-      const res = await fetch('/api/personel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resource: 'odeme', personelId: detayFor.id, personelAdi: detayFor.adSoyad, ...odemeForm }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error();
-      setOdemeler((prev) => [json.record, ...prev]);
-      setOdemeForm({ tarih: new Date().toLocaleDateString('tr-TR'), tutar: '', tur: 'Avans', aciklama: '' });
-      showToast('Ödeme kaydedildi');
-    } catch {
-      showToast('Kaydedilemedi');
-    } finally {
-      setOdemeSaving(false);
-    }
-  }
-
   return (
-    <div className="mh-personel">
-      <div className="mh-toptanci-head">
-        <div className="mh-search-box">
-          <Search size={14} />
-          <input placeholder="Personel ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
+    <div className="mh-yeni">
+      <div className="mh-kpi-row">
+        <div className="mh-kpi-card">
+          <span className="mh-kpi-label">Bu Ayki Toplam Gider</span>
+          <span className="mh-kpi-value">{TL(kpi.toplamGider)}</span>
         </div>
-        <button className="mh-primary-btn small" onClick={() => setFormOpen((v) => !v)}>
-          <Plus size={14} /> Yeni Eleman
-        </button>
+        <div className="mh-kpi-card mh-kpi-danger">
+          <span className="mh-kpi-label">Bekleyen Ödemeler</span>
+          <span className="mh-kpi-value">{TL(kpi.bekleyen)}</span>
+        </div>
+        <div className="mh-kpi-card">
+          <span className="mh-kpi-label">En Yüksek Harcama Kalemi</span>
+          <span className="mh-kpi-value mh-kpi-value-small">{kpi.enYuksekKat ? `%${kpi.yuzde} ${kpi.enYuksekKat}` : '-'}</span>
+        </div>
       </div>
 
-      {formOpen && (
-        <div className="mh-toptanci-form">
-          <div className="mh-field">
-            <label>Ad Soyad</label>
-            <input className="mh-tabbable" autoFocus value={form.adSoyad} onChange={(e) => updateForm('adSoyad', e.target.value)} onKeyDown={handleTabEnter} />
-          </div>
-          <div className="mh-field">
-            <label>İşe Başlama Tarihi</label>
-            <input className="mh-tabbable" type="date" value={form.iseBaslamaTarihi} onChange={(e) => updateForm('iseBaslamaTarihi', e.target.value)} onKeyDown={handleTabEnter} />
-          </div>
-          <div className="mh-field">
-            <label>Maaş (TL)</label>
-            <input className="mh-tabbable" type="number" value={form.maas} onChange={(e) => updateForm('maas', e.target.value)} onKeyDown={handleTabEnter} />
-          </div>
-          <div className="mh-field mh-field-checkbox">
-            <label><input type="checkbox" checked={form.sigortali} onChange={(e) => updateForm('sigortali', e.target.checked)} /> Sigortalı</label>
-          </div>
-          <div className="mh-field">
-            <label>Cep No</label>
-            <input className="mh-tabbable" value={form.cepNo} onChange={(e) => updateForm('cepNo', e.target.value)} onKeyDown={handleTabEnter} />
-          </div>
-          <div className="mh-field">
-            <label>Not</label>
-            <textarea className="mh-tabbable" rows={2} value={form.not} onChange={(e) => updateForm('not', e.target.value)} onKeyDown={handleTabEnter} />
-          </div>
-          <button className="mh-primary-btn" disabled={saving} onClick={kaydet}>{saving ? 'Kaydediliyor...' : 'Kaydet'}</button>
-        </div>
-      )}
-
-      {loading ? (
-        <p className="mh-empty">Yükleniyor...</p>
-      ) : (
-        <div className="mh-personel-list">
-          {filtreli.length === 0 && <p className="mh-empty">Kayıtlı personel yok</p>}
-          {filtreli.map((p) => (
-            <div key={p.id} className={`mh-personel-row ${p.durum === 'ayrildi' ? 'ayrildi' : ''}`}>
-              <div className="mh-personel-info" onClick={() => openDetay(p)}>
-                <span className="ad">{p.adSoyad}</span>
-                <span className="detay">
-                  İşe giriş: {p.iseBaslamaTarihi || '-'} · Maaş: {TL(p.maas)} · {p.sigortali ? 'Sigortalı' : 'Sigortasız'}
-                  {p.durum === 'ayrildi' && ` · Ayrıldı: ${p.istenAyrilmaTarihi}`}
-                </span>
-              </div>
-              {p.durum !== 'ayrildi' && (
-                <button className="mh-ayrildi-btn" onClick={() => istenAyrildi(p)}>İşten Ayrıldı</button>
-              )}
-            </div>
+      <div className="mh-filter-bar">
+        <div className="mh-filter-pills">
+          <button className={kategoriFiltre === 'tumu' ? 'active' : ''} onClick={() => setKategoriFiltre('tumu')}>Tümü</button>
+          {GIDER_KATEGORILERI.map((k) => (
+            <button key={k} className={kategoriFiltre === k ? 'active' : ''} onClick={() => setKategoriFiltre(k)}>{k}</button>
           ))}
         </div>
+        <div className="mh-filter-right">
+          <div className="mh-date-pills">
+            <button className={tarihFiltre === 'buAy' ? 'active' : ''} onClick={() => setTarihFiltre('buAy')}>Bu Ay</button>
+            <button className={tarihFiltre === 'gecenAy' ? 'active' : ''} onClick={() => setTarihFiltre('gecenAy')}>Geçen Ay</button>
+            <button className={tarihFiltre === 'tumu' ? 'active' : ''} onClick={() => setTarihFiltre('tumu')}>Tümü</button>
+          </div>
+          <button className="mh-primary-btn" onClick={() => setDrawerAcik(true)}><Plus size={15} /> Manuel Gider Ekle</button>
+          <button className="mh-secondary-btn" onClick={() => setXmlModalAcik(true)}><Upload size={15} /> XML Fatura Yükle</button>
+        </div>
+      </div>
+
+      <div className="mh-table-card">
+        {loading ? (
+          <p className="mh-empty">Yükleniyor...</p>
+        ) : filtreli.length === 0 ? (
+          <p className="mh-empty">Bu filtrede kayıt yok.</p>
+        ) : (
+          <table className="mh-excel-table">
+            <thead>
+              <tr>
+                <th>Tarih</th><th>Kategori</th><th>Tedarikçi / Açıklama</th><th>Tutar (TL)</th><th>Durum</th><th>İşlem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtreli.map((k) => (
+                <tr key={k.id}>
+                  <td>{k.tarih}</td>
+                  <td><span className="mh-badge mh-badge-mavi">{k.kategori}</span></td>
+                  <td>{k.tedarikciAciklama || toptanciAdi(k.toptanciId) || '-'}{k.belgeNo ? ` (${k.belgeNo})` : ''}</td>
+                  <td className="mh-tutar-cell">{TL(k.tutar)}</td>
+                  <td>
+                    {k.odemeDurumu === 'Ödeme Bekliyor'
+                      ? <span className="mh-durum mh-durum-kirmizi">🔴 Ödeme Bekliyor</span>
+                      : <span className="mh-durum mh-durum-yesil">🟢 Ödendi</span>}
+                  </td>
+                  <td>
+                    {k.odemeDurumu === 'Ödeme Bekliyor'
+                      ? <button className="mh-mini-btn" onClick={() => odemeDurumuDegistir(k)}>Öde</button>
+                      : <button className="mh-mini-btn mh-mini-btn-ghost" onClick={() => odemeDurumuDegistir(k)}>⋮</button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={3}>Toplam</td>
+                <td className="mh-tutar-cell">{TL(dipToplam)}</td>
+                <td colSpan={2}></td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+
+      {drawerAcik && (
+        <GiderDrawer
+          toptancilar={toptancilar}
+          onClose={() => setDrawerAcik(false)}
+          onSaved={(rec) => { setKayitlar((prev) => [rec, ...prev]); setDrawerAcik(false); showToast('Gider kaydedildi'); }}
+        />
       )}
 
-      {detayFor && (
-        <div className="mh-modal-overlay" onClick={() => setDetayFor(null)}>
-          <div className="mh-modal mh-personel-detay" onClick={(e) => e.stopPropagation()}>
-            <div className="mh-modal-head">
-              <h3>{detayFor.adSoyad} — Ödeme Dökümü</h3>
-              <button onClick={() => setDetayFor(null)}><X size={18} /></button>
-            </div>
-
-            <div className="mh-odeme-form">
-              <input className="mh-tabbable" type="date" value={odemeForm.tarih} onChange={(e) => setOdemeForm((p) => ({ ...p, tarih: e.target.value }))} onKeyDown={handleTabEnter} />
-              <input className="mh-tabbable" type="number" placeholder="Tutar" value={odemeForm.tutar} onChange={(e) => setOdemeForm((p) => ({ ...p, tutar: e.target.value }))} onKeyDown={handleTabEnter} />
-              <select className="mh-tabbable" value={odemeForm.tur} onChange={(e) => setOdemeForm((p) => ({ ...p, tur: e.target.value }))} onKeyDown={handleTabEnter}>
-                <option value="Avans">Avans</option>
-                <option value="Maaş">Maaş</option>
-                <option value="Diğer">Diğer</option>
-              </select>
-              <input className="mh-tabbable" placeholder="Açıklama" value={odemeForm.aciklama} onChange={(e) => setOdemeForm((p) => ({ ...p, aciklama: e.target.value }))} onKeyDown={handleTabEnter} />
-              <button className="mh-primary-btn small" disabled={odemeSaving} onClick={odemeKaydet}>{odemeSaving ? '...' : 'Ekle'}</button>
-            </div>
-
-            <div className="mh-odeme-list">
-              {odemeler.length === 0 && <p className="mh-empty">Henüz ödeme yok</p>}
-              {odemeler.map((o) => (
-                <div key={o.id} className="mh-odeme-row">
-                  <span className="tarih">{o.tarih}</span>
-                  <span className="tur">{o.tur}</span>
-                  <span className="tutar">{TL(o.tutar)}</span>
-                  <span className="aciklama">{o.aciklama}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+      {xmlModalAcik && (
+        <GiderXmlModal
+          toptancilar={toptancilar}
+          onClose={() => setXmlModalAcik(false)}
+          onSaved={() => { setXmlModalAcik(false); yukle(); showToast('Fatura(lar) giderlere işlendi'); }}
+          showToast={showToast}
+        />
       )}
     </div>
   );
 }
 
-// ================== 4) FATURA DETAYLI GİRİŞ ==================
-function FaturaDetaySekmesi({ showToast }) {
-  const [alisFaturalari, setAlisFaturalari] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [seciliFatura, setSeciliFatura] = useState(null);
-  const [kalemler, setKalemler] = useState([]);
-  const [kalemForm, setKalemForm] = useState({ urunAdi: '', adet: '', birimFiyat: '', kdvOrani: '%20', iskontoOrani: '' });
+// Sağ çekmece — manuel gider ekleme formu.
+function GiderDrawer({ toptancilar, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    kategori: '', firma: '', tutar: '', kdvOrani: '%20', odemeDurumu: 'Ödendi', belgeNo: '', tarih: bugunISO(), toptanciId: '',
+  });
   const [saving, setSaving] = useState(false);
+  const [firmaOnerAcik, setFirmaOnerAcik] = useState(false);
 
-  // ---- Malzeme Havuzu — Reçete/Maliyet sistemi burada da kullanılıyor: ürün adı artık
-  // serbest yazılabilir (mevcut davranış korunuyor) AMA aynı zamanda Malzeme Havuzu'ndan
-  // bir malzemeye eşlenebiliyor — eşlenirse fiyat otomatik Malzeme Maliyet Geçmişi'ne
-  // de kaydolur, reçetelerde kullanılabilir hale gelir.
-  const [malzemeler, setMalzemeler] = useState([]);
-  const [seciliMalzeme, setSeciliMalzeme] = useState(null); // {id, ad, birim} ya da null (eşlenmemiş)
-  const [malzemeAramaAcik, setMalzemeAramaAcik] = useState(false);
-  const [yeniMalzemeModal, setYeniMalzemeModal] = useState(false);
-  const [yeniMalzemeForm, setYeniMalzemeForm] = useState({ ad: '', birim: 'kg' });
+  const firmaFiltreli = useMemo(() => {
+    const q = (form.firma || '').trim().toLocaleLowerCase('tr-TR');
+    if (!q) return [];
+    return toptancilar.filter((t) => t.firmaAdi.toLocaleLowerCase('tr-TR').includes(q)).slice(0, 8);
+  }, [toptancilar, form.firma]);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch('/api/muhasebe?tip=alisFaturasi');
-        const json = await res.json();
-        setAlisFaturalari(json.records || []);
-      } catch {
-        showToast('Alış faturaları yüklenemedi');
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-    fetch('/api/recete?resource=malzemeler').then((r) => r.json()).then((j) => setMalzemeler(j.records || [])).catch(() => {});
-  }, []);
-
-  async function faturaSec(f) {
-    setSeciliFatura(f);
-    setKalemForm({ urunAdi: '', adet: '', birimFiyat: '', kdvOrani: '%20', iskontoOrani: '' });
-    setSeciliMalzeme(null);
-    try {
-      const res = await fetch(`/api/muhasebe?resource=detay&faturaId=${f.id}`);
-      const json = await res.json();
-      setKalemler(json.records || []);
-    } catch {
-      showToast('Kalemler yüklenemedi');
-    }
+  function firmaSec(t) {
+    setForm((p) => ({ ...p, firma: t.firmaAdi, toptanciId: t.id }));
+    setFirmaOnerAcik(false);
   }
 
-  function malzemeSec(m) {
-    setSeciliMalzeme(m);
-    setKalemForm((p) => ({ ...p, urunAdi: m.ad }));
-    setMalzemeAramaAcik(false);
-  }
-
-  async function yeniMalzemeKaydet() {
-    if (!yeniMalzemeForm.ad.trim()) { showToast('Malzeme adı gerekli'); return; }
-    try {
-      const res = await fetch('/api/recete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resource: 'malzemeler', ...yeniMalzemeForm }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error();
-      setMalzemeler((prev) => [...prev, json.record]);
-      malzemeSec(json.record);
-      setYeniMalzemeModal(false);
-      setYeniMalzemeForm({ ad: '', birim: 'kg' });
-      showToast('Malzeme oluşturuldu');
-    } catch {
-      showToast('Malzeme oluşturulamadı');
-    }
-  }
-
-  async function kalemEkle() {
-    if (!kalemForm.urunAdi.trim()) { showToast('Ürün adı gerekli'); return; }
+  async function kaydet() {
+    if (!form.kategori) return;
+    if (!form.tutar) return;
     setSaving(true);
     try {
-      const res = await fetch('/api/muhasebe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch('/api/muhasebe?resource=giderler', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          resource: 'detay',
-          faturaId: seciliFatura.id,
-          firma: seciliFatura.firma,
-          faturaNo: seciliFatura.faturaNo,
-          ...kalemForm,
+          tarih: form.tarih, kategori: form.kategori, tedarikciAciklama: form.firma,
+          tutar: ondalikParse(form.tutar), kdvOrani: form.kdvOrani, odemeDurumu: form.odemeDurumu,
+          belgeNo: form.belgeNo, toptanciId: form.toptanciId || '',
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error();
-      setKalemler((prev) => [...prev, json.record]);
-
-      // Malzeme Havuzu'ndan bir malzemeye eşlendiyse, bu alışın fiyatını da Malzeme Maliyet
-      // Geçmişi'ne kaydet — reçete maliyeti hesabı bundan besleniyor. Eşlenmemişse (serbest
-      // yazılmış ürün adıysa) bu adım atlanır, sadece fatura kaydı olarak kalır.
-      if (seciliMalzeme) {
-        fetch('/api/recete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            resource: 'maliyetGecmisi',
-            malzemeId: seciliMalzeme.id,
-            malzemeAdi: seciliMalzeme.ad,
-            miktar: kalemForm.adet,
-            birim: seciliMalzeme.birim,
-            toplamFiyat: ondalikParse(kalemForm.adet) * ondalikParse(kalemForm.birimFiyat),
-            faturaId: seciliFatura.id,
-          }),
-        }).catch(() => {});
-      }
-
-      setKalemForm({ urunAdi: '', adet: '', birimFiyat: '', kdvOrani: kalemForm.kdvOrani, iskontoOrani: '' });
-      setSeciliMalzeme(null);
-      showToast('Kalem eklendi');
+      if (!res.ok) throw new Error(json.error || 'save failed');
+      onSaved(json.record);
     } catch {
-      showToast('Eklenemedi');
-    } finally {
       setSaving(false);
     }
   }
 
-  const kalemToplam = kalemler.reduce((s, k) => s + (k.satirTutari || 0), 0);
-  const kdvToplam = kalemler.reduce((s, k) => s + (k.kdvTutari || 0), 0);
-  const genelToplam = kalemToplam + kdvToplam;
-
   return (
-    <div className="mh-detay">
-      <div className="mh-detay-cols">
-        <div className="mh-detay-col-left">
-          <span className="mh-subhead">Alış Faturaları</span>
-          {loading ? (
-            <p className="mh-empty">Yükleniyor...</p>
-          ) : (
-            <div className="mh-detay-fatura-list">
-              {alisFaturalari.length === 0 && <p className="mh-empty">Kayıtlı alış faturası yok — önce Fatura/Makbuz sekmesinden ekleyin</p>}
-              {alisFaturalari.map((f) => (
-                <button
-                  key={f.id}
-                  className={`mh-detay-fatura-item ${seciliFatura?.id === f.id ? 'active' : ''}`}
-                  onClick={() => faturaSec(f)}
-                >
-                  <span className="firma">{f.firma}</span>
-                  <span className="no">No: {f.faturaNo || '-'} · {f.faturaTarihi || f.tarih}</span>
-                  <span className="tutar">{TL(Number(f.tutar) || 0)}</span>
-                </button>
-              ))}
-            </div>
-          )}
+    <div className="mh-drawer-overlay" onClick={onClose}>
+      <div className="mh-drawer" onClick={(e) => e.stopPropagation()}>
+        <div className="mh-drawer-head">
+          <span>Manuel Gider Ekle</span>
+          <button onClick={onClose}><X size={18} /></button>
         </div>
-
-        <div className="mh-detay-col-right">
-          {!seciliFatura ? (
-            <p className="mh-empty">Soldan bir alış faturası seç, kalemlerini gir</p>
-          ) : (
-            <>
-              <span className="mh-subhead">{seciliFatura.firma} — {seciliFatura.faturaNo || 'No yok'}</span>
-
-              <div className="mh-kalem-form">
-                <div className="mh-malzeme-secici">
-                  <input
-                    className="mh-tabbable"
-                    placeholder="Ürün Adı (Malzeme Havuzu'ndan seç veya yeni yaz)"
-                    value={kalemForm.urunAdi}
-                    onChange={(e) => { setKalemForm((p) => ({ ...p, urunAdi: e.target.value })); setSeciliMalzeme(null); setMalzemeAramaAcik(true); }}
-                    onFocus={() => setMalzemeAramaAcik(true)}
-                    onBlur={() => setTimeout(() => setMalzemeAramaAcik(false), 150)}
-                    onKeyDown={handleTabEnter}
-                    lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false"
-                  />
-                  {seciliMalzeme && <span className="mh-malzeme-badge">✓ {seciliMalzeme.birim}</span>}
-                  {malzemeAramaAcik && (
-                    <div className="mh-malzeme-dropdown">
-                      {malzemeler
-                        .filter((m) => !kalemForm.urunAdi.trim() || m.ad.toLocaleLowerCase('tr').includes(kalemForm.urunAdi.toLocaleLowerCase('tr')))
-                        .slice(0, 8)
-                        .map((m) => (
-                          <button key={m.id} onMouseDown={() => malzemeSec(m)}>{m.ad} <span>({m.birim})</span></button>
-                        ))}
-                      <button className="mh-malzeme-yeni-btn" onMouseDown={() => { setYeniMalzemeForm({ ad: kalemForm.urunAdi, birim: 'kg' }); setYeniMalzemeModal(true); setMalzemeAramaAcik(false); }}>
-                        <Plus size={12} /> Yeni Malzeme Oluştur
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <input className="mh-tabbable" type="number" step="any" placeholder="Adet" value={kalemForm.adet} onChange={(e) => setKalemForm((p) => ({ ...p, adet: e.target.value }))} onKeyDown={handleTabEnter} />
-                <input className="mh-tabbable" type="number" step="any" placeholder="Birim Fiyat" value={kalemForm.birimFiyat} onChange={(e) => setKalemForm((p) => ({ ...p, birimFiyat: e.target.value }))} onKeyDown={handleTabEnter} />
-                <select className="mh-tabbable" value={kalemForm.kdvOrani} onChange={(e) => setKalemForm((p) => ({ ...p, kdvOrani: e.target.value }))} onKeyDown={handleTabEnter}>
-                  <option value="%1">%1</option>
-                  <option value="%10">%10</option>
-                  <option value="%20">%20</option>
-                </select>
-                <input className="mh-tabbable" type="number" step="any" placeholder="İskonto %" value={kalemForm.iskontoOrani} onChange={(e) => setKalemForm((p) => ({ ...p, iskontoOrani: e.target.value }))} onKeyDown={handleTabEnter} />
-                <button className="mh-primary-btn small" disabled={saving} onClick={kalemEkle}><Plus size={13} /> Ekle</button>
-              </div>
-
-              {yeniMalzemeModal && (
-                <div className="mh-malzeme-modal-overlay" onClick={() => setYeniMalzemeModal(false)}>
-                  <div className="mh-malzeme-modal" onClick={(e) => e.stopPropagation()}>
-                    <span className="mh-subhead">Yeni Malzeme Oluştur</span>
-                    <label>Malzeme Adı</label>
-                    <input className="mh-tabbable" autoFocus value={yeniMalzemeForm.ad} onChange={(e) => setYeniMalzemeForm((p) => ({ ...p, ad: e.target.value }))} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false" />
-                    <label>Birim</label>
-                    <select className="mh-tabbable" value={yeniMalzemeForm.birim} onChange={(e) => setYeniMalzemeForm((p) => ({ ...p, birim: e.target.value }))}>
-                      <option value="gr">gr</option>
-                      <option value="kg">kg</option>
-                      <option value="ml">ml</option>
-                      <option value="litre">litre</option>
-                      <option value="adet">adet</option>
-                      <option value="porsiyon">porsiyon</option>
-                    </select>
-                    <div className="mh-malzeme-modal-btns">
-                      <button onClick={() => setYeniMalzemeModal(false)}>İptal</button>
-                      <button className="mh-primary-btn small" onClick={yeniMalzemeKaydet}>Kaydet</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="mh-kalem-list">
-                <div className="mh-kalem-head">
-                  <span>Ürün</span><span>Adet</span><span>Birim F.</span><span>KDV</span><span>İsk.</span><span>KDV Tutarı</span><span>Tutar</span>
-                </div>
-                {kalemler.length === 0 && <p className="mh-empty">Henüz kalem girilmedi</p>}
-                {kalemler.map((k) => (
-                  <div key={k.id} className="mh-kalem-row">
-                    <span>{k.urunAdi}</span>
-                    <span>{k.adet}</span>
-                    <span>{TL(k.birimFiyat)}</span>
-                    <span>{k.kdvOrani}</span>
-                    <span>{k.iskontoOrani || '-'}</span>
-                    <span>{TL(k.kdvTutari)}</span>
-                    <span>{TL(k.satirTutari)}</span>
-                  </div>
+        <div className="mh-drawer-body mh-drawer-2col">
+          <div className="mh-field">
+            <label>Kategori</label>
+            <select className="mh-tabbable" value={form.kategori} onChange={(e) => setForm((p) => ({ ...p, kategori: e.target.value }))} onKeyDown={handleTabEnter}>
+              <option value="">Seçiniz</option>
+              {GIDER_KATEGORILERI.map((k) => <option key={k} value={k}>{k}</option>)}
+            </select>
+          </div>
+          <div className="mh-field">
+            <label>Tutar (TL, KDV Dahil)</label>
+            <input className="mh-tabbable" value={form.tutar} onChange={(e) => setForm((p) => ({ ...p, tutar: e.target.value }))} onKeyDown={handleTabEnter} inputMode="decimal" />
+          </div>
+          <div className="mh-field mh-field-rel">
+            <label>Tedarikçi / Firma Adı</label>
+            <input
+              className="mh-tabbable" value={form.firma} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false"
+              onChange={(e) => { setForm((p) => ({ ...p, firma: e.target.value, toptanciId: '' })); setFirmaOnerAcik(true); }}
+              onFocus={() => setFirmaOnerAcik(true)} onKeyDown={handleTabEnter}
+            />
+            {firmaOnerAcik && firmaFiltreli.length > 0 && (
+              <div className="mh-firma-oneri">
+                {firmaFiltreli.map((t) => (
+                  <div key={t.id} className="mh-firma-oneri-item" onClick={() => firmaSec(t)}>{t.firmaAdi}</div>
                 ))}
               </div>
-              <div className="mh-kalem-toplam">
-                <span>KDV Toplamı</span>
-                <strong>{TL(kdvToplam)}</strong>
-              </div>
-              <div className="mh-kalem-toplam">
-                <span>Kalemler Toplamı (KDV Hariç)</span>
-                <strong>{TL(kalemToplam)}</strong>
-              </div>
-              <div className="mh-kalem-toplam">
-                <span>Genel Toplam (KDV Dahil)</span>
-                <strong>{TL(genelToplam)}</strong>
-              </div>
+            )}
+          </div>
+          <div className="mh-field">
+            <label>KDV Oranı</label>
+            <select className="mh-tabbable" value={form.kdvOrani} onChange={(e) => setForm((p) => ({ ...p, kdvOrani: e.target.value }))} onKeyDown={handleTabEnter}>
+              <option value="%1">%1</option><option value="%10">%10</option><option value="%20">%20</option>
+            </select>
+          </div>
+          <div className="mh-field">
+            <label>Fatura/Fiş Tarihi</label>
+            <input className="mh-tabbable" type="date" value={form.tarih.includes('.') ? '' : form.tarih} onChange={(e) => {
+              const [y, m, d] = e.target.value.split('-');
+              setForm((p) => ({ ...p, tarih: `${d}.${m}.${y}` }));
+            }} onKeyDown={handleTabEnter} />
+          </div>
+          <div className="mh-field">
+            <label>Ödeme Durumu</label>
+            <select className="mh-tabbable" value={form.odemeDurumu} onChange={(e) => setForm((p) => ({ ...p, odemeDurumu: e.target.value }))} onKeyDown={handleTabEnter}>
+              <option value="Ödendi">Ödendi</option><option value="Ödeme Bekliyor">Ödeme Bekliyor</option>
+            </select>
+          </div>
+          <div className="mh-field mh-field-full">
+            <label>Belge No / Not</label>
+            <input className="mh-tabbable" value={form.belgeNo} onChange={(e) => setForm((p) => ({ ...p, belgeNo: e.target.value }))} onKeyDown={handleTabEnter} />
+          </div>
+        </div>
+        <div className="mh-drawer-foot">
+          <button className="mh-primary-btn" disabled={saving || !form.kategori || !form.tutar} onClick={kaydet}>
+            <Check size={15} /> Kaydet
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// XML fatura yükleme — mevcut api/muhasebe.js parseFaturaXml akışını kullanır,
+// onaylanan satırlar Giderler'e ("Diğer Giderler" varsayılan, kullanıcı değiştirebilir) yazılır.
+function GiderXmlModal({ toptancilar, onClose, onSaved, showToast }) {
+  const [dosya, setDosya] = useState(null);
+  const [yukleniyor, setYukleniyor] = useState(false);
+  const [faturalar, setFaturalar] = useState(null);
+  const [kaydediliyor, setKaydediliyor] = useState(false);
+
+  function dosyaSec(e) {
+    const f = e.target.files?.[0];
+    if (f) setDosya(f);
+  }
+
+  async function parseEt() {
+    if (!dosya) return;
+    setYukleniyor(true);
+    try {
+      const buf = await dosya.arrayBuffer();
+      const b64 = btoa(new Uint8Array(buf).reduce((s, b) => s + String.fromCharCode(b), ''));
+      const res = await fetch('/api/muhasebe?resource=xmlParse', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zipBase64: b64 }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'parse failed');
+      setFaturalar((json.faturalar || []).map((f) => ({ ...f, secilenKategori: 'Diğer Giderler', dahil: !f.mukerrer })));
+    } catch (err) {
+      showToast('XML okunamadı: ' + err.message);
+    } finally {
+      setYukleniyor(false);
+    }
+  }
+
+  function toptanciEslesenBul(tedarikciAdi) {
+    const norm = (tedarikciAdi || '').trim().toLocaleLowerCase('tr-TR');
+    return toptancilar.find((t) => t.firmaAdi.trim().toLocaleLowerCase('tr-TR') === norm);
+  }
+
+  async function tumunuKaydet() {
+    setKaydediliyor(true);
+    try {
+      const dahilOlanlar = (faturalar || []).filter((f) => f.dahil);
+      for (const f of dahilOlanlar) {
+        const eslesen = toptanciEslesenBul(f.tedarikciAdi);
+        await fetch('/api/muhasebe?resource=giderler', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tarih: f.tarih ? f.tarih.split('-').reverse().join('.') : bugunISO(),
+            kategori: f.secilenKategori, tedarikciAciklama: f.tedarikciAdi,
+            tutar: f.toplamKdvDahil || 0, odemeDurumu: 'Ödeme Bekliyor',
+            belgeNo: f.faturaNo, toptanciId: eslesen ? eslesen.id : '',
+          }),
+        });
+      }
+      onSaved();
+    } catch {
+      showToast('Kaydetme sırasında hata oluştu');
+    } finally {
+      setKaydediliyor(false);
+    }
+  }
+
+  return (
+    <div className="mh-drawer-overlay" onClick={onClose}>
+      <div className="mh-modal-wide" onClick={(e) => e.stopPropagation()}>
+        <div className="mh-drawer-head">
+          <span>XML Fatura Yükle</span>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="mh-drawer-body">
+          {!faturalar ? (
+            <>
+              <input type="file" accept=".zip" onChange={dosyaSec} />
+              <button className="mh-primary-btn" style={{ marginTop: 14 }} disabled={!dosya || yukleniyor} onClick={parseEt}>
+                {yukleniyor ? 'Okunuyor...' : 'Zip Dosyasını Oku'}
+              </button>
+            </>
+          ) : (
+            <>
+              {faturalar.map((f, idx) => (
+                <div key={idx} className={`mh-xml-fatura-card ${f.mukerrer ? 'mukerrer' : ''}`}>
+                  <div className="mh-xml-fatura-head">
+                    <label className="mh-field-checkbox">
+                      <input type="checkbox" checked={f.dahil} onChange={(e) => {
+                        setFaturalar((prev) => prev.map((x, i) => i === idx ? { ...x, dahil: e.target.checked } : x));
+                      }} />
+                      <strong>{f.tedarikciAdi}</strong>
+                    </label>
+                    <span>{TL(f.toplamKdvDahil)}</span>
+                  </div>
+                  {f.mukerrer && <div className="mh-mukerrer-uyari">⚠️ Bu fatura daha önce {f.oncekiGorulmeTarihi} tarihinde yüklenmiş, mükerrer olabilir.</div>}
+                  <div className="mh-field">
+                    <label>Kategori</label>
+                    <select value={f.secilenKategori} onChange={(e) => {
+                      setFaturalar((prev) => prev.map((x, i) => i === idx ? { ...x, secilenKategori: e.target.value } : x));
+                    }}>
+                      {GIDER_KATEGORILERI.map((k) => <option key={k} value={k}>{k}</option>)}
+                    </select>
+                  </div>
+                </div>
+              ))}
+              <button className="mh-primary-btn" style={{ marginTop: 10 }} disabled={kaydediliyor} onClick={tumunuKaydet}>
+                {kaydediliyor ? 'Kaydediliyor...' : 'Seçilenleri Giderlere Kaydet'}
+              </button>
             </>
           )}
         </div>
@@ -934,11 +516,808 @@ function FaturaDetaySekmesi({ showToast }) {
   );
 }
 
-// ================== REÇETELER ==================
-// Ürün listesi Supabase'ten (products) geliyor — mevcut ürün havuzu, elle yazılmıyor.
-// Maliyet/reçete hesabı Sheets'ten (api/recete.js) geliyor. Satış anındaki maliyet snapshot'ı
-// (sold_items.unit_cost_at_sale/total_cost_at_sale) Supabase'de — bu ekran onu göstermiyor,
-// sadece GÜNCEL maliyeti gösterip yeni reçete tanımlamaya yarıyor.
+// ================== 2) GELİRLER / SATIŞLAR ==================
+function GelirlerSekmesi({ showToast }) {
+  const [kayitlar, setKayitlar] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [kategoriFiltre, setKategoriFiltre] = useState('tumu');
+  const [tarihFiltre, setTarihFiltre] = useState('buAy');
+  const [drawerAcik, setDrawerAcik] = useState(false);
+
+  async function yukle() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=gelirler');
+      const json = await res.json();
+      setKayitlar(json.records || []);
+    } catch {
+      showToast('Gelirler yüklenemedi');
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { yukle(); }, []);
+
+  const filtreli = useMemo(() => {
+    return kayitlar
+      .filter((k) => kategoriFiltre === 'tumu' || k.kategori === kategoriFiltre)
+      .filter((k) => tarihAraliktaMi(k.tarih, tarihFiltre))
+      .sort((a, b) => (trTarihiCoz(b.tarih)?.getTime() || 0) - (trTarihiCoz(a.tarih)?.getTime() || 0));
+  }, [kayitlar, kategoriFiltre, tarihFiltre]);
+
+  const kpi = useMemo(() => {
+    const buAyKayitlar = kayitlar.filter((k) => tarihAraliktaMi(k.tarih, 'buAy'));
+    const toplamResmi = buAyKayitlar.reduce((s, k) => s + k.tutar, 0);
+    const kurumsalBekleyen = buAyKayitlar
+      .filter((k) => k.kategori === 'Kurumsal Satış / Catering Faturası' && k.tahsilatDurumu === 'Tahsilat Bekliyor')
+      .reduce((s, k) => s + k.tutar, 0);
+    const yemekKartiBekleyen = buAyKayitlar
+      .filter((k) => k.kategori === 'Yemek Kartı Şirket Faturası' && k.tahsilatDurumu === 'Tahsilat Bekliyor')
+      .reduce((s, k) => s + k.tutar, 0);
+    return { toplamResmi, kurumsalBekleyen, yemekKartiBekleyen };
+  }, [kayitlar]);
+
+  const dipToplam = useMemo(() => filtreli.reduce((s, k) => s + k.tutar, 0), [filtreli]);
+
+  async function tahsilEt(kayit) {
+    try {
+      await fetch('/api/muhasebe?resource=gelirler', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: kayit.id, tahsilatDurumu: 'Tahsil Edildi' }),
+      });
+      setKayitlar((prev) => prev.map((k) => (k.id === kayit.id ? { ...k, tahsilatDurumu: 'Tahsil Edildi' } : k)));
+      showToast('Tahsil edildi olarak işaretlendi');
+    } catch {
+      showToast('Güncellenemedi');
+    }
+  }
+
+  return (
+    <div className="mh-yeni">
+      <div className="mh-kpi-row">
+        <div className="mh-kpi-card">
+          <span className="mh-kpi-label">Bu Ay Kesilen Resmi Faturalar</span>
+          <span className="mh-kpi-value">{TL(kpi.toplamResmi)}</span>
+        </div>
+        <div className="mh-kpi-card mh-kpi-warning">
+          <span className="mh-kpi-label">Tahsil Edilecek Kurumsal Alacaklar</span>
+          <span className="mh-kpi-value">{TL(kpi.kurumsalBekleyen)}</span>
+        </div>
+        <div className="mh-kpi-card mh-kpi-warning">
+          <span className="mh-kpi-label">Yemek Kartı Bekleyen Tahsilat</span>
+          <span className="mh-kpi-value">{TL(kpi.yemekKartiBekleyen)}</span>
+        </div>
+      </div>
+
+      <div className="mh-filter-bar">
+        <div className="mh-filter-pills">
+          <button className={kategoriFiltre === 'tumu' ? 'active' : ''} onClick={() => setKategoriFiltre('tumu')}>Tümü</button>
+          {GELIR_KATEGORILERI.map((k) => (
+            <button key={k} className={kategoriFiltre === k ? 'active' : ''} onClick={() => setKategoriFiltre(k)}>{k}</button>
+          ))}
+        </div>
+        <div className="mh-filter-right">
+          <div className="mh-date-pills">
+            <button className={tarihFiltre === 'buAy' ? 'active' : ''} onClick={() => setTarihFiltre('buAy')}>Bu Ay</button>
+            <button className={tarihFiltre === 'gecenAy' ? 'active' : ''} onClick={() => setTarihFiltre('gecenAy')}>Geçen Ay</button>
+            <button className={tarihFiltre === 'tumu' ? 'active' : ''} onClick={() => setTarihFiltre('tumu')}>Tümü</button>
+          </div>
+          <button className="mh-primary-btn" onClick={() => setDrawerAcik(true)}><Plus size={15} /> Yeni Satış Faturası Ekle</button>
+        </div>
+      </div>
+
+      <div className="mh-table-card">
+        {loading ? (
+          <p className="mh-empty">Yükleniyor...</p>
+        ) : filtreli.length === 0 ? (
+          <p className="mh-empty">Bu filtrede kayıt yok.</p>
+        ) : (
+          <table className="mh-excel-table">
+            <thead>
+              <tr>
+                <th>Tarih</th><th>Kategori</th><th>Müşteri / Firma Adı</th><th>Fatura No</th><th>Tutar (TL)</th><th>Vade / Durum</th><th>İşlem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtreli.map((k) => (
+                <tr key={k.id}>
+                  <td>{k.tarih}</td>
+                  <td><span className="mh-badge mh-badge-mor">{k.kategori}</span></td>
+                  <td>{k.musteriFirma}</td>
+                  <td>{k.faturaNo || '-'}</td>
+                  <td className="mh-tutar-cell">{TL(k.tutar)}</td>
+                  <td>
+                    {k.tahsilatDurumu === 'Tahsilat Bekliyor'
+                      ? <span className="mh-durum mh-durum-kirmizi">🔴 Tahsilat Bekliyor{k.vadeTarihi ? ` (Vade: ${k.vadeTarihi})` : ''}</span>
+                      : <span className="mh-durum mh-durum-yesil">🟢 Tahsil Edildi</span>}
+                  </td>
+                  <td>
+                    {k.tahsilatDurumu === 'Tahsilat Bekliyor'
+                      ? <button className="mh-mini-btn" onClick={() => tahsilEt(k)}>Tahsil Et</button>
+                      : <button className="mh-mini-btn mh-mini-btn-ghost">⋮</button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={4}>Toplam</td>
+                <td className="mh-tutar-cell">{TL(dipToplam)}</td>
+                <td colSpan={2}></td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+
+      {drawerAcik && (
+        <GelirDrawer
+          onClose={() => setDrawerAcik(false)}
+          onSaved={(rec) => { setKayitlar((prev) => [rec, ...prev]); setDrawerAcik(false); showToast('Gelir faturası kaydedildi'); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function GelirDrawer({ onClose, onSaved }) {
+  const [form, setForm] = useState({
+    kategori: '', musteriFirma: '', faturaNo: '', tutar: '', kdvOrani: '%20',
+    tarih: bugunISO(), vadeTarihi: '', tahsilatDurumu: 'Tahsilat Bekliyor',
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function kaydet() {
+    if (!form.kategori || !form.musteriFirma || !form.tutar) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=gelirler', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tarih: form.tarih, kategori: form.kategori, musteriFirma: form.musteriFirma,
+          faturaNo: form.faturaNo, tutar: ondalikParse(form.tutar), kdvOrani: form.kdvOrani,
+          vadeTarihi: form.vadeTarihi, tahsilatDurumu: form.tahsilatDurumu,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'save failed');
+      onSaved(json.record);
+    } catch {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mh-drawer-overlay" onClick={onClose}>
+      <div className="mh-drawer" onClick={(e) => e.stopPropagation()}>
+        <div className="mh-drawer-head">
+          <span>Yeni Satış Faturası Ekle</span>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="mh-drawer-body mh-drawer-2col">
+          <div className="mh-field">
+            <label>Müşteri / Cari</label>
+            <input className="mh-tabbable" value={form.musteriFirma} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false"
+              onChange={(e) => setForm((p) => ({ ...p, musteriFirma: e.target.value }))} onKeyDown={handleTabEnter} />
+          </div>
+          <div className="mh-field">
+            <label>Kategori</label>
+            <select className="mh-tabbable" value={form.kategori} onChange={(e) => setForm((p) => ({ ...p, kategori: e.target.value }))} onKeyDown={handleTabEnter}>
+              <option value="">Seçiniz</option>
+              {GELIR_KATEGORILERI.map((k) => <option key={k} value={k}>{k}</option>)}
+            </select>
+          </div>
+          <div className="mh-field">
+            <label>Fatura / Belge No</label>
+            <input className="mh-tabbable" value={form.faturaNo} onChange={(e) => setForm((p) => ({ ...p, faturaNo: e.target.value }))} onKeyDown={handleTabEnter} />
+          </div>
+          <div className="mh-field">
+            <label>Toplam Tutar (TL)</label>
+            <input className="mh-tabbable" value={form.tutar} onChange={(e) => setForm((p) => ({ ...p, tutar: e.target.value }))} onKeyDown={handleTabEnter} inputMode="decimal" />
+          </div>
+          <div className="mh-field">
+            <label>KDV Oranı</label>
+            <select className="mh-tabbable" value={form.kdvOrani} onChange={(e) => setForm((p) => ({ ...p, kdvOrani: e.target.value }))} onKeyDown={handleTabEnter}>
+              <option value="%1">%1</option><option value="%10">%10</option><option value="%20">%20</option>
+            </select>
+          </div>
+          <div className="mh-field">
+            <label>Fatura Tarihi</label>
+            <input className="mh-tabbable" type="date" onChange={(e) => {
+              const [y, m, d] = e.target.value.split('-');
+              setForm((p) => ({ ...p, tarih: `${d}.${m}.${y}` }));
+            }} onKeyDown={handleTabEnter} />
+          </div>
+          <div className="mh-field">
+            <label>Vade Tarihi</label>
+            <input className="mh-tabbable" type="date" onChange={(e) => {
+              if (!e.target.value) return setForm((p) => ({ ...p, vadeTarihi: '' }));
+              const [y, m, d] = e.target.value.split('-');
+              setForm((p) => ({ ...p, vadeTarihi: `${d}.${m}.${y}` }));
+            }} onKeyDown={handleTabEnter} />
+          </div>
+          <div className="mh-field">
+            <label>Tahsilat Durumu</label>
+            <select className="mh-tabbable" value={form.tahsilatDurumu} onChange={(e) => setForm((p) => ({ ...p, tahsilatDurumu: e.target.value }))} onKeyDown={handleTabEnter}>
+              <option value="Tahsilat Bekliyor">Tahsilat Bekliyor</option>
+              <option value="Tahsil Edildi">Tahsil Edildi</option>
+            </select>
+          </div>
+        </div>
+        <div className="mh-drawer-foot">
+          <button className="mh-primary-btn" disabled={saving || !form.kategori || !form.musteriFirma || !form.tutar} onClick={kaydet}>
+            <Check size={15} /> Kaydet
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ================== 3) TOPTANCILAR VE CARİ TAKİBİ ==================
+// Bakiye artık Sheets'teki eski 'Bakiye' sütunundan DEĞİL, Toptancı Hareketleri
+// tablosunun toplamından hesaplanıyor (fatura +, ödeme -). FIFO kapama: ödeme
+// yapıldığında en eski açık faturadan başlanarak borç düşülür (ekstre görünümünde
+// ve dip bakiyede yansır — ayrı bir "kapatma" alanı tutulmuyor, sadece toplamla hesaplanıyor).
+function ToptancilarCariSekmesi({ showToast }) {
+  const [toptancilar, setToptancilar] = useState([]);
+  const [hareketler, setHareketler] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [arama, setArama] = useState('');
+  const [durumFiltre, setDurumFiltre] = useState('tumu');
+  const [odemeDrawerToptanci, setOdemeDrawerToptanci] = useState(null);
+  const [yeniCariModal, setYeniCariModal] = useState(false);
+  const [ekstreToptanci, setEkstreToptanci] = useState(null);
+
+  async function yukle() {
+    setLoading(true);
+    try {
+      const [tRes, hRes] = await Promise.all([
+        fetch('/api/toptancilar'),
+        fetch('/api/muhasebe?resource=toptanciHareket'),
+      ]);
+      const tJson = await tRes.json();
+      const hJson = await hRes.json();
+      setToptancilar(tJson.records || []);
+      setHareketler(hJson.records || []);
+    } catch {
+      showToast('Veriler yüklenemedi');
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { yukle(); }, []);
+
+  // Her toptancı için: toplam fatura, toplam ödeme, bakiye, son işlem tarihi — hareketlerden.
+  const toptanciOzet = useMemo(() => {
+    const map = {};
+    toptancilar.forEach((t) => { map[t.id] = { ...t, toplamFatura: 0, toplamOdenen: 0, bakiye: 0, sonIslemTarihi: null, sonIslemTs: 0 }; });
+    hareketler.forEach((h) => {
+      const rec = map[h.toptanciId];
+      if (!rec) return;
+      if (h.tur === 'fatura') rec.toplamFatura += h.tutar;
+      if (h.tur === 'odeme') rec.toplamOdenen += h.tutar;
+      const ts = trTarihiCoz(h.tarih)?.getTime() || 0;
+      if (ts >= rec.sonIslemTs) { rec.sonIslemTs = ts; rec.sonIslemTarihi = h.tarih; }
+    });
+    Object.values(map).forEach((rec) => { rec.bakiye = Math.round((rec.toplamFatura - rec.toplamOdenen) * 100) / 100; });
+    return Object.values(map);
+  }, [toptancilar, hareketler]);
+
+  const filtreli = useMemo(() => {
+    const q = arama.trim().toLocaleLowerCase('tr-TR');
+    return toptanciOzet
+      .filter((t) => !q || t.firmaAdi.toLocaleLowerCase('tr-TR').includes(q))
+      .filter((t) => {
+        if (durumFiltre === 'borclu') return t.bakiye > 0.01;
+        if (durumFiltre === 'alacakli') return t.bakiye < -0.01;
+        if (durumFiltre === 'sifir') return Math.abs(t.bakiye) <= 0.01;
+        return true;
+      })
+      .sort((a, b) => b.sonIslemTs - a.sonIslemTs);
+  }, [toptanciOzet, arama, durumFiltre]);
+
+  const kpi = useMemo(() => {
+    const toplamBorc = toptanciOzet.reduce((s, t) => s + Math.max(0, t.bakiye), 0);
+    const now = new Date();
+    const buAyOdemeler = hareketler.filter((h) => h.tur === 'odeme' && tarihAraliktaMi(h.tarih, 'buAy'));
+    const buAyToplamOdeme = buAyOdemeler.reduce((s, h) => s + h.tutar, 0);
+    // Vadesi geçen: bu KPI için basit tanım — bakiyesi pozitif olan toptancıların toplamı
+    // (Sheets'te vade tarihi tutulmuyor, gider kayıtlarındaki "Ödeme Bekliyor" olanlardan geçmiş tarihliler baz alınabilir — şimdilik toplam borç ile aynı gösteriliyor, ileride vade alanı eklenirse ayrıştırılır).
+    return { toplamBorc, buAyToplamOdeme };
+  }, [toptanciOzet, hareketler]);
+
+  return (
+    <div className="mh-yeni">
+      <div className="mh-kpi-row">
+        <div className="mh-kpi-card mh-kpi-danger">
+          <span className="mh-kpi-label">Toplam Toptancı Borcu</span>
+          <span className="mh-kpi-value">{TL(kpi.toplamBorc)}</span>
+        </div>
+        <div className="mh-kpi-card mh-kpi-warning">
+          <span className="mh-kpi-label">Vadesi Geçen Borçlar</span>
+          <span className="mh-kpi-value">{TL(kpi.toplamBorc)}</span>
+        </div>
+        <div className="mh-kpi-card">
+          <span className="mh-kpi-label">Bu Ay Yapılan Toplam Ödeme</span>
+          <span className="mh-kpi-value">{TL(kpi.buAyToplamOdeme)}</span>
+        </div>
+      </div>
+
+      <div className="mh-filter-bar">
+        <div className="mh-filter-left-search">
+          <Search size={15} />
+          <input placeholder="Tedarikçi / Firma Ara..." value={arama} onChange={(e) => setArama(e.target.value)} />
+        </div>
+        <div className="mh-filter-pills">
+          <button className={durumFiltre === 'tumu' ? 'active' : ''} onClick={() => setDurumFiltre('tumu')}>Tümü</button>
+          <button className={durumFiltre === 'borclu' ? 'active' : ''} onClick={() => setDurumFiltre('borclu')}>🔴 Borcumuz Olanlar</button>
+          <button className={durumFiltre === 'alacakli' ? 'active' : ''} onClick={() => setDurumFiltre('alacakli')}>🟢 Alacaklı Olduklarımız</button>
+          <button className={durumFiltre === 'sifir' ? 'active' : ''} onClick={() => setDurumFiltre('sifir')}>⚪ Bakiyesi Sıfır</button>
+        </div>
+        <div className="mh-filter-right">
+          <button className="mh-primary-btn" onClick={() => setOdemeDrawerToptanci({})}><Plus size={15} /> Ödeme / Tahsilat Yap</button>
+          <button className="mh-secondary-btn" onClick={() => setYeniCariModal(true)}><Users size={15} /> Yeni Cari Kartı Aç</button>
+        </div>
+      </div>
+
+      <div className="mh-table-card">
+        {loading ? (
+          <p className="mh-empty">Yükleniyor...</p>
+        ) : filtreli.length === 0 ? (
+          <p className="mh-empty">Kayıt bulunamadı.</p>
+        ) : (
+          <table className="mh-excel-table">
+            <thead>
+              <tr>
+                <th>Tedarikçi / Firma Adı</th><th>Ana Harcama Grubu</th><th>Son İşlem Tarihi</th>
+                <th>Toplam Fatura</th><th>Toplam Ödenen</th><th>Güncel Bakiye (Borç)</th><th>İşlem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtreli.map((t) => (
+                <tr key={t.id}>
+                  <td><strong>{t.firmaAdi}</strong></td>
+                  <td>{t.kategori || '-'}</td>
+                  <td>{t.sonIslemTarihi || '-'}</td>
+                  <td className="mh-tutar-cell">{TL(t.toplamFatura)}</td>
+                  <td className="mh-tutar-cell">{TL(t.toplamOdenen)}</td>
+                  <td className="mh-tutar-cell">
+                    {Math.abs(t.bakiye) <= 0.01
+                      ? <span className="mh-durum mh-durum-notr">⚪ {TL(0)}</span>
+                      : t.bakiye > 0
+                        ? <span className="mh-durum mh-durum-kirmizi">🔴 {TL(t.bakiye)}</span>
+                        : <span className="mh-durum mh-durum-yesil">🟢 {TL(Math.abs(t.bakiye))}</span>}
+                  </td>
+                  <td className="mh-islem-cell">
+                    <button className="mh-mini-btn" onClick={() => setOdemeDrawerToptanci(t)}>Ödeme Yap</button>
+                    <button className="mh-mini-btn mh-mini-btn-ghost" onClick={() => setEkstreToptanci(t)}>Ekstre</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={5}>Genel Bakiye Toplamı</td>
+                <td className="mh-tutar-cell">{TL(filtreli.reduce((s, t) => s + t.bakiye, 0))}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+
+      {odemeDrawerToptanci && (
+        <ToptanciOdemeDrawer
+          toptancilar={toptancilar}
+          secili={odemeDrawerToptanci}
+          onClose={() => setOdemeDrawerToptanci(null)}
+          onSaved={(rec) => { setHareketler((prev) => [rec, ...prev]); setOdemeDrawerToptanci(null); showToast('Ödeme kaydedildi'); }}
+        />
+      )}
+
+      {yeniCariModal && (
+        <YeniToptanciModal
+          onClose={() => setYeniCariModal(false)}
+          onSaved={(rec) => { setToptancilar((prev) => [...prev, rec]); setYeniCariModal(false); showToast('Cari kartı açıldı'); }}
+        />
+      )}
+
+      {ekstreToptanci && (
+        <ToptanciEkstreModal
+          toptanci={ekstreToptanci}
+          hareketler={hareketler.filter((h) => h.toptanciId === ekstreToptanci.id).sort((a, b) => (trTarihiCoz(a.tarih)?.getTime() || 0) - (trTarihiCoz(b.tarih)?.getTime() || 0))}
+          onClose={() => setEkstreToptanci(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ToptanciOdemeDrawer({ toptancilar, secili, onClose, onSaved }) {
+  const [toptanciId, setToptanciId] = useState(secili.id || '');
+  const [tutar, setTutar] = useState('');
+  const [odemeYontemi, setOdemeYontemi] = useState('Banka Havalesi / EFT');
+  const [tarih, setTarih] = useState(bugunISO());
+  const [aciklama, setAciklama] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function kaydet() {
+    if (!toptanciId || !tutar) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=toptanciHareket', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toptanciId, tarih, tutar: ondalikParse(tutar), odemeYontemi, aciklama }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'save failed');
+      onSaved(json.record);
+    } catch {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mh-drawer-overlay" onClick={onClose}>
+      <div className="mh-drawer" onClick={(e) => e.stopPropagation()}>
+        <div className="mh-drawer-head">
+          <span>Ödeme / Tahsilat Yap</span>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="mh-drawer-body">
+          <div className="mh-field">
+            <label>Firma</label>
+            <select className="mh-tabbable" value={toptanciId} onChange={(e) => setToptanciId(e.target.value)} onKeyDown={handleTabEnter}>
+              <option value="">Seçiniz</option>
+              {toptancilar.map((t) => <option key={t.id} value={t.id}>{t.firmaAdi}</option>)}
+            </select>
+          </div>
+          <div className="mh-field">
+            <label>Ödeme Tutarı (TL)</label>
+            <input className="mh-tabbable" value={tutar} onChange={(e) => setTutar(e.target.value)} onKeyDown={handleTabEnter} inputMode="decimal" />
+          </div>
+          <div className="mh-field">
+            <label>Ödeme Yöntemi</label>
+            <select className="mh-tabbable" value={odemeYontemi} onChange={(e) => setOdemeYontemi(e.target.value)} onKeyDown={handleTabEnter}>
+              <option>Banka Havalesi / EFT</option><option>Nakit (Kasa)</option><option>Kredi Kartı</option>
+            </select>
+          </div>
+          <div className="mh-field">
+            <label>Tarih</label>
+            <input className="mh-tabbable" type="date" onChange={(e) => {
+              const [y, m, d] = e.target.value.split('-');
+              setTarih(`${d}.${m}.${y}`);
+            }} onKeyDown={handleTabEnter} />
+          </div>
+          <div className="mh-field">
+            <label>Açıklama / Dekont No</label>
+            <input className="mh-tabbable" value={aciklama} onChange={(e) => setAciklama(e.target.value)} onKeyDown={handleTabEnter} />
+          </div>
+        </div>
+        <div className="mh-drawer-foot">
+          <button className="mh-primary-btn" disabled={saving || !toptanciId || !tutar} onClick={kaydet}>
+            <Check size={15} /> Kaydet
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function YeniToptanciModal({ onClose, onSaved }) {
+  const [form, setForm] = useState({ firmaAdi: '', kategori: '', telefon: '', yetkiliKisi: '', adres: '', not: '' });
+  const [saving, setSaving] = useState(false);
+
+  async function kaydet() {
+    if (!form.firmaAdi.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/toptancilar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'save failed');
+      onSaved(json.record);
+    } catch {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mh-drawer-overlay" onClick={onClose}>
+      <div className="mh-drawer" onClick={(e) => e.stopPropagation()}>
+        <div className="mh-drawer-head">
+          <span>Yeni Cari Kartı Aç</span>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="mh-drawer-body">
+          <div className="mh-field">
+            <label>Firma Adı</label>
+            <input className="mh-tabbable" autoFocus value={form.firmaAdi} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false"
+              onChange={(e) => setForm((p) => ({ ...p, firmaAdi: e.target.value }))} onKeyDown={handleTabEnter} />
+          </div>
+          <div className="mh-field">
+            <label>Ana Harcama Grubu</label>
+            <input className="mh-tabbable" value={form.kategori} placeholder="örn. Tavuk Alışı"
+              onChange={(e) => setForm((p) => ({ ...p, kategori: e.target.value }))} onKeyDown={handleTabEnter} />
+          </div>
+          <div className="mh-field">
+            <label>Telefon</label>
+            <input className="mh-tabbable" value={form.telefon} onChange={(e) => setForm((p) => ({ ...p, telefon: e.target.value }))} onKeyDown={handleTabEnter} />
+          </div>
+          <div className="mh-field">
+            <label>Yetkili Kişi</label>
+            <input className="mh-tabbable" value={form.yetkiliKisi} onChange={(e) => setForm((p) => ({ ...p, yetkiliKisi: e.target.value }))} onKeyDown={handleTabEnter} />
+          </div>
+          <div className="mh-field">
+            <label>Adres</label>
+            <textarea className="mh-tabbable" value={form.adres} onChange={(e) => setForm((p) => ({ ...p, adres: e.target.value }))} onKeyDown={handleTabEnter} />
+          </div>
+          <div className="mh-field">
+            <label>Not</label>
+            <textarea className="mh-tabbable" value={form.not} onChange={(e) => setForm((p) => ({ ...p, not: e.target.value }))} onKeyDown={handleTabEnter} />
+          </div>
+        </div>
+        <div className="mh-drawer-foot">
+          <button className="mh-primary-btn" disabled={saving || !form.firmaAdi.trim()} onClick={kaydet}>
+            <Check size={15} /> Kaydet
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ToptanciEkstreModal({ toptanci, hareketler, onClose }) {
+  let kosuBakiye = 0;
+  return (
+    <div className="mh-drawer-overlay" onClick={onClose}>
+      <div className="mh-modal-wide" onClick={(e) => e.stopPropagation()}>
+        <div className="mh-drawer-head">
+          <span>{toptanci.firmaAdi} — Hesap Ekstresi</span>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="mh-drawer-body">
+          {hareketler.length === 0 ? (
+            <p className="mh-empty">Hiç hareket yok.</p>
+          ) : (
+            <table className="mh-excel-table">
+              <thead><tr><th>Tarih</th><th>Tür</th><th>Açıklama</th><th>Tutar</th><th>Bakiye</th></tr></thead>
+              <tbody>
+                {hareketler.map((h) => {
+                  kosuBakiye += h.tur === 'fatura' ? h.tutar : -h.tutar;
+                  return (
+                    <tr key={h.id}>
+                      <td>{h.tarih}</td>
+                      <td>{h.tur === 'fatura' ? 'Fatura (+)' : 'Ödeme (-)'}</td>
+                      <td>{h.aciklama || '-'}</td>
+                      <td className="mh-tutar-cell">{h.tur === 'fatura' ? TL(h.tutar) : `-${TL(h.tutar)}`}</td>
+                      <td className="mh-tutar-cell">{TL(kosuBakiye)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ================== 4) ORTAKLAR CARİ TAKİP ==================
+// Bu sayfaya girilen hiçbir işlem dükkanın operasyonel P&L'ini etkilemez — ayrı defter.
+// yon='cekim': ortağa ödendi/şahsi çekim -> borcu (bize olan) artar, bakiye azalır.
+// yon='yatirim': ortak dükkana cepten ödedi/sermaye ekledi -> alacağı artar, bakiye artar.
+function OrtaklarCariSekmesi({ showToast }) {
+  const [hareketler, setHareketler] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [ortakFiltre, setOrtakFiltre] = useState('tumu');
+  const [drawerAcik, setDrawerAcik] = useState(false);
+
+  async function yukle() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=ortakHareket');
+      const json = await res.json();
+      setHareketler(json.records || []);
+    } catch {
+      showToast('Ortak hareketleri yüklenemedi');
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { yukle(); }, []);
+
+  // Her ortak için kronolojik bakiye: yatirim +, cekim -.
+  const ortakBakiye = useMemo(() => {
+    const map = {};
+    ORTAKLAR.forEach((o) => { map[o] = { ad: o, bakiye: 0, sonIslem: null, sonIslemTs: 0 }; });
+    const kronolojik = [...hareketler].sort((a, b) => (trTarihiCoz(a.tarih)?.getTime() || 0) - (trTarihiCoz(b.tarih)?.getTime() || 0));
+    kronolojik.forEach((h) => {
+      const rec = map[h.ortakAdi];
+      if (!rec) return;
+      rec.bakiye += h.yon === 'yatirim' ? h.tutar : -h.tutar;
+      const ts = trTarihiCoz(h.tarih)?.getTime() || 0;
+      if (ts >= rec.sonIslemTs) { rec.sonIslemTs = ts; rec.sonIslem = h; }
+    });
+    return map;
+  }, [hareketler]);
+
+  const filtreliHareketler = useMemo(() => {
+    return hareketler
+      .filter((h) => ortakFiltre === 'tumu' || h.ortakAdi === ortakFiltre)
+      .sort((a, b) => (trTarihiCoz(b.tarih)?.getTime() || 0) - (trTarihiCoz(a.tarih)?.getTime() || 0));
+  }, [hareketler, ortakFiltre]);
+
+  function dekontGonder(h) {
+    const bakiye = ortakBakiye[h.ortakAdi]?.bakiye || 0;
+    const metin = `🧾 *PERPA SANDVİÇ - İÇ KASA DEKONTU*\n🗓 *Tarih:* ${h.tarih}\n👤 *Ortak:* ${h.ortakAdi}\n📝 *İşlem:* ${h.islemTuru}\n💰 *Tutar:* ${TL(h.tutar)}\n📊 *Güncel Alacak Bakiyeniz:* ${TL(bakiye)}`;
+    const url = `https://wa.me/?text=${encodeURIComponent(metin)}`;
+    window.open(url, '_blank');
+  }
+
+  return (
+    <div className="mh-yeni">
+      <div className="mh-kpi-row mh-kpi-row-2">
+        {ORTAKLAR.map((o) => {
+          const rec = ortakBakiye[o];
+          return (
+            <div key={o} className="mh-kpi-card mh-partner-card">
+              <span className="mh-kpi-label">{o}</span>
+              <span className="mh-kpi-value">{TL(rec.bakiye)}</span>
+              <span className={`mh-durum ${rec.bakiye >= 0 ? 'mh-durum-yesil' : 'mh-durum-kirmizi'}`}>
+                {rec.bakiye >= 0 ? '🟢 Alacaklı' : '🔴 Borçlu'}
+              </span>
+              {rec.sonIslem && (
+                <span className="mh-partner-son-islem">Son İşlem: {rec.sonIslem.tarih} - {rec.sonIslem.islemTuru} ({TL(rec.sonIslem.tutar)})</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mh-filter-bar">
+        <div className="mh-filter-pills">
+          <button className={ortakFiltre === 'tumu' ? 'active' : ''} onClick={() => setOrtakFiltre('tumu')}>Tüm İşlemler</button>
+          {ORTAKLAR.map((o) => (
+            <button key={o} className={ortakFiltre === o ? 'active' : ''} onClick={() => setOrtakFiltre(o)}>{o}</button>
+          ))}
+        </div>
+        <div className="mh-filter-right">
+          <button className="mh-primary-btn" onClick={() => setDrawerAcik(true)}><Plus size={15} /> Ortak Hareket / Makbuz Ekle</button>
+        </div>
+      </div>
+
+      <div className="mh-table-card">
+        {loading ? (
+          <p className="mh-empty">Yükleniyor...</p>
+        ) : filtreliHareketler.length === 0 ? (
+          <p className="mh-empty">Kayıt yok.</p>
+        ) : (
+          <table className="mh-excel-table">
+            <thead>
+              <tr>
+                <th>Tarih</th><th>Ortak</th><th>İşlem Türü</th><th>Açıklama</th>
+                <th>Borç / Çekilen</th><th>Alacak / Yatan</th><th>WhatsApp</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtreliHareketler.map((h) => (
+                <tr key={h.id}>
+                  <td>{h.tarih}</td>
+                  <td><strong>{h.ortakAdi}</strong></td>
+                  <td>{h.islemTuru}</td>
+                  <td>{h.aciklama || '-'}</td>
+                  <td className="mh-tutar-cell">{h.yon === 'cekim' ? TL(h.tutar) : '-'}</td>
+                  <td className="mh-tutar-cell">{h.yon === 'yatirim' ? TL(h.tutar) : '-'}</td>
+                  <td>
+                    <button className="mh-mini-btn" onClick={() => dekontGonder(h)}><MessageCircle size={13} /> Dekont Gönder</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {drawerAcik && (
+        <OrtakHareketDrawer
+          onClose={() => setDrawerAcik(false)}
+          onSaved={(rec) => { setHareketler((prev) => [rec, ...prev]); setDrawerAcik(false); showToast('Ortak hareketi kaydedildi'); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function OrtakHareketDrawer({ onClose, onSaved }) {
+  const [ortakAdi, setOrtakAdi] = useState(ORTAKLAR[0]);
+  const [yon, setYon] = useState('cekim');
+  const [islemTuru, setIslemTuru] = useState(ORTAK_ISLEM_TURLERI[0]);
+  const [tutar, setTutar] = useState('');
+  const [kasaBanka, setKasaBanka] = useState('Ana Kasa');
+  const [tarih, setTarih] = useState(bugunISO());
+  const [aciklama, setAciklama] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function kaydet() {
+    if (!ortakAdi || !tutar) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=ortakHareket', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ortakAdi, tarih, islemTuru, yon, tutar: ondalikParse(tutar), kasaBanka, aciklama }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'save failed');
+      onSaved(json.record);
+    } catch {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mh-drawer-overlay" onClick={onClose}>
+      <div className="mh-drawer" onClick={(e) => e.stopPropagation()}>
+        <div className="mh-drawer-head">
+          <span>Ortak Hareket / Makbuz Ekle</span>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="mh-drawer-body">
+          <div className="mh-field">
+            <label>Ortak</label>
+            <select className="mh-tabbable" value={ortakAdi} onChange={(e) => setOrtakAdi(e.target.value)} onKeyDown={handleTabEnter}>
+              {ORTAKLAR.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+          <div className="mh-field">
+            <label>İşlem Yönü</label>
+            <select className="mh-tabbable" value={yon} onChange={(e) => setYon(e.target.value)} onKeyDown={handleTabEnter}>
+              <option value="cekim">Ortağa Ödeme Yapıldı / Şahsi Çekim</option>
+              <option value="yatirim">Ortak Dükkana Para Verdi / Cepten Ödedi</option>
+            </select>
+          </div>
+          <div className="mh-field">
+            <label>İşlem Türü</label>
+            <select className="mh-tabbable" value={islemTuru} onChange={(e) => setIslemTuru(e.target.value)} onKeyDown={handleTabEnter}>
+              {ORTAK_ISLEM_TURLERI.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="mh-field">
+            <label>Tutar (TL)</label>
+            <input className="mh-tabbable" value={tutar} onChange={(e) => setTutar(e.target.value)} onKeyDown={handleTabEnter} inputMode="decimal" />
+          </div>
+          <div className="mh-field">
+            <label>Kasa / Banka</label>
+            <select className="mh-tabbable" value={kasaBanka} onChange={(e) => setKasaBanka(e.target.value)} onKeyDown={handleTabEnter}>
+              <option>Ana Kasa</option><option>Şirket Banka Hesabı</option>
+            </select>
+          </div>
+          <div className="mh-field">
+            <label>Tarih</label>
+            <input className="mh-tabbable" type="date" onChange={(e) => {
+              const [y, m, d] = e.target.value.split('-');
+              setTarih(`${d}.${m}.${y}`);
+            }} onKeyDown={handleTabEnter} />
+          </div>
+          <div className="mh-field">
+            <label>Açıklama</label>
+            <textarea className="mh-tabbable" value={aciklama} onChange={(e) => setAciklama(e.target.value)} onKeyDown={handleTabEnter} />
+          </div>
+        </div>
+        <div className="mh-drawer-foot">
+          <button className="mh-primary-btn" disabled={saving || !ortakAdi || !tutar} onClick={kaydet}>
+            <Check size={15} /> Kaydet
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ReceteSekmesi({ showToast }) {
   const [urunler, setUrunler] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1153,4 +1532,4 @@ function ReceteSekmesi({ showToast }) {
       )}
     </div>
   );
-} 
+}
