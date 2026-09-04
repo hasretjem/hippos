@@ -471,3 +471,5 @@
 
 .mh-modal-xxl { width: 960px; max-width: 96vw; max-height: 92vh; }
 .mh-modal-xxl .mh-drawer-body { padding: 20px; }
+
+.mh-hint { font-size: 11.5px; color: #83786B; font-style: italic; margin: -6px 0 0; }

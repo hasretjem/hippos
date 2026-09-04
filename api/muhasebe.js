@@ -89,20 +89,23 @@ const GELIR_KATEGORILERI = [
   'Diğer Gelirler',
 ];
 
-// Giderler sekmesi — 1. sekme. Her satır tek bir harcama/alış kaydı.
+// Giderler sekmesi — 1. sekme. Her satır tek bir harcama/alış kaydı (XML'den gelen
+// faturalarda kalem bazlı — aynı faturaya ait kalemler ortak FaturaID paylaşır, UI'da
+// bu ID'ye göre TEK satıra gruplanıp gösterilir; kalem detayı ileride ayrı bir sayfada
+// kullanılmak üzere Sheets'te saklanmaya devam eder).
 // toptanciId doluysa bu gider aynı zamanda o toptancının hareket geçmişine
 // borç satırı olarak da düşülür (FIFO bakiye hesabı hareketlerden yapılıyor).
 const GIDER_TAB = {
   tab: 'Giderler',
-  headers: ['ID', 'Tarih', 'Kategori', 'TedarikciAciklama', 'Tutar', 'KdvOrani', 'OdemeDurumu', 'BelgeNo', 'ToptanciID', 'KayitZamani'],
+  headers: ['ID', 'Tarih', 'Kategori', 'TedarikciAciklama', 'Tutar', 'KdvOrani', 'OdemeDurumu', 'BelgeNo', 'ToptanciID', 'KayitZamani', 'FaturaID'],
 };
-const GIDER_LAST_COL = 'J';
+const GIDER_LAST_COL = 'K';
 
 function rowToGider(r) {
   return {
     id: r[0], tarih: r[1] || '', kategori: r[2] || '', tedarikciAciklama: r[3] || '',
     tutar: sayiCoz(r[4]), kdvOrani: r[5] || '', odemeDurumu: r[6] || 'Ödendi',
-    belgeNo: r[7] || '', toptanciId: r[8] || '', kayitZamani: r[9] || '',
+    belgeNo: r[7] || '', toptanciId: r[8] || '', kayitZamani: r[9] || '', faturaId: r[10] || '',
   };
 }
 
@@ -213,6 +216,15 @@ function ondalikParseServer(v) {
   if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
+}
+
+// Türkçe tarih (GG.AA.YYYY) -> Date, FIFO sıralaması için. api/recete.js'teki
+// trTarihiCoz ile aynı mantık, ayrı dosya olduğu için burada da tanımlı.
+function trTarihiCozServer(str) {
+  if (!str) return null;
+  const m = String(str).match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+  if (!m) return null;
+  return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
 }
 
 function sayiCoz(v) {
@@ -651,10 +663,12 @@ export default async function handler(req, res) {
       const toptanciId = eslesenToptanci ? eslesenToptanci[0] : '';
 
       // Her satır kendi kategorisiyle ayrı bir Gider kaydı olur — KDV dahil satır tutarı kullanılır.
+      // Hepsi AYNI faturaId'yi paylaşır — UI'da fatura başına tek satır olarak gruplanıp gösterilir,
+      // kalem detayı (ürün adı vb.) Sheets'te saklı kalır, ileride ayrı bir sayfada kullanılabilir.
       const giderSatirlari = satirlar.map((s) => {
         const id = benzersizId();
         const tutar = Math.round((Number(s.satirTutari) || 0) * 100) / 100;
-        return [id, kayitTarih, s.kategori || 'Diğer Giderler', `${tedarikciAdi} — ${s.urunAdi || ''}`, tutar, s.kdvOrani ? `%${s.kdvOrani}` : '', 'Ödeme Bekliyor', faturaNo, toptanciId, kayitZamani];
+        return [id, kayitTarih, s.kategori || 'Diğer Giderler', `${tedarikciAdi} — ${s.urunAdi || ''}`, tutar, s.kdvOrani ? `%${s.kdvOrani}` : '', 'Ödeme Bekliyor', faturaNo, toptanciId, kayitZamani, faturaId];
       });
       if (giderSatirlari.length) {
         await ensureTab(sheets, GIDER_TAB.tab, GIDER_TAB.headers);
@@ -777,7 +791,9 @@ export default async function handler(req, res) {
         const kayitTarih = tarih || now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
         const kayitZamani = now.toISOString();
         const tutarNum = ondalikParseServer(tutar);
-        const rowValues = [id, kayitTarih, kategori, tedarikciAciklama || '', tutarNum, kdvOrani || '', odemeDurumu || 'Ödendi', belgeNo || '', toptanciId || '', kayitZamani];
+        // Manuel eklenen gider tek kalemlik kendi faturası gibi davranır — faturaId = kendi id'si,
+        // böylece UI'daki fatura-bazlı gruplama (XML'den gelen çok kalemli faturalarla) tutarlı çalışır.
+        const rowValues = [id, kayitTarih, kategori, tedarikciAciklama || '', tutarNum, kdvOrani || '', odemeDurumu || 'Ödendi', belgeNo || '', toptanciId || '', kayitZamani, id];
         await appendRow(sheets, GIDER_TAB, rowValues);
 
         // Toptancı seçildiyse hareket defterine borç (fatura) satırı düş — FIFO bakiye buradan hesaplanır.
@@ -796,12 +812,29 @@ export default async function handler(req, res) {
         if (idx === -1) return res.status(404).json({ error: 'kayıt bulunamadı' });
         const mevcut = rowToGider(rows[idx]);
         const merged = { ...mevcut, ...patch };
-        const rowValues = [merged.id, merged.tarih, merged.kategori, merged.tedarikciAciklama, merged.tutar, merged.kdvOrani, merged.odemeDurumu, merged.belgeNo, merged.toptanciId, merged.kayitZamani];
+        const rowValues = [merged.id, merged.tarih, merged.kategori, merged.tedarikciAciklama, merged.tutar, merged.kdvOrani, merged.odemeDurumu, merged.belgeNo, merged.toptanciId, merged.kayitZamani, merged.faturaId];
         await sheets.spreadsheets.values.update({
           spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A${idx + 2}:${GIDER_LAST_COL}${idx + 2}`,
           valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
         });
         return res.status(200).json({ ok: true, record: rowToGider(rowValues) });
+      }
+      // Toplu güncelleme — aynı faturaId'ye ait TÜM satırların ödeme durumunu birlikte değiştirir
+      // (Toptancılar sekmesinden "Ödeme Yap" sonrası, ya da manuel toplu işaretleme için).
+      if (req.method === 'PATCH') {
+        const { faturaId, odemeDurumu } = req.body || {};
+        if (!faturaId || !odemeDurumu) return res.status(400).json({ error: 'faturaId ve odemeDurumu gerekli' });
+        const rows = await getRows(sheets, GIDER_TAB);
+        const eslesenIdx = rows.map((r, i) => ({ r, i })).filter(({ r }) => r[10] === faturaId);
+        for (const { r, i } of eslesenIdx) {
+          const rowValues = [...r];
+          rowValues[6] = odemeDurumu;
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A${i + 2}:${GIDER_LAST_COL}${i + 2}`,
+            valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
+          });
+        }
+        return res.status(200).json({ ok: true, guncellenen: eslesenIdx.length });
       }
       return res.status(405).json({ error: 'Method not allowed' });
     }
@@ -851,7 +884,10 @@ export default async function handler(req, res) {
         if (req.query.toptanciId) records = records.filter((r) => r.toptanciId === req.query.toptanciId);
         return res.status(200).json({ records });
       }
-      // Manuel ödeme kaydı — 'odeme' türünde, tutar borcu azaltır (FIFO kapama hesabı frontend'de/toplamda yapılır).
+      // Manuel ödeme kaydı — 'odeme' türünde, tutar borcu azaltır. FIFO kapama: bu toptancının
+      // Giderler'deki "Ödeme Bekliyor" faturaları (faturaId bazında gruplu) tarihe göre en eskiden
+      // başlanarak, ödenen tutar tükenene kadar "Ödendi" işaretlenir — kısmi ödeme, son kapanan
+      // faturanın kısmen ödenmiş kalmasına neden olabilir (bir sonraki ödemede devam eder).
       if (req.method === 'POST') {
         const { toptanciId, tarih, tutar, odemeYontemi, aciklama } = req.body || {};
         if (!toptanciId || tutar === undefined || tutar === null || tutar === '') {
@@ -861,9 +897,42 @@ export default async function handler(req, res) {
         const now = new Date();
         const kayitTarih = tarih || now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
         const kayitZamani = now.toISOString();
-        const rowValues = [id, toptanciId, kayitTarih, 'odeme', ondalikParseServer(tutar), aciklama || '', '', odemeYontemi || '', kayitZamani];
+        const odemeTutari = ondalikParseServer(tutar);
+        const rowValues = [id, toptanciId, kayitTarih, 'odeme', odemeTutari, aciklama || '', '', odemeYontemi || '', kayitZamani];
         await appendRow(sheets, TOPTANCI_HAREKET_TAB, rowValues);
-        return res.status(200).json({ ok: true, record: rowToToptanciHareket(rowValues) });
+
+        // FIFO kapama — bu toptancının Giderler'deki bekleyen faturalarını (faturaId bazında
+        // gruplu tutar) tarihe göre eskiden yeniye sırala, ödenen tutar tükenene kadar "Ödendi" yap.
+        const giderRows = await getRows(sheets, GIDER_TAB);
+        const bekleyenFaturalar = {}; // faturaId -> { tutar, satirIdxleri: [], tarih }
+        giderRows.forEach((r, i) => {
+          if (r[8] !== toptanciId || r[6] !== 'Ödeme Bekliyor') return;
+          const faturaId = r[10] || r[0];
+          if (!bekleyenFaturalar[faturaId]) bekleyenFaturalar[faturaId] = { tutar: 0, satirIdxleri: [], tarih: r[1] };
+          bekleyenFaturalar[faturaId].tutar += sayiCoz(r[4]);
+          bekleyenFaturalar[faturaId].satirIdxleri.push(i);
+        });
+        const siraliFaturalar = Object.entries(bekleyenFaturalar).sort((a, b) => {
+          const ta = trTarihiCozServer(a[1].tarih), tb = trTarihiCozServer(b[1].tarih);
+          return (ta?.getTime() || 0) - (tb?.getTime() || 0);
+        });
+        let kalanOdeme = odemeTutari;
+        const kapatilanSatirIdx = [];
+        for (const [, fatura] of siraliFaturalar) {
+          if (kalanOdeme < fatura.tutar - 0.01) break; // tam kapanmıyorsa dur (kısmi ödeme sıradaki turda devam eder)
+          kalanOdeme = Math.round((kalanOdeme - fatura.tutar) * 100) / 100;
+          kapatilanSatirIdx.push(...fatura.satirIdxleri);
+        }
+        for (const idx of kapatilanSatirIdx) {
+          const rowValues2 = [...giderRows[idx]];
+          rowValues2[6] = 'Ödendi';
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A${idx + 2}:${GIDER_LAST_COL}${idx + 2}`,
+            valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues2] },
+          });
+        }
+
+        return res.status(200).json({ ok: true, record: rowToToptanciHareket(rowValues), kapatilanFaturaSayisi: kapatilanSatirIdx.length });
       }
       return res.status(405).json({ error: 'Method not allowed' });
     }

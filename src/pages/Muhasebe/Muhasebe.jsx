@@ -5,7 +5,7 @@ import { supabase } from '../../services/supabase';
 import FaturaXmlIce from './FaturaXmlIce/FaturaXmlIce';
 import {
   ArrowLeft, TrendingDown, TrendingUp, Truck, Users, ChefHat,
-  Plus, Upload, X, Check, Search, MessageCircle,
+  Plus, Upload, X, Check, Search, MessageCircle, Trash2,
 } from 'lucide-react';
 
 // KRİTİK: Number("0,04") -> NaN döner (Türkçe ondalık virgülü). Tutar/oran input'larında
@@ -134,6 +134,7 @@ export default function Muhasebe({ onNavigate }) {
 function GiderlerSekmesi({ showToast }) {
   const [kayitlar, setKayitlar] = useState([]);
   const [toptancilar, setToptancilar] = useState([]);
+  const [kategoriler, setKategoriler] = useState(GIDER_KATEGORILERI);
   const [loading, setLoading] = useState(true);
   const [kategoriFiltre, setKategoriFiltre] = useState('tumu');
   const [tarihFiltre, setTarihFiltre] = useState('buAy');
@@ -143,14 +144,17 @@ function GiderlerSekmesi({ showToast }) {
   async function yukle() {
     setLoading(true);
     try {
-      const [gRes, tRes] = await Promise.all([
+      const [gRes, tRes, kRes] = await Promise.all([
         fetch('/api/muhasebe?resource=giderler'),
         fetch('/api/toptancilar'),
+        fetch('/api/muhasebe?resource=kategoriler'),
       ]);
       const gJson = await gRes.json();
       const tJson = await tRes.json();
+      const kJson = await kRes.json();
       setKayitlar(gJson.records || []);
       setToptancilar(tJson.records || []);
+      if (kJson.kategoriler?.length) setKategoriler(kJson.kategoriler);
     } catch {
       showToast('Veriler yüklenemedi');
     } finally {
@@ -159,12 +163,38 @@ function GiderlerSekmesi({ showToast }) {
   }
   useEffect(() => { yukle(); }, []);
 
+  // XML'den gelen faturalar kalem kalem Sheets'e yazılıyor (aynı faturaId'yi paylaşırlar) —
+  // burada UI'da tek satıra gruplanıyor. Kalem detayı (hangi ürün, ne kadar) gruplamada
+  // kaybolmuyor, sadece görünmüyor — ileride ayrı bir sayfada kullanılabilir.
+  const faturaGruplari = useMemo(() => {
+    const gruplar = {};
+    kayitlar.forEach((k) => {
+      const anahtar = k.faturaId || k.id;
+      if (!gruplar[anahtar]) {
+        gruplar[anahtar] = {
+          faturaId: anahtar, tarih: k.tarih, kategori: k.kategori, tedarikciAciklama: k.tedarikciAciklama,
+          tutar: 0, odemeDurumu: k.odemeDurumu, belgeNo: k.belgeNo, toptanciId: k.toptanciId,
+          kalemSayisi: 0, kategoriler: new Set(),
+        };
+      }
+      gruplar[anahtar].tutar += k.tutar;
+      gruplar[anahtar].kalemSayisi += 1;
+      gruplar[anahtar].kategoriler.add(k.kategori);
+      // Herhangi bir kalem "Ödeme Bekliyor" ise fatura genelinde de öyle gösterilir.
+      if (k.odemeDurumu === 'Ödeme Bekliyor') gruplar[anahtar].odemeDurumu = 'Ödeme Bekliyor';
+    });
+    return Object.values(gruplar).map((g) => ({
+      ...g, tutar: Math.round(g.tutar * 100) / 100,
+      kategoriGoster: g.kategoriler.size > 1 ? `${[...g.kategoriler][0]} +${g.kategoriler.size - 1}` : g.kategori,
+    }));
+  }, [kayitlar]);
+
   const filtreli = useMemo(() => {
-    return kayitlar
-      .filter((k) => kategoriFiltre === 'tumu' || k.kategori === kategoriFiltre)
-      .filter((k) => tarihAraliktaMi(k.tarih, tarihFiltre))
+    return faturaGruplari
+      .filter((g) => kategoriFiltre === 'tumu' || g.kategoriler.has(kategoriFiltre))
+      .filter((g) => tarihAraliktaMi(g.tarih, tarihFiltre))
       .sort((a, b) => (trTarihiCoz(b.tarih)?.getTime() || 0) - (trTarihiCoz(a.tarih)?.getTime() || 0));
-  }, [kayitlar, kategoriFiltre, tarihFiltre]);
+  }, [faturaGruplari, kategoriFiltre, tarihFiltre]);
 
   const kpi = useMemo(() => {
     const buAyKayitlar = kayitlar.filter((k) => tarihAraliktaMi(k.tarih, 'buAy'));
@@ -178,25 +208,11 @@ function GiderlerSekmesi({ showToast }) {
     return { toplamGider, bekleyen, enYuksekKat, yuzde };
   }, [kayitlar]);
 
-  const dipToplam = useMemo(() => filtreli.reduce((s, k) => s + k.tutar, 0), [filtreli]);
+  const dipToplam = useMemo(() => filtreli.reduce((s, g) => s + g.tutar, 0), [filtreli]);
 
   function toptanciAdi(id) {
     const t = toptancilar.find((x) => x.id === id);
     return t ? t.firmaAdi : null;
-  }
-
-  async function odemeDurumuDegistir(kayit) {
-    const yeniDurum = kayit.odemeDurumu === 'Ödeme Bekliyor' ? 'Ödendi' : 'Ödeme Bekliyor';
-    try {
-      await fetch('/api/muhasebe?resource=giderler', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: kayit.id, odemeDurumu: yeniDurum }),
-      });
-      setKayitlar((prev) => prev.map((k) => (k.id === kayit.id ? { ...k, odemeDurumu: yeniDurum } : k)));
-      showToast(yeniDurum === 'Ödendi' ? 'Ödendi olarak işaretlendi' : 'Ödeme bekliyor olarak işaretlendi');
-    } catch {
-      showToast('Güncellenemedi');
-    }
   }
 
   return (
@@ -219,7 +235,7 @@ function GiderlerSekmesi({ showToast }) {
       <div className="mh-filter-bar">
         <div className="mh-filter-pills">
           <button className={kategoriFiltre === 'tumu' ? 'active' : ''} onClick={() => setKategoriFiltre('tumu')}>Tümü</button>
-          {GIDER_KATEGORILERI.map((k) => (
+          {kategoriler.map((k) => (
             <button key={k} className={kategoriFiltre === k ? 'active' : ''} onClick={() => setKategoriFiltre(k)}>{k}</button>
           ))}
         </div>
@@ -243,25 +259,20 @@ function GiderlerSekmesi({ showToast }) {
           <table className="mh-excel-table">
             <thead>
               <tr>
-                <th>Tarih</th><th>Kategori</th><th>Tedarikçi / Açıklama</th><th>Tutar (TL)</th><th>Durum</th><th>İşlem</th>
+                <th>Tarih</th><th>Kategori</th><th>Tedarikçi / Açıklama</th><th>Tutar (TL)</th><th>Durum</th>
               </tr>
             </thead>
             <tbody>
-              {filtreli.map((k) => (
-                <tr key={k.id}>
-                  <td>{k.tarih}</td>
-                  <td><span className="mh-badge mh-badge-mavi">{k.kategori}</span></td>
-                  <td>{k.tedarikciAciklama || toptanciAdi(k.toptanciId) || '-'}{k.belgeNo ? ` (${k.belgeNo})` : ''}</td>
-                  <td className="mh-tutar-cell">{TL(k.tutar)}</td>
+              {filtreli.map((g) => (
+                <tr key={g.faturaId}>
+                  <td>{g.tarih}</td>
+                  <td><span className="mh-badge mh-badge-mavi">{g.kategoriGoster}</span></td>
+                  <td>{g.tedarikciAciklama || toptanciAdi(g.toptanciId) || '-'}{g.belgeNo ? ` (${g.belgeNo})` : ''}{g.kalemSayisi > 1 ? ` — ${g.kalemSayisi} kalem` : ''}</td>
+                  <td className="mh-tutar-cell">{TL(g.tutar)}</td>
                   <td>
-                    {k.odemeDurumu === 'Ödeme Bekliyor'
+                    {g.odemeDurumu === 'Ödeme Bekliyor'
                       ? <span className="mh-durum mh-durum-kirmizi">🔴 Ödeme Bekliyor</span>
                       : <span className="mh-durum mh-durum-yesil">🟢 Ödendi</span>}
-                  </td>
-                  <td>
-                    {k.odemeDurumu === 'Ödeme Bekliyor'
-                      ? <button className="mh-mini-btn" onClick={() => odemeDurumuDegistir(k)}>Öde</button>
-                      : <button className="mh-mini-btn mh-mini-btn-ghost" onClick={() => odemeDurumuDegistir(k)}>⋮</button>}
                   </td>
                 </tr>
               ))}
@@ -270,16 +281,18 @@ function GiderlerSekmesi({ showToast }) {
               <tr>
                 <td colSpan={3}>Toplam</td>
                 <td className="mh-tutar-cell">{TL(dipToplam)}</td>
-                <td colSpan={2}></td>
+                <td></td>
               </tr>
             </tfoot>
           </table>
         )}
       </div>
+      <p className="mh-hint">Ödemeler "Toptancılar ve Cari Takibi" sekmesinden, toptancı bazında toplu yapılır.</p>
 
       {drawerAcik && (
         <GiderDrawer
           toptancilar={toptancilar}
+          kategoriler={kategoriler}
           onClose={() => setDrawerAcik(false)}
           onSaved={(rec) => { setKayitlar((prev) => [rec, ...prev]); setDrawerAcik(false); showToast('Gider kaydedildi'); }}
         />
@@ -303,7 +316,7 @@ function GiderlerSekmesi({ showToast }) {
 }
 
 // Sağ çekmece — manuel gider ekleme formu.
-function GiderDrawer({ toptancilar, onClose, onSaved }) {
+function GiderDrawer({ toptancilar, kategoriler, onClose, onSaved }) {
   const [form, setForm] = useState({
     kategori: '', firma: '', tutar: '', kdvOrani: '%20', odemeDurumu: 'Ödendi', belgeNo: '', tarih: bugunISO(), toptanciId: '',
   });
@@ -354,7 +367,7 @@ function GiderDrawer({ toptancilar, onClose, onSaved }) {
             <label>Kategori</label>
             <select className="mh-tabbable" value={form.kategori} onChange={(e) => setForm((p) => ({ ...p, kategori: e.target.value }))} onKeyDown={handleTabEnter}>
               <option value="">Seçiniz</option>
-              {GIDER_KATEGORILERI.map((k) => <option key={k} value={k}>{k}</option>)}
+              {kategoriler.map((k) => <option key={k} value={k}>{k}</option>)}
             </select>
           </div>
           <div className="mh-field">
@@ -823,7 +836,11 @@ function ToptancilarCariSekmesi({ showToast }) {
           toptancilar={toptancilar}
           secili={odemeDrawerToptanci}
           onClose={() => setOdemeDrawerToptanci(null)}
-          onSaved={(rec) => { setHareketler((prev) => [rec, ...prev]); setOdemeDrawerToptanci(null); showToast('Ödeme kaydedildi'); }}
+          onSaved={(rec, kapatilan) => {
+            setHareketler((prev) => [rec, ...prev]);
+            setOdemeDrawerToptanci(null);
+            showToast(kapatilan > 0 ? `Ödeme kaydedildi, ${kapatilan} fatura kalemi ödendi olarak işaretlendi` : 'Ödeme kaydedildi');
+          }}
         />
       )}
 
@@ -863,7 +880,7 @@ function ToptanciOdemeDrawer({ toptancilar, secili, onClose, onSaved }) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'save failed');
-      onSaved(json.record);
+      onSaved(json.record, json.kapatilanFaturaSayisi || 0);
     } catch {
       setSaving(false);
     }
