@@ -627,9 +627,11 @@ export default async function handler(req, res) {
     }
 
     // ---- ADIM 4a: Alış faturasını onayla ve kaydet ----
-    // Alış Faturası (başlık) + her satır için Fatura Detaylı Giriş kaydı oluşturur.
-    // Ayrıca eşleştirilmiş (malzemeId'si olan) satırlar için Malzeme Maliyet Geçmişi'ne
-    // de kayıt düşer — Reçeteler sayfasının "en güncel fiyat" araması buradan besleniyor.
+    // ARTIK Fatura Detaylı Giriş/Alış Faturası'na DEĞİL — yeni Giderler sekmesine
+    // (her satır kendi kategorisiyle ayrı bir Gider kaydı) ve Toptancı Hareketleri'ne
+    // (tüm fatura tutarı tek borç satırı, tedarikçi adına göre KESİN eşleşen toptancı
+    // bulunursa) yazılıyor. Malzeme eşleştirmesi yapılmış satırlar için Malzeme Maliyet
+    // Geçmişi kaydı AYNEN korunuyor — Reçeteler'in "en güncel fiyat" araması buradan besleniyor.
     if (resource === 'xmlKaydetAlis') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
       const { tedarikciAdi, faturaNo, tarih, toplamKdvDahil, toplamKdvTutari, satirlar } = req.body || {};
@@ -637,33 +639,42 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'tedarikciAdi, faturaNo ve satirlar gerekli' });
       }
       const now = new Date();
-      const kayitTarih = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
-      const kayitSaat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
-
+      const kayitTarih = tarih ? isoToTrTarih(tarih) || tarih : now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+      const kayitZamani = now.toISOString();
       const faturaId = benzersizId();
-      const alisConfig = BELGE_TIPLERI.alisFaturasi;
-      await appendRow(sheets, { tab: alisConfig.tab, headers: alisConfig.headers }, [
-        faturaId, kayitTarih, kayitSaat, tedarikciAdi, faturaNo, tarih || '',
-        toplamKdvDahil ?? '', toplamKdvTutari ?? '', 'Beklemede', 'Uyumsoft XML içe aktarma',
-      ]);
 
-      const detaySatirlari = satirlar.map((s) => {
+      // Tedarikçi adı normalize edilerek Toptancılar sekmesinde KESİN (tam) eşleşme aranır —
+      // eşleşme yoksa gider yine kaydedilir, sadece toptanciId boş kalır (hareket düşülmez).
+      const toptancilarRows = await getRows(sheets, { tab: 'Toptancılar', headers: ['ID', 'Firma Adı', 'Kategori', 'Telefon', 'Yetkili Kişi', 'Adres', 'Not', 'Bakiye', 'Eklenme Tarihi', 'Durum'] });
+      const tedNorm = metinNormalize(tedarikciAdi);
+      const eslesenToptanci = toptancilarRows.find((r) => metinNormalize(r[1]) === tedNorm);
+      const toptanciId = eslesenToptanci ? eslesenToptanci[0] : '';
+
+      // Her satır kendi kategorisiyle ayrı bir Gider kaydı olur — KDV dahil satır tutarı kullanılır.
+      const giderSatirlari = satirlar.map((s) => {
         const id = benzersizId();
-        return [
-          id, faturaId, tedarikciAdi, faturaNo, kayitTarih, kayitSaat,
-          s.urunAdi || '', s.miktar ?? '', s.birimFiyat ?? '', s.kdvOrani ?? '', s.iskontoOrani ?? '',
-          s.kdvTutari ?? '', s.satirTutari ?? '', s.kategori || '',
-        ];
+        const tutar = Math.round((Number(s.satirTutari) || 0) * 100) / 100;
+        return [id, kayitTarih, s.kategori || 'Diğer Giderler', `${tedarikciAdi} — ${s.urunAdi || ''}`, tutar, s.kdvOrani ? `%${s.kdvOrani}` : '', 'Ödeme Bekliyor', faturaNo, toptanciId, kayitZamani];
       });
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SHEET_ID, range: `${DETAY_TAB}!A2`, valueInputOption: 'USER_ENTERED',
-        insertDataOption: 'INSERT_ROWS', requestBody: { values: detaySatirlari },
-      });
+      if (giderSatirlari.length) {
+        await ensureTab(sheets, GIDER_TAB.tab, GIDER_TAB.headers);
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A2`, valueInputOption: 'USER_ENTERED',
+          insertDataOption: 'INSERT_ROWS', requestBody: { values: giderSatirlari },
+        });
+      }
 
-      // Malzeme eşleştirmesi yapılmış satırlar için maliyet geçmişi kaydı.
-      // miktar × paketMiktar = bu satırdan elde edilen TOPLAM malzeme birimi miktarı;
-      // birim maliyet = satirTutari (KDV dahil) / bu miktar — yani "1 malzeme birimi
-      // (örn. 1 kg) bu faturada ne kadara mal oldu".
+      // Toptancı eşleştiyse TEK bir borç (fatura) hareketi düşülür — fatura toplamı,
+      // satır bazında değil (FIFO bakiye tek fatura = tek borç kalemi olarak kapanır).
+      if (toptanciId) {
+        const toplamTutar = toplamKdvDahil != null ? Number(toplamKdvDahil) : giderSatirlari.reduce((s, r) => s + r[4], 0);
+        await ensureTab(sheets, TOPTANCI_HAREKET_TAB.tab, TOPTANCI_HAREKET_TAB.headers);
+        await appendRow(sheets, TOPTANCI_HAREKET_TAB, [
+          benzersizId(), toptanciId, kayitTarih, 'fatura', Math.round(toplamTutar * 100) / 100, `Fatura No: ${faturaNo}`, faturaId, '', kayitZamani,
+        ]);
+      }
+
+      // Malzeme eşleştirmesi yapılmış satırlar için maliyet geçmişi kaydı — DEĞİŞMEDİ.
       const maliyetSatirlari = satirlar
         .filter((s) => s.malzemeId && s.miktar && s.satirTutari != null)
         .map((s) => {
@@ -686,19 +697,21 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, faturaId });
     }
 
-    // ---- ADIM 4b: Satış faturasını onayla ve kaydet (sadece başlık, satır detayı yok) ----
+    // ---- ADIM 4b: Satış faturasını onayla ve kaydet ----
+    // ARTIK Satış Faturası sekmesine DEĞİL — Gelirler sekmesine yazılıyor
+    // ("Diğer Gelirler" varsayılan kategori, kullanıcı Giderler XML modalında değiştiremiyor
+    // çünkü bu akış alış odaklı — satış faturaları nadiren XML'den geliyor).
     if (resource === 'xmlKaydetSatis') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
       const { aliciAdi, faturaNo, tarih, toplamKdvDahil, toplamKdvTutari } = req.body || {};
       if (!aliciAdi || !faturaNo) return res.status(400).json({ error: 'aliciAdi ve faturaNo gerekli' });
       const now = new Date();
-      const kayitTarih = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
-      const kayitSaat = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
+      const kayitTarih = tarih ? isoToTrTarih(tarih) || tarih : now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+      const kayitZamani = now.toISOString();
       const faturaId = benzersizId();
-      const satisConfig = BELGE_TIPLERI.satisFaturasi;
-      await appendRow(sheets, { tab: satisConfig.tab, headers: satisConfig.headers }, [
-        faturaId, kayitTarih, kayitSaat, aliciAdi, faturaNo, tarih || '',
-        toplamKdvDahil ?? '', toplamKdvTutari ?? '', 'Beklemede', 'Uyumsoft XML içe aktarma',
+      await ensureTab(sheets, GELIR_TAB.tab, GELIR_TAB.headers);
+      await appendRow(sheets, GELIR_TAB, [
+        faturaId, kayitTarih, 'Diğer Gelirler', aliciAdi, faturaNo, toplamKdvDahil ?? 0, '', '', 'Tahsil Edildi', kayitZamani,
       ]);
       return res.status(200).json({ ok: true, faturaId });
     }

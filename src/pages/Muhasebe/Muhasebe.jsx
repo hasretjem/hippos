@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import './Muhasebe.css';
 import { TL } from '../../hooks/useHipposData';
 import { supabase } from '../../services/supabase';
+import FaturaXmlIce from './FaturaXmlIce/FaturaXmlIce';
 import {
   ArrowLeft, TrendingDown, TrendingUp, Truck, Users, ChefHat,
   Plus, Upload, X, Check, Search, MessageCircle,
@@ -285,12 +286,17 @@ function GiderlerSekmesi({ showToast }) {
       )}
 
       {xmlModalAcik && (
-        <GiderXmlModal
-          toptancilar={toptancilar}
-          onClose={() => setXmlModalAcik(false)}
-          onSaved={() => { setXmlModalAcik(false); yukle(); showToast('Fatura(lar) giderlere işlendi'); }}
-          showToast={showToast}
-        />
+        <div className="mh-drawer-overlay" onClick={() => setXmlModalAcik(false)}>
+          <div className="mh-modal-wide mh-modal-xxl" onClick={(e) => e.stopPropagation()}>
+            <div className="mh-drawer-head">
+              <span>XML Fatura Yükle</span>
+              <button onClick={() => setXmlModalAcik(false)}><X size={18} /></button>
+            </div>
+            <div className="mh-drawer-body">
+              <FaturaXmlIce showToast={showToast} />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -404,117 +410,6 @@ function GiderDrawer({ toptancilar, onClose, onSaved }) {
   );
 }
 
-// XML fatura yükleme — mevcut api/muhasebe.js parseFaturaXml akışını kullanır,
-// onaylanan satırlar Giderler'e ("Diğer Giderler" varsayılan, kullanıcı değiştirebilir) yazılır.
-function GiderXmlModal({ toptancilar, onClose, onSaved, showToast }) {
-  const [dosya, setDosya] = useState(null);
-  const [yukleniyor, setYukleniyor] = useState(false);
-  const [faturalar, setFaturalar] = useState(null);
-  const [kaydediliyor, setKaydediliyor] = useState(false);
-
-  function dosyaSec(e) {
-    const f = e.target.files?.[0];
-    if (f) setDosya(f);
-  }
-
-  async function parseEt() {
-    if (!dosya) return;
-    setYukleniyor(true);
-    try {
-      const buf = await dosya.arrayBuffer();
-      const b64 = btoa(new Uint8Array(buf).reduce((s, b) => s + String.fromCharCode(b), ''));
-      const res = await fetch('/api/muhasebe?resource=xmlParse', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ zipBase64: b64 }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'parse failed');
-      setFaturalar((json.faturalar || []).map((f) => ({ ...f, secilenKategori: 'Diğer Giderler', dahil: !f.mukerrer })));
-    } catch (err) {
-      showToast('XML okunamadı: ' + err.message);
-    } finally {
-      setYukleniyor(false);
-    }
-  }
-
-  function toptanciEslesenBul(tedarikciAdi) {
-    const norm = (tedarikciAdi || '').trim().toLocaleLowerCase('tr-TR');
-    return toptancilar.find((t) => t.firmaAdi.trim().toLocaleLowerCase('tr-TR') === norm);
-  }
-
-  async function tumunuKaydet() {
-    setKaydediliyor(true);
-    try {
-      const dahilOlanlar = (faturalar || []).filter((f) => f.dahil);
-      for (const f of dahilOlanlar) {
-        const eslesen = toptanciEslesenBul(f.tedarikciAdi);
-        await fetch('/api/muhasebe?resource=giderler', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tarih: f.tarih ? f.tarih.split('-').reverse().join('.') : bugunISO(),
-            kategori: f.secilenKategori, tedarikciAciklama: f.tedarikciAdi,
-            tutar: f.toplamKdvDahil || 0, odemeDurumu: 'Ödeme Bekliyor',
-            belgeNo: f.faturaNo, toptanciId: eslesen ? eslesen.id : '',
-          }),
-        });
-      }
-      onSaved();
-    } catch {
-      showToast('Kaydetme sırasında hata oluştu');
-    } finally {
-      setKaydediliyor(false);
-    }
-  }
-
-  return (
-    <div className="mh-drawer-overlay" onClick={onClose}>
-      <div className="mh-modal-wide" onClick={(e) => e.stopPropagation()}>
-        <div className="mh-drawer-head">
-          <span>XML Fatura Yükle</span>
-          <button onClick={onClose}><X size={18} /></button>
-        </div>
-        <div className="mh-drawer-body">
-          {!faturalar ? (
-            <>
-              <input type="file" accept=".zip" onChange={dosyaSec} />
-              <button className="mh-primary-btn" style={{ marginTop: 14 }} disabled={!dosya || yukleniyor} onClick={parseEt}>
-                {yukleniyor ? 'Okunuyor...' : 'Zip Dosyasını Oku'}
-              </button>
-            </>
-          ) : (
-            <>
-              {faturalar.map((f, idx) => (
-                <div key={idx} className={`mh-xml-fatura-card ${f.mukerrer ? 'mukerrer' : ''}`}>
-                  <div className="mh-xml-fatura-head">
-                    <label className="mh-field-checkbox">
-                      <input type="checkbox" checked={f.dahil} onChange={(e) => {
-                        setFaturalar((prev) => prev.map((x, i) => i === idx ? { ...x, dahil: e.target.checked } : x));
-                      }} />
-                      <strong>{f.tedarikciAdi}</strong>
-                    </label>
-                    <span>{TL(f.toplamKdvDahil)}</span>
-                  </div>
-                  {f.mukerrer && <div className="mh-mukerrer-uyari">⚠️ Bu fatura daha önce {f.oncekiGorulmeTarihi} tarihinde yüklenmiş, mükerrer olabilir.</div>}
-                  <div className="mh-field">
-                    <label>Kategori</label>
-                    <select value={f.secilenKategori} onChange={(e) => {
-                      setFaturalar((prev) => prev.map((x, i) => i === idx ? { ...x, secilenKategori: e.target.value } : x));
-                    }}>
-                      {GIDER_KATEGORILERI.map((k) => <option key={k} value={k}>{k}</option>)}
-                    </select>
-                  </div>
-                </div>
-              ))}
-              <button className="mh-primary-btn" style={{ marginTop: 10 }} disabled={kaydediliyor} onClick={tumunuKaydet}>
-                {kaydediliyor ? 'Kaydediliyor...' : 'Seçilenleri Giderlere Kaydet'}
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ================== 2) GELİRLER / SATIŞLAR ==================
 function GelirlerSekmesi({ showToast }) {

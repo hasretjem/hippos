@@ -315,7 +315,7 @@ export default function FaturaXmlIce({ showToast }) {
         Uyumsoft'tan indirdiğin fatura zip dosyasını yükle. Önce mükerrer kontrolü, tedarikçi
         kategorisi ve malzeme eşleştirmesini burada gözden geçirip düzeltirsin — bu aşamada
         hiçbir şey otomatik kaydedilmez. Hazır olduğunda en alttaki "Tümünü Kaydet" butonuna
-        basarak faturaları Alış/Satış Faturası ve Fatura Detaylı Giriş'e kalıcı olarak yazdırırsın.
+        basarak faturaları Giderler ve (eşleşen tedarikçi varsa) Toptancı Hareketleri'ne kalıcı olarak yazdırırsın.
       </p>
 
       <label className="fxi-upload-btn">
@@ -581,7 +581,7 @@ export default function FaturaXmlIce({ showToast }) {
 
               <div className="fxi-kaydet-satir">
                 {kaydedilenler[f.uuid] && (
-                  <span className="fxi-eslesme-ok"><span><Check size={14} /> Alış Faturası olarak kaydedildi</span></span>
+                  <span className="fxi-eslesme-ok"><span><Check size={14} /> Giderlere kaydedildi</span></span>
                 )}
               </div>
               </>
