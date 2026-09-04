@@ -1102,6 +1102,31 @@ export default async function handler(req, res) {
     // ARTIK Satış Faturası sekmesine DEĞİL — Gelirler sekmesine yazılıyor
     // ("Diğer Gelirler" varsayılan kategori, kullanıcı Giderler XML modalında değiştiremiyor
     // çünkü bu akış alış odaklı — satış faturaları nadiren XML'den geliyor).
+    // ---- ADIM 4b: Satış faturalarını toplu kaydet ----
+    // Alış faturalarıyla aynı batch mantığı — tüm satış faturaları tek body'de gelir,
+    // tek append'te Gelirler sekmesine yazılır. Frontend'deki for döngüsü kaldırıldı.
+    if (resource === 'xmlKaydetSatisBatch') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { faturalar: gonderilen } = req.body || {};
+      if (!Array.isArray(gonderilen) || gonderilen.length === 0) {
+        return res.status(400).json({ error: 'faturalar dizisi boş veya eksik' });
+      }
+      const now = new Date();
+      const kayitZamani = now.toISOString();
+      const gelirSatirlari = gonderilen.map((f) => {
+        const kayitTarih = f.tarih ? isoToTrTarih(f.tarih) || f.tarih : now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+        return [benzersizId(), kayitTarih, 'Diğer Gelirler', f.aliciAdi, f.faturaNo, f.toplamKdvDahil ?? 0, '', '', 'Tahsil Edildi', kayitZamani];
+      });
+      await ensureTab(sheets, GELIR_TAB.tab, GELIR_TAB.headers);
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID, range: `${GELIR_TAB.tab}!A2:${GELIR_LAST_COL}`,
+        valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
+        requestBody: { values: gelirSatirlari },
+      });
+      return res.status(200).json({ ok: true, kaydedilen: gelirSatirlari.length });
+    }
+
+    // ---- ADIM 4b-compat: Tek satış faturası (geriye dönük uyumluluk) ----
     if (resource === 'xmlKaydetSatis') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
       const { aliciAdi, faturaNo, tarih, toplamKdvDahil, toplamKdvTutari } = req.body || {};

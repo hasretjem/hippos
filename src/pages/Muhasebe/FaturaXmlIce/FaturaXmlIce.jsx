@@ -171,20 +171,6 @@ export default function FaturaXmlIce({ showToast }) {
 
   const duzenlemeyiIptalEt = () => setEditingKey(null);
 
-  // Tek bir satış faturasını kaydeder (alış faturası artık batch ile toplu gidiyor).
-  const satisFaturasiKaydet = async (f) => {
-    const res = await fetch('/api/muhasebe', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        resource: 'xmlKaydetSatis',
-        aliciAdi: f.aliciAdi, faturaNo: f.faturaNo, tarih: f.tarih,
-        toplamKdvDahil: f.toplamKdvDahil, toplamKdvTutari: f.toplamKdvTutari,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-  };
-
   // ADIM 4: Tüm onaylı faturaları kaydet.
   // ÖNCEDEN: her fatura için ayrı fetch (25 fatura × 4 Sheets isteği = ~100 istek → kota patlaması).
   // ARTIK: Alış faturaları tek toplu çağrıda (xmlKaydetAlisBatch) gönderilir — Sheets 4 istekle kapanır,
@@ -237,16 +223,32 @@ export default function FaturaXmlIce({ showToast }) {
       }
     }
 
-    // --- Satış faturaları: tek tek (genellikle 1-2 adet) ---
-    for (const f of satislar) {
+    // --- Satış faturaları: tek toplu istek ---
+    if (satislar.length > 0) {
       try {
-        await satisFaturasiKaydet(f);
-        setKaydedilenler((prev) => ({ ...prev, [f.uuid]: true }));
+        const res = await fetch('/api/muhasebe', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            resource: 'xmlKaydetSatisBatch',
+            faturalar: satislar.map((f) => ({
+              aliciAdi: f.aliciAdi, faturaNo: f.faturaNo, tarih: f.tarih,
+              toplamKdvDahil: f.toplamKdvDahil, toplamKdvTutari: f.toplamKdvTutari,
+            })),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        setKaydedilenler((prev) => {
+          const yeni = { ...prev };
+          satislar.forEach((f) => { yeni[f.uuid] = true; });
+          return yeni;
+        });
+        setKaydedilenSayisi((prev) => prev + satislar.length);
       } catch (err) {
-        hataSayisi += 1;
-        showToast(`${f.faturaNo} kaydedilemedi: ${err.message}`);
+        hataSayisi += satislar.length;
+        showToast(`Satış faturaları kaydedilemedi: ${err.message}`);
+        setKaydedilenSayisi((prev) => prev + satislar.length);
       }
-      setKaydedilenSayisi((prev) => prev + 1);
     }
 
     setKaydediliyor(false);
