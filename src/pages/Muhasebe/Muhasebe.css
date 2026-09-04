@@ -1,9 +1,13 @@
 .mh-shell {
   height: 100vh;
-  width: 100vw;
+  width: 100%;
   position: fixed;
   inset: 0;
   overflow-y: auto;
+  /* KRİTİK: önce width:100vw idi — dikey scrollbar varken 100vw scrollbar genişliğini de
+     kapsadığı için sayfa yatay olarak taşıyordu, kullanıcı sağa/sola kaydırmak zorunda
+     kalıyordu ve position:fixed drawer viewport'a sabitken içerik kayıyordu. */
+  overflow-x: hidden;
   background: #393E41;
   color: #F6F7EB;
   font-family: 'Inter', -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -87,12 +91,11 @@
 .mh-primary-btn.small { width: auto; height: 36px; padding: 0 14px; font-size: 12px; }
 .mh-primary-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-.mh-secondary-btn {
-  height: 38px; border-radius: 8px; border: none;
-  background: #393E41; color: #F6F7EB !important;
-  font-size: 12.5px; font-weight: 700; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-}
+/* NOT: burada ÖNCEDEN ikinci bir .mh-secondary-btn tanımı vardı (koyu zemin +
+   color:#F6F7EB !important). Aşağıdaki beyaz zeminli tanım onu eziyordu ama RENGİ
+   ezemiyordu (!important) — sonuç: beyaz zemin üzerine açık krem yazı, buton
+   okunmuyordu ("XML Fatura Yükle" görünmez haldeydi). Tek tanımda birleştirildi;
+   .small varyantı Reçeteler'deki "Malzeme Ekle" butonu için korundu. */
 .mh-secondary-btn.small { width: auto; height: 32px; padding: 0 12px; font-size: 11.5px; }
 
 .mh-toast {
@@ -372,8 +375,21 @@
 .mh-partner-son-islem { font-size: 11px; color: #83786B; margin-top: 2px; }
 
 /* Filtre barı */
+/* Aksiyon barı — tarih/arama solda, butonlar sağda, TEK satır.
+   Eski .mh-filter-bar'da kategori pill'leri ile aksiyonlar aynı flex satırındaydı;
+   pill'ler taşınca aksiyonlar alta düşüp margin-left:auto ile sağa yapışıyor,
+   solda kocaman boşluk bırakıyordu. Artık ikisi ayrı satırda. */
+.mh-actionbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.mh-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+/* .mh-primary-btn genel kuralı width:100% — aksiyon barında butonun tüm satırı
+   kaplamasına (ekranda devasa görünmesine) neden oluyordu, burada içeriğe göre daralıyor. */
+.mh-actions .mh-primary-btn { width: auto; padding: 0 18px; white-space: nowrap; }
 .mh-filter-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
 .mh-filter-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.mh-filter-pills-inline { flex: 1; min-width: 0; }
 .mh-filter-pills button {
   height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #E3DFCF;
   background: #fff; color: #393E41; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
@@ -394,9 +410,10 @@
 
 .mh-secondary-btn {
   display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px;
-  border-radius: 10px; border: 1.5px solid #E3DFCF; background: #fff; color: #393E41;
-  font-size: 13px; font-weight: 700; cursor: pointer;
+  border-radius: 10px; border: 1.5px solid #E3DFCF; background: #fff; color: #393E41 !important;
+  font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
 }
+.mh-secondary-btn:hover { border-color: #83786B; }
 
 /* Excel tipi tablo */
 .mh-table-card { background: #FDFBF7; border: 1px solid #E3DFCF; border-radius: 16px; padding: 4px; overflow-x: auto; }
@@ -430,11 +447,12 @@
 
 /* Drawer / Modal */
 .mh-drawer-overlay {
-  position: fixed; inset: 0; background: rgba(57,62,65,0.5); z-index: 200;
+  position: fixed; inset: 0; background: rgba(57,62,65,0.55); z-index: 200;
   display: flex; justify-content: flex-end;
+  backdrop-filter: blur(2px);
 }
 .mh-drawer {
-  width: 420px; max-width: 92vw; height: 100vh; background: #F6F7EB; color: #393E41;
+  width: 460px; max-width: 94vw; height: 100vh; background: #F6F7EB; color: #393E41;
   display: flex; flex-direction: column; box-shadow: -8px 0 24px rgba(0,0,0,0.2);
   animation: mh-drawer-in 0.18s ease-out;
 }
@@ -443,7 +461,9 @@
   width: 720px; max-width: 94vw; max-height: 88vh; margin: auto; background: #F6F7EB; color: #393E41;
   border-radius: 16px; display: flex; flex-direction: column; overflow: hidden;
 }
-.mh-drawer-overlay:has(.mh-modal-wide) { align-items: center; justify-content: center; }
+/* :has() yerine — modal içeren overlay'i ortalamak için doğrudan kural
+   (bazı tarayıcılarda :has desteği yok, sessizce sola yapışık kalıyordu). */
+.mh-drawer-overlay-center { align-items: center; justify-content: center; }
 .mh-drawer-head {
   display: flex; justify-content: space-between; align-items: center; padding: 18px 20px;
   border-bottom: 1px solid #E3DFCF; font-size: 15px; font-weight: 800;
@@ -473,3 +493,69 @@
 .mh-modal-xxl .mh-drawer-body { padding: 20px; }
 
 .mh-hint { font-size: 11.5px; color: #83786B; font-style: italic; margin: -6px 0 0; }
+
+/* ================== UI RAFİNE (4 Eylül) ================== */
+/* Sekme barı biraz daha kompakt, aktif sekme daha net */
+.mh-tabs button { height: 42px; padding: 0 16px; font-size: 13px; transition: background 0.12s; }
+.mh-tabs button:hover:not(.active) { background: rgba(246, 247, 235, 0.12); }
+
+/* Gövde ve dikey ritim */
+.mh-body { padding: 20px; }
+.mh-yeni { gap: 14px; }
+
+/* KPI kartları biraz daha sıkı, uzun kategori adları taşmasın */
+.mh-kpi-card { padding: 14px 16px; }
+.mh-kpi-value { font-size: 21px; line-height: 1.15; }
+.mh-kpi-value-small { font-size: 14.5px; line-height: 1.3; word-break: break-word; }
+
+/* Tablo okunabilirliği: zebra + daha rahat satır yüksekliği */
+.mh-excel-table tbody tr:nth-child(even) { background: rgba(57, 62, 65, 0.022); }
+.mh-excel-table tbody tr:hover { background: rgba(233, 79, 55, 0.06); }
+.mh-excel-table td { padding: 11px 12px; }
+.mh-excel-table th { padding: 11px 12px; }
+/* Tedarikçi/açıklama sütunu uzun metinlerde satırı şişirmesin */
+.mh-excel-table td:nth-child(3) { max-width: 520px; }
+
+/* Sayısal sütunlar sağa hizalı — Excel alışkanlığı, hızlı okunur */
+.mh-tutar-cell { text-align: right; }
+.mh-excel-table th:nth-last-child(2) { text-align: right; }
+.mh-excel-table tfoot .mh-tutar-cell { text-align: right; }
+
+/* Rozet: uzun kategori adları için daha dar */
+.mh-badge { font-size: 10.5px; padding: 3px 8px; }
+
+/* Arama kutusu aksiyon barında dengeli dursun */
+.mh-filter-left-search { height: 38px; flex: 1; max-width: 340px; }
+
+/* Dar ekranlarda aksiyon barı alt alta düşünce butonlar tam genişlik olsun */
+@media (max-width: 720px) {
+  .mh-actionbar { flex-direction: column; align-items: stretch; }
+  .mh-actions { width: 100%; }
+  .mh-actions .mh-primary-btn, .mh-actions .mh-secondary-btn { flex: 1; justify-content: center; }
+  .mh-filter-left-search { max-width: none; }
+  .mh-kpi-row, .mh-kpi-row-2 { grid-template-columns: 1fr; }
+  .mh-drawer-2col { grid-template-columns: 1fr; }
+}
+
+/* XML popup: tablo 11 sütunlu, dar modalda taşıyordu — daha geniş, taşma kontrollü */
+.mh-modal-xxl { width: 1180px; max-width: 96vw; max-height: 92vh; }
+.mh-modal-xxl .mh-drawer-body { padding: 16px; overflow-x: hidden; }
+
+/* Manuel gider: işletme gideri / toptancı alışı seçimi */
+.mh-gider-tipi {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  padding: 14px 20px 0;
+}
+.mh-gider-tipi button {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 10px 12px; border-radius: 10px; cursor: pointer; text-align: left;
+  border: 1.5px solid #E3DFCF; background: #fff; color: #393E41;
+  font-size: 13px; font-weight: 700;
+}
+.mh-gider-tipi button small { font-size: 10.5px; font-weight: 500; color: #83786B; line-height: 1.25; }
+.mh-gider-tipi button.active { border-color: #E94F37; background: rgba(233, 79, 55, 0.07); }
+.mh-gider-tipi button.active small { color: #B33F2C; }
+
+/* Form içi yardım/uyarı metni */
+.mh-field-hint { font-size: 10.5px; color: #83786B; line-height: 1.3; margin-top: 2px; }
+.mh-field-hint-err { color: #C0392B; font-weight: 600; }

@@ -41,9 +41,22 @@ function trTarihiCoz(str) {
   return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
 }
 
-function bugunISO() {
+// <input type="date"> HER ZAMAN "YYYY-MM-DD" ister; sistemin geri kalanı ise TR formatı
+// ("GG.AA.YYYY") kullanıyor. Tarih alanlarını controlled tutabilmek için state'te ISO
+// saklanıp gönderim anında TR'ye çevriliyor — önceden value hiç verilmediği (ya da
+// nokta içerdiği için hep boşa düştüğü) için tarih kutuları açılışta boş görünüyordu.
+function bugunInputISO() {
   const d = new Date();
-  return d.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+  const tr = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }));
+  const ay = String(tr.getMonth() + 1).padStart(2, '0');
+  const gun = String(tr.getDate()).padStart(2, '0');
+  return `${tr.getFullYear()}-${ay}-${gun}`;
+}
+
+function inputISOtoTr(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}.${m}.${y}`;
 }
 
 // "Bu Ay" / "Geçen Ay" filtresi için tarih aralığı kontrolü.
@@ -232,22 +245,23 @@ function GiderlerSekmesi({ showToast }) {
         </div>
       </div>
 
-      <div className="mh-filter-bar">
-        <div className="mh-filter-pills">
-          <button className={kategoriFiltre === 'tumu' ? 'active' : ''} onClick={() => setKategoriFiltre('tumu')}>Tümü</button>
-          {kategoriler.map((k) => (
-            <button key={k} className={kategoriFiltre === k ? 'active' : ''} onClick={() => setKategoriFiltre(k)}>{k}</button>
-          ))}
+      <div className="mh-actionbar">
+        <div className="mh-date-pills">
+          <button className={tarihFiltre === 'buAy' ? 'active' : ''} onClick={() => setTarihFiltre('buAy')}>Bu Ay</button>
+          <button className={tarihFiltre === 'gecenAy' ? 'active' : ''} onClick={() => setTarihFiltre('gecenAy')}>Geçen Ay</button>
+          <button className={tarihFiltre === 'tumu' ? 'active' : ''} onClick={() => setTarihFiltre('tumu')}>Tümü</button>
         </div>
-        <div className="mh-filter-right">
-          <div className="mh-date-pills">
-            <button className={tarihFiltre === 'buAy' ? 'active' : ''} onClick={() => setTarihFiltre('buAy')}>Bu Ay</button>
-            <button className={tarihFiltre === 'gecenAy' ? 'active' : ''} onClick={() => setTarihFiltre('gecenAy')}>Geçen Ay</button>
-            <button className={tarihFiltre === 'tumu' ? 'active' : ''} onClick={() => setTarihFiltre('tumu')}>Tümü</button>
-          </div>
-          <button className="mh-primary-btn" onClick={() => setDrawerAcik(true)}><Plus size={15} /> Manuel Gider Ekle</button>
+        <div className="mh-actions">
           <button className="mh-secondary-btn" onClick={() => setXmlModalAcik(true)}><Upload size={15} /> XML Fatura Yükle</button>
+          <button className="mh-primary-btn" onClick={() => setDrawerAcik(true)}><Plus size={15} /> Manuel Gider Ekle</button>
         </div>
+      </div>
+
+      <div className="mh-filter-pills">
+        <button className={kategoriFiltre === 'tumu' ? 'active' : ''} onClick={() => setKategoriFiltre('tumu')}>Tümü</button>
+        {kategoriler.map((k) => (
+          <button key={k} className={kategoriFiltre === k ? 'active' : ''} onClick={() => setKategoriFiltre(k)}>{k}</button>
+        ))}
       </div>
 
       <div className="mh-table-card">
@@ -294,12 +308,18 @@ function GiderlerSekmesi({ showToast }) {
           toptancilar={toptancilar}
           kategoriler={kategoriler}
           onClose={() => setDrawerAcik(false)}
-          onSaved={(rec) => { setKayitlar((prev) => [rec, ...prev]); setDrawerAcik(false); showToast('Gider kaydedildi'); }}
+          onSaved={(rec, yeniToptanciAcildi) => {
+            setKayitlar((prev) => [rec, ...prev]);
+            setDrawerAcik(false);
+            showToast(yeniToptanciAcildi ? 'Gider kaydedildi, yeni cari kartı açıldı' : 'Gider kaydedildi');
+            // Yeni toptancı açıldıysa firma listesi tazelensin (autocomplete güncel kalsın).
+            if (yeniToptanciAcildi) fetch('/api/toptancilar').then((r) => r.json()).then((j) => setToptancilar(j.records || [])).catch(() => {});
+          }}
         />
       )}
 
       {xmlModalAcik && (
-        <div className="mh-drawer-overlay" onClick={() => { setXmlModalAcik(false); yukle(); }}>
+        <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={() => { setXmlModalAcik(false); yukle(); }}>
           <div className="mh-modal-wide mh-modal-xxl" onClick={(e) => e.stopPropagation()}>
             <div className="mh-drawer-head">
               <span>XML Fatura Yükle</span>
@@ -316,17 +336,30 @@ function GiderlerSekmesi({ showToast }) {
 }
 
 // Sağ çekmece — manuel gider ekleme formu.
+// Manuel gider ekleme. İKİ FARKLI gider tipi var ve bunlar farklı davranıyor:
+//  - "İşletme Gideri" (kira, elektrik, personel, vergi...): cari takibi YOK, karşı tarafın
+//    bakiyesi tutulmaz, sadece Giderler'e yazılır. Firma alanı serbest metin (opsiyonel).
+//  - "Toptancı Alışı": Toptancılar sekmesindeki bir cariye bağlanır, borç hareketi düşülür,
+//    ödeme o sekmeden FIFO ile kapatılır. Firma seçimi zorunlu (yoksa yenisi açılabilir).
 function GiderDrawer({ toptancilar, kategoriler, onClose, onSaved }) {
+  const [giderTipi, setGiderTipi] = useState('isletme'); // isletme | toptanci
   const [form, setForm] = useState({
-    kategori: '', firma: '', tutar: '', kdvOrani: '%20', odemeDurumu: 'Ödendi', belgeNo: '', tarih: bugunISO(), toptanciId: '',
+    kategori: '', firma: '', tutar: '', kdvOrani: '%20', odemeDurumu: 'Ödendi', belgeNo: '', tarih: bugunInputISO(), toptanciId: '',
   });
   const [saving, setSaving] = useState(false);
   const [firmaOnerAcik, setFirmaOnerAcik] = useState(false);
 
   const firmaFiltreli = useMemo(() => {
     const q = (form.firma || '').trim().toLocaleLowerCase('tr-TR');
-    if (!q) return [];
+    if (!q) return toptancilar.slice(0, 8);
     return toptancilar.filter((t) => t.firmaAdi.toLocaleLowerCase('tr-TR').includes(q)).slice(0, 8);
+  }, [toptancilar, form.firma]);
+
+  // Yazılan ad mevcut bir toptancıyla birebir eşleşiyor mu (yeni kart açılacak mı)?
+  const tamEslesme = useMemo(() => {
+    const q = (form.firma || '').trim().toLocaleLowerCase('tr-TR');
+    if (!q) return null;
+    return toptancilar.find((t) => t.firmaAdi.trim().toLocaleLowerCase('tr-TR') === q) || null;
   }, [toptancilar, form.firma]);
 
   function firmaSec(t) {
@@ -334,22 +367,29 @@ function GiderDrawer({ toptancilar, kategoriler, onClose, onSaved }) {
     setFirmaOnerAcik(false);
   }
 
+  const toptanciModu = giderTipi === 'toptanci';
+  // Tarih HER ZAMAN zorunlu; toptancı modunda ayrıca firma adı gerekli.
+  const gecerli = form.kategori && form.tutar && form.tarih && (!toptanciModu || form.firma.trim());
+
   async function kaydet() {
-    if (!form.kategori) return;
-    if (!form.tutar) return;
+    if (!gecerli) return;
     setSaving(true);
     try {
       const res = await fetch('/api/muhasebe?resource=giderler', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tarih: form.tarih, kategori: form.kategori, tedarikciAciklama: form.firma,
+          tarih: inputISOtoTr(form.tarih), kategori: form.kategori, tedarikciAciklama: form.firma,
           tutar: ondalikParse(form.tutar), kdvOrani: form.kdvOrani, odemeDurumu: form.odemeDurumu,
-          belgeNo: form.belgeNo, toptanciId: form.toptanciId || '',
+          belgeNo: form.belgeNo,
+          // Sadece toptancı modunda cari bağlantısı kurulur. toptanciId boş ama
+          // yeniToptanciAdi doluysa backend yeni bir toptancı kartı açıp ona bağlar.
+          toptanciId: toptanciModu ? (form.toptanciId || '') : '',
+          yeniToptanciAdi: toptanciModu && !form.toptanciId ? form.firma.trim() : '',
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'save failed');
-      onSaved(json.record);
+      onSaved(json.record, json.yeniToptanciAcildi);
     } catch {
       setSaving(false);
     }
@@ -362,6 +402,18 @@ function GiderDrawer({ toptancilar, kategoriler, onClose, onSaved }) {
           <span>Manuel Gider Ekle</span>
           <button onClick={onClose}><X size={18} /></button>
         </div>
+
+        <div className="mh-gider-tipi">
+          <button className={giderTipi === 'isletme' ? 'active' : ''} onClick={() => setGiderTipi('isletme')}>
+            İşletme Gideri
+            <small>Kira, elektrik, personel, vergi…</small>
+          </button>
+          <button className={giderTipi === 'toptanci' ? 'active' : ''} onClick={() => setGiderTipi('toptanci')}>
+            Toptancı Alışı
+            <small>Cari hesaba borç yazılır</small>
+          </button>
+        </div>
+
         <div className="mh-drawer-body mh-drawer-2col">
           <div className="mh-field">
             <label>Kategori</label>
@@ -374,19 +426,23 @@ function GiderDrawer({ toptancilar, kategoriler, onClose, onSaved }) {
             <label>Tutar (TL, KDV Dahil)</label>
             <input className="mh-tabbable" value={form.tutar} onChange={(e) => setForm((p) => ({ ...p, tutar: e.target.value }))} onKeyDown={handleTabEnter} inputMode="decimal" />
           </div>
-          <div className="mh-field mh-field-rel">
-            <label>Tedarikçi / Firma Adı</label>
+          <div className="mh-field mh-field-rel mh-field-full">
+            <label>{toptanciModu ? 'Toptancı / Firma (zorunlu)' : 'Firma / Açıklama (isteğe bağlı)'}</label>
             <input
               className="mh-tabbable" value={form.firma} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false"
+              placeholder={toptanciModu ? 'Ara veya yeni firma adı yaz…' : 'örn. Perpa Dükkan Kirası, BEDAŞ'}
               onChange={(e) => { setForm((p) => ({ ...p, firma: e.target.value, toptanciId: '' })); setFirmaOnerAcik(true); }}
               onFocus={() => setFirmaOnerAcik(true)} onKeyDown={handleTabEnter}
             />
-            {firmaOnerAcik && firmaFiltreli.length > 0 && (
+            {toptanciModu && firmaOnerAcik && firmaFiltreli.length > 0 && (
               <div className="mh-firma-oneri">
                 {firmaFiltreli.map((t) => (
                   <div key={t.id} className="mh-firma-oneri-item" onClick={() => firmaSec(t)}>{t.firmaAdi}</div>
                 ))}
               </div>
+            )}
+            {toptanciModu && form.firma.trim() && !tamEslesme && (
+              <span className="mh-field-hint">Bu firma kayıtlı değil — kaydedince yeni cari kartı açılacak.</span>
             )}
           </div>
           <div className="mh-field">
@@ -397,12 +453,11 @@ function GiderDrawer({ toptancilar, kategoriler, onClose, onSaved }) {
           </div>
           <div className="mh-field">
             <label>Fatura/Fiş Tarihi</label>
-            <input className="mh-tabbable" type="date" value={form.tarih.includes('.') ? '' : form.tarih} onChange={(e) => {
-              const [y, m, d] = e.target.value.split('-');
-              setForm((p) => ({ ...p, tarih: `${d}.${m}.${y}` }));
-            }} onKeyDown={handleTabEnter} />
+            <input className="mh-tabbable" type="date" required value={form.tarih}
+              onChange={(e) => setForm((p) => ({ ...p, tarih: e.target.value }))} onKeyDown={handleTabEnter} />
+            {!form.tarih && <span className="mh-field-hint mh-field-hint-err">Tarih zorunlu.</span>}
           </div>
-          <div className="mh-field">
+          <div className="mh-field mh-field-full">
             <label>Ödeme Durumu</label>
             <select className="mh-tabbable" value={form.odemeDurumu} onChange={(e) => setForm((p) => ({ ...p, odemeDurumu: e.target.value }))} onKeyDown={handleTabEnter}>
               <option value="Ödendi">Ödendi</option><option value="Ödeme Bekliyor">Ödeme Bekliyor</option>
@@ -414,7 +469,7 @@ function GiderDrawer({ toptancilar, kategoriler, onClose, onSaved }) {
           </div>
         </div>
         <div className="mh-drawer-foot">
-          <button className="mh-primary-btn" disabled={saving || !form.kategori || !form.tutar} onClick={kaydet}>
+          <button className="mh-primary-btn" disabled={saving || !gecerli} onClick={kaydet}>
             <Check size={15} /> Kaydet
           </button>
         </div>
@@ -468,14 +523,14 @@ function GelirlerSekmesi({ showToast }) {
 
   const dipToplam = useMemo(() => filtreli.reduce((s, k) => s + k.tutar, 0), [filtreli]);
 
-  async function tahsilEt(kayit) {
+  async function tahsilDurumuDegistir(kayit, yeniDurum) {
     try {
       await fetch('/api/muhasebe?resource=gelirler', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: kayit.id, tahsilatDurumu: 'Tahsil Edildi' }),
+        body: JSON.stringify({ id: kayit.id, tahsilatDurumu: yeniDurum }),
       });
-      setKayitlar((prev) => prev.map((k) => (k.id === kayit.id ? { ...k, tahsilatDurumu: 'Tahsil Edildi' } : k)));
-      showToast('Tahsil edildi olarak işaretlendi');
+      setKayitlar((prev) => prev.map((k) => (k.id === kayit.id ? { ...k, tahsilatDurumu: yeniDurum } : k)));
+      showToast(yeniDurum === 'Tahsil Edildi' ? 'Tahsil edildi olarak işaretlendi' : 'Tahsilat geri alındı');
     } catch {
       showToast('Güncellenemedi');
     }
@@ -498,22 +553,23 @@ function GelirlerSekmesi({ showToast }) {
         </div>
       </div>
 
-      <div className="mh-filter-bar">
-        <div className="mh-filter-pills">
-          <button className={kategoriFiltre === 'tumu' ? 'active' : ''} onClick={() => setKategoriFiltre('tumu')}>Tümü</button>
-          {GELIR_KATEGORILERI.map((k) => (
-            <button key={k} className={kategoriFiltre === k ? 'active' : ''} onClick={() => setKategoriFiltre(k)}>{k}</button>
-          ))}
+      <div className="mh-actionbar">
+        <div className="mh-date-pills">
+          <button className={tarihFiltre === 'buAy' ? 'active' : ''} onClick={() => setTarihFiltre('buAy')}>Bu Ay</button>
+          <button className={tarihFiltre === 'gecenAy' ? 'active' : ''} onClick={() => setTarihFiltre('gecenAy')}>Geçen Ay</button>
+          <button className={tarihFiltre === 'tumu' ? 'active' : ''} onClick={() => setTarihFiltre('tumu')}>Tümü</button>
         </div>
-        <div className="mh-filter-right">
-          <div className="mh-date-pills">
-            <button className={tarihFiltre === 'buAy' ? 'active' : ''} onClick={() => setTarihFiltre('buAy')}>Bu Ay</button>
-            <button className={tarihFiltre === 'gecenAy' ? 'active' : ''} onClick={() => setTarihFiltre('gecenAy')}>Geçen Ay</button>
-            <button className={tarihFiltre === 'tumu' ? 'active' : ''} onClick={() => setTarihFiltre('tumu')}>Tümü</button>
-          </div>
-          <button className="mh-primary-btn" onClick={() => setDrawerAcik(true)}><Plus size={15} /> Yeni Satış Faturası Ekle</button>
+        <div className="mh-actions">
           <button className="mh-secondary-btn" onClick={() => setXmlModalAcik(true)}><Upload size={15} /> XML Fatura Yükle</button>
+          <button className="mh-primary-btn" onClick={() => setDrawerAcik(true)}><Plus size={15} /> Yeni Satış Faturası</button>
         </div>
+      </div>
+
+      <div className="mh-filter-pills">
+        <button className={kategoriFiltre === 'tumu' ? 'active' : ''} onClick={() => setKategoriFiltre('tumu')}>Tümü</button>
+        {GELIR_KATEGORILERI.map((k) => (
+          <button key={k} className={kategoriFiltre === k ? 'active' : ''} onClick={() => setKategoriFiltre(k)}>{k}</button>
+        ))}
       </div>
 
       <div className="mh-table-card">
@@ -543,8 +599,8 @@ function GelirlerSekmesi({ showToast }) {
                   </td>
                   <td>
                     {k.tahsilatDurumu === 'Tahsilat Bekliyor'
-                      ? <button className="mh-mini-btn" onClick={() => tahsilEt(k)}>Tahsil Et</button>
-                      : <button className="mh-mini-btn mh-mini-btn-ghost">⋮</button>}
+                      ? <button className="mh-mini-btn" onClick={() => tahsilDurumuDegistir(k, 'Tahsil Edildi')}>Tahsil Et</button>
+                      : <button className="mh-mini-btn mh-mini-btn-ghost" title="Tahsilatı geri al" onClick={() => tahsilDurumuDegistir(k, 'Tahsilat Bekliyor')}>Geri Al</button>}
                   </td>
                 </tr>
               ))}
@@ -568,7 +624,7 @@ function GelirlerSekmesi({ showToast }) {
       )}
 
       {xmlModalAcik && (
-        <div className="mh-drawer-overlay" onClick={() => { setXmlModalAcik(false); yukle(); }}>
+        <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={() => { setXmlModalAcik(false); yukle(); }}>
           <div className="mh-modal-wide mh-modal-xxl" onClick={(e) => e.stopPropagation()}>
             <div className="mh-drawer-head">
               <span>XML Fatura Yükle</span>
@@ -587,7 +643,7 @@ function GelirlerSekmesi({ showToast }) {
 function GelirDrawer({ onClose, onSaved }) {
   const [form, setForm] = useState({
     kategori: '', musteriFirma: '', faturaNo: '', tutar: '', kdvOrani: '%20',
-    tarih: bugunISO(), vadeTarihi: '', tahsilatDurumu: 'Tahsilat Bekliyor',
+    tarih: bugunInputISO(), vadeTarihi: '', tahsilatDurumu: 'Tahsilat Bekliyor',
   });
   const [saving, setSaving] = useState(false);
 
@@ -598,9 +654,9 @@ function GelirDrawer({ onClose, onSaved }) {
       const res = await fetch('/api/muhasebe?resource=gelirler', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tarih: form.tarih, kategori: form.kategori, musteriFirma: form.musteriFirma,
+          tarih: inputISOtoTr(form.tarih), kategori: form.kategori, musteriFirma: form.musteriFirma,
           faturaNo: form.faturaNo, tutar: ondalikParse(form.tutar), kdvOrani: form.kdvOrani,
-          vadeTarihi: form.vadeTarihi, tahsilatDurumu: form.tahsilatDurumu,
+          vadeTarihi: inputISOtoTr(form.vadeTarihi), tahsilatDurumu: form.tahsilatDurumu,
         }),
       });
       const json = await res.json();
@@ -647,18 +703,11 @@ function GelirDrawer({ onClose, onSaved }) {
           </div>
           <div className="mh-field">
             <label>Fatura Tarihi</label>
-            <input className="mh-tabbable" type="date" onChange={(e) => {
-              const [y, m, d] = e.target.value.split('-');
-              setForm((p) => ({ ...p, tarih: `${d}.${m}.${y}` }));
-            }} onKeyDown={handleTabEnter} />
+            <input className="mh-tabbable" type="date" value={form.tarih} onChange={(e) => setForm((p) => ({ ...p, tarih: e.target.value }))} onKeyDown={handleTabEnter} />
           </div>
           <div className="mh-field">
             <label>Vade Tarihi</label>
-            <input className="mh-tabbable" type="date" onChange={(e) => {
-              if (!e.target.value) return setForm((p) => ({ ...p, vadeTarihi: '' }));
-              const [y, m, d] = e.target.value.split('-');
-              setForm((p) => ({ ...p, vadeTarihi: `${d}.${m}.${y}` }));
-            }} onKeyDown={handleTabEnter} />
+            <input className="mh-tabbable" type="date" value={form.vadeTarihi} onChange={(e) => setForm((p) => ({ ...p, vadeTarihi: e.target.value }))} onKeyDown={handleTabEnter} />
           </div>
           <div className="mh-field">
             <label>Tahsilat Durumu</label>
@@ -669,7 +718,7 @@ function GelirDrawer({ onClose, onSaved }) {
           </div>
         </div>
         <div className="mh-drawer-foot">
-          <button className="mh-primary-btn" disabled={saving || !form.kategori || !form.musteriFirma || !form.tutar} onClick={kaydet}>
+          <button className="mh-primary-btn" disabled={saving || !form.kategori || !form.musteriFirma || !form.tutar || !form.tarih} onClick={kaydet}>
             <Check size={15} /> Kaydet
           </button>
         </div>
@@ -743,12 +792,42 @@ function ToptancilarCariSekmesi({ showToast }) {
 
   const kpi = useMemo(() => {
     const toplamBorc = toptanciOzet.reduce((s, t) => s + Math.max(0, t.bakiye), 0);
-    const now = new Date();
     const buAyOdemeler = hareketler.filter((h) => h.tur === 'odeme' && tarihAraliktaMi(h.tarih, 'buAy'));
     const buAyToplamOdeme = buAyOdemeler.reduce((s, h) => s + h.tutar, 0);
-    // Vadesi geçen: bu KPI için basit tanım — bakiyesi pozitif olan toptancıların toplamı
-    // (Sheets'te vade tarihi tutulmuyor, gider kayıtlarındaki "Ödeme Bekliyor" olanlardan geçmiş tarihliler baz alınabilir — şimdilik toplam borç ile aynı gösteriliyor, ileride vade alanı eklenirse ayrıştırılır).
-    return { toplamBorc, buAyToplamOdeme };
+
+    // "Vadesi geçen" ÖNCEDEN toplamBorc ile birebir aynı sayıyı gösteriyordu (anlamsızdı).
+    // Artık gerçek FIFO ile hesaplanıyor: her toptancının faturaları kronolojik sıraya
+    // dizilip ödemeler en eskiden başlayarak düşülüyor; hâlâ açık kalan faturalardan
+    // 30 günden eski olanların toplamı "geciken borç" sayılıyor. (Sheets'te vade alanı
+    // yok — 30 gün, sektörde yaygın varsayılan vade olarak baz alındı.)
+    const otuzGunOnce = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    let gecikenBorc = 0;
+    const hareketlerByToptanci = {};
+    hareketler.forEach((h) => {
+      if (!hareketlerByToptanci[h.toptanciId]) hareketlerByToptanci[h.toptanciId] = [];
+      hareketlerByToptanci[h.toptanciId].push(h);
+    });
+    Object.values(hareketlerByToptanci).forEach((hs) => {
+      const kronolojik = [...hs].sort((a, b) => (trTarihiCoz(a.tarih)?.getTime() || 0) - (trTarihiCoz(b.tarih)?.getTime() || 0));
+      const acikFaturalar = [];
+      let odemeHavuzu = 0;
+      kronolojik.forEach((h) => {
+        if (h.tur === 'odeme') odemeHavuzu += h.tutar;
+        else acikFaturalar.push({ tutar: h.tutar, ts: trTarihiCoz(h.tarih)?.getTime() || 0 });
+      });
+      // Ödemeleri en eski faturalardan başlayarak düş (FIFO).
+      for (const f of acikFaturalar) {
+        if (odemeHavuzu <= 0) break;
+        const dusulen = Math.min(odemeHavuzu, f.tutar);
+        f.tutar -= dusulen;
+        odemeHavuzu -= dusulen;
+      }
+      acikFaturalar.forEach((f) => {
+        if (f.tutar > 0.01 && f.ts && f.ts < otuzGunOnce) gecikenBorc += f.tutar;
+      });
+    });
+
+    return { toplamBorc, buAyToplamOdeme, gecikenBorc };
   }, [toptanciOzet, hareketler]);
 
   return (
@@ -759,8 +838,8 @@ function ToptancilarCariSekmesi({ showToast }) {
           <span className="mh-kpi-value">{TL(kpi.toplamBorc)}</span>
         </div>
         <div className="mh-kpi-card mh-kpi-warning">
-          <span className="mh-kpi-label">Vadesi Geçen Borçlar</span>
-          <span className="mh-kpi-value">{TL(kpi.toplamBorc)}</span>
+          <span className="mh-kpi-label">30+ Gün Bekleyen Borç</span>
+          <span className="mh-kpi-value">{TL(kpi.gecikenBorc)}</span>
         </div>
         <div className="mh-kpi-card">
           <span className="mh-kpi-label">Bu Ay Yapılan Toplam Ödeme</span>
@@ -768,21 +847,22 @@ function ToptancilarCariSekmesi({ showToast }) {
         </div>
       </div>
 
-      <div className="mh-filter-bar">
+      <div className="mh-actionbar">
         <div className="mh-filter-left-search">
           <Search size={15} />
           <input placeholder="Tedarikçi / Firma Ara..." value={arama} onChange={(e) => setArama(e.target.value)} />
         </div>
-        <div className="mh-filter-pills">
-          <button className={durumFiltre === 'tumu' ? 'active' : ''} onClick={() => setDurumFiltre('tumu')}>Tümü</button>
-          <button className={durumFiltre === 'borclu' ? 'active' : ''} onClick={() => setDurumFiltre('borclu')}>🔴 Borcumuz Olanlar</button>
-          <button className={durumFiltre === 'alacakli' ? 'active' : ''} onClick={() => setDurumFiltre('alacakli')}>🟢 Alacaklı Olduklarımız</button>
-          <button className={durumFiltre === 'sifir' ? 'active' : ''} onClick={() => setDurumFiltre('sifir')}>⚪ Bakiyesi Sıfır</button>
+        <div className="mh-actions">
+          <button className="mh-secondary-btn" onClick={() => setYeniCariModal(true)}><Users size={15} /> Yeni Cari Kartı</button>
+          <button className="mh-primary-btn" onClick={() => setOdemeDrawerToptanci({})}><Plus size={15} /> Ödeme Yap</button>
         </div>
-        <div className="mh-filter-right">
-          <button className="mh-primary-btn" onClick={() => setOdemeDrawerToptanci({})}><Plus size={15} /> Ödeme / Tahsilat Yap</button>
-          <button className="mh-secondary-btn" onClick={() => setYeniCariModal(true)}><Users size={15} /> Yeni Cari Kartı Aç</button>
-        </div>
+      </div>
+
+      <div className="mh-filter-pills">
+        <button className={durumFiltre === 'tumu' ? 'active' : ''} onClick={() => setDurumFiltre('tumu')}>Tümü</button>
+        <button className={durumFiltre === 'borclu' ? 'active' : ''} onClick={() => setDurumFiltre('borclu')}>🔴 Borcumuz Olanlar</button>
+        <button className={durumFiltre === 'alacakli' ? 'active' : ''} onClick={() => setDurumFiltre('alacakli')}>🟢 Alacaklı Olduklarımız</button>
+        <button className={durumFiltre === 'sifir' ? 'active' : ''} onClick={() => setDurumFiltre('sifir')}>⚪ Bakiyesi Sıfır</button>
       </div>
 
       <div className="mh-table-card">
@@ -866,7 +946,7 @@ function ToptanciOdemeDrawer({ toptancilar, secili, onClose, onSaved }) {
   const [toptanciId, setToptanciId] = useState(secili.id || '');
   const [tutar, setTutar] = useState('');
   const [odemeYontemi, setOdemeYontemi] = useState('Banka Havalesi / EFT');
-  const [tarih, setTarih] = useState(bugunISO());
+  const [tarih, setTarih] = useState(bugunInputISO());
   const [aciklama, setAciklama] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -876,7 +956,7 @@ function ToptanciOdemeDrawer({ toptancilar, secili, onClose, onSaved }) {
     try {
       const res = await fetch('/api/muhasebe?resource=toptanciHareket', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toptanciId, tarih, tutar: ondalikParse(tutar), odemeYontemi, aciklama }),
+        body: JSON.stringify({ toptanciId, tarih: inputISOtoTr(tarih), tutar: ondalikParse(tutar), odemeYontemi, aciklama }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'save failed');
@@ -913,10 +993,7 @@ function ToptanciOdemeDrawer({ toptancilar, secili, onClose, onSaved }) {
           </div>
           <div className="mh-field">
             <label>Tarih</label>
-            <input className="mh-tabbable" type="date" onChange={(e) => {
-              const [y, m, d] = e.target.value.split('-');
-              setTarih(`${d}.${m}.${y}`);
-            }} onKeyDown={handleTabEnter} />
+            <input className="mh-tabbable" type="date" value={tarih} onChange={(e) => setTarih(e.target.value)} onKeyDown={handleTabEnter} />
           </div>
           <div className="mh-field">
             <label>Açıklama / Dekont No</label>
@@ -924,7 +1001,7 @@ function ToptanciOdemeDrawer({ toptancilar, secili, onClose, onSaved }) {
           </div>
         </div>
         <div className="mh-drawer-foot">
-          <button className="mh-primary-btn" disabled={saving || !toptanciId || !tutar} onClick={kaydet}>
+          <button className="mh-primary-btn" disabled={saving || !toptanciId || !tutar || !tarih} onClick={kaydet}>
             <Check size={15} /> Kaydet
           </button>
         </div>
@@ -1001,7 +1078,7 @@ function YeniToptanciModal({ onClose, onSaved }) {
 function ToptanciEkstreModal({ toptanci, hareketler, onClose }) {
   let kosuBakiye = 0;
   return (
-    <div className="mh-drawer-overlay" onClick={onClose}>
+    <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={onClose}>
       <div className="mh-modal-wide" onClick={(e) => e.stopPropagation()}>
         <div className="mh-drawer-head">
           <span>{toptanci.firmaAdi} — Hesap Ekstresi</span>
@@ -1107,15 +1184,15 @@ function OrtaklarCariSekmesi({ showToast }) {
         })}
       </div>
 
-      <div className="mh-filter-bar">
-        <div className="mh-filter-pills">
+      <div className="mh-actionbar">
+        <div className="mh-filter-pills mh-filter-pills-inline">
           <button className={ortakFiltre === 'tumu' ? 'active' : ''} onClick={() => setOrtakFiltre('tumu')}>Tüm İşlemler</button>
           {ORTAKLAR.map((o) => (
             <button key={o} className={ortakFiltre === o ? 'active' : ''} onClick={() => setOrtakFiltre(o)}>{o}</button>
           ))}
         </div>
-        <div className="mh-filter-right">
-          <button className="mh-primary-btn" onClick={() => setDrawerAcik(true)}><Plus size={15} /> Ortak Hareket / Makbuz Ekle</button>
+        <div className="mh-actions">
+          <button className="mh-primary-btn" onClick={() => setDrawerAcik(true)}><Plus size={15} /> Ortak Hareketi Ekle</button>
         </div>
       </div>
 
@@ -1167,7 +1244,7 @@ function OrtakHareketDrawer({ onClose, onSaved }) {
   const [islemTuru, setIslemTuru] = useState(ORTAK_ISLEM_TURLERI[0]);
   const [tutar, setTutar] = useState('');
   const [kasaBanka, setKasaBanka] = useState('Ana Kasa');
-  const [tarih, setTarih] = useState(bugunISO());
+  const [tarih, setTarih] = useState(bugunInputISO());
   const [aciklama, setAciklama] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -1177,7 +1254,7 @@ function OrtakHareketDrawer({ onClose, onSaved }) {
     try {
       const res = await fetch('/api/muhasebe?resource=ortakHareket', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ortakAdi, tarih, islemTuru, yon, tutar: ondalikParse(tutar), kasaBanka, aciklama }),
+        body: JSON.stringify({ ortakAdi, tarih: inputISOtoTr(tarih), islemTuru, yon, tutar: ondalikParse(tutar), kasaBanka, aciklama }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'save failed');
@@ -1226,10 +1303,7 @@ function OrtakHareketDrawer({ onClose, onSaved }) {
           </div>
           <div className="mh-field">
             <label>Tarih</label>
-            <input className="mh-tabbable" type="date" onChange={(e) => {
-              const [y, m, d] = e.target.value.split('-');
-              setTarih(`${d}.${m}.${y}`);
-            }} onKeyDown={handleTabEnter} />
+            <input className="mh-tabbable" type="date" value={tarih} onChange={(e) => setTarih(e.target.value)} onKeyDown={handleTabEnter} />
           </div>
           <div className="mh-field">
             <label>Açıklama</label>
@@ -1237,7 +1311,7 @@ function OrtakHareketDrawer({ onClose, onSaved }) {
           </div>
         </div>
         <div className="mh-drawer-foot">
-          <button className="mh-primary-btn" disabled={saving || !ortakAdi || !tutar} onClick={kaydet}>
+          <button className="mh-primary-btn" disabled={saving || !ortakAdi || !tutar || !tarih} onClick={kaydet}>
             <Check size={15} /> Kaydet
           </button>
         </div>

@@ -341,3 +341,34 @@
   opacity: 0.6;
   cursor: default;
 }
+/* ================== POPUP TAŞMA DÜZELTMESİ (4 Eylül) ==================
+   Tablo 11 sütunlu (ürün adı, kod, miktar, birim, fiyat, tutar, KDV, iskonto, not,
+   kategori, malzeme eşleştirme formu). width:100% ile modalın içine sıkıştırılmaya
+   çalışılınca hücreler taşıp sağa doğru akıyordu. Artık tablo kendi doğal genişliğinde
+   duruyor ve fatura kartı içinde YATAY KAYDIRILIYOR — modalın dışına taşmıyor. */
+.fxi-wrap { max-width: 100%; overflow-x: hidden; }
+
+.fxi-tablo-kaydir {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -4px;
+  padding: 0 4px 4px;
+}
+.fxi-tablo { min-width: 1080px; }
+
+/* Uzun ürün adları satırı şişirmesin, sütun sabit kalsın */
+.fxi-tablo td:first-child { max-width: 260px; word-break: break-word; }
+.fxi-tablo th, .fxi-tablo td { vertical-align: top; }
+
+/* Eşleştirme formu ve seçicileri hücre genişliğini aşmasın */
+.fxi-eslesme-form { min-width: 200px; max-width: 240px; }
+.fxi-eslesme-select, .fxi-eslesme-input { max-width: 100%; width: 100%; box-sizing: border-box; }
+.fxi-arama-sonuclari { max-width: 240px; }
+.fxi-fiyat-onizleme { word-break: break-word; }
+
+/* Kategori seçme satırı (tedarikçi sınıflandırma) uzun kategori adlarıyla taşıyordu */
+.fxi-siniflandirma-sor { flex-wrap: wrap; }
+.fxi-siniflandirma-sor .fxi-tip-btn { white-space: normal; text-align: left; }
+
+/* Fatura başlığındaki toplamlar dar ekranda alt satıra insin */
+.fxi-toplamlar { word-break: break-word; }

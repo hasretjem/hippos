@@ -883,27 +883,51 @@ export default async function handler(req, res) {
         return res.status(200).json({ records: rows.map(rowToGider) });
       }
       if (req.method === 'POST') {
-        const { tarih, kategori, tedarikciAciklama, tutar, kdvOrani, odemeDurumu, belgeNo, toptanciId } = req.body || {};
+        const { tarih, kategori, tedarikciAciklama, tutar, kdvOrani, odemeDurumu, belgeNo, toptanciId, yeniToptanciAdi } = req.body || {};
         if (!kategori || tutar === undefined || tutar === null || tutar === '') {
           return res.status(400).json({ error: 'kategori ve tutar gerekli' });
         }
+        // Tarih artık ZORUNLU — boş tarihli kayıt "Bu Ay" filtresinde hiç görünmediği için
+        // kullanıcı açısından kaybolmuş oluyordu. Frontend de boş tarihte kaydet'i kilitliyor.
+        if (!tarih) return res.status(400).json({ error: 'tarih gerekli' });
         const id = benzersizId();
         const now = new Date();
-        const kayitTarih = tarih || now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+        const kayitTarih = tarih;
         const kayitZamani = now.toISOString();
         const tutarNum = ondalikParseServer(tutar);
+
+        // Toptancı Alışı modunda firma kayıtlı değilse yeni cari kartı açılır
+        // (İşletme Gideri modunda yeniToptanciAdi hiç gönderilmez, cari oluşmaz).
+        let etkinToptanciId = toptanciId || '';
+        let yeniToptanciAcildi = false;
+        if (!etkinToptanciId && String(yeniToptanciAdi || '').trim()) {
+          const TOPTANCILAR_TABCONFIG = { tab: 'Toptancılar', headers: ['ID', 'Firma Adı', 'Kategori', 'Telefon', 'Yetkili Kişi', 'Adres', 'Not', 'Bakiye', 'Eklenme Tarihi', 'Durum'] };
+          const tRows = await getRows(sheets, TOPTANCILAR_TABCONFIG);
+          const adNorm = metinNormalize(yeniToptanciAdi);
+          const mevcut = tRows.find((r) => metinNormalize(r[1]) === adNorm);
+          if (mevcut) {
+            etkinToptanciId = mevcut[0];
+          } else {
+            etkinToptanciId = benzersizId();
+            yeniToptanciAcildi = true;
+            await appendRow(sheets, TOPTANCILAR_TABCONFIG, [
+              etkinToptanciId, String(yeniToptanciAdi).trim(), kategori, '', '', '', 'Manuel gider girişinden otomatik oluşturuldu', 0, kayitTarih, 'aktif',
+            ]);
+          }
+        }
+
         // Manuel eklenen gider tek kalemlik kendi faturası gibi davranır — faturaId = kendi id'si,
         // böylece UI'daki fatura-bazlı gruplama (XML'den gelen çok kalemli faturalarla) tutarlı çalışır.
-        const rowValues = [id, kayitTarih, kategori, tedarikciAciklama || '', tutarNum, kdvOrani || '', odemeDurumu || 'Ödendi', belgeNo || '', toptanciId || '', kayitZamani, id];
+        const rowValues = [id, kayitTarih, kategori, tedarikciAciklama || '', tutarNum, kdvOrani || '', odemeDurumu || 'Ödendi', belgeNo || '', etkinToptanciId, kayitZamani, id];
         await appendRow(sheets, GIDER_TAB, rowValues);
 
-        // Toptancı seçildiyse hareket defterine borç (fatura) satırı düş — FIFO bakiye buradan hesaplanır.
-        if (toptanciId) {
+        // Cari bağlantısı varsa hareket defterine borç (fatura) satırı düş — FIFO bakiye buradan hesaplanır.
+        if (etkinToptanciId) {
           await appendRow(sheets, TOPTANCI_HAREKET_TAB, [
-            benzersizId(), toptanciId, kayitTarih, 'fatura', tutarNum, tedarikciAciklama || kategori, id, '', kayitZamani,
+            benzersizId(), etkinToptanciId, kayitTarih, 'fatura', tutarNum, tedarikciAciklama || kategori, id, '', kayitZamani,
           ]);
         }
-        return res.status(200).json({ ok: true, record: rowToGider(rowValues) });
+        return res.status(200).json({ ok: true, record: rowToGider(rowValues), yeniToptanciAcildi });
       }
       if (req.method === 'PUT') {
         const { id, ...patch } = req.body || {};
@@ -951,9 +975,11 @@ export default async function handler(req, res) {
         if (!kategori || !musteriFirma || tutar === undefined || tutar === null || tutar === '') {
           return res.status(400).json({ error: 'kategori, musteriFirma ve tutar gerekli' });
         }
+        // Tarih zorunlu (boş tarihli kayıt "Bu Ay" filtresinde görünmez olurdu).
+        if (!tarih) return res.status(400).json({ error: 'tarih gerekli' });
         const id = benzersizId();
         const now = new Date();
-        const kayitTarih = tarih || now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+        const kayitTarih = tarih;
         const kayitZamani = now.toISOString();
         const rowValues = [id, kayitTarih, kategori, musteriFirma, faturaNo || '', ondalikParseServer(tutar), kdvOrani || '', vadeTarihi || '', tahsilatDurumu || 'Tahsilat Bekliyor', kayitZamani];
         await appendRow(sheets, GELIR_TAB, rowValues);

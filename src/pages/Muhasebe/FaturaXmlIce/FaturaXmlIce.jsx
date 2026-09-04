@@ -408,6 +408,7 @@ export default function FaturaXmlIce({ showToast }) {
                 </div>
               )}
 
+              <div className="fxi-tablo-kaydir">
               <table className="fxi-tablo">
                 <thead>
                   <tr>
@@ -578,6 +579,7 @@ export default function FaturaXmlIce({ showToast }) {
                   })}
                 </tbody>
               </table>
+              </div>
 
               <div className="fxi-kaydet-satir">
                 {kaydedilenler[f.uuid] && (
