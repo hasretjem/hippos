@@ -2,10 +2,11 @@ import React, { useState, useMemo, useRef } from 'react';
 import './Paketci.css';
 import BosVarPaketci from '../../components/bosvar/BosVarPaketci';
 import '../../components/bosvar/bosvar.css';
+import StokSayimEkrani from '../../components/StokSayim/StokSayimEkrani';
 import { TL } from '../../hooks/useHipposData';
 import {
   Package, Users, Camera, Image as ImageIcon, StickyNote, Check, X,
-  ChevronLeft, Wallet, Undo2, Clock, User, AlertTriangle, CupSoda, PackageOpen,
+  ChevronLeft, Wallet, Undo2, Clock, User, AlertTriangle, CupSoda, PackageOpen, ClipboardList,
 } from 'lucide-react';
 
 const ODEME_YONTEMLERI = ['Nakit', 'Kredi Kartı', 'Yemek Kartı', 'Diğer'];
@@ -32,7 +33,8 @@ export default function Paketci({ data }) {
     setPaketciAdi(nameInput.trim());
   }
 
-  const [tab, setTab] = useState('paketler'); // 'paketler' | 'cariler'
+  const [tab, setTab] = useState('paketler'); // 'paketler' | 'cariler' | 'stok'
+  const stokBekleyen = ['ambalaj', 'icecek'].filter((s) => data.stok?.sayimlar?.[s] && !data.stok.sayimlar[s].okundu).length;
   const [selectedPaket, setSelectedPaket] = useState(null); // paket adı (string)
   const [selectedCari, setSelectedCari] = useState(null); // cari id
   const [actionModal, setActionModal] = useState(null); // { hedefTip: 'paket'|'cari', hedefId, tip: 'teslim_edildi'|'tam_odeme'|'kismi_odeme' }
@@ -148,9 +150,15 @@ export default function Paketci({ data }) {
         <button className={tab === 'cariler' ? 'active' : ''} onClick={() => setTab('cariler')}>
           <Users size={16} /> Cariler
         </button>
+        <button className={tab === 'stok' ? 'active' : ''} onClick={() => setTab('stok')}>
+          <ClipboardList size={16} /> Stok Sayım {stokBekleyen > 0 && <span className="pk-badge">{stokBekleyen}</span>}
+        </button>
       </div>
 
       <div className="pk-body">
+        {tab === 'stok' && (
+          <StokSayimEkrani data={data} rol="paketci" adSoyad={paketciAdi} />
+        )}
         {tab === 'paketler' && !selectedPaket && !selectedBosvarKaydi && (
           <div className="pk-list">
             {paketListesi.length === 0 && bosvarKayitListesi.length === 0 && <div className="pk-empty">Şu an açık teslimat yok.</div>}

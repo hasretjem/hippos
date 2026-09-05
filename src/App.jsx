@@ -8,8 +8,10 @@ import GunSonu from './pages/GunSonu/GunSonu';
 import Paketci from './pages/Paketci/Paketci';
 import MutfakPaneli from './pages/MutfakPaneli/MutfakPaneli';
 import Muhasebe from './pages/Muhasebe/Muhasebe';
+import StokSiparis from './pages/StokSiparis/StokSiparis';
 import BottomNav from './components/BottomNav/BottomNav';
 import useHipposData, { QUICK_SALE } from './hooks/useHipposData';
+import useStokTakip from './hooks/useStokTakip';
 import { supabase } from './services/supabase';
 
 export default function App() {
@@ -23,7 +25,11 @@ export default function App() {
   // tableti, ana paneldeki HER tabloyu (cari hareketleri, satış geçmişi, ürün düzenleme
   // geçmişi vs.) dinlemeye hiç ihtiyaç duymuyor — sadece kendi ekranına lazım olanı dinlesin.
   const dataScope = isPaketciRoute ? 'paketci' : isMutfakRoute ? 'mutfak' : 'full';
-  const data = useHipposData(dataScope);
+  const baseData = useHipposData(dataScope);
+  // Stok Sipariş modülü — ayrı, izole hook (kendi broadcast kanalı), her scope'ta aktif:
+  // ana panel takip listelerini yönetir, mutfak/paketçi kendi sekmelerine sayım gönderir.
+  const stok = useStokTakip(true);
+  const data = { ...baseData, stok };
   const [activePage, setActivePage] = useState('tables');
   const [selectedTable, setSelectedTable] = useState(QUICK_SALE);
 
@@ -50,7 +56,7 @@ export default function App() {
   }
 
   function handleNavigate(page, opts) {
-    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler' || page === 'endofday' || page === 'muhasebe') {
+    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler' || page === 'endofday' || page === 'muhasebe' || page === 'stoksiparis') {
       // Sadece alt menüden "Hızlı Satış"a bilerek tıklanınca seçili masa sıfırlanır.
       // Masalar sayfasından bir masaya girerken (opts.resetTable verilmez) buna dokunulmaz.
       if (page === 'pos' && opts?.resetTable) setSelectedTable(QUICK_SALE);
@@ -89,7 +95,10 @@ export default function App() {
       {activePage === 'muhasebe' && (
         <Muhasebe onNavigate={handleNavigate} />
       )}
-      {activePage !== 'products' && activePage !== 'pos' && activePage !== 'endofday' && activePage !== 'muhasebe' && <BottomNav activePage={activePage} onNavigate={handleNavigate} paketciBekleyenSayisi={(data.cariTeslimatBildirimleri || []).filter((b) => b.durum === 'bekliyor').length} />}
+      {activePage === 'stoksiparis' && (
+        <StokSiparis data={data} onNavigate={handleNavigate} />
+      )}
+      {activePage !== 'products' && activePage !== 'pos' && activePage !== 'endofday' && activePage !== 'muhasebe' && activePage !== 'stoksiparis' && <BottomNav activePage={activePage} onNavigate={handleNavigate} paketciBekleyenSayisi={(data.cariTeslimatBildirimleri || []).filter((b) => b.durum === 'bekliyor').length} stokOkunmadi={stok.toplamOkunmadi} />}
     </>
   );
 }
