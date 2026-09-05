@@ -201,7 +201,15 @@ export default function FisMenü({ data }) {
     }).filter(x => x.id);
   }
 
-  const corbaSug  = toSug(CORBA_SABIT, corbaYemekler);
+  const corbaSug = products
+    .filter(p => p.gununMenusuKategori === 'corba' && !p.isAzVariant)
+    .sort((a, b) => (a.gununMenusuSira || 99) - (b.gununMenusuSira || 99))
+    .map(p => ({ id: p.id, name: p.ad }));
+
+  const yardimciSug = products
+    .filter(p => p.gununMenusuKategori === 'yardimci_yemek' && !p.isAzVariant)
+    .sort((a, b) => (a.gununMenusuSira || 99) - (b.gununMenusuSira || 99))
+    .map(p => ({ id: p.id, name: p.ad }));
   const bakSug    = toSug(BAKLAGIL_SABIT, yemekler);
   const firinSug  = toSug(FIRIN_SABIT, yemekler);
   const pilavSug  = toSug(PILAV_SABIT, yemekler);
@@ -361,7 +369,7 @@ export default function FisMenü({ data }) {
   function pilavSlotProps(slot) {
     return {
       placeholder: 'Pilav / makarna ara...',
-      suggestions: pilavSug,
+      suggestions: yardimciSug.length > 0 ? yardimciSug : pilavSug,
       allProducts: yemekler.map(p => ({ id: p.id, name: p.ad })),
       sel: slot.sel,
       onPick: item => updSlot(setPilavSlots, slot.key, item),
@@ -371,7 +379,7 @@ export default function FisMenü({ data }) {
   function corbaSlotProps(slot) {
     return {
       placeholder: 'Çorba ara veya seç...',
-      suggestions: corbaSug,
+      suggestions: corbaSug.length > 0 ? corbaSug : toSug(CORBA_SABIT, yemekler),
       allProducts: yemekler.map(p => ({ id: p.id, name: p.ad })),
       sel: slot.sel,
       onPick: item => updSlot(setCorbaSlots, slot.key, item),
