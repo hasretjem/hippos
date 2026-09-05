@@ -1,60 +1,51 @@
+/* Marka renkleri */
 .sse-shell {
+  --krem: #F6F7EB;
+  --turuncu: #E8912F;
+  --kirmizi: #E94F37;
+  --koyu: #393E41;
+
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* Üstte panel başlığı/sekmeleri olabildiği için sabit yükseklik yerine ESNEK
+     yükseklik kullanılıyor: flex:1 ile kalan alanı doldurur, min-height:0 ile de
+     iç listenin kendi içinde kaydırılmasına izin verir. Böylece alttaki
+     Gönder/Sıfırla butonları her zaman ekranda kalır (önceki hata buydu). */
+  flex: 1;
+  min-height: 0;
   background: #f5f5f5;
   font-family: 'Inter', sans-serif;
   color: #000;
+  overflow: hidden;
 }
 
-.sse-tabs {
-  display: flex;
-  background: #fff;
-  border-bottom: 2px solid #000;
-}
+/* Geom fontu: sekmeler, başlıklar, butonlar */
+.sse-tabs { display: flex; background: #fff; border-bottom: 2px solid #000; flex-shrink: 0; }
 .sse-tab {
-  flex: 1;
-  padding: 12px 8px;
-  border: none;
-  background: none;
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
-  color: #555;
+  flex: 1; padding: 12px 8px; border: none; background: none;
+  font-family: 'Geom-BlackItalic', sans-serif;
+  font-size: 15px; cursor: pointer; color: #666;
   border-bottom: 3px solid transparent;
 }
-.sse-tab.active {
-  color: #000;
-  border-bottom-color: #000;
-}
+.sse-tab.active { color: #000; border-bottom-color: var(--turuncu); }
 
 .sse-son-gonderim {
-  padding: 8px 14px;
-  font-size: 12px;
-  color: #666;
-  background: #fff;
-  border-bottom: 1px solid #ddd;
+  padding: 8px 14px; font-size: 12px; color: #666;
+  background: #fff; border-bottom: 1px solid #ddd; flex-shrink: 0;
 }
 
-.sse-list {
-  flex: 1;
-  overflow-y: auto;
-}
+.sse-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
 .sse-row {
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid #ddd;
-  min-height: 48px;
-  background: #fff;
+  display: flex; align-items: center; border-bottom: 1px solid #ddd;
+  min-height: 48px; background: #fff;
 }
 .sse-row-head {
-  background: #e8e8e8;
-  font-size: 12px;
-  font-weight: 800;
-  position: sticky;
-  top: 0;
-  z-index: 3;
+  background: var(--kirmizi);
+  color: var(--krem);
+  font-family: 'Geom-BlackItalic', sans-serif;
+  font-size: 14px;
+  position: sticky; top: 0; z-index: 3;
   border-bottom: 1.5px solid #000;
 }
 .sse-row:nth-child(even) { background: #fafafa; }
@@ -64,94 +55,47 @@
 .sse-col-num { width: 90px; flex-shrink: 0; }
 .sse-col-birim { width: 60px; flex-shrink: 0; font-size: 13px; color: #555; }
 .sse-col-not { flex: 1.4; min-width: 100px; }
+.sse-row-head .sse-col-birim { color: var(--krem); }
 
 .sse-input {
-  width: 100%;
-  border: 1.5px solid #000;
-  border-radius: 4px;
-  font-size: 16px;
-  font-weight: 800;
-  text-align: center;
-  padding: 8px 4px;
+  width: 100%; border: 1.5px solid #000; border-radius: 4px;
+  font-size: 16px; font-weight: 800; text-align: center; padding: 8px 4px;
   font-family: 'Inter', sans-serif;
 }
-.sse-input-not {
-  text-align: left;
-  font-weight: 500;
-  font-size: 13px;
-}
+.sse-input-not { text-align: left; font-weight: 500; font-size: 13px; }
 
-.sse-satir-ekle {
-  padding: 12px 14px;
-}
+.sse-satir-ekle { padding: 12px 14px 24px; }
+.sse-satir-ekle .sse-btn { font-family: 'Geom-BlackItalic', sans-serif; }
 
 .sse-footer {
-  display: flex;
-  gap: 10px;
-  padding: 12px 14px;
-  background: #fff;
-  border-top: 2.5px solid #000;
+  display: flex; gap: 10px; padding: 12px 14px;
+  background: #fff; border-top: 2.5px solid #000;
+  flex-shrink: 0;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
 }
 .sse-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 14px;
-  font-size: 15px;
-  font-weight: 800;
-  border-radius: 4px;
-  cursor: pointer;
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 14px; font-size: 15px; border-radius: 4px; cursor: pointer;
   border: 1.5px solid #000;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Geom-BlackItalic', sans-serif;
 }
 .sse-btn-outline { background: #fff; color: #000; }
-.sse-btn-primary { background: #25D366; color: #000; }
-.sse-btn-danger { background: #e11d48; color: #fff; border-color: #e11d48; }
+.sse-btn-primary { background: var(--turuncu); color: var(--krem); }
+.sse-btn-danger { background: var(--kirmizi); color: var(--krem); border-color: var(--kirmizi); }
 
 .sse-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-  z-index: 300;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
 }
 .sse-modal {
-  background: #fff;
-  border: 2.5px solid #000;
-  border-radius: 6px;
-  padding: 20px;
-  max-width: 320px;
-  width: 100%;
-  text-align: center;
+  background: #fff; border: 2.5px solid #000; border-radius: 6px;
+  padding: 20px; max-width: 320px; width: 100%; text-align: center;
 }
-.sse-modal-warning {
-  color: #e11d48;
-  font-weight: 800;
-  font-size: 14px;
-  margin-bottom: 8px;
-}
-.sse-modal-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 16px;
-}
+.sse-modal-warning { color: var(--kirmizi); font-weight: 800; font-size: 14px; margin-bottom: 8px; }
+.sse-modal-actions { display: flex; gap: 8px; margin-top: 16px; }
 
 .sse-toast {
-  position: fixed;
-  bottom: 90px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #000;
-  color: #fff;
-  padding: 10px 20px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 600;
-  z-index: 400;
-  white-space: nowrap;
+  position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+  background: #000; color: #fff; padding: 10px 20px; border-radius: 999px;
+  font-size: 14px; font-weight: 600; z-index: 400; white-space: nowrap;
 }

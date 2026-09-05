@@ -7,7 +7,7 @@ import {
   ListChecks, Calculator, Eye, EyeOff, Share2, Search, X,
   Banknote, CreditCard, UtensilsCrossed, BookOpen, ExternalLink, ChevronRight, ChevronDown,
   Undo2, Wifi, WifiOff, Printer, Database, FileSpreadsheet, Triangle, Image as ImageIcon, RefreshCw,
-  Wheat, Copy, Check, Receipt, AlertTriangle,
+  Wheat, Copy, Check, Receipt, AlertTriangle, ClipboardList,
 } from 'lucide-react';
 
 // Türkçe karakter duyarsız arama (İ/I/ı/i, ş/s, ğ/g, ü/u, ö/o, ç/c)
@@ -31,6 +31,7 @@ function normalizeTr(s) {
 ];
 
 export default function Settings({ data, onNavigate }) {
+  const stokOkunmadi = data.stok?.toplamOkunmadi || 0;
   const {
     products,
     categories,
@@ -540,6 +541,14 @@ export default function Settings({ data, onNavigate }) {
               <span className="st-action-ico"><Receipt size={22} /></span>
               <span className="st-action-title">Muhasebe</span>
               <span className="st-action-sub">Fatura, makbuz, toptancı ve personel yönetimi</span>
+            </button>
+            <button className="st-action-card st-action-stok" onClick={() => onNavigate('stoksiparis')}>
+              <span className="st-action-ico"><ClipboardList size={22} /></span>
+              <span className="st-action-title">
+                Stok Sipariş
+                {stokOkunmadi > 0 && <span className="st-action-badge">{stokOkunmadi}</span>}
+              </span>
+              <span className="st-action-sub">Mutfak/paketçi sayımı ve toptancı siparişi</span>
             </button>
           </div>
 

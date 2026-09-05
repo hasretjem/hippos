@@ -1,6 +1,6 @@
 import React from 'react';
 import './BottomNav.css';
-import { Zap, Table2, BarChart3, Settings, Wallet, ClipboardList } from 'lucide-react';
+import { Zap, Table2, BarChart3, Settings, Wallet } from 'lucide-react';
 
 const ITEMS = [
   { key: 'pos', label: 'Hızlı Satış', Icon: Zap },
@@ -8,7 +8,6 @@ const ITEMS = [
   { key: 'cariler', label: 'Cariler', Icon: Wallet },
   { key: 'reports', label: 'Kasa & Rapor', Icon: BarChart3 },
   { key: 'settings', label: 'Yönetim Paneli', Icon: Settings },
-  { key: 'stoksiparis', label: 'Stok Sipariş', Icon: ClipboardList },
 ];
 
 export default function BottomNav({ activePage, onNavigate, paketciBekleyenSayisi = 0, stokOkunmadi = 0 }) {
@@ -16,9 +15,9 @@ export default function BottomNav({ activePage, onNavigate, paketciBekleyenSayis
     <nav className="nav-bottom">
       {ITEMS.map(({ key, label, Icon }) => {
         const isCari = key === 'cariler';
-        const isStok = key === 'stoksiparis';
+        const isSettings = key === 'settings';
         const hasBekleyen = isCari && paketciBekleyenSayisi > 0;
-        const hasStokBildirim = isStok && stokOkunmadi > 0;
+        const hasStokBildirim = isSettings && stokOkunmadi > 0;
         return (
           <button
             key={key}

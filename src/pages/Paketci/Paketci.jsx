@@ -155,10 +155,11 @@ export default function Paketci({ data }) {
         </button>
       </div>
 
-      <div className="pk-body">
-        {tab === 'stok' && (
-          <StokSayimEkrani data={data} rol="paketci" adSoyad={paketciAdi} />
-        )}
+      {tab === 'stok' && (
+        <StokSayimEkrani data={data} rol="paketci" adSoyad={paketciAdi} />
+      )}
+
+      <div className="pk-body" style={tab === 'stok' ? { display: 'none' } : undefined}>
         {tab === 'paketler' && !selectedPaket && !selectedBosvarKaydi && (
           <div className="pk-list">
             {paketListesi.length === 0 && bosvarKayitListesi.length === 0 && <div className="pk-empty">Şu an açık teslimat yok.</div>}

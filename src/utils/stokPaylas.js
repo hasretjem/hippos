@@ -6,6 +6,11 @@ import html2canvas from 'html2canvas';
 
 const SABLON_GENISLIK = 720;
 
+// Marka renkleri (Tables.css / DirectSale.css ile aynı)
+const KREM = '#F6F7EB';
+const TURUNCU = '#E8912F';
+const KIRMIZI = '#E94F37';
+
 function trTarih(iso) {
   if (!iso) return '';
   return new Date(iso).toLocaleDateString('tr-TR', {
@@ -27,6 +32,8 @@ function sablonHtmlOlustur(baslikSag, satirlar) {
 
   const baslik = document.createElement('div');
   baslik.style.padding = '14px 16px';
+  baslik.style.background = TURUNCU;
+  baslik.style.color = KREM;
   baslik.style.borderBottom = '2.5px solid #000';
   baslik.style.display = 'flex';
   baslik.style.justifyContent = 'space-between';
@@ -40,7 +47,8 @@ function sablonHtmlOlustur(baslikSag, satirlar) {
   const basHead = document.createElement('div');
   basHead.style.display = 'flex';
   basHead.style.borderBottom = '1.5px solid #000';
-  basHead.style.background = '#e0e0e0';
+  basHead.style.background = KIRMIZI;
+  basHead.style.color = KREM;
   basHead.style.fontSize = '13px';
   basHead.style.fontWeight = '800';
   basHead.innerHTML = `
