@@ -607,3 +607,13 @@
   border-radius: 7px; border: 1px solid #E3DFCF; background: #fff;
   color: #393E41; font-size: 12px; padding: 0 6px;
 }
+
+/* 4 KPI kart — toptancı sayfasında avans ayrı kart eklendi */
+.mh-kpi-row-4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 900px) { .mh-kpi-row-4 { grid-template-columns: repeat(2, 1fr); } }
+
+/* Kart alt açıklama satırı */
+.mh-kpi-alt { font-size: 10.5px; color: #83786B; margin-top: 1px; }
+
+/* Avans kartı — yeşil vurgulu */
+.mh-kpi-yesil { border-color: rgba(46,139,87,0.35) !important; background: rgba(46,139,87,0.05) !important; }

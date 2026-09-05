@@ -192,7 +192,19 @@ function rowToEkstre(r) {
   };
 }
 
-// Banka ekstresi Türkçe karaktersiz, kısaltılmış ve satır sonunda şehir/ülke taşır
+// Yemek kartı / fintek komisyon firmaları — bunlar tedarikçi değil, aracı kurum.
+// Kart ekstrelerinde GİDEN olarak görünseler de Toptancı Carisine ödeme olarak
+// değil, doğrudan "Yemek Kart-Banka Masf." kategorisinde Giderlere yazılırlar.
+// firmaEslesirMi ile bir toptancıya bağlanmaz; eslesmeDurumu = 'fintek_komisyon'.
+const YEMEK_KARTI_KOMISYON_FIRMALARI = new Set([
+  'multinet', 'tokenflex', 'token', 'metropal', 'sodexo', 'pluxee',
+  'edenred', 'ticket', 'setcard', 'wincard', 'paycell', 'paye',
+]);
+
+function fintekKomisyonMu(saticiAdi) {
+  const norm = asciiNormalize(saticiAdi).split(' ');
+  return norm.some((k) => YEMEK_KARTI_KOMISYON_FIRMALARI.has(k));
+}
 // ("KOFTECI YUSUF IST SISLI B ISTANBUL TR"). Toptancılar'daki resmi unvanla
 // ("KÖFTECİ YUSUF HZR. YEM. ... TİC.A.Ş.") eşleştirmek için ikisini de aynı sadeleştirmeden
 // geçirip anlamlı kelimeleri karşılaştırıyoruz.
@@ -1299,22 +1311,31 @@ export default async function handler(req, res) {
         let kategori = '';
 
         if (gidenMi) {
-          const eslesen = toptancilarRows.find((r) => firmaEslesirMi(saticiAdi, r[1]));
-          if (eslesen) {
-            eslesmeDurumu = 'toptanci_odemesi';
-            eslesenToptanciId = eslesen[0];
-            kategori = eslesen[2] || MCC_KATEGORI[saticiKodu] || '';
-            ozet.toptanciOdemesi++;
-            // Cari borcu azaltan ödeme hareketi — FIFO kapama toptanciHareket POST'unda
-            // yapıldığı gibi burada da fatura kapatma yapılmıyor, sadece bakiye düşüyor.
-            toptanciOdemeleri.push([
-              benzersizId(), eslesen[0], tarih, 'odeme', tutar,
-              `Kredi Kartı Ödemesi — ${saticiAdi}`, '', 'Kredi Kartı', kayitZamani,
-            ]);
-          } else {
-            eslesmeDurumu = 'fatura_bekliyor';
-            kategori = MCC_KATEGORI[saticiKodu] || '';
+          // Önce fintek/yemek kartı komisyon firması mı diye kontrol et — bu firmalar
+          // tedarikçi değil, aracı kurum. Toptancı carisine DEĞİL, doğrudan Giderlere yazılır.
+          if (fintekKomisyonMu(saticiAdi)) {
+            eslesmeDurumu = 'fintek_komisyon';
+            kategori = 'Yemek Kart-Banka Masf.';
             ozet.faturaBekliyor++;
+          } else {
+            const eslesen = toptancilarRows.find((r) => firmaEslesirMi(saticiAdi, r[1]));
+            if (eslesen) {
+              // KRİTİK DÜZELTME: Uyumsoft faturası henüz gelmemiş kart ödemeleri
+              // toptancı carisini HEMEN eksiye geçirmemeli — "Faturası Beklenenler"
+              // havuzunda beklеmeli. Kullanıcı "Cariye Ödeme Olarak İşle" butonuna
+              // bastığında VEYA Uyumsoft faturasıyla eşleştiğinde cari güncellenir.
+              // ÖNCEKİ HATALI DAVRANIŞ: firmaEslesirMi true → anında 'odeme' hareketi yazılıyordu
+              // → fatura gelmeden bakiye düşüyordu → toptancı Köfteci Yusuf 27.645 TL eksi görünüyordu.
+              eslesmeDurumu = 'fatura_bekliyor';
+              eslesenToptanciId = eslesen[0];
+              kategori = eslesen[2] || MCC_KATEGORI[saticiKodu] || '';
+              ozet.faturaBekliyor++;
+              // toptanciOdemeleri listesine ARTIK eklenmiyoruz — cari hareketi yazılmaz.
+            } else {
+              eslesmeDurumu = 'fatura_bekliyor';
+              kategori = MCC_KATEGORI[saticiKodu] || '';
+              ozet.faturaBekliyor++;
+            }
           }
         } else {
           if (posHakedisMi(aciklama)) { eslesmeDurumu = 'pos_hakedis'; ozet.posHakedis++; }
@@ -1348,24 +1369,54 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, ozet });
     }
 
-    // "Faturası Beklenenler" havuzundaki bir satırı Giderler'e aktar (fatura hiç gelmeyecekse
-    // ya da fişle kapatılacaksa). Ekstre satırı 'gidere_islendi' olarak işaretlenir.
+    // "Faturası Beklenenler" havuzundaki bir satırı işle. İKİ SEÇENEK:
+    // 1) Giderler'e aktar (fatura hiç gelmeyecekse ya da fişle kapatılacaksa)
+    // 2) Cariye ödeme olarak işle (ödeme yapıldı, fatura ayrıca Uyumsoft'tan gelecek)
+    //    → Toptancı Hareketleri'ne 'odeme' kaydı düşülür; fatura gelince ayrıca 'fatura' kaydı açılır.
     if (resource === 'ekstreGidereIsle') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-      const { ekstreId, kategori } = req.body || {};
-      if (!ekstreId || !kategori) return res.status(400).json({ error: 'ekstreId ve kategori gerekli' });
+      const { ekstreId, kategori, cariyeOdemeOlarakIsle } = req.body || {};
+      if (!ekstreId) return res.status(400).json({ error: 'ekstreId gerekli' });
 
       const rows = await getRows(sheets, EKSTRE_TAB);
       const idx = rows.findIndex((r) => r[0] === ekstreId);
       if (idx === -1) return res.status(404).json({ error: 'ekstre kaydı bulunamadı' });
       const kayit = rowToEkstre(rows[idx]);
-
-      const giderId = benzersizId();
       const kayitZamani = new Date().toISOString();
+      let giderId = '';
+
+      if (cariyeOdemeOlarakIsle) {
+        // Toptancı carisine ödeme hareketi düş — fatura ayrıca gelecek.
+        if (!kayit.eslesenToptanciId) return res.status(400).json({ error: 'Bu satır bir toptancıya bağlı değil; önce cari eşleştirmesi gerekiyor' });
+        await ensureTab(sheets, TOPTANCI_HAREKET_TAB.tab, TOPTANCI_HAREKET_TAB.headers);
+        await appendRow(sheets, TOPTANCI_HAREKET_TAB, [
+          benzersizId(), kayit.eslesenToptanciId, kayit.tarih, 'odeme', kayit.tutar,
+          `Kredi Kartı Ödemesi — ${kayit.saticiAdi}`, '', 'Kredi Kartı', kayitZamani,
+        ]);
+        const rowValues = [...rows[idx]];
+        rowValues[10] = 'toptanci_odemesi';
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID, range: `${EKSTRE_TAB.tab}!A${idx + 2}:${EKSTRE_LAST_COL}${idx + 2}`,
+          valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
+        });
+        return res.status(200).json({ ok: true, islem: 'cariye_odeme' });
+      }
+
+      // Giderler'e aktar (eski davranış, kategori zorunlu).
+      if (!kategori) return res.status(400).json({ error: 'kategori gerekli' });
+      giderId = benzersizId();
       await appendRow(sheets, GIDER_TAB, [
         giderId, kayit.tarih, kategori, kayit.saticiAdi || kayit.aciklama, kayit.tutar, '',
-        'Ödendi', 'Kart Ekstresi', '', kayitZamani, giderId,
+        'Ödendi', 'Kart Ekstresi', kayit.eslesenToptanciId || '', kayitZamani, giderId,
       ]);
+      // Toptancıya bağlı bir satırsa giderlere aktarıldığında borç hareketi de düş.
+      if (kayit.eslesenToptanciId) {
+        await ensureTab(sheets, TOPTANCI_HAREKET_TAB.tab, TOPTANCI_HAREKET_TAB.headers);
+        await appendRow(sheets, TOPTANCI_HAREKET_TAB, [
+          benzersizId(), kayit.eslesenToptanciId, kayit.tarih, 'fatura', kayit.tutar,
+          `Kart Ekstresi — ${kayit.saticiAdi}`, giderId, '', kayitZamani,
+        ]);
+      }
 
       const rowValues = [...rows[idx]];
       rowValues[10] = 'gidere_islendi';

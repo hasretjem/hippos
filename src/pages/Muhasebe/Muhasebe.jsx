@@ -616,8 +616,7 @@ function EkstreAltSekmesi({ showToast, yon, onDegisti }) {
         <div className="mh-ozet-serit">
           <span><b>{sonOzet.eklenen}</b> yeni</span>
           {sonOzet.mukerrer > 0 && <span><b>{sonOzet.mukerrer}</b> mükerrer atlandı</span>}
-          {sonOzet.toptanciOdemesi > 0 && <span className="ok"><b>{sonOzet.toptanciOdemesi}</b> toptancı ödemesi işlendi</span>}
-          {sonOzet.faturaBekliyor > 0 && <span className="uyari"><b>{sonOzet.faturaBekliyor}</b> fatura bekliyor</span>}
+          {sonOzet.faturaBekliyor > 0 && <span className="uyari"><b>{sonOzet.faturaBekliyor}</b> faturası bekleniyor — "Faturası Beklenenler" sekmesinden işle</span>}
           {sonOzet.posHakedis > 0 && <span className="ok"><b>{sonOzet.posHakedis}</b> POS hakedişi</span>}
         </div>
       )}
@@ -667,6 +666,8 @@ function EkstreAltSekmesi({ showToast, yon, onDegisti }) {
 // Ekstre satırının eşleşme durumunu okunur bir etikete çevirir.
 function ekstreDurumEtiketi(k, toptanciAdiCoz) {
   switch (k.eslesmeDurumu) {
+    case 'fintek_komisyon':
+      return <span className="mh-durum mh-durum-notr">💳 Komisyon (Giderler'e işlenecek)</span>;
     case 'toptanci_odemesi':
       return <span className="mh-durum mh-durum-yesil">🟢 Cariye işlendi{toptanciAdiCoz?.(k.eslesenToptanciId) ? ` — ${toptanciAdiCoz(k.eslesenToptanciId)}` : ''}</span>;
     case 'fatura_bekliyor':
@@ -739,6 +740,31 @@ function FaturaBekleyenlerAltSekmesi({ showToast, onDegisti }) {
     }
   }
 
+  // Ödeme yapıldı, fatura ayrıca Uyumsoft'tan gelecek — cari hesabına 'odeme' düşülür,
+  // Giderler'e yazılmaz (fatura XML'den gelince ayrıca yazılacak).
+  async function cariyeOdemeOlarakIsle(kayit) {
+    if (!kayit.eslesenToptanciId) {
+      showToast('Bu satır bir toptancıya bağlı değil, önce Toptancılar\'dan manuel eşleştir');
+      return;
+    }
+    setIslenen(kayit.id + '_cari');
+    try {
+      const res = await fetch('/api/muhasebe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resource: 'ekstreGidereIsle', ekstreId: kayit.id, cariyeOdemeOlarakIsle: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'işlenemedi');
+      setKayitlar((prev) => prev.filter((k) => k.id !== kayit.id));
+      showToast('Cari hesaba ödeme olarak işlendi — fatura gelince XML\'den eşleşecek');
+      onDegisti?.();
+    } catch (err) {
+      showToast('İşlenemedi: ' + err.message);
+    } finally {
+      setIslenen('');
+    }
+  }
+
   async function yoksay(kayit) {
     try {
       await fetch('/api/muhasebe?resource=ekstre', {
@@ -790,17 +816,28 @@ function FaturaBekleyenlerAltSekmesi({ showToast, onDegisti }) {
                   <td>{k.saticiAdi || k.aciklama}</td>
                   <td className="mh-tutar-cell">{TL(k.tutar)}</td>
                   <td>
-                    <select className="mh-satir-select" value={secilenKategori[k.id] || ''}
-                      onChange={(e) => setSecilenKategori((p) => ({ ...p, [k.id]: e.target.value }))}>
-                      <option value="">Seçiniz</option>
-                      {kategoriler.map((kat) => <option key={kat} value={kat}>{kat}</option>)}
-                    </select>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <select className="mh-satir-select" value={secilenKategori[k.id] || ''}
+                        onChange={(e) => setSecilenKategori((p) => ({ ...p, [k.id]: e.target.value }))}>
+                        <option value="">Kategori seç</option>
+                        {kategoriler.map((kat) => <option key={kat} value={kat}>{kat}</option>)}
+                      </select>
+                    </div>
                   </td>
-                  <td className="mh-islem-cell">
-                    <button className="mh-mini-btn" disabled={islenen === k.id} onClick={() => gidereIsle(k)}>
-                      {islenen === k.id ? '…' : 'Giderlere İşle'}
+                  <td className="mh-islem-cell" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 5 }}>
+                    {/* Toptancıya bağlıysa: ödeme cariye işlenebilir (fatura ayrıca gelecek)
+                        ya da fatura hiç gelmeyecekse direkt Giderler'e aktarılabilir. */}
+                    {k.eslesenToptanciId && (
+                      <button className="mh-mini-btn" disabled={!!islenen} onClick={() => cariyeOdemeOlarakIsle(k)}
+                        title="Ödemeyi Toptancı Carisine işle — fatura XML'den gelince ayrıca eşleşecek">
+                        {islenen === k.id + '_cari' ? '…' : '🏦 Cariye Ödeme İşle'}
+                      </button>
+                    )}
+                    <button className="mh-mini-btn mh-mini-btn-ghost" disabled={!!islenen} onClick={() => gidereIsle(k)}
+                      title="Fatura hiç gelmeyecekse kategori seçip doğrudan Giderler'e aktar">
+                      {islenen === k.id ? '…' : 'Giderlere Aktar'}
                     </button>
-                    <button className="mh-mini-btn mh-mini-btn-ghost" onClick={() => yoksay(k)}>Kapsam Dışı</button>
+                    <button className="mh-mini-btn mh-mini-btn-ghost" style={{ opacity: 0.6 }} onClick={() => yoksay(k)}>Yoksay</button>
                   </td>
                 </tr>
               ))}
@@ -1275,15 +1312,21 @@ function ToptancilarCariSekmesi({ showToast }) {
   }, [toptanciOzet, arama, durumFiltre]);
 
   const kpi = useMemo(() => {
-    const toplamBorc = toptanciOzet.reduce((s, t) => s + Math.max(0, t.bakiye), 0);
+    // Net borç = pozitif bakiyeler toplamı (gerçek borcumuz).
+    // Avans = negatif bakiyeler toplamı (fazla ödediklerimiz/alacaklarımız).
+    const netBorc = toptanciOzet.reduce((s, t) => s + Math.max(0, t.bakiye), 0);
+    const toplamAvans = toptanciOzet.reduce((s, t) => s + Math.max(0, -t.bakiye), 0);
+
+    // "Bu Ay Yapılan Ödeme" KPI'ı — sadece bu ayın ödemeleri.
+    // ÖNCEDEN: bu faturaya bakiyeyle tutarsız görünüyordu çünkü "Toplam Ödenen" sütunu
+    // tüm zamanları, KPI sadece bu ayı gösteriyordu. Şimdi KPI etiketi netleştirildi.
     const buAyOdemeler = hareketler.filter((h) => h.tur === 'odeme' && tarihAraliktaMi(h.tarih, 'buAy'));
     const buAyToplamOdeme = buAyOdemeler.reduce((s, h) => s + h.tutar, 0);
 
-    // "Vadesi geçen" ÖNCEDEN toplamBorc ile birebir aynı sayıyı gösteriyordu (anlamsızdı).
-    // Artık gerçek FIFO ile hesaplanıyor: her toptancının faturaları kronolojik sıraya
-    // dizilip ödemeler en eskiden başlayarak düşülüyor; hâlâ açık kalan faturalardan
-    // 30 günden eski olanların toplamı "geciken borç" sayılıyor. (Sheets'te vade alanı
-    // yok — 30 gün, sektörde yaygın varsayılan vade olarak baz alındı.)
+    // Tüm zamanların toplam ödemesi — tablodaki "Toplam Ödenen" sütunlarının genel toplamıyla tutarlı.
+    const tumZamanlarToplamOdeme = hareketler.filter((h) => h.tur === 'odeme').reduce((s, h) => s + h.tutar, 0);
+
+    // 30+ gün gecikmiş açık borç (FIFO hesaplaması).
     const otuzGunOnce = Date.now() - 30 * 24 * 60 * 60 * 1000;
     let gecikenBorc = 0;
     const hareketlerByToptanci = {};
@@ -1299,7 +1342,6 @@ function ToptancilarCariSekmesi({ showToast }) {
         if (h.tur === 'odeme') odemeHavuzu += h.tutar;
         else acikFaturalar.push({ tutar: h.tutar, ts: trTarihiCoz(h.tarih)?.getTime() || 0 });
       });
-      // Ödemeleri en eski faturalardan başlayarak düş (FIFO).
       for (const f of acikFaturalar) {
         if (odemeHavuzu <= 0) break;
         const dusulen = Math.min(odemeHavuzu, f.tutar);
@@ -1311,23 +1353,33 @@ function ToptancilarCariSekmesi({ showToast }) {
       });
     });
 
-    return { toplamBorc, buAyToplamOdeme, gecikenBorc };
+    return { netBorc, toplamAvans, buAyToplamOdeme, tumZamanlarToplamOdeme, gecikenBorc };
   }, [toptanciOzet, hareketler]);
 
   return (
     <div className="mh-yeni">
-      <div className="mh-kpi-row">
+      <div className="mh-kpi-row mh-kpi-row-4">
         <div className="mh-kpi-card mh-kpi-danger">
-          <span className="mh-kpi-label">Toplam Toptancı Borcu</span>
-          <span className="mh-kpi-value">{TL(kpi.toplamBorc)}</span>
+          <span className="mh-kpi-label">Toplam Borcumuz</span>
+          <span className="mh-kpi-value">{TL(kpi.netBorc)}</span>
+          <span className="mh-kpi-alt">Toptancılara açık borç</span>
         </div>
+        {kpi.toplamAvans > 0.01 && (
+          <div className="mh-kpi-card mh-kpi-yesil">
+            <span className="mh-kpi-label">Toptancıdaki Avansımız</span>
+            <span className="mh-kpi-value">{TL(kpi.toplamAvans)}</span>
+            <span className="mh-kpi-alt">Fazla ödeme / alacak</span>
+          </div>
+        )}
         <div className="mh-kpi-card mh-kpi-warning">
-          <span className="mh-kpi-label">30+ Gün Bekleyen Borç</span>
+          <span className="mh-kpi-label">30+ Gün Geciken Borç</span>
           <span className="mh-kpi-value">{TL(kpi.gecikenBorc)}</span>
+          <span className="mh-kpi-alt">FIFO'ya göre vadesi geçmiş</span>
         </div>
         <div className="mh-kpi-card">
-          <span className="mh-kpi-label">Bu Ay Yapılan Toplam Ödeme</span>
+          <span className="mh-kpi-label">Bu Ay Ödenen</span>
           <span className="mh-kpi-value">{TL(kpi.buAyToplamOdeme)}</span>
+          <span className="mh-kpi-alt">Toplam tüm zaman: {TL(kpi.tumZamanlarToplamOdeme)}</span>
         </div>
       </div>
 
@@ -1386,8 +1438,18 @@ function ToptancilarCariSekmesi({ showToast }) {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={5}>Genel Bakiye Toplamı</td>
-                <td className="mh-tutar-cell">{TL(filtreli.reduce((s, t) => s + t.bakiye, 0))}</td>
+                <td colSpan={4}>Seçili Listenin Net Bakiyesi</td>
+                <td className="mh-tutar-cell">{TL(filtreli.reduce((s, t) => s + t.toplamOdenen, 0))}</td>
+                <td className="mh-tutar-cell">
+                  {(() => {
+                    const net = filtreli.reduce((s, t) => s + t.bakiye, 0);
+                    return net > 0.01
+                      ? <span className="mh-durum mh-durum-kirmizi">🔴 {TL(net)}</span>
+                      : net < -0.01
+                        ? <span className="mh-durum mh-durum-yesil">🟢 {TL(Math.abs(net))} avansımız var</span>
+                        : <span className="mh-durum mh-durum-notr">⚪ Sıfır</span>;
+                  })()}
+                </td>
                 <td></td>
               </tr>
             </tfoot>
