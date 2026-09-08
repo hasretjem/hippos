@@ -75,6 +75,11 @@ function tarihAraliktaMi(trTarihStr, aralik) {
   return true;
 }
 
+const AY_ADLARI = [
+  'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+  'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
+];
+
 const GIDER_KATEGORILERI = [
   'Gıda Alışı',
   'Kahvaltı Malzeme Alışı',
@@ -858,7 +863,13 @@ function FaturaBekleyenlerAltSekmesi({ showToast, onDegisti }) {
 function HakedisEslestirmeAltSekmesi({ showToast }) {
   const [kayitlar, setKayitlar] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [islenen, setIslenen] = useState('');
+
+  // Yıl/Ay/Gün filtresi — sayfa ilk açıldığında içinde bulunulan ay seçili gelir
+  // (kullanıcı kararı, 8 Eylül). "Tümü" seçilirse o kırılım filtre dışı bırakılır.
+  const simdi = new Date();
+  const [yilFiltre, setYilFiltre] = useState(String(simdi.getFullYear()));
+  const [ayFiltre, setAyFiltre] = useState(String(simdi.getMonth() + 1));
+  const [gunFiltre, setGunFiltre] = useState('tumu');
 
   async function yukle() {
     setLoading(true);
@@ -874,39 +885,30 @@ function HakedisEslestirmeAltSekmesi({ showToast }) {
   }
   useEffect(() => { yukle(); }, []);
 
-  async function komisyonYaz(kayit) {
-    setIslenen(kayit.id);
-    try {
-      const res = await fetch('/api/muhasebe?resource=giderler', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tarih: kayit.tarih, kategori: 'Yemek Kart-Banka Masf.',
-          tedarikciAciklama: `POS komisyon kesintisi — ${kayit.ciroTarihi} cirosu`,
-          tutar: kayit.fark, odemeDurumu: 'Ödendi', belgeNo: 'Hakediş Farkı',
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'kaydedilemedi');
-      await fetch('/api/muhasebe?resource=ekstre', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: kayit.id, eslesenKayitId: json.record.id }),
-      });
-      setKayitlar((prev) => prev.map((k) => (k.id === kayit.id ? { ...k, eslesenKayitId: json.record.id } : k)));
-      showToast('Komisyon gideri kaydedildi');
-    } catch (err) {
-      showToast('Kaydedilemedi: ' + err.message);
-    } finally {
-      setIslenen('');
-    }
-  }
+  const yillar = useMemo(() => {
+    const s = new Set(kayitlar.map((k) => trTarihiCoz(k.tarih)?.getFullYear()).filter(Boolean));
+    s.add(simdi.getFullYear());
+    return [...s].sort((a, b) => b - a);
+  }, [kayitlar]);
+
+  const filtreli = useMemo(() => {
+    return kayitlar.filter((k) => {
+      const d = trTarihiCoz(k.tarih);
+      if (!d) return false;
+      if (yilFiltre !== 'tumu' && d.getFullYear() !== Number(yilFiltre)) return false;
+      if (ayFiltre !== 'tumu' && d.getMonth() + 1 !== Number(ayFiltre)) return false;
+      if (gunFiltre !== 'tumu' && d.getDate() !== Number(gunFiltre)) return false;
+      return true;
+    }).sort((a, b) => (trTarihiCoz(b.tarih)?.getTime() || 0) - (trTarihiCoz(a.tarih)?.getTime() || 0));
+  }, [kayitlar, yilFiltre, ayFiltre, gunFiltre]);
 
   const kpi = useMemo(() => {
-    const eslesen = kayitlar.filter((k) => k.ciroTutari !== null);
-    const toplamHakedis = kayitlar.reduce((s, k) => s + k.tutar, 0);
+    const eslesen = filtreli.filter((k) => k.ciroTutari !== null);
+    const toplamHakedis = filtreli.reduce((s, k) => s + k.tutar, 0);
     const toplamFark = eslesen.reduce((s, k) => s + (k.fark || 0), 0);
-    const eslesmeyen = kayitlar.length - eslesen.length;
+    const eslesmeyen = filtreli.length - eslesen.length;
     return { toplamHakedis, toplamFark, eslesmeyen };
-  }, [kayitlar]);
+  }, [filtreli]);
 
   return (
     <>
@@ -927,25 +929,40 @@ function HakedisEslestirmeAltSekmesi({ showToast }) {
 
       <p className="mh-hint">
         Bankaya yatan POS hakedişi ile Gün Sonu'nda girdiğiniz POS cirosu karşılaştırılır.
-        Hakediş genelde ertesi gün yattığı için aynı gün ve bir önceki günün cirosuna bakılıp
-        yakın olan eşleştirilir. Aradaki fark komisyon kesintisi adayıdır.
+        Hakediş her zaman ertesi gün yattığı için bir önceki günün cirosuyla eşleştirilir.
+        Aradaki fark varsa sağda ikaz gösterilir.
       </p>
+
+      <div className="mh-filter-pills">
+        <select className="mh-tabbable" value={yilFiltre} onChange={(e) => setYilFiltre(e.target.value)}>
+          {yillar.map((y) => <option key={y} value={y}>{y}</option>)}
+          <option value="tumu">Tüm Yıllar</option>
+        </select>
+        <select className="mh-tabbable" value={ayFiltre} onChange={(e) => setAyFiltre(e.target.value)}>
+          <option value="tumu">Tüm Aylar</option>
+          {AY_ADLARI.map((ad, i) => <option key={i} value={i + 1}>{ad}</option>)}
+        </select>
+        <select className="mh-tabbable" value={gunFiltre} onChange={(e) => setGunFiltre(e.target.value)}>
+          <option value="tumu">Tüm Günler</option>
+          {Array.from({ length: 31 }, (_, i) => i + 1).map((g) => <option key={g} value={g}>{g}</option>)}
+        </select>
+      </div>
 
       <div className="mh-table-card">
         {loading ? (
           <p className="mh-empty">Yükleniyor...</p>
-        ) : kayitlar.length === 0 ? (
-          <p className="mh-empty">Henüz POS hakediş kaydı yok. Ekstre yükleyince buraya düşer.</p>
+        ) : filtreli.length === 0 ? (
+          <p className="mh-empty">Bu filtrede POS hakediş kaydı yok.</p>
         ) : (
           <table className="mh-excel-table">
             <thead>
               <tr>
                 <th>Yatış Tarihi</th><th>Bankaya Yatan</th><th>Eşleşen Ciro Günü</th>
-                <th>Gün Sonu POS Cirosu</th><th>Fark</th><th>İşlem</th>
+                <th>Gün Sonu POS Cirosu</th><th>Fark</th>
               </tr>
             </thead>
             <tbody>
-              {kayitlar.map((k) => (
+              {filtreli.map((k) => (
                 <tr key={k.id}>
                   <td>{k.tarih}</td>
                   <td className="mh-tutar-cell">{TL(k.tutar)}</td>
@@ -954,20 +971,19 @@ function HakedisEslestirmeAltSekmesi({ showToast }) {
                   <td className="mh-tutar-cell">
                     {k.fark === null ? '—'
                       : Math.abs(k.fark) < 0.01 ? <span className="mh-durum mh-durum-yesil">🟢 Tam</span>
-                      : <span className="mh-durum mh-durum-kirmizi">{TL(k.fark)}</span>}
-                  </td>
-                  <td>
-                    {k.eslesenKayitId
-                      ? <span className="mh-durum mh-durum-yesil">🟢 İşlendi</span>
-                      : k.fark !== null && k.fark > 0.01
-                        ? <button className="mh-mini-btn" disabled={islenen === k.id} onClick={() => komisyonYaz(k)}>
-                            {islenen === k.id ? '…' : 'Komisyonu Gidere Yaz'}
-                          </button>
-                        : '—'}
+                      : <span className="mh-durum mh-durum-kirmizi">🔴 {TL(k.fark)}</span>}
                   </td>
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr>
+                <td>Toplam</td>
+                <td className="mh-tutar-cell">{TL(kpi.toplamHakedis)}</td>
+                <td colSpan={2}></td>
+                <td className="mh-tutar-cell">{TL(kpi.toplamFark)}</td>
+              </tr>
+            </tfoot>
           </table>
         )}
       </div>

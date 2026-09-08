@@ -410,6 +410,24 @@ function trTarihiCozServer(str) {
   return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
 }
 
+// Excel, tarih hücrelerini içeride sayı (1899-12-30'dan itibaren geçen gün sayısı) olarak
+// saklar; xlsxSatirlariniCoz() hücre STİLİNİ (numFmt) okumadığı için bu ham sayı olduğu gibi
+// gelir (örn. "46269"). Böyle bir değer görülürse gerçek DD.MM.YYYY tarihine çeviriyoruz;
+// zaten "12.09.2026" gibi metin gelmişse dokunmuyoruz.
+function excelTarihiCoz(v) {
+  const s = String(v ?? '').trim();
+  if (!s) return s;
+  if (!/^\d+(\.\d+)?$/.test(s)) return s; // zaten metin/tarih formatındaysa aynen bırak
+  const serial = Math.floor(Number(s));
+  if (!Number.isFinite(serial) || serial < 1) return s;
+  const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+  const d = new Date(excelEpoch.getTime() + serial * 86400000);
+  const gg = String(d.getUTCDate()).padStart(2, '0');
+  const aa = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = d.getUTCFullYear();
+  return `${gg}.${aa}.${yyyy}`;
+}
+
 function sayiCoz(v) {
   if (v === undefined || v === null || v === '') return 0;
   if (typeof v === 'number') return v;
@@ -1288,7 +1306,7 @@ export default async function handler(req, res) {
 
       for (let i = 1; i < hamSatirlar.length; i++) {
         const h = hamSatirlar[i];
-        const tarih = String(h[cTarih] || '').trim();
+        const tarih = excelTarihiCoz(h[cTarih]);
         if (!tarih) continue;
         ozet.toplam++;
 
@@ -1449,8 +1467,9 @@ export default async function handler(req, res) {
         posByTarih[t] = (posByTarih[t] || 0) + sayiCoz(r[4]);
       });
 
-      // Hakedişler bankaya genelde ERTESİ gün yatar — hem aynı gün hem bir önceki günün
-      // POS cirosuyla karşılaştırıp daha yakın olanı eşleştiriyoruz.
+      // Hakediş bankaya SABİT olarak ertesi gün yatar — eşleşen günsonu POS cirosu her
+      // zaman (hakediş yatış tarihi - 1 gün). "En yakın olanı seç" gibi esnek bir arama
+      // yapılmaz (kullanıcı kararı, 8 Eylül).
       const oncekiGun = (trTarih) => {
         const d = trTarihiCozServer(trTarih);
         if (!d) return null;
@@ -1459,17 +1478,10 @@ export default async function handler(req, res) {
       };
 
       const sonuc = hakedisler.map((h) => {
-        const ayniGun = posByTarih[h.tarih];
-        const dunTarih = oncekiGun(h.tarih);
-        const dun = dunTarih ? posByTarih[dunTarih] : undefined;
-        let ciroTarihi = null, ciroTutari = null;
-        if (ayniGun !== undefined && dun !== undefined) {
-          ciroTarihi = Math.abs(ayniGun - h.tutar) <= Math.abs(dun - h.tutar) ? h.tarih : dunTarih;
-          ciroTutari = ciroTarihi === h.tarih ? ayniGun : dun;
-        } else if (ayniGun !== undefined) { ciroTarihi = h.tarih; ciroTutari = ayniGun; }
-        else if (dun !== undefined) { ciroTarihi = dunTarih; ciroTutari = dun; }
+        const ciroTarihi = oncekiGun(h.tarih);
+        const ciroTutari = ciroTarihi && posByTarih[ciroTarihi] !== undefined ? posByTarih[ciroTarihi] : null;
         const fark = ciroTutari !== null ? Math.round((ciroTutari - h.tutar) * 100) / 100 : null;
-        return { ...h, ciroTarihi, ciroTutari, fark };
+        return { ...h, ciroTarihi: ciroTutari !== null ? ciroTarihi : null, ciroTutari, fark };
       });
       return res.status(200).json({ records: sonuc });
     }
