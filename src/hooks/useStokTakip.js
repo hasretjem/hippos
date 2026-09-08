@@ -89,12 +89,10 @@ export default function useStokTakip(enabled = true) {
   }, []);
 
   function bildir(event) {
-    // Kendi yazdığımız değişikliği kendimiz zaten iyimser (optimistic) olarak
-    // state'e yansıttığımız için, broadcast SADECE diğer cihazlara "sen de tazele"
-    // demek amacıyla gönderiliyor.
-    if (channelRef.current) {
-      channelRef.current.send({ type: 'broadcast', event, payload: {} });
-    }
+    if (!channelRef.current) { console.warn('[StokTakip] bildir: kanal yok, mesaj gönderilemedi'); return; }
+    const durum = channelRef.current.state;
+    console.log('[StokTakip] bildir:', event, '— kanal durumu:', durum);
+    channelRef.current.send({ type: 'broadcast', event, payload: {} });
   }
 
   useEffect(() => {
@@ -107,10 +105,12 @@ export default function useStokTakip(enabled = true) {
     loadAll();
 
     const channel = supabase
-      .channel('stok-takip-live')
+      .channel('stok-takip-live', { config: { broadcast: { self: false } } })
       .on('broadcast', { event: 'urunler_changed' }, () => { console.log('[StokTakip] urunler_changed broadcast alındı'); refetchUrunler(); })
       .on('broadcast', { event: 'sayimlar_changed' }, () => { console.log('[StokTakip] sayimlar_changed broadcast alındı'); refetchSayimlar(); })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[StokTakip] kanal durumu:', status);
+      });
     channelRef.current = channel;
 
     return () => {
