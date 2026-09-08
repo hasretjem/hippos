@@ -16,6 +16,10 @@ export default function StokSiparis({ data, onNavigate }) {
 
   React.useEffect(() => {
     stok.sekmeOkundu(aktifSekme);
+    // Sekmeye girince o sekmedeki "YENİ" etiketlerini toplu temizle —
+    // ürün silinmiyor, sadece yeni_mi false yapılıyor.
+    const yeniler = stok.urunler.filter((u) => u.sekme === aktifSekme && u.yeniMi);
+    yeniler.forEach((u) => stok.yeniGorundu(u.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aktifSekme]);
 
@@ -178,7 +182,7 @@ export default function StokSiparis({ data, onNavigate }) {
                   className="ss-input ss-input-text"
                   value={u.ad}
                   onChange={(e) => urunAlan(u.id, 'ad', e.target.value)}
-                  onBlur={() => { if (u.yeniMi) stok.yeniGorundu(u.id); }}
+                  onBlur={() => {}}
                 />
                 {u.yeniMi && <span className="ss-yeni-badge">YENİ</span>}
               </div>
