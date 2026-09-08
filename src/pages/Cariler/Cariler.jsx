@@ -475,6 +475,8 @@ export default function Cariler({ data, onNavigate }) {
       })(),
       '',
       'Afiyet olsun, iyi günler! 😇🍽️✨',
+      '',
+      '_(Bu bilgi mesajı, düzenli hesap mutabakatı kapsamında sistem tarafından otomatik oluşturulmuştur.)_',
     ].join('\n');
     setOzetText(text);
     setOzetModalOpen(true);
