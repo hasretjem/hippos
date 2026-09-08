@@ -1153,6 +1153,8 @@ function SatislarAltSekmesi({ showToast }) {
         )}
       </div>
 
+      <GunSonuKayitlariTablosu />
+
       {drawerAcik && (
         <GelirDrawer
           onClose={() => setDrawerAcik(false)}
@@ -1174,6 +1176,248 @@ function SatislarAltSekmesi({ showToast }) {
         </div>
       )}
     </>
+  );
+}
+
+// Sadece görüntüleme — veri girişi mevcut "Gün Sonu Al" ekranından (api/gunsonu.js) devam
+// ediyor, buradan yeni kayıt girilmez. Tasarım 8 Eylül'de netleşti: Yıl/Ay/Gün filtresi
+// (varsayılan bu ay), detay JSON alanları küçük butonla açılıyor, altta filtrelenmiş
+// toplam satırı var.
+function GunSonuKayitlariTablosu() {
+  const [kayitlar, setKayitlar] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [detay, setDetay] = useState(null); // { tip, kayit }
+
+  const simdi = new Date();
+  const [yilFiltre, setYilFiltre] = useState(String(simdi.getFullYear()));
+  const [ayFiltre, setAyFiltre] = useState(String(simdi.getMonth() + 1));
+  const [gunFiltre, setGunFiltre] = useState('tumu');
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await fetch('/api/gunsonu');
+        const json = await res.json();
+        setKayitlar(json.records || []);
+      } catch {
+        setKayitlar([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const yillar = useMemo(() => {
+    const s = new Set(kayitlar.map((k) => trTarihiCoz(k.tarih)?.getFullYear()).filter(Boolean));
+    s.add(simdi.getFullYear());
+    return [...s].sort((a, b) => b - a);
+  }, [kayitlar]);
+
+  const filtreli = useMemo(() => {
+    return kayitlar.filter((k) => {
+      const d = trTarihiCoz(k.tarih);
+      if (!d) return false;
+      if (yilFiltre !== 'tumu' && d.getFullYear() !== Number(yilFiltre)) return false;
+      if (ayFiltre !== 'tumu' && d.getMonth() + 1 !== Number(ayFiltre)) return false;
+      if (gunFiltre !== 'tumu' && d.getDate() !== Number(gunFiltre)) return false;
+      return true;
+    }).sort((a, b) => (trTarihiCoz(b.tarih)?.getTime() || 0) - (trTarihiCoz(a.tarih)?.getTime() || 0));
+  }, [kayitlar, yilFiltre, ayFiltre, gunFiltre]);
+
+  const toplam = useMemo(() => filtreli.reduce((acc, k) => {
+    acc.nakit += k.toplamNakitPara || 0;
+    acc.pos += k.posToplam || 0;
+    acc.anaKasa += k.anaKasaToplam || 0;
+    acc.anaKasaHarcama += (k.anaKasaHarcamalar || []).reduce((s, x) => s + (Number(x.tutar) || 0), 0);
+    acc.gunlukKasaHarcama += (k.gunlukKasaHarcamalar || []).reduce((s, x) => s + (Number(x.tutar) || 0), 0);
+    acc.cari += k.cariToplam || 0;
+    acc.yemek += k.genelYemekToplami || 0;
+    acc.ciro += (k.ciro && k.ciro.total) || 0;
+    return acc;
+  }, { nakit: 0, pos: 0, anaKasa: 0, anaKasaHarcama: 0, gunlukKasaHarcama: 0, cari: 0, yemek: 0, ciro: 0 }), [filtreli]);
+
+  function detayAc(tip, kayit) { setDetay({ tip, kayit }); }
+
+  return (
+    <div className="mh-gunsonu-blok">
+      <div className="mh-gunsonu-baslik">Gün Sonu Kayıtları</div>
+
+      <div className="mh-filter-pills">
+        <select className="mh-tabbable" value={yilFiltre} onChange={(e) => setYilFiltre(e.target.value)}>
+          {yillar.map((y) => <option key={y} value={y}>{y}</option>)}
+          <option value="tumu">Tüm Yıllar</option>
+        </select>
+        <select className="mh-tabbable" value={ayFiltre} onChange={(e) => setAyFiltre(e.target.value)}>
+          <option value="tumu">Tüm Aylar</option>
+          {AY_ADLARI.map((ad, i) => <option key={i} value={i + 1}>{ad}</option>)}
+        </select>
+        <select className="mh-tabbable" value={gunFiltre} onChange={(e) => setGunFiltre(e.target.value)}>
+          <option value="tumu">Tüm Günler</option>
+          {Array.from({ length: 31 }, (_, i) => i + 1).map((g) => <option key={g} value={g}>{g}</option>)}
+        </select>
+      </div>
+
+      <div className="mh-table-card">
+        {loading ? (
+          <p className="mh-empty">Yükleniyor...</p>
+        ) : filtreli.length === 0 ? (
+          <p className="mh-empty">Bu filtrede gün sonu kaydı yok.</p>
+        ) : (
+          <table className="mh-excel-table">
+            <thead>
+              <tr>
+                <th>Yıl</th><th>Ay</th><th>Gün</th><th>Saat</th>
+                <th>Nakit</th><th>POS</th><th>Ana Kasa</th><th>Ana Kasa Harc.</th>
+                <th>Günlük Kasa Harc.</th><th>Cari</th><th>Yemek Kartı</th><th>Ciro</th><th>Ana Kasa Takibi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtreli.map((k) => {
+                const d = trTarihiCoz(k.tarih);
+                const anaKasaHarcTop = (k.anaKasaHarcamalar || []).reduce((s, x) => s + (Number(x.tutar) || 0), 0);
+                const gunlukKasaHarcTop = (k.gunlukKasaHarcamalar || []).reduce((s, x) => s + (Number(x.tutar) || 0), 0);
+                return (
+                  <tr key={k.tarih}>
+                    <td>{d ? d.getFullYear() : '-'}</td>
+                    <td>{d ? AY_ADLARI[d.getMonth()] : '-'}</td>
+                    <td>{d ? d.getDate() : '-'}</td>
+                    <td>{k.kaydedenSaat || '-'}</td>
+                    <td className="mh-tutar-cell">{TL(k.toplamNakitPara || 0)}</td>
+                    <td className="mh-tutar-cell">{TL(k.posToplam || 0)}</td>
+                    <td className="mh-tutar-cell">{TL(k.anaKasaToplam || 0)}</td>
+                    <td className="mh-tutar-cell">
+                      {TL(anaKasaHarcTop)}
+                      {anaKasaHarcTop > 0 && <button className="mh-mini-btn mh-mini-btn-ghost" onClick={() => detayAc('anaKasaHarcamalar', k)}>detay</button>}
+                    </td>
+                    <td className="mh-tutar-cell">
+                      {TL(gunlukKasaHarcTop)}
+                      {gunlukKasaHarcTop > 0 && <button className="mh-mini-btn mh-mini-btn-ghost" onClick={() => detayAc('gunlukKasaHarcamalar', k)}>detay</button>}
+                    </td>
+                    <td className="mh-tutar-cell">
+                      {TL(k.cariToplam || 0)}
+                      {k.cariToplam > 0 && <button className="mh-mini-btn mh-mini-btn-ghost" onClick={() => detayAc('cariDetay', k)}>detay</button>}
+                    </td>
+                    <td className="mh-tutar-cell">
+                      {TL(k.genelYemekToplami || 0)}
+                      {k.genelYemekToplami > 0 && <button className="mh-mini-btn mh-mini-btn-ghost" onClick={() => detayAc('yemekDetay', k)}>detay</button>}
+                    </td>
+                    <td className="mh-tutar-cell">{TL((k.ciro && k.ciro.total) || 0)}</td>
+                    <td className="mh-tutar-cell">
+                      {k.anaKasaTakibi ? <button className="mh-mini-btn mh-mini-btn-ghost" onClick={() => detayAc('anaKasaTakibi', k)}>detay</button> : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={4}>Toplam</td>
+                <td className="mh-tutar-cell">{TL(toplam.nakit)}</td>
+                <td className="mh-tutar-cell">{TL(toplam.pos)}</td>
+                <td className="mh-tutar-cell">{TL(toplam.anaKasa)}</td>
+                <td className="mh-tutar-cell">{TL(toplam.anaKasaHarcama)}</td>
+                <td className="mh-tutar-cell">{TL(toplam.gunlukKasaHarcama)}</td>
+                <td className="mh-tutar-cell">{TL(toplam.cari)}</td>
+                <td className="mh-tutar-cell">{TL(toplam.yemek)}</td>
+                <td className="mh-tutar-cell">{TL(toplam.ciro)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+
+      {detay && <GunSonuDetayModal tip={detay.tip} kayit={detay.kayit} onClose={() => setDetay(null)} />}
+    </div>
+  );
+}
+
+function GunSonuDetayModal({ tip, kayit, onClose }) {
+  const basliklar = {
+    anaKasaHarcamalar: 'Ana Kasa Harcamaları',
+    gunlukKasaHarcamalar: 'Günlük Kasa Harcamaları',
+    cariDetay: 'Cari Detay',
+    yemekDetay: 'Yemek Kartı Detay',
+    anaKasaTakibi: 'Ana Kasa Takibi',
+  };
+
+  function icerik() {
+    if (tip === 'anaKasaHarcamalar' || tip === 'gunlukKasaHarcamalar') {
+      const liste = kayit[tip] || [];
+      return (
+        <table className="mh-excel-table">
+          <thead><tr><th>Ad</th><th>Tutar</th></tr></thead>
+          <tbody>
+            {liste.filter((x) => x.ad).map((x, i) => (
+              <tr key={i}><td>{x.ad}</td><td className="mh-tutar-cell">{TL(Number(x.tutar) || 0)}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+    if (tip === 'cariDetay') {
+      const detayObj = kayit.cariDetay || {};
+      const sabitler = Object.entries(detayObj.sabitler || {});
+      const ekstra = detayObj.ekstra || [];
+      return (
+        <table className="mh-excel-table">
+          <thead><tr><th>Ad</th><th>Tutar</th></tr></thead>
+          <tbody>
+            {sabitler.map(([ad, tutar]) => (
+              <tr key={ad}><td>{ad}</td><td className="mh-tutar-cell">{TL(Number(tutar) || 0)}</td></tr>
+            ))}
+            {ekstra.filter((x) => x.ad).map((x, i) => (
+              <tr key={'ek' + i}><td>{x.ad}</td><td className="mh-tutar-cell">{TL(Number(x.tutar) || 0)}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+    if (tip === 'yemekDetay') {
+      const detayObj = kayit.yemekDetay || {};
+      const kolonlar = detayObj.kolonlar || [];
+      const tutarlar = detayObj.tutarlar || {};
+      return (
+        <table className="mh-excel-table">
+          <thead><tr><th>Marka</th>{kolonlar.map((k) => <th key={k}>{k}</th>)}</tr></thead>
+          <tbody>
+            {Object.entries(tutarlar).map(([marka, satir]) => (
+              <tr key={marka}>
+                <td>{marka}</td>
+                {kolonlar.map((k) => <td key={k} className="mh-tutar-cell">{satir[k] ? TL(Number(satir[k]) || 0) : '—'}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+    if (tip === 'anaKasaTakibi') {
+      const t = kayit.anaKasaTakibi || {};
+      return (
+        <table className="mh-excel-table">
+          <tbody>
+            <tr><td>Dünden Devir</td><td className="mh-tutar-cell">{TL(Number(t.dundenDevir) || 0)}</td></tr>
+            <tr><td>Bugünkü Nakit</td><td className="mh-tutar-cell">{TL(Number(t.bugunkuNakit) || 0)}</td></tr>
+            <tr><td>Ana Kasa Harcama</td><td className="mh-tutar-cell">{TL(Number(t.anaKasaHarcama) || 0)}</td></tr>
+            <tr><td>Yarına Devir</td><td className="mh-tutar-cell">{TL(Number(t.yarinaDevir) || 0)}</td></tr>
+          </tbody>
+        </table>
+      );
+    }
+    return null;
+  }
+
+  return (
+    <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={onClose}>
+      <div className="mh-modal-wide" onClick={(e) => e.stopPropagation()}>
+        <div className="mh-drawer-head">
+          <span>{basliklar[tip]} — {kayit.tarih}</span>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="mh-drawer-body">{icerik()}</div>
+      </div>
+    </div>
   );
 }
 
