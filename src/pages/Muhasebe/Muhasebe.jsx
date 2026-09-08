@@ -1181,6 +1181,13 @@ function SatislarAltSekmesi({ showToast }) {
   );
 }
 
+// api/gunsonu.js'teki ciro objesinde toplam alanı YOK, sadece nakit/kart/yemek/cari
+// kırılımı var — toplam ciro bu dördünün toplamı olarak burada hesaplanıyor.
+function ciroToplam(ciro) {
+  if (!ciro) return 0;
+  return (Number(ciro.nakit) || 0) + (Number(ciro.kart) || 0) + (Number(ciro.yemek) || 0) + (Number(ciro.cari) || 0);
+}
+
 // Sadece görüntüleme — veri girişi mevcut "Gün Sonu Al" ekranından (api/gunsonu.js) devam
 // ediyor, buradan yeni kayıt girilmez. Tasarım 8 Eylül'de netleşti: Yıl/Ay/Gün filtresi
 // (varsayılan bu ay), detay JSON alanları küçük butonla açılıyor, altta filtrelenmiş
@@ -1235,7 +1242,7 @@ function GunSonuKayitlariTablosu() {
     acc.gunlukKasaHarcama += (k.gunlukKasaHarcamalar || []).reduce((s, x) => s + (Number(x.tutar) || 0), 0);
     acc.cari += k.cariToplam || 0;
     acc.yemek += k.genelYemekToplami || 0;
-    acc.ciro += (k.ciro && k.ciro.total) || 0;
+    acc.ciro += ciroToplam(k.ciro);
     return acc;
   }, { nakit: 0, pos: 0, anaKasa: 0, anaKasaHarcama: 0, gunlukKasaHarcama: 0, cari: 0, yemek: 0, ciro: 0 }), [filtreli]);
 
@@ -1302,7 +1309,7 @@ function GunSonuKayitlariTablosu() {
                       {TL(k.genelYemekToplami || 0)}
                       {k.genelYemekToplami > 0 && <button className="mh-mini-btn mh-mini-btn-ghost" onClick={() => detayAc('yemekDetay', k)}>detay</button>}
                     </td>
-                    <td className="mh-tutar-cell">{TL((k.ciro && k.ciro.total) || 0)}</td>
+                    <td className="mh-tutar-cell">{TL(ciroToplam(k.ciro))}</td>
                     <td className="mh-tutar-cell">
                       {k.anaKasaTakibi ? <button className="mh-mini-btn mh-mini-btn-ghost" onClick={() => detayAc('anaKasaTakibi', k)}>detay</button> : '—'}
                     </td>
