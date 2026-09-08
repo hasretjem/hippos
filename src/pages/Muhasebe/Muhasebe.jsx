@@ -1002,6 +1002,9 @@ function GelirlerSekmesi({ showToast }) {
         <button className={altTab === 'satislar' ? 'active' : ''} onClick={() => setAltTab('satislar')}>
           📊 Satışlar & Gün Sonu
         </button>
+        <button className={altTab === 'gunsonu' ? 'active' : ''} onClick={() => setAltTab('gunsonu')}>
+          🧾 Gün Sonu Kayıtları
+        </button>
         <button className={altTab === 'yatanlar' ? 'active' : ''} onClick={() => setAltTab('yatanlar')}>
           🏦 Bankaya Yatanlar
         </button>
@@ -1011,6 +1014,7 @@ function GelirlerSekmesi({ showToast }) {
       </div>
 
       {altTab === 'satislar' && <SatislarAltSekmesi showToast={showToast} />}
+      {altTab === 'gunsonu' && <GunSonuKayitlariTablosu />}
       {altTab === 'yatanlar' && <EkstreAltSekmesi showToast={showToast} yon="GELEN" />}
       {altTab === 'hakedis' && <HakedisEslestirmeAltSekmesi showToast={showToast} />}
     </div>
@@ -1153,8 +1157,6 @@ function SatislarAltSekmesi({ showToast }) {
         )}
       </div>
 
-      <GunSonuKayitlariTablosu />
-
       {drawerAcik && (
         <GelirDrawer
           onClose={() => setDrawerAcik(false)}
@@ -1241,8 +1243,6 @@ function GunSonuKayitlariTablosu() {
 
   return (
     <div className="mh-gunsonu-blok">
-      <div className="mh-gunsonu-baslik">Gün Sonu Kayıtları</div>
-
       <div className="mh-filter-pills">
         <select className="mh-tabbable" value={yilFiltre} onChange={(e) => setYilFiltre(e.target.value)}>
           {yillar.map((y) => <option key={y} value={y}>{y}</option>)}

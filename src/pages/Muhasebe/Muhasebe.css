@@ -618,8 +618,8 @@
 /* Avans kartı — yeşil vurgulu */
 .mh-kpi-yesil { border-color: rgba(46,139,87,0.35) !important; background: rgba(46,139,87,0.05) !important; }
 
-/* Gün Sonu Kayıtları bloğu (Satışlar & Gün Sonu alt sekmesi, fatura listesinin altında) */
-.mh-gunsonu-blok { margin-top: 24px; padding-top: 20px; border-top: 1px solid #E3DFCF; }
+/* Gün Sonu Kayıtları bloğu (kendi alt sekmesi) */
+.mh-gunsonu-blok { }
 .mh-gunsonu-baslik { font-size: 15px; font-weight: 700; color: #393E41; margin-bottom: 12px; }
 .mh-filter-pills select {
   height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid #E3DFCF;
