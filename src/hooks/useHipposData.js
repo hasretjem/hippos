@@ -899,6 +899,26 @@ export default function useHipposData(scope = 'full') {
     }
     loadAll();
 
+    // ---- MOBİL UYANMA TELAFİSİ ----
+    // Telefon kilitlenince / tarayıcı arka plana atılınca işletim sistemi WebSocket'i kesiyor.
+    // Supabase geri gelince yeniden bağlanıyor AMA postgres_changes mesajlarının tekrar oynatma
+    // (replay) özelliği YOK — bağlantı kopukken olan değişiklikler kalıcı olarak kayboluyor ve
+    // ekran, elle yenilenene kadar eski veriyi göstermeye devam ediyor. Paketçinin telefonunda
+    // "yenilemeden siparişler düşmüyor" şikâyetinin sebebi tam olarak buydu.
+    // Çözüm: sayfa tekrar görünür olduğunda / internet geri geldiğinde bir kez loadAll() çalıştır.
+    // Bu bir REALTIME MESAJI DEĞİL, normal bir sorgu — aylık realtime kotasından hiçbir şey yemez.
+    let lastSyncTs = Date.now();
+    function resyncIfStale() {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      // Üst üste tetiklenmeyi önle (visibilitychange + focus + online aynı anda gelebilir).
+      if (Date.now() - lastSyncTs < 3000) return;
+      lastSyncTs = Date.now();
+      loadAll();
+    }
+    document.addEventListener('visibilitychange', resyncIfStale);
+    window.addEventListener('focus', resyncIfStale);
+    window.addEventListener('online', resyncIfStale);
+
     // Realtime kotasını (aylık mesaj sınırı) boşuna doldurmamak için: hangi ekran/cihaz
     // olduğuna göre SADECE ihtiyacı olan tabloları dinliyoruz. Paketçinin telefonu cari
     // hareketlerini/satış geçmişini/ürün düzenleme geçmişini hiç bilmesine gerek yok;
@@ -925,7 +945,7 @@ export default function useHipposData(scope = 'full') {
       cari_faturalar: need([]),
       cari_gecmis: need([]),
       paket_teslimatlari: need(['paketci']),
-      cari_teslimat_bildirimleri: need([]),             // ← OLMALI (full + paketci, yani herkes)
+      cari_teslimat_bildirimleri: need(['paketci']),
       bosvar_bildirimleri: need(['paketci']),
       bosvar_kayitlari: need(['paketci']),
       mutfak_hazir_notlar: need([]),
@@ -1139,6 +1159,9 @@ export default function useHipposData(scope = 'full') {
 
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', resyncIfStale);
+      window.removeEventListener('focus', resyncIfStale);
+      window.removeEventListener('online', resyncIfStale);
       liveChannelRef.current = null;
       supabase.removeChannel(channel);
     };
