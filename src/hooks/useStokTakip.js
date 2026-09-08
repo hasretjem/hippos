@@ -80,9 +80,10 @@ export default function useStokTakip(enabled = true) {
     // Kaydedilmemiş düzenleme varken uzaktan gelen tazeleme uygulanmaz.
     if (kirliRef.current && !zorla) return;
     const { data, error } = await supabase.from('stok_sayimlari').select('*');
-    if (!error) {
+    if (error) { console.error('[StokTakip] refetchSayimlar hata:', error); return; }
+    if (data) {
       const m = {};
-      (data || []).forEach((r) => { m[r.sekme] = rowToSayim(r); });
+      data.forEach((r) => { m[r.sekme] = rowToSayim(r); });
       setSayimlar(m);
     }
   }, []);
@@ -107,8 +108,8 @@ export default function useStokTakip(enabled = true) {
 
     const channel = supabase
       .channel('stok-takip-live')
-      .on('broadcast', { event: 'urunler_changed' }, () => refetchUrunler())
-      .on('broadcast', { event: 'sayimlar_changed' }, () => refetchSayimlar())
+      .on('broadcast', { event: 'urunler_changed' }, () => { console.log('[StokTakip] urunler_changed broadcast alındı'); refetchUrunler(); })
+      .on('broadcast', { event: 'sayimlar_changed' }, () => { console.log('[StokTakip] sayimlar_changed broadcast alındı'); refetchSayimlar(); })
       .subscribe();
     channelRef.current = channel;
 
@@ -160,7 +161,7 @@ export default function useStokTakip(enabled = true) {
       ...prev,
       [sekme]: { sekme, kalemler, gonderen: gonderen || '', gonderimTarihi: nowIso, okundu: false, siparisVerildi: false },
     }));
-    await supabase.from('stok_sayimlari').upsert({
+    const { error: gonderError } = await supabase.from('stok_sayimlari').upsert({
       sekme,
       kalemler,
       gonderen: gonderen || '',
@@ -168,6 +169,7 @@ export default function useStokTakip(enabled = true) {
       okundu: false,
       siparis_verildi: false,
     }, { onConflict: 'sekme' });
+    if (gonderError) { console.error('[StokTakip] sayimGonder hata:', gonderError); return; }
     bildir('sayimlar_changed');
   }, []);
 
