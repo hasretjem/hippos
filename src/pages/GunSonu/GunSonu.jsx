@@ -349,11 +349,15 @@ export default function GunSonu({ data, onNavigate }) {
           tutarlar: yemekTutarlari, // { marka: { kolon: tutar } }
         },
 
+        // Sheets'e artık Hippos'un Supabase'den hesapladığı ciro DEĞİL, kasiyerin bu ekranda
+        // elle girdiği tutarlar yazılıyor (kullanıcı kararı, 9 Eylül) — Ciro Karşılaştırma
+        // paneli hâlâ ekranda canlı gösteriliyor ama sadece anlık kontrol amaçlı, kayda
+        // girmiyor. Kasiyer bir alanı boş bırakırsa Sheets'te de 0 olarak kalır.
         ciro: {
-          nakit: ciro['NAKİT'],
-          kart: ciro['KREDİ KARTI'],
-          yemek: ciro['YEMEK KARTI'],
-          cari: ciro['CARİ'],
+          nakit: toplamNakitPara,
+          kart: posToplam,
+          yemek: genelYemekToplami,
+          cari: cariToplam,
         },
 
         anaKasaTakibi: {
