@@ -748,6 +748,10 @@ export function MiniHarcamaFormu({ baslik, showToast }) {
   const [yeniGiderKat, setYeniGiderKat] = useState('');
   const [kategoriler, setKategoriler] = useState([]);
   const [aciklamaAcik, setAciklamaAcik] = useState({});
+  // Her satır için arama text'i ve dropdown açıklığı ayrı ayrı tutulur
+  const [aramalar, setAramalar] = useState({});
+  const [dropdownAcik, setDropdownAcik] = useState({});
+  const aramRefs = useRef({});
 
   useEffect(() => {
     (async () => {
@@ -764,12 +768,42 @@ export function MiniHarcamaFormu({ baslik, showToast }) {
     })();
   }, []);
 
+  // Dışarı tıklayınca tüm dropdown'ları kapat
+  useEffect(() => {
+    function dis(e) {
+      const herhangiAcik = Object.values(dropdownAcik).some(Boolean);
+      if (!herhangiAcik) return;
+      const icinde = Object.values(aramRefs.current).some(r => r && r.contains && r.contains(e.target));
+      if (!icinde) setDropdownAcik({});
+    }
+    document.addEventListener('mousedown', dis);
+    return () => document.removeEventListener('mousedown', dis);
+  }, [dropdownAcik]);
+
   function satirGuncelle(idx, field, val) {
     setSatirlar(prev => prev.map((r, i) => i === idx ? { ...r, [field]: val } : r));
   }
 
   function satirEkle() {
     setSatirlar(prev => [...prev, { id: null, neIcin: '', tutar: '', aciklama: '' }]);
+  }
+
+  function neIcinAra(idx, val) {
+    setAramalar(prev => ({ ...prev, [idx]: val }));
+    satirGuncelle(idx, 'neIcin', ''); // seçim sıfırla
+    setDropdownAcik(prev => ({ ...prev, [idx]: true }));
+  }
+
+  function neIcinSec(idx, firmaAdi) {
+    satirGuncelle(idx, 'neIcin', firmaAdi);
+    setAramalar(prev => ({ ...prev, [idx]: firmaAdi }));
+    setDropdownAcik(prev => ({ ...prev, [idx]: false }));
+  }
+
+  function oneriListesi(idx) {
+    const ara = (aramalar[idx] || '').toLocaleLowerCase('tr');
+    if (!ara) return firmalar;
+    return firmalar.filter(f => f.firmaAdi.toLocaleLowerCase('tr').includes(ara));
   }
 
   async function satirKaydet(idx) {
@@ -813,27 +847,43 @@ export function MiniHarcamaFormu({ baslik, showToast }) {
         <button className="gs-mini-yeni-btn" onClick={() => setYeniGiderModal(true)}>+ Yeni Gider</button>
       </div>
       {satirlar.map((s, idx) => (
-        <div key={idx} className="gs-mini-satir">
-          {s.id && <span className="gs-gider-kod" title="Gider Kodu">{String(s.id).slice(-6)}</span>}
-          <select className="gs-mini-select gs-tabbable" value={s.neIcin} onChange={e => satirGuncelle(idx, 'neIcin', e.target.value)}>
-            <option value="">Ne için?</option>
-            {firmalar.map(f => <option key={f.firmaAdi} value={f.firmaAdi}>{f.firmaAdi}</option>)}
-          </select>
-          <input type="number" placeholder="0" className="gs-mini-tutar gs-tabbable" value={s.tutar}
-            onChange={e => satirGuncelle(idx, 'tutar', e.target.value)} />
-          <button className="gs-mini-aciklama-btn" title="Not ekle"
-            onClick={() => setAciklamaAcik(prev => ({ ...prev, [idx]: !prev[idx] }))}>📝</button>
-          <button className="gs-mini-kaydet" onClick={() => satirKaydet(idx)}>✓</button>
+        <div key={idx} className="gs-mini-satir-wrap">
+          <div className="gs-mini-satir">
+            {s.id && <span className="gs-gider-kod" title="Gider Kodu">{String(s.id).slice(-6)}</span>}
+            <div className="gs-mini-ara-wrap" ref={el => aramRefs.current[idx] = el}>
+              <input
+                className="gs-mini-ara gs-tabbable"
+                placeholder="Ne için? Ara..."
+                value={aramalar[idx] !== undefined ? aramalar[idx] : s.neIcin}
+                onChange={e => neIcinAra(idx, e.target.value)}
+                onFocus={() => setDropdownAcik(prev => ({ ...prev, [idx]: true }))}
+              />
+              {dropdownAcik[idx] && oneriListesi(idx).length > 0 && (
+                <div className="gs-mini-dropdown">
+                  {oneriListesi(idx).map(f => (
+                    <button key={f.firmaAdi} type="button" className="gs-mini-dropdown-item"
+                      onMouseDown={() => neIcinSec(idx, f.firmaAdi)}>
+                      {f.firmaAdi}
+                      {f.giderKategorisi && <span className="gs-mini-kat">{f.giderKategorisi}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <input type="number" placeholder="0" className="gs-mini-tutar gs-tabbable" value={s.tutar}
+              onChange={e => satirGuncelle(idx, 'tutar', e.target.value)} />
+            <button className="gs-mini-aciklama-btn" title="Not ekle"
+              onClick={() => setAciklamaAcik(prev => ({ ...prev, [idx]: !prev[idx] }))}>📝</button>
+            <button className="gs-mini-kaydet" onClick={() => satirKaydet(idx)}>✓</button>
+          </div>
+          {aciklamaAcik[idx] && (
+            <div className="gs-mini-aciklama-pop">
+              <input className="gs-tabbable" placeholder="Not (opsiyonel)" value={s.aciklama}
+                onChange={e => satirGuncelle(idx, 'aciklama', e.target.value)} />
+            </div>
+          )}
         </div>
       ))}
-      {satirlar.some((s, idx) => aciklamaAcik[idx]) && satirlar.map((s, idx) =>
-        aciklamaAcik[idx] ? (
-          <div key={'ac' + idx} className="gs-mini-aciklama-pop">
-            <input className="gs-tabbable" placeholder="Not (opsiyonel)" value={s.aciklama}
-              onChange={e => satirGuncelle(idx, 'aciklama', e.target.value)} />
-          </div>
-        ) : null
-      )}
       <button className="gs-add-row-btn" onClick={satirEkle}><Plus size={13} /> Satır Ekle</button>
 
       {yeniGiderModal && (
