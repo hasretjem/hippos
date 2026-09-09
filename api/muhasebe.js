@@ -346,6 +346,137 @@ function ekstreHash(tarih, yon, tutar, aciklama) {
 // tablodan (fatura TARİHİNE göre, kayıt sırasına göre değil) okunuyor. Burada satır
 // bazında malzeme eşleştirmesi yapılmış her kalem için bir kayıt düşülüyor, böylece
 // Reçeteler sayfası "fiyat bulunamadı" hatası almadan en son fatura fiyatını gösterebiliyor.
+// ============================================================
+// YENİ ÜÇLÜ (9 Eylül): Fatura ve Fiş Girişi / Tahsilat Makbuzu / Banka/Kart Takip.
+// Kullanıcı kararı: bu sekmeler TAMAMEN AYRI yaşar, mevcut Giderler ve Toptancı
+// Hareketleri sekmelerine dokunmaz; içine SADECE bu ekranlardan elle girilen
+// bilgiler yazılır (Supabase'den otomatik veri alınmaz).
+// ============================================================
+const FATURA_FIS_TAB = {
+  tab: 'Fatura ve Fişler',
+  headers: ['ID', 'Tarih', 'Gun', 'Ay', 'Yil', 'FirmaAdi', 'FaturaNo', 'Aciklama', 'GiderKategorisi',
+    'OdemeTuru', 'OdemeDetay', 'FaturaTutari', 'OdemeTutari', 'BakiyeDurumu', 'BakiyeTutari',
+    'KaynakFaturaID', 'KayitZamani'],
+};
+
+function rowToFaturaFis(r) {
+  return {
+    id: r[0], tarih: r[1], gun: r[2], ay: r[3], yil: r[4], firmaAdi: r[5] || '',
+    faturaNo: r[6] || '', aciklama: r[7] || '', giderKategorisi: r[8] || '',
+    odemeTuru: r[9] || '', odemeDetay: r[10] || '',
+    faturaTutari: sayiCoz(r[11]), odemeTutari: sayiCoz(r[12]),
+    bakiyeDurumu: r[13] || '', bakiyeTutari: sayiCoz(r[14]),
+    kaynakFaturaID: r[15] || '', kayitZamani: r[16] || '',
+  };
+}
+
+const TAHSILAT_TAB = {
+  tab: 'Tahsilat Makbuzları',
+  headers: ['ID', 'Tarih', 'Gun', 'Ay', 'Yil', 'FirmaAdi', 'FaturaNo', 'Aciklama',
+    'OdemeTuru', 'OdemeDetay', 'Tutar', 'OncekiBakiye', 'YeniBakiye', 'KaynakEkstreID', 'KayitZamani'],
+};
+
+function rowToTahsilat(r) {
+  return {
+    id: r[0], tarih: r[1], gun: r[2], ay: r[3], yil: r[4], firmaAdi: r[5] || '',
+    faturaNo: r[6] || '', aciklama: r[7] || '', odemeTuru: r[8] || '', odemeDetay: r[9] || '',
+    tutar: sayiCoz(r[10]), oncekiBakiye: sayiCoz(r[11]), yeniBakiye: sayiCoz(r[12]),
+    kaynakEkstreID: r[13] || '', kayitZamani: r[14] || '',
+  };
+}
+
+// Firma defteri — tutarsız (henüz işlemi olmayan) firmalar da aramada çıksın diye ayrı tutulur.
+const FF_FIRMA_TAB = { tab: 'Fatura Firmaları', headers: ['ID', 'FirmaAdi', 'KayitZamani'] };
+
+const ODEME_YONTEMI_TAB = { tab: 'Ödeme Yöntemleri', headers: ['ID', 'Tur', 'Ad', 'KayitZamani'] };
+const VARSAYILAN_ODEME_YONTEMLERI = [
+  ['Nakit', ''],
+  ['Kredi Kartı', 'Ödeal Kredi Kartı'],
+  ['Kredi Kartı', 'İş Bankası Kredi Kartı'],
+  ['Banka Havalesi', 'İş Bankası'],
+  ['Banka Havalesi', 'Akbank'],
+  ['Cari', ''],
+];
+
+function rowToOdemeYontemi(r) {
+  return { id: r[0], tur: r[1] || '', ad: r[2] || '' };
+}
+
+// Sekme yoksa varsayılan yöntemlerle tohumlanır; varsa dokunulmaz (kullanıcının
+// eklediği/sildiği yöntemler korunur). Her çağrıda güncel satırları döndürür.
+async function ensureOdemeYontemleri(sheets) {
+  const rows = await getRows(sheets, ODEME_YONTEMI_TAB);
+  if (rows.length > 0) return rows;
+  const now = new Date().toISOString();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: `${ODEME_YONTEMI_TAB.tab}!A2:${lastCol(ODEME_YONTEMI_TAB.headers)}`,
+    valueInputOption: 'USER_ENTERED',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: { values: VARSAYILAN_ODEME_YONTEMLERI.map(([tur, ad]) => [benzersizId(), tur, ad, now]) },
+  });
+  return getRows(sheets, ODEME_YONTEMI_TAB);
+}
+
+const BANKA_KART_TAB = {
+  tab: 'Banka Kart Hareketleri',
+  headers: ['ID', 'Tarih', 'HesapTuru', 'HesapAdi', 'Yon', 'Tutar', 'Aciklama', 'KaynakID', 'KayitZamani'],
+};
+
+function rowToBankaKartHareket(r) {
+  return {
+    id: r[0], tarih: r[1], hesapTuru: r[2] || '', hesapAdi: r[3] || '', yon: r[4] || '',
+    tutar: sayiCoz(r[5]), aciklama: r[6] || '', kaynakID: r[7] || '', kayitZamani: r[8] || '',
+  };
+}
+
+// Sadece kart/banka üzerinden yapılan ödemeler hesap hareketine düşer (nakit ve cari düşmez).
+function hesapHareketiGerekir(odemeTuru) {
+  return odemeTuru === 'Kredi Kartı' || odemeTuru === 'Banka Havalesi';
+}
+
+function trTarihiParcala(trTarih) {
+  const d = trTarihiCozServer(trTarih);
+  if (!d) return { gun: '', ay: '', yil: '' };
+  return { gun: d.getDate(), ay: d.getMonth() + 1, yil: d.getFullYear() };
+}
+
+// Bakiye = (fatura tutarları - peşin ödenenler) - yapılan tahsilatlar.
+// Pozitif => firmaya BORÇLUYUZ (bunlar gider/alış faturaları).
+function firmaBakiyesi(firmaAdi, faturaKayitlari, tahsilatlar) {
+  const hedef = metinNormalize(firmaAdi);
+  const borc = faturaKayitlari
+    .filter((k) => metinNormalize(k.firmaAdi) === hedef)
+    .reduce((s, k) => s + (k.faturaTutari - k.odemeTutari), 0);
+  const odenen = tahsilatlar
+    .filter((t) => metinNormalize(t.firmaAdi) === hedef)
+    .reduce((s, t) => s + t.tutar, 0);
+  return Math.round((borc - odenen) * 100) / 100;
+}
+
+function bakiyeDurumuEtiketi(bakiye) {
+  if (Math.abs(bakiye) < 0.01) return 'Hesap Yok';
+  return bakiye > 0 ? 'Borçlu' : 'Alacaklı';
+}
+
+// Arama listesi: firma defteri + fiilen işlem görmüş firmalar birleştirilir.
+function firmaListesiCikar(firmaRows, faturaKayitlari, tahsilatlar) {
+  const harita = new Map();
+  const ekle = (ad) => {
+    const temiz = String(ad || '').trim();
+    if (!temiz) return;
+    const anahtar = metinNormalize(temiz);
+    if (!harita.has(anahtar)) harita.set(anahtar, temiz);
+  };
+  firmaRows.forEach((r) => ekle(r[1]));
+  faturaKayitlari.forEach((k) => ekle(k.firmaAdi));
+  tahsilatlar.forEach((t) => ekle(t.firmaAdi));
+  return [...harita.values()]
+    .map((ad) => ({ firmaAdi: ad, bakiye: firmaBakiyesi(ad, faturaKayitlari, tahsilatlar) }))
+    .map((f) => ({ ...f, durum: bakiyeDurumuEtiketi(f.bakiye) }))
+    .sort((a, b) => a.firmaAdi.localeCompare(b.firmaAdi, 'tr'));
+}
+
 const MALIYET_TAB = { tab: 'Malzeme Maliyet Geçmişi', headers: ['ID', 'MalzemeID', 'Malzeme Adı', 'Tarih', 'Miktar', 'Birim', 'Toplam Fiyat', 'Birim Maliyet', 'FaturaID'] };
 
 // XML'den gelen tarih "YYYY-MM-DD", Malzeme Maliyet Geçmişi'ndeki Tarih sütunu ise
@@ -1696,6 +1827,238 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, record: rowToOrtakHareket(rowValues) });
       }
       return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // ============================================================
+    // YENİ ÜÇLÜ: Fatura ve Fiş Girişi + Tahsilat Makbuzu + Banka/Kart Takip
+    // Kullanıcı kararı (9 Eylül): bu üçlü TAMAMEN AYRI sheet'lerde yaşar, mevcut
+    // Giderler / Toptancı Hareketleri sekmelerine HİÇ DOKUNMAZ. Supabase'den veri
+    // ALINMAZ — sadece bu ekranlardan elle girilen bilgiler kaydedilir.
+    // ============================================================
+
+    if (resource === 'faturaFis') {
+      if (req.method === 'GET') {
+        const [ffRows, tahRows, firmaRows, oyRows] = await Promise.all([
+          getRows(sheets, FATURA_FIS_TAB),
+          getRows(sheets, TAHSILAT_TAB),
+          getRows(sheets, FF_FIRMA_TAB),
+          ensureOdemeYontemleri(sheets),
+        ]);
+        const kayitlar = ffRows.map(rowToFaturaFis);
+        const tahsilatlar = tahRows.map(rowToTahsilat);
+        const firmalar = firmaListesiCikar(firmaRows, kayitlar, tahsilatlar);
+        return res.status(200).json({
+          records: kayitlar,
+          firmalar,
+          odemeYontemleri: oyRows.map(rowToOdemeYontemi),
+        });
+      }
+
+      if (req.method === 'POST') {
+        const {
+          tarih, firmaAdi, faturaNo, aciklama, giderKategorisi,
+          odemeTuru, odemeDetay, faturaTutari, odemeTutari, kaynakFaturaID,
+        } = req.body || {};
+        if (!firmaAdi || !String(firmaAdi).trim()) return res.status(400).json({ error: 'firmaAdi gerekli' });
+        if (faturaTutari === undefined || faturaTutari === null || faturaTutari === '') {
+          return res.status(400).json({ error: 'faturaTutari gerekli' });
+        }
+
+        const now = new Date();
+        const trTarih = tarih || now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+        const p = trTarihiParcala(trTarih);
+        const fTutar = ondalikParseServer(faturaTutari);
+        const oTutar = ondalikParseServer(odemeTutari || 0);
+
+        // Kayıt SONRASI bakiye — mevcut bakiyeye bu faturanın kalan borcu ekleniyor.
+        const [ffRows, tahRows] = await Promise.all([
+          getRows(sheets, FATURA_FIS_TAB),
+          getRows(sheets, TAHSILAT_TAB),
+        ]);
+        const oncekiBakiye = firmaBakiyesi(firmaAdi, ffRows.map(rowToFaturaFis), tahRows.map(rowToTahsilat));
+        const yeniBakiye = Math.round((oncekiBakiye + (fTutar - oTutar)) * 100) / 100;
+
+        const id = benzersizId();
+        await appendRow(sheets, FATURA_FIS_TAB, [
+          id, trTarih, p.gun, p.ay, p.yil, String(firmaAdi).trim(), faturaNo || '', aciklama || '',
+          giderKategorisi || '', odemeTuru || '', odemeDetay || '', fTutar, oTutar,
+          bakiyeDurumuEtiketi(yeniBakiye), yeniBakiye, kaynakFaturaID || '', now.toISOString(),
+        ]);
+
+        // Peşin ödeme kredi kartı / banka havalesiyle yapıldıysa o hesabın hareketine de düşer.
+        if (oTutar > 0 && hesapHareketiGerekir(odemeTuru)) {
+          await appendRow(sheets, BANKA_KART_TAB, [
+            benzersizId(), trTarih, odemeTuru, odemeDetay || '', 'GİDEN', oTutar,
+            `${firmaAdi}${faturaNo ? ' — ' + faturaNo : ''}`, id, now.toISOString(),
+          ]);
+        }
+
+        return res.status(200).json({ ok: true, id, oncekiBakiye, yeniBakiye });
+      }
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // Yeni firma kaydı — ayrı "Fatura Firmaları" sekmesine yazılır. (Kullanıcı "aynı
+    // sheet'e 0 tutarlı satır ekle" demişti; 0 tutarlı satır listeleri/toplamları
+    // kirlettiği için ayrı bir firma defteri tercih edildi, arama iki kaynağı da tarar.)
+    if (resource === 'faturaFisFirmaEkle') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { firmaAdi } = req.body || {};
+      if (!firmaAdi || !String(firmaAdi).trim()) return res.status(400).json({ error: 'firmaAdi gerekli' });
+      const ad = String(firmaAdi).trim();
+      const mevcut = await getRows(sheets, FF_FIRMA_TAB);
+      const adNorm = metinNormalize(ad);
+      if (mevcut.some((r) => metinNormalize(r[1]) === adNorm)) {
+        return res.status(200).json({ ok: true, zatenVar: true, firmaAdi: ad });
+      }
+      await appendRow(sheets, FF_FIRMA_TAB, [benzersizId(), ad, new Date().toISOString()]);
+      return res.status(200).json({ ok: true, firmaAdi: ad });
+    }
+
+    // Yeni ödeme yöntemi / kart / banka ekleme.
+    if (resource === 'odemeYontemiEkle') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { tur, ad } = req.body || {};
+      if (!tur || !String(tur).trim()) return res.status(400).json({ error: 'tur gerekli' });
+      await ensureOdemeYontemleri(sheets);
+      const mevcut = await getRows(sheets, ODEME_YONTEMI_TAB);
+      const turNorm = metinNormalize(tur);
+      const adNorm = metinNormalize(ad || '');
+      if (mevcut.some((r) => metinNormalize(r[1]) === turNorm && metinNormalize(r[2]) === adNorm)) {
+        return res.status(200).json({ ok: true, zatenVar: true });
+      }
+      await appendRow(sheets, ODEME_YONTEMI_TAB, [benzersizId(), String(tur).trim(), String(ad || '').trim(), new Date().toISOString()]);
+      return res.status(200).json({ ok: true });
+    }
+
+    if (resource === 'tahsilat') {
+      if (req.method === 'GET') {
+        const [ffRows, tahRows, firmaRows, oyRows] = await Promise.all([
+          getRows(sheets, FATURA_FIS_TAB),
+          getRows(sheets, TAHSILAT_TAB),
+          getRows(sheets, FF_FIRMA_TAB),
+          ensureOdemeYontemleri(sheets),
+        ]);
+        const kayitlar = ffRows.map(rowToFaturaFis);
+        const tahsilatlar = tahRows.map(rowToTahsilat);
+        return res.status(200).json({
+          records: tahsilatlar,
+          firmalar: firmaListesiCikar(firmaRows, kayitlar, tahsilatlar),
+          odemeYontemleri: oyRows.map(rowToOdemeYontemi),
+        });
+      }
+
+      if (req.method === 'POST') {
+        const { tarih, firmaAdi, faturaNo, aciklama, odemeTuru, odemeDetay, tutar, kaynakEkstreID } = req.body || {};
+        if (!firmaAdi || !String(firmaAdi).trim()) return res.status(400).json({ error: 'firmaAdi gerekli' });
+        if (tutar === undefined || tutar === null || tutar === '') return res.status(400).json({ error: 'tutar gerekli' });
+
+        const now = new Date();
+        const trTarih = tarih || now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+        const p = trTarihiParcala(trTarih);
+        const odenen = ondalikParseServer(tutar);
+
+        const [ffRows, tahRows] = await Promise.all([
+          getRows(sheets, FATURA_FIS_TAB),
+          getRows(sheets, TAHSILAT_TAB),
+        ]);
+        const oncekiBakiye = firmaBakiyesi(firmaAdi, ffRows.map(rowToFaturaFis), tahRows.map(rowToTahsilat));
+        const yeniBakiye = Math.round((oncekiBakiye - odenen) * 100) / 100;
+
+        const id = benzersizId();
+        await appendRow(sheets, TAHSILAT_TAB, [
+          id, trTarih, p.gun, p.ay, p.yil, String(firmaAdi).trim(), faturaNo || '', aciklama || '',
+          odemeTuru || '', odemeDetay || '', odenen, oncekiBakiye, yeniBakiye,
+          kaynakEkstreID || '', now.toISOString(),
+        ]);
+
+        if (hesapHareketiGerekir(odemeTuru)) {
+          await appendRow(sheets, BANKA_KART_TAB, [
+            benzersizId(), trTarih, odemeTuru, odemeDetay || '', 'GİDEN', odenen,
+            `Tahsilat — ${firmaAdi}`, id, now.toISOString(),
+          ]);
+        }
+
+        return res.status(200).json({ ok: true, id, oncekiBakiye, yeniBakiye });
+      }
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // Bir firmanın kayıt öncesi bakiyesi (form "Güncel Bakiye" alanı için).
+    if (resource === 'firmaBakiye') {
+      if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+      const firmaAdi = req.query.firmaAdi || '';
+      if (!firmaAdi) return res.status(400).json({ error: 'firmaAdi gerekli' });
+      const [ffRows, tahRows] = await Promise.all([
+        getRows(sheets, FATURA_FIS_TAB),
+        getRows(sheets, TAHSILAT_TAB),
+      ]);
+      const bakiye = firmaBakiyesi(firmaAdi, ffRows.map(rowToFaturaFis), tahRows.map(rowToTahsilat));
+      return res.status(200).json({ bakiye, durum: bakiyeDurumuEtiketi(bakiye) });
+    }
+
+    // Banka/Kart Takip sekmesi — hesap bazlı hareket dökümü.
+    if (resource === 'bankaKartHareket') {
+      if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+      const [hareketRows, oyRows] = await Promise.all([
+        getRows(sheets, BANKA_KART_TAB),
+        ensureOdemeYontemleri(sheets),
+      ]);
+      let records = hareketRows.map(rowToBankaKartHareket);
+      if (req.query.hesapAdi) records = records.filter((r) => r.hesapAdi === req.query.hesapAdi);
+      const hesaplar = oyRows.map(rowToOdemeYontemi).filter((o) => hesapHareketiGerekir(o.tur) && o.ad);
+      return res.status(200).json({ records, hesaplar });
+    }
+
+    // Uyumsoft'tan gelmiş ama bu ekrandan HENÜZ İŞLENMEMİŞ faturalar (kart olarak gösterilir).
+    // Kaynak: mevcut XML içe aktarma verisi (Giderler sekmesi, FaturaID bazında gruplanır).
+    if (resource === 'bekleyenFaturalar') {
+      if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+      const [giderRows, ffRows] = await Promise.all([
+        getRows(sheets, GIDER_TAB),
+        getRows(sheets, FATURA_FIS_TAB),
+      ]);
+      const islenmis = new Set(ffRows.map(rowToFaturaFis).map((r) => r.kaynakFaturaID).filter(Boolean));
+
+      const gruplar = new Map();
+      giderRows.map(rowToGider).forEach((g) => {
+        if (!g.faturaId || islenmis.has(g.faturaId)) return;
+        const mevcut = gruplar.get(g.faturaId) || {
+          faturaID: g.faturaId, tarih: g.tarih, firmaAdi: g.tedarikciAciklama,
+          faturaNo: g.belgeNo, kategori: g.kategori, tutar: 0, kdvTutari: 0, satirSayisi: 0,
+        };
+        mevcut.tutar += Number(g.tutar) || 0;
+        mevcut.kdvTutari += ondalikParseServer(g.kdvOrani);
+        mevcut.satirSayisi += 1;
+        gruplar.set(g.faturaId, mevcut);
+      });
+
+      let records = [...gruplar.values()].map((f) => ({
+        ...f,
+        tutar: Math.round(f.tutar * 100) / 100,
+        kdvTutari: Math.round(f.kdvTutari * 100) / 100,
+      }));
+      if (req.query.firmaAdi) {
+        const hedef = metinNormalize(req.query.firmaAdi);
+        records = records.filter((r) => metinNormalize(r.firmaAdi) === hedef);
+      }
+      records.sort((a, b) => (trTarihiCozServer(b.tarih)?.getTime() || 0) - (trTarihiCozServer(a.tarih)?.getTime() || 0));
+      return res.status(200).json({ records });
+    }
+
+    // Banka ekstresinden gelen, henüz bir firmayla eşleştirilmemiş GİDEN ödemeler
+    // (Tahsilat Makbuzu ekranındaki kartlar).
+    if (resource === 'bekleyenOdemeler') {
+      if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+      const [ekstreRows, tahRows] = await Promise.all([
+        getRows(sheets, EKSTRE_TAB),
+        getRows(sheets, TAHSILAT_TAB),
+      ]);
+      const kullanilan = new Set(tahRows.map(rowToTahsilat).map((t) => t.kaynakEkstreID).filter(Boolean));
+      const records = ekstreRows.map(rowToEkstre)
+        .filter((e) => e.yon === 'GİDEN' && !kullanilan.has(e.id))
+        .sort((a, b) => (trTarihiCozServer(b.tarih)?.getTime() || 0) - (trTarihiCozServer(a.tarih)?.getTime() || 0));
+      return res.status(200).json({ records });
     }
 
     // ---- Fatura/Makbuz (4 tip) ----

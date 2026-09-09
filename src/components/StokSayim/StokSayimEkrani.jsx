@@ -141,11 +141,13 @@ export default function StokSayimEkrani({ data, rol, adSoyad }) {
             </div>
             <div className="sse-col sse-col-birim">{u.birim}</div>
             <div className="sse-col sse-col-not">
-              <input
+              <textarea
                 className="sse-input sse-input-not"
                 value={taslakDeger(u.id, 'not')}
                 onChange={(e) => setAlan(u.id, 'not', e.target.value)}
                 placeholder="not..."
+                rows={1}
+                onInput={(e) => { e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
               />
             </div>
           </div>

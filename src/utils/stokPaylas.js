@@ -39,8 +39,8 @@ function sablonHtmlOlustur(baslikSag, satirlar) {
   baslik.style.justifyContent = 'space-between';
   baslik.style.alignItems = 'baseline';
   baslik.innerHTML = `
-    <span style="font-size:22px;font-weight:800;">Perpa Sandviç</span>
-    <span style="font-size:14px;font-weight:800;">${baslikSag}</span>
+    <span style="font-size:28px;font-weight:800;">Perpa Sandviç</span>
+    <span style="font-size:18px;font-weight:800;">${baslikSag}</span>
   `;
   el.appendChild(baslik);
 
@@ -53,8 +53,8 @@ function sablonHtmlOlustur(baslikSag, satirlar) {
   basHead.style.fontWeight = '800';
   basHead.innerHTML = `
     <div style="flex:1;padding:8px 10px;">Malzeme Adı</div>
-    <div style="width:90px;padding:8px 10px;text-align:center;">Sipariş</div>
-    <div style="width:70px;padding:8px 10px;text-align:center;">Birim</div>
+    <div style="width:80px;padding:8px 10px;text-align:center;">Sipariş</div>
+    <div style="width:65px;padding:8px 10px;text-align:center;">Birim</div>
   `;
   el.appendChild(basHead);
 
@@ -69,8 +69,8 @@ function sablonHtmlOlustur(baslikSag, satirlar) {
         <div style="font-size:15px;font-weight:800;">${escapeHtml(s.ad)}</div>
         ${s.not ? `<div style="font-size:12px;font-style:italic;color:#555;margin-top:2px;">"${escapeHtml(s.not)}"</div>` : ''}
       </div>
-      <div style="width:90px;padding:9px 10px;text-align:center;font-size:15px;font-weight:800;">${escapeHtml(s.siparis)}</div>
-      <div style="width:70px;padding:9px 10px;text-align:center;font-size:13px;">${escapeHtml(s.birim || '')}</div>
+      <div style="width:80px;padding:9px 10px;text-align:center;font-size:15px;font-weight:800;">${escapeHtml(s.siparis)}</div>
+      <div style="width:65px;padding:9px 10px;text-align:center;font-size:13px;">${escapeHtml(s.birim || '')}</div>
     `;
     el.appendChild(row);
   });

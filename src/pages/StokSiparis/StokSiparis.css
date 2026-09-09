@@ -73,17 +73,19 @@
   border-bottom: 1.5px solid #000;
   align-items: center;
 }
+.ss-table-head .ss-col { border-right-color: rgba(246,247,235,0.3); }
+.ss-table-head .ss-col-kendim { border-right: none; }
 .ss-row { background: #fff; }
 .ss-row:nth-child(even) { background: #fafafa; }
 
-.ss-col { padding: 4px 8px; display: flex; align-items: center; position: relative; }
+.ss-col { padding: 4px 8px; display: flex; align-items: center; position: relative; border-right: 1px solid rgba(0,0,0,0.12); box-sizing: border-box; }
 .ss-col-sil { width: 34px; justify-content: center; flex-shrink: 0; }
 .ss-col-ad { flex: 1.8; min-width: 160px; }
 .ss-col-num { width: 90px; flex-shrink: 0; text-align: center; justify-content: center; }
 .ss-col-birim { width: 70px; flex-shrink: 0; }
 .ss-col-hedef { width: 110px; flex-shrink: 0; }
-.ss-col-not { width: 130px; flex-shrink: 0; word-break: break-word; white-space: pre-wrap; padding-top: 8px; padding-bottom: 8px; }
-.ss-col-kendim { width: 60px; flex-shrink: 0; justify-content: center; text-align: center; }
+.ss-col-not { width: 130px; flex-shrink: 0; overflow: hidden; padding-top: 6px; padding-bottom: 6px; }
+.ss-col-kendim { width: 60px; flex-shrink: 0; justify-content: center; text-align: center; border-right: none; }
 
 .ss-input {
   width: 100%; border: 1px solid transparent; background: transparent;
@@ -92,6 +94,17 @@
 }
 .ss-input:focus { outline: none; border-color: #000; background: #fff; }
 .ss-input-small { text-align: center; font-size: 13px; }
+.ss-col-not .ss-input {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  height: auto;
+  min-height: 32px;
+  resize: none;
+  overflow: hidden;
+  box-sizing: border-box;
+  width: 100%;
+}
 .ss-input-siparis { font-weight: 800; }
 .ss-input-text { font-weight: 700; }
 .ss-readonly { font-size: 14px; font-weight: 700; color: #333; }

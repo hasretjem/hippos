@@ -225,11 +225,13 @@ export default function StokSiparis({ data, onNavigate }) {
                 />
               </div>
               <div className="ss-col ss-col-not">
-                <input
+                <textarea
                   className="ss-input ss-input-small"
                   value={kalem.not || ''}
                   onChange={(e) => kalemAlan(u.id, 'not', e.target.value)}
                   placeholder="not..."
+                  rows={1}
+                  onInput={(e) => { e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
                 />
               </div>
               <div className="ss-col ss-col-kendim">

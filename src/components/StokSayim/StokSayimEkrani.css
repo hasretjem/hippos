@@ -49,13 +49,15 @@
   border-bottom: 1.5px solid #000;
   align-items: center;
 }
+.sse-row-head .sse-col { border-right-color: rgba(246,247,235,0.3); }
+.sse-row-head .sse-col-not { border-right: none; }
 .sse-row:nth-child(even) { background: #fafafa; }
 
-.sse-col { padding: 6px 8px; }
+.sse-col { padding: 6px 8px; border-right: 1px solid rgba(0,0,0,0.12); box-sizing: border-box; }
 .sse-col-ad { flex: 2; font-size: 15px; font-weight: 700; }
 .sse-col-num { width: 90px; flex-shrink: 0; }
 .sse-col-birim { width: 60px; flex-shrink: 0; font-size: 13px; color: #555; }
-.sse-col-not { flex: 1.4; min-width: 100px; word-break: break-word; white-space: pre-wrap; padding-top: 8px; padding-bottom: 8px; }
+.sse-col-not { flex: 1.4; min-width: 100px; overflow: hidden; padding-top: 6px; padding-bottom: 6px; border-right: none; }
 .sse-row-head .sse-col-birim { color: var(--krem); }
 
 .sse-input {
@@ -63,7 +65,12 @@
   font-size: 16px; font-weight: 800; text-align: center; padding: 8px 4px;
   font-family: 'Inter', sans-serif;
 }
-.sse-input-not { text-align: left; font-weight: 500; font-size: 13px; }
+.sse-input-not {
+  text-align: left; font-weight: 500; font-size: 13px;
+  white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word;
+  height: auto; min-height: 32px; resize: none; overflow: hidden;
+  box-sizing: border-box; width: 100%; border-radius: 4px;
+}
 
 .sse-satir-ekle { padding: 12px 14px 24px; }
 .sse-satir-ekle .sse-btn { font-family: 'Geom-BlackItalic', sans-serif; }
