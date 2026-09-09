@@ -356,7 +356,7 @@ const FATURA_FIS_TAB = {
   tab: 'Fatura ve Fişler',
   headers: ['ID', 'Tarih', 'Gun', 'Ay', 'Yil', 'FirmaAdi', 'FaturaNo', 'Aciklama', 'GiderKategorisi',
     'OdemeTuru', 'OdemeDetay', 'FaturaTutari', 'KdvTutari', 'IskontoTutari', 'OdemeTutari',
-    'BakiyeDurumu', 'BakiyeTutari', 'KaynakFaturaID', 'KayitZamani'],
+    'BakiyeDurumu', 'BakiyeTutari', 'KaynakFaturaID', 'GunlukHarcama', 'KayitZamani'],
 };
 
 function rowToFaturaFis(r) {
@@ -367,7 +367,9 @@ function rowToFaturaFis(r) {
     faturaTutari: sayiCoz(r[11]), kdvTutari: sayiCoz(r[12]), iskontoTutari: sayiCoz(r[13]),
     odemeTutari: sayiCoz(r[14]),
     bakiyeDurumu: r[15] || '', bakiyeTutari: sayiCoz(r[16]),
-    kaynakFaturaID: r[17] || '', kayitZamani: r[18] || '',
+    kaynakFaturaID: r[17] || '',
+    gunlukHarcama: r[18] === 'TRUE' || r[18] === true,
+    kayitZamani: r[19] || '',
   };
 }
 
@@ -387,7 +389,8 @@ function rowToTahsilat(r) {
 }
 
 // Firma defteri — tutarsız (henüz işlemi olmayan) firmalar da aramada çıksın diye ayrı tutulur.
-const FF_FIRMA_TAB = { tab: 'Fatura Firmaları', headers: ['ID', 'FirmaAdi', 'KayitZamani'] };
+// GunlukHarcama=TRUE olanlar kasa harcama mini formunda görünür, FALSE olanlar sadece muhasebede.
+const FF_FIRMA_TAB = { tab: 'Fatura Firmaları', headers: ['ID', 'FirmaAdi', 'GiderKategorisi', 'GunlukHarcama', 'KayitZamani'] };
 
 const ODEME_YONTEMI_TAB = { tab: 'Ödeme Yöntemleri', headers: ['ID', 'Tur', 'Ad', 'KayitZamani'] };
 const VARSAYILAN_ODEME_YONTEMLERI = [
@@ -1880,12 +1883,14 @@ export default async function handler(req, res) {
         const yeniBakiye = Math.round((oncekiBakiye + (fTutar - oTutar)) * 100) / 100;
 
         const id = benzersizId();
+        const gunlukHarcama = req.body.gunlukHarcama === true || req.body.gunlukHarcama === 'true';
         await appendRow(sheets, FATURA_FIS_TAB, [
           id, trTarih, p.gun, p.ay, p.yil, String(firmaAdi).trim(), faturaNo || '', aciklama || '',
           giderKategorisi || '', odemeTuru || '', odemeDetay || '', fTutar,
           ondalikParseServer(req.body.kdvTutari || 0),
           ondalikParseServer(req.body.iskontoTutari || 0),
-          oTutar, bakiyeDurumuEtiketi(yeniBakiye), yeniBakiye, kaynakFaturaID || '', now.toISOString(),
+          oTutar, bakiyeDurumuEtiketi(yeniBakiye), yeniBakiye, kaynakFaturaID || '',
+          gunlukHarcama ? 'TRUE' : 'FALSE', now.toISOString(),
         ]);
 
         // Peşin ödeme kredi kartı / banka havalesiyle yapıldıysa o hesabın hareketine de düşer.
@@ -1901,12 +1906,11 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // Yeni firma kaydı — ayrı "Fatura Firmaları" sekmesine yazılır. (Kullanıcı "aynı
-    // sheet'e 0 tutarlı satır ekle" demişti; 0 tutarlı satır listeleri/toplamları
-    // kirlettiği için ayrı bir firma defteri tercih edildi, arama iki kaynağı da tarar.)
+    // Yeni firma kaydı — ayrı "Fatura Firmaları" sekmesine yazılır. gunlukHarcama=true
+    // ile açılan firmalar kasa harcama mini formunda görünür, false olanlar görünmez.
     if (resource === 'faturaFisFirmaEkle') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-      const { firmaAdi } = req.body || {};
+      const { firmaAdi, giderKategorisi, gunlukHarcama } = req.body || {};
       if (!firmaAdi || !String(firmaAdi).trim()) return res.status(400).json({ error: 'firmaAdi gerekli' });
       const ad = String(firmaAdi).trim();
       const mevcut = await getRows(sheets, FF_FIRMA_TAB);
@@ -1914,8 +1918,52 @@ export default async function handler(req, res) {
       if (mevcut.some((r) => metinNormalize(r[1]) === adNorm)) {
         return res.status(200).json({ ok: true, zatenVar: true, firmaAdi: ad });
       }
-      await appendRow(sheets, FF_FIRMA_TAB, [benzersizId(), ad, new Date().toISOString()]);
+      await ensureTab(sheets, FF_FIRMA_TAB, ['ID', 'FirmaAdi', 'GiderKategorisi', 'GunlukHarcama', 'KayitZamani']);
+      const rows = await getRows(sheets, FF_FIRMA_TAB);
+      if (rows[0] && rows[0].length < 5) {
+        // Eski header'ı genişlet — ensureTab yeterli, gerçek append aşağıda
+      }
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID,
+        range: `${FF_FIRMA_TAB.tab}!A2:E`,
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: { values: [[benzersizId(), ad, giderKategorisi || '', gunlukHarcama ? 'TRUE' : 'FALSE', new Date().toISOString()]] },
+      });
       return res.status(200).json({ ok: true, firmaAdi: ad });
+    }
+
+    // Günlük harcama firmalarını listele (GunlukHarcama=TRUE olanlar)
+    if (resource === 'gunlukHarcamaFirmalar') {
+      if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+      const rows = await getRows(sheets, FF_FIRMA_TAB);
+      const firmalar = rows
+        .filter((r) => r[3] === 'TRUE')
+        .map((r) => ({ id: r[0], firmaAdi: r[1] || '', giderKategorisi: r[2] || '' }));
+      return res.status(200).json({ firmalar });
+    }
+
+    // Günlük harcama kaydı — kasa harcama mini formundan gelir, GunlukHarcama=TRUE olarak işaretlenir.
+    // Tarih otomatik (bugün), fatura no yok, ödeme türü Nakit (sabitleştirildi), bakiye hesabı yok.
+    if (resource === 'gunlukHarcamaKaydet') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { firmaAdi, giderKategorisi, aciklama, faturaTutari, giderId } = req.body || {};
+      if (!firmaAdi || !String(firmaAdi).trim()) return res.status(400).json({ error: 'firmaAdi gerekli' });
+      if (!faturaTutari) return res.status(400).json({ error: 'faturaTutari gerekli' });
+      const now = new Date();
+      const trTarih = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+      const p = trTarihiParcala(trTarih);
+      const fTutar = ondalikParseServer(faturaTutari);
+      // Var olan gider id'si gönderilmişse satırı GÜNCELLEMEYİZ — satır silinmez,
+      // kullanıcı kaydedince YENİ satır eklenir (her kaydet yeni satır = günlük harcama defteri mantığı).
+      // Eski satır id'si frontend'de görünür referans olarak kalır (gider kodu).
+      const id = giderId || benzersizId();
+      await appendRow(sheets, FATURA_FIS_TAB, [
+        id, trTarih, p.gun, p.ay, p.yil, String(firmaAdi).trim(), '', aciklama || '',
+        giderKategorisi || '', 'Nakit', '', fTutar, 0, 0, 0,
+        'Hesap Yok', 0, '', 'TRUE', now.toISOString(),
+      ]);
+      return res.status(200).json({ ok: true, id });
     }
 
     // Yeni ödeme yöntemi / kart / banka ekleme.

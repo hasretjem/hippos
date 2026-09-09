@@ -383,3 +383,49 @@
   .gs-content-3col { grid-template-columns: 1fr; }
   .gs-col { overflow-y: visible; }
 }
+/* ---- Cari ödeme paneli ---- */
+.gs-cari-odeme-panel {
+  margin-top: 10px; padding: 10px 12px; background: rgba(46,139,87,.07);
+  border: 1px solid rgba(46,139,87,.25); border-radius: 10px;
+}
+
+/* ---- Mini Harcama Formu ---- */
+.gs-mini-fis { display: flex; flex-direction: column; gap: 4px; }
+.gs-mini-fis-head { display: flex; justify-content: space-between; align-items: center; }
+.gs-mini-yeni-btn {
+  font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px;
+  border: 1px dashed #C9C3B5; background: transparent; color: #83786B; cursor: pointer;
+}
+.gs-mini-yeni-btn:hover { background: #F0EDE4; }
+.gs-mini-satir { display: flex; align-items: center; gap: 4px; }
+.gs-mini-select {
+  flex: 1; height: 28px; font-size: 12px; border-radius: 6px; border: 1px solid #E3DFCF;
+  background: #fff; color: #393E41; padding: 0 6px;
+}
+.gs-mini-tutar {
+  width: 72px; height: 28px; font-size: 12px; border-radius: 6px; border: 1px solid #E3DFCF;
+  background: #fff; color: #393E41; padding: 0 6px; text-align: right;
+}
+.gs-mini-aciklama-btn, .gs-mini-kaydet {
+  height: 28px; width: 28px; border-radius: 6px; border: 1px solid #E3DFCF;
+  background: #fff; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center;
+}
+.gs-mini-kaydet { background: #393E41; color: #F6F7EB; border-color: #393E41; font-weight: 700; }
+.gs-mini-kaydet:hover { background: #2A2E31; }
+.gs-gider-kod { font-size: 9px; color: #B0A898; font-family: monospace; min-width: 44px; }
+.gs-mini-aciklama-pop input {
+  width: 100%; height: 28px; font-size: 12px; border-radius: 6px; border: 1px solid #E3DFCF;
+  background: #fff; color: #393E41; padding: 0 8px; box-sizing: border-box;
+}
+.gs-mini-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+}
+.gs-mini-modal {
+  background: #fff; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px;
+  min-width: 280px; box-shadow: 0 8px 32px rgba(0,0,0,.2);
+}
+.gs-mini-modal input { height: 34px; border-radius: 8px; border: 1px solid #E3DFCF; padding: 0 10px; font-size: 13px; }
+.gs-mini-modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.gs-mini-modal-footer button { padding: 6px 14px; border-radius: 8px; border: 1px solid #E3DFCF; cursor: pointer; font-size: 13px; }
+.gs-primary-btn { background: #393E41; color: #F6F7EB; border-color: #393E41 !important; font-weight: 600; }

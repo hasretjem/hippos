@@ -31,7 +31,7 @@ function parseNum(v) {
 }
 
 export default function GunSonu({ data, onNavigate }) {
-  const { salesHistory, cariler, cariHareketler } = data;
+  const { salesHistory, cariler, cariHareketler, cariOdemeler } = data;
 
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -222,11 +222,40 @@ export default function GunSonu({ data, onNavigate }) {
   }, [cariler, cariHareketler]);
 
   const otomatikCariListesi = useMemo(() => {
+    // Firma carileri: sabit liste + bugün cari hareketi olan ve bakiyesi > 0 olanlar
     const digerCariler = Object.keys(bugunFirmaTutarlari).filter(
       (ad) => !SABIT_CARILER.includes(ad) && bugunFirmaTutarlari[ad] > 0
     );
     return [...SABIT_CARILER, ...digerCariler];
   }, [bugunFirmaTutarlari]);
+
+  // Bireysel cariler: bugün cari hareketi olan ve bakiyesi > 0 olan tip=bireysel cariler
+  const bugunBireyselCariler = useMemo(() => {
+    const gunBaslangic = new Date(); gunBaslangic.setHours(0, 0, 0, 0);
+    const ts0 = gunBaslangic.getTime();
+    return (cariler || [])
+      .filter((c) => c.tip === 'bireysel')
+      .map((c) => {
+        const bugunTutar = (cariHareketler || [])
+          .filter((h) => h.cariId === c.id && h.ts >= ts0)
+          .reduce((s, h) => s + h.toplam, 0);
+        return { ...c, bugunTutar };
+      })
+      .filter((c) => c.bugunTutar > 0);
+  }, [cariler, cariHareketler]);
+  const bireyselCariToplam = bugunBireyselCariler.reduce((s, c) => s + c.bugunTutar, 0);
+
+  // Bugün tahsil edilen cari ödemeleri (havale hariç) — bilgi amaçlı, cirodan düşülmez
+  const bugunCariOdemeOzeti = useMemo(() => {
+    const gunBaslangic = new Date(); gunBaslangic.setHours(0, 0, 0, 0);
+    const ts0 = gunBaslangic.getTime();
+    const ozet = {};
+    (cariOdemeler || [])
+      .filter((o) => o.ts >= ts0 && o.tur !== 'HAVALE')
+      .forEach((o) => { ozet[o.tur] = (ozet[o.tur] || 0) + o.tutar; });
+    return ozet;
+  }, [cariOdemeler]);
+  const bugunCariOdemeToplamı = Object.values(bugunCariOdemeOzeti).reduce((s, v) => s + v, 0);
 
   const [cariOverrides, setCariOverrides] = useState({});
   const [cariEditingFor, setCariEditingFor] = useState(null);
@@ -241,7 +270,7 @@ export default function GunSonu({ data, onNavigate }) {
   function addEkstraCari() { setEkstraCariler((prev) => [...prev, { ad: '', tutar: '' }]); }
   function updateEkstraCari(idx, field, value) { setEkstraCariler((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r))); }
   function removeEkstraCari(idx) { setEkstraCariler((prev) => prev.filter((_, i) => i !== idx)); }
-  const cariToplam = otomatikCariListesi.reduce((s, ad) => s + cariGosterilenTutar(ad), 0) + ekstraCariler.reduce((s, r) => s + parseNum(r.tutar), 0);
+  const cariToplam = otomatikCariListesi.reduce((s, ad) => s + cariGosterilenTutar(ad), 0) + ekstraCariler.reduce((s, r) => s + parseNum(r.tutar), 0) + bireyselCariToplam;
 
   // Dünden Devir artık HİÇ elle girilemez — sadece bir önceki Gün Sonu kaydından otomatik
   // gelir (yoksa 0). Düzeltmek gerekirse Sheets'ten yapılmalı, buradan değil.
@@ -341,6 +370,8 @@ export default function GunSonu({ data, onNavigate }) {
             return acc;
           }, {}),
           ekstra: ekstraCariler, // [{ ad, tutar }]
+          bireysel: bugunBireyselCariler.map((c) => ({ ad: c.ad, tutar: c.bugunTutar })),
+          bugunCariOdemeOzeti, // havale hariç tahsil edilen ödemeler, bilgi amaçlı
         },
 
         genelYemekToplami,
@@ -466,7 +497,39 @@ export default function GunSonu({ data, onNavigate }) {
                 ))}
                 <button className="gs-add-row-btn" onClick={addEkstraCari}><Plus size={13} /> Cari Ekle</button>
               </div>
-              <div className="gs-row-total main"><span>TOPLAM CARİ TUTARI</span><strong>{TL(cariToplam)}</strong></div>
+              <div className="gs-row-total main"><span>FİRMA CARİ TOPLAMI</span><strong>{TL(otomatikCariListesi.reduce((s, ad) => s + cariGosterilenTutar(ad), 0) + ekstraCariler.reduce((s, r) => s + parseNum(r.tutar), 0))}</strong></div>
+
+              {/* Bireysel Cariler */}
+              {bugunBireyselCariler.length > 0 && (
+                <>
+                  <span className="gs-subhead" style={{marginTop:12}}>Bireysel Cariler</span>
+                  <div className="gs-cari-list">
+                    {bugunBireyselCariler.map((c) => (
+                      <div key={c.id} className="gs-cari-row">
+                        <span className="ad">{c.ad}</span>
+                        <strong>{TL(c.bugunTutar)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="gs-row-total"><span>BİREYSEL CARİ TOPLAMI</span><strong>{TL(bireyselCariToplam)}</strong></div>
+                </>
+              )}
+
+              <div className="gs-row-total main" style={{marginTop:8}}><span>TOPLAM CARİ TUTARI</span><strong>{TL(cariToplam)}</strong></div>
+
+              {/* Cariden Gelen Ödemeler — bilgi amaçlı, cirodan düşülmez */}
+              {bugunCariOdemeToplamı > 0 && (
+                <div className="gs-cari-odeme-panel">
+                  <span className="gs-subhead">Cariden Gelen Ödemeler</span>
+                  {Object.entries(bugunCariOdemeOzeti).map(([tur, tutar]) => (
+                    <div key={tur} className="gs-cari-row">
+                      <span className="ad">{tur}</span>
+                      <strong>{TL(tutar)}</strong>
+                    </div>
+                  ))}
+                  <div className="gs-row-total"><span>TOPLAM TAHSİLAT</span><strong>{TL(bugunCariOdemeToplamı)}</strong></div>
+                </div>
+              )}
             </section>
           </div>
 
@@ -519,29 +582,11 @@ export default function GunSonu({ data, onNavigate }) {
               <h2><Calculator size={16} /> Harcamalar</h2>
 
               <span className="gs-subhead">Ana Kasadan Harcamalar <span className="gs-hint">(günlük ciroyu etkilemez)</span></span>
-              <div className="gs-dynrow-list">
-                {anaKasaHarcamalar.map((row, idx) => (
-                  <div key={idx} className="gs-dynrow plain">
-                    <input placeholder="Ne için (örn. Market)" className="gs-dynrow-label gs-tabbable" value={row.ad} onChange={(e) => updateRow(setAnaKasaHarcamalar, idx, 'ad', e.target.value)} onKeyDown={handleTabEnter} />
-                    <input type="number" placeholder="0 (+ / -)" className="gs-tabbable" value={row.tutar} onChange={(e) => updateRow(setAnaKasaHarcamalar, idx, 'tutar', e.target.value)} onKeyDown={handleTabEnter} />
-                    {anaKasaHarcamalar.length > 1 && <button className="gs-row-del" onClick={() => removeRow(setAnaKasaHarcamalar, idx)}><Trash2 size={12} /></button>}
-                  </div>
-                ))}
-                <button className="gs-add-row-btn" onClick={() => addRow(setAnaKasaHarcamalar)}><Plus size={13} /> Satır Ekle</button>
-              </div>
+              <MiniHarcamaFormu baslik="" showToast={showToast} />
               <div className="gs-row-total main"><span>ANA KASA TOPLAMI</span><strong>{TL(anaKasaToplam)}</strong></div>
 
               <span className="gs-subhead" style={{ marginTop: 14 }}>Günlük Kasadan Harcamalar</span>
-              <div className="gs-dynrow-list">
-                {gunlukKasaHarcamalar.map((row, idx) => (
-                  <div key={idx} className="gs-dynrow plain">
-                    <input placeholder="Ne için (örn. Manav)" className="gs-dynrow-label gs-tabbable" value={row.ad} onChange={(e) => updateRow(setGunlukKasaHarcamalar, idx, 'ad', e.target.value)} onKeyDown={handleTabEnter} />
-                    <input type="number" placeholder="0 (+ / -)" className="gs-tabbable" value={row.tutar} onChange={(e) => updateRow(setGunlukKasaHarcamalar, idx, 'tutar', e.target.value)} onKeyDown={handleTabEnter} />
-                    {gunlukKasaHarcamalar.length > 1 && <button className="gs-row-del" onClick={() => removeRow(setGunlukKasaHarcamalar, idx)}><Trash2 size={12} /></button>}
-                  </div>
-                ))}
-                <button className="gs-add-row-btn" onClick={() => addRow(setGunlukKasaHarcamalar)}><Plus size={13} /> Satır Ekle</button>
-              </div>
+              <MiniHarcamaFormu baslik="" showToast={showToast} />
               <div className="gs-row-total main"><span>GÜNLÜK KASA TOPLAMI</span><strong>{TL(gunlukKasaToplam)}</strong></div>
             </section>
 
@@ -677,6 +722,126 @@ export default function GunSonu({ data, onNavigate }) {
       )}
 
       {toast && <div className="gs-toast">{toast}</div>}
+    </div>
+  );
+}
+// ============================================================
+// Mini Fiş Girişi — Kasa Harcama bölümünde kullanılır.
+// Girilen bilgiler Fatura ve Fişler sheet'ine GunlukHarcama=TRUE olarak kaydedilir.
+// ============================================================
+export function MiniHarcamaFormu({ baslik, showToast }) {
+  const [satirlar, setSatirlar] = useState([{ id: null, neIcin: '', tutar: '', aciklama: '' }]);
+  const [firmalar, setFirmalar] = useState([]); // { firmaAdi, giderKategorisi }
+  const [yeniGiderModal, setYeniGiderModal] = useState(false);
+  const [yeniGiderAd, setYeniGiderAd] = useState('');
+  const [yeniGiderKat, setYeniGiderKat] = useState('');
+  const [kategoriler, setKategoriler] = useState([]);
+  const [aciklamaAcik, setAciklamaAcik] = useState({});
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [fRes, kRes] = await Promise.all([
+          fetch('/api/muhasebe?resource=gunlukHarcamaFirmalar'),
+          fetch('/api/muhasebe?resource=kategoriler'),
+        ]);
+        const fj = await fRes.json();
+        const kj = await kRes.json();
+        setFirmalar(fj.firmalar || []);
+        if (kj.kategoriler?.length) setKategoriler(kj.kategoriler);
+      } catch { /* sessiz */ }
+    })();
+  }, []);
+
+  function satirGuncelle(idx, field, val) {
+    setSatirlar(prev => prev.map((r, i) => i === idx ? { ...r, [field]: val } : r));
+  }
+
+  function satirEkle() {
+    setSatirlar(prev => [...prev, { id: null, neIcin: '', tutar: '', aciklama: '' }]);
+  }
+
+  async function satirKaydet(idx) {
+    const s = satirlar[idx];
+    if (!s.neIcin || !s.tutar) { showToast('Firma ve tutar gerekli'); return; }
+    const firma = firmalar.find(f => f.firmaAdi === s.neIcin);
+    try {
+      const res = await fetch('/api/muhasebe?resource=gunlukHarcamaKaydet', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firmaAdi: s.neIcin, giderKategorisi: firma?.giderKategorisi || '',
+          aciklama: s.aciklama, faturaTutari: s.tutar, giderId: s.id || undefined,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error);
+      showToast('Kaydedildi');
+      setSatirlar(prev => prev.map((r, i) => i === idx ? { ...r, id: j.id } : r));
+    } catch(e) { showToast('Kaydedilemedi: ' + e.message); }
+  }
+
+  async function yeniGiderEkle() {
+    if (!yeniGiderAd.trim()) return;
+    try {
+      const res = await fetch('/api/muhasebe?resource=faturaFisFirmaEkle', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firmaAdi: yeniGiderAd.trim(), giderKategorisi: yeniGiderKat, gunlukHarcama: true }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error);
+      showToast(j.zatenVar ? 'Bu firma zaten var' : 'Gider yeri eklendi');
+      if (!j.zatenVar) setFirmalar(prev => [...prev, { firmaAdi: yeniGiderAd.trim(), giderKategorisi: yeniGiderKat }]);
+      setYeniGiderModal(false); setYeniGiderAd(''); setYeniGiderKat('');
+    } catch(e) { showToast('Eklenemedi: ' + e.message); }
+  }
+
+  return (
+    <div className="gs-mini-fis">
+      <div className="gs-mini-fis-head">
+        <span className="gs-subhead">{baslik}</span>
+        <button className="gs-mini-yeni-btn" onClick={() => setYeniGiderModal(true)}>+ Yeni Gider</button>
+      </div>
+      {satirlar.map((s, idx) => (
+        <div key={idx} className="gs-mini-satir">
+          {s.id && <span className="gs-gider-kod" title="Gider Kodu">{String(s.id).slice(-6)}</span>}
+          <select className="gs-mini-select gs-tabbable" value={s.neIcin} onChange={e => satirGuncelle(idx, 'neIcin', e.target.value)}>
+            <option value="">Ne için?</option>
+            {firmalar.map(f => <option key={f.firmaAdi} value={f.firmaAdi}>{f.firmaAdi}</option>)}
+          </select>
+          <input type="number" placeholder="0" className="gs-mini-tutar gs-tabbable" value={s.tutar}
+            onChange={e => satirGuncelle(idx, 'tutar', e.target.value)} />
+          <button className="gs-mini-aciklama-btn" title="Not ekle"
+            onClick={() => setAciklamaAcik(prev => ({ ...prev, [idx]: !prev[idx] }))}>📝</button>
+          <button className="gs-mini-kaydet" onClick={() => satirKaydet(idx)}>✓</button>
+        </div>
+      ))}
+      {satirlar.some((s, idx) => aciklamaAcik[idx]) && satirlar.map((s, idx) =>
+        aciklamaAcik[idx] ? (
+          <div key={'ac' + idx} className="gs-mini-aciklama-pop">
+            <input className="gs-tabbable" placeholder="Not (opsiyonel)" value={s.aciklama}
+              onChange={e => satirGuncelle(idx, 'aciklama', e.target.value)} />
+          </div>
+        ) : null
+      )}
+      <button className="gs-add-row-btn" onClick={satirEkle}><Plus size={13} /> Satır Ekle</button>
+
+      {yeniGiderModal && (
+        <div className="gs-mini-modal-overlay" onClick={() => setYeniGiderModal(false)}>
+          <div className="gs-mini-modal" onClick={e => e.stopPropagation()}>
+            <strong>Yeni Gider Yeri</strong>
+            <input className="gs-tabbable" placeholder="Ne için? (örn. Manav)" value={yeniGiderAd}
+              onChange={e => setYeniGiderAd(e.target.value)} autoFocus />
+            <select className="gs-mini-select" value={yeniGiderKat} onChange={e => setYeniGiderKat(e.target.value)}>
+              <option value="">Kategori seç</option>
+              {kategoriler.map(k => <option key={k} value={k}>{k}</option>)}
+            </select>
+            <div className="gs-mini-modal-footer">
+              <button onClick={() => setYeniGiderModal(false)}>Vazgeç</button>
+              <button className="gs-primary-btn" onClick={yeniGiderEkle}>Ekle</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
