@@ -62,7 +62,7 @@
 .ss-table-wrap { flex: 1; min-height: 0; overflow: auto; }
 
 .ss-table-head, .ss-row {
-  display: flex; align-items: center; border-bottom: 1px solid #ddd; min-height: 46px;
+  display: flex; align-items: flex-start; border-bottom: 1px solid #ddd; min-height: 46px;
 }
 .ss-table-head {
   background: var(--kirmizi);
@@ -71,6 +71,7 @@
   font-size: 13px;
   position: sticky; top: 0; z-index: 5;
   border-bottom: 1.5px solid #000;
+  align-items: center;
 }
 .ss-row { background: #fff; }
 .ss-row:nth-child(even) { background: #fafafa; }
@@ -81,7 +82,7 @@
 .ss-col-num { width: 90px; flex-shrink: 0; text-align: center; justify-content: center; }
 .ss-col-birim { width: 70px; flex-shrink: 0; }
 .ss-col-hedef { width: 110px; flex-shrink: 0; }
-.ss-col-not { width: 130px; flex-shrink: 0; }
+.ss-col-not { width: 130px; flex-shrink: 0; word-break: break-word; white-space: pre-wrap; padding-top: 8px; padding-bottom: 8px; }
 .ss-col-kendim { width: 60px; flex-shrink: 0; justify-content: center; text-align: center; }
 
 .ss-input {
