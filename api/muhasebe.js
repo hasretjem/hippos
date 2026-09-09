@@ -355,8 +355,8 @@ function ekstreHash(tarih, yon, tutar, aciklama) {
 const FATURA_FIS_TAB = {
   tab: 'Fatura ve Fişler',
   headers: ['ID', 'Tarih', 'Gun', 'Ay', 'Yil', 'FirmaAdi', 'FaturaNo', 'Aciklama', 'GiderKategorisi',
-    'OdemeTuru', 'OdemeDetay', 'FaturaTutari', 'OdemeTutari', 'BakiyeDurumu', 'BakiyeTutari',
-    'KaynakFaturaID', 'KayitZamani'],
+    'OdemeTuru', 'OdemeDetay', 'FaturaTutari', 'KdvTutari', 'IskontoTutari', 'OdemeTutari',
+    'BakiyeDurumu', 'BakiyeTutari', 'KaynakFaturaID', 'KayitZamani'],
 };
 
 function rowToFaturaFis(r) {
@@ -364,9 +364,10 @@ function rowToFaturaFis(r) {
     id: r[0], tarih: r[1], gun: r[2], ay: r[3], yil: r[4], firmaAdi: r[5] || '',
     faturaNo: r[6] || '', aciklama: r[7] || '', giderKategorisi: r[8] || '',
     odemeTuru: r[9] || '', odemeDetay: r[10] || '',
-    faturaTutari: sayiCoz(r[11]), odemeTutari: sayiCoz(r[12]),
-    bakiyeDurumu: r[13] || '', bakiyeTutari: sayiCoz(r[14]),
-    kaynakFaturaID: r[15] || '', kayitZamani: r[16] || '',
+    faturaTutari: sayiCoz(r[11]), kdvTutari: sayiCoz(r[12]), iskontoTutari: sayiCoz(r[13]),
+    odemeTutari: sayiCoz(r[14]),
+    bakiyeDurumu: r[15] || '', bakiyeTutari: sayiCoz(r[16]),
+    kaynakFaturaID: r[17] || '', kayitZamani: r[18] || '',
   };
 }
 
@@ -1881,8 +1882,10 @@ export default async function handler(req, res) {
         const id = benzersizId();
         await appendRow(sheets, FATURA_FIS_TAB, [
           id, trTarih, p.gun, p.ay, p.yil, String(firmaAdi).trim(), faturaNo || '', aciklama || '',
-          giderKategorisi || '', odemeTuru || '', odemeDetay || '', fTutar, oTutar,
-          bakiyeDurumuEtiketi(yeniBakiye), yeniBakiye, kaynakFaturaID || '', now.toISOString(),
+          giderKategorisi || '', odemeTuru || '', odemeDetay || '', fTutar,
+          ondalikParseServer(req.body.kdvTutari || 0),
+          ondalikParseServer(req.body.iskontoTutari || 0),
+          oTutar, bakiyeDurumuEtiketi(yeniBakiye), yeniBakiye, kaynakFaturaID || '', now.toISOString(),
         ]);
 
         // Peşin ödeme kredi kartı / banka havalesiyle yapıldıysa o hesabın hareketine de düşer.

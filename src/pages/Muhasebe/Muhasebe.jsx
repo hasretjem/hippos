@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './Muhasebe.css';
 import { TL } from '../../hooks/useHipposData';
 import { supabase } from '../../services/supabase';
@@ -153,8 +153,6 @@ export default function Muhasebe({ onNavigate }) {
 // arasında henüz eşleşmemiş harcamaların bekleme havuzu.
 function GiderlerSekmesi({ showToast }) {
   const [altTab, setAltTab] = useState('faturalar');
-  // Ekstre yüklendiğinde "Faturası Beklenenler" rozetindeki sayı anında güncellensin diye
-  // sayaç üst bileşende tutuluyor (alt sekmeler arası paylaşılan tek durum bu).
   const [bekleyenSayisi, setBekleyenSayisi] = useState(null);
 
   async function bekleyenSayisiniTazele() {
@@ -179,11 +177,23 @@ function GiderlerSekmesi({ showToast }) {
           ⏳ Faturası Beklenenler
           {bekleyenSayisi > 0 && <span className="mh-rozet-sayi">{bekleyenSayisi}</span>}
         </button>
+        <button className={altTab === 'faturaGiris' ? 'active' : ''} onClick={() => setAltTab('faturaGiris')}>
+          🧾 Fatura ve Fiş Girişi
+        </button>
+        <button className={altTab === 'tahsilat' ? 'active' : ''} onClick={() => setAltTab('tahsilat')}>
+          💰 Tahsilat Makbuzu
+        </button>
+        <button className={altTab === 'bankaKart' ? 'active' : ''} onClick={() => setAltTab('bankaKart')}>
+          🏦 Banka / Kart Takip
+        </button>
       </div>
 
       {altTab === 'faturalar' && <FaturalarAltSekmesi showToast={showToast} />}
       {altTab === 'ekstre' && <EkstreAltSekmesi showToast={showToast} yon="GİDEN" onDegisti={bekleyenSayisiniTazele} />}
       {altTab === 'bekleyen' && <FaturaBekleyenlerAltSekmesi showToast={showToast} onDegisti={bekleyenSayisiniTazele} />}
+      {altTab === 'faturaGiris' && <FaturaFisGirisiSekmesi showToast={showToast} />}
+      {altTab === 'tahsilat' && <TahsilatMakbuzuSekmesi showToast={showToast} />}
+      {altTab === 'bankaKart' && <BankaKartTakipSekmesi showToast={showToast} />}
     </div>
   );
 }
@@ -2345,6 +2355,709 @@ function ReceteSekmesi({ showToast }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+// ============================================================
+// Ortak yardımcılar — Fatura/Fiş Girişi + Tahsilat için
+// ============================================================
+
+const GUNLER_KISA = ['Pts','Sal','Çar','Per','Cum','Cts','Paz'];
+
+function bugunTR() {
+  return new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+}
+
+function trStrToDate(s) {
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (!m) return null;
+  return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+}
+
+function dateToTrStr(d) {
+  if (!d) return '';
+  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+}
+
+// Takvim + yazılabilir input kombinasyonu (Cariler FuturaModal deseninden adapte edildi).
+function TarihSecici({ value, onChange }) {
+  const [acik, setAcik] = useState(false);
+  const [input, setInput] = useState(value || bugunTR());
+  const [takvimYil, setTakvimYil] = useState(() => { const d = trStrToDate(value || bugunTR()); return d ? d.getFullYear() : new Date().getFullYear(); });
+  const [takvimAy, setTakvimAy] = useState(() => { const d = trStrToDate(value || bugunTR()); return d ? d.getMonth() : new Date().getMonth(); });
+  const ref = useRef(null);
+
+  useEffect(() => { setInput(value || ''); }, [value]);
+
+  useEffect(() => {
+    function dis(e) { if (ref.current && !ref.current.contains(e.target)) setAcik(false); }
+    document.addEventListener('mousedown', dis);
+    return () => document.removeEventListener('mousedown', dis);
+  }, []);
+
+  function buildCal(y, m) {
+    const ilk = new Date(y, m, 1);
+    const son = new Date(y, m + 1, 0);
+    const bosluk = (ilk.getDay() + 6) % 7;
+    const gunler = [];
+    for (let i = 0; i < bosluk; i++) gunler.push(null);
+    for (let d = 1; d <= son.getDate(); d++) gunler.push(new Date(y, m, d));
+    return gunler;
+  }
+
+  function gunSec(d) {
+    const s = dateToTrStr(d);
+    setInput(s);
+    onChange(s);
+    setAcik(false);
+  }
+
+  function inputDegisti(e) {
+    const v = e.target.value;
+    setInput(v);
+    if (/^\d{2}\.\d{2}\.\d{4}$/.test(v)) {
+      const d = trStrToDate(v);
+      if (d) { onChange(v); setTakvimYil(d.getFullYear()); setTakvimAy(d.getMonth()); }
+    }
+  }
+
+  const secili = trStrToDate(value || '');
+  const gunler = buildCal(takvimYil, takvimAy);
+
+  return (
+    <div className="ff-tarih-wrap" ref={ref}>
+      <div className="ff-tarih-row">
+        <button type="button" className="ff-takvim-ikon" onClick={() => setAcik(a => !a)}>📅</button>
+        <input className="ff-input ff-tarih-input" value={input} onChange={inputDegisti}
+          placeholder="GG.AA.YYYY" maxLength={10} />
+      </div>
+      {acik && (
+        <div className="ff-takvim-popup">
+          <div className="ff-takvim-head">
+            <button type="button" onClick={() => { if (takvimAy===0) { setTakvimYil(y=>y-1); setTakvimAy(11); } else setTakvimAy(m=>m-1); }}>‹</button>
+            <span>{AY_ADLARI[takvimAy]} {takvimYil}</span>
+            <button type="button" onClick={() => { if (takvimAy===11) { setTakvimYil(y=>y+1); setTakvimAy(0); } else setTakvimAy(m=>m+1); }}>›</button>
+          </div>
+          <div className="ff-takvim-grid">
+            {GUNLER_KISA.map(g => <div key={g} className="ff-takvim-label">{g}</div>)}
+            {gunler.map((d, i) => (
+              <button key={i} type="button"
+                className={`ff-takvim-gun ${!d ? 'ff-takvim-bos' : ''} ${d && secili && d.toDateString()===secili.toDateString() ? 'ff-takvim-secili' : ''}`}
+                disabled={!d} onClick={() => d && gunSec(d)}>
+                {d ? d.getDate() : ''}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Firma autocomplete + yeni firma kaydı.
+function FirmaSecici({ value, onChange, firmalar, showToast, onFirmaEklendi }) {
+  const [input, setInput] = useState(value || '');
+  const [acik, setAcik] = useState(false);
+  const [yeniModal, setYeniModal] = useState(false);
+  const [yeniAd, setYeniAd] = useState('');
+  const [kaydediyor, setKaydediyor] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => { setInput(value || ''); }, [value]);
+
+  useEffect(() => {
+    function dis(e) { if (ref.current && !ref.current.contains(e.target)) setAcik(false); }
+    document.addEventListener('mousedown', dis);
+    return () => document.removeEventListener('mousedown', dis);
+  }, []);
+
+  const oneri = useMemo(() => {
+    if (input.length < 2) return [];
+    const norm = input.toLocaleLowerCase('tr');
+    return firmalar.filter(f => f.firmaAdi.toLocaleLowerCase('tr').includes(norm)).slice(0, 8);
+  }, [input, firmalar]);
+
+  function sec(firma) { setInput(firma.firmaAdi); onChange(firma); setAcik(false); }
+
+  function inputDegisti(e) {
+    setInput(e.target.value);
+    onChange(null);
+    setAcik(true);
+  }
+
+  async function firmaEkle() {
+    if (!yeniAd.trim()) return;
+    setKaydediyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=faturaFisFirmaEkle', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firmaAdi: yeniAd.trim() }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      showToast(j.zatenVar ? 'Bu firma zaten kayıtlı' : 'Firma eklendi');
+      onFirmaEklendi(yeniAd.trim());
+      setYeniModal(false); setYeniAd('');
+    } catch(e) { showToast('Firma eklenemedi: ' + e.message); }
+    finally { setKaydediyor(false); }
+  }
+
+  return (
+    <div className="ff-firma-wrap" ref={ref}>
+      <div className="ff-firma-row">
+        <input className="ff-input" value={input} onChange={inputDegisti}
+          onFocus={() => setAcik(true)} placeholder="Firma adı ara..." />
+        <button type="button" className="ff-yeni-btn" title="Yeni firma ekle" onClick={() => setYeniModal(true)}>
+          <Plus size={14} /> Yeni
+        </button>
+      </div>
+      {acik && oneri.length > 0 && (
+        <div className="ff-dropdown">
+          {oneri.map((f, i) => (
+            <button key={i} type="button" className="ff-dropdown-item" onClick={() => sec(f)}>
+              <span className="ff-dropdown-ad">{f.firmaAdi}</span>
+              <span className={`ff-bakiye-rozet ${f.durum === 'Borçlu' ? 'ff-borc' : f.durum === 'Alacaklı' ? 'ff-alacak' : 'ff-hesap-yok'}`}>
+                {f.durum}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {yeniModal && (
+        <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={() => setYeniModal(false)}>
+          <div className="mh-modal-wide" onClick={e => e.stopPropagation()} style={{maxWidth:360}}>
+            <div className="mh-drawer-head">
+              <span>Yeni Firma Ekle</span>
+              <button onClick={() => setYeniModal(false)}><X size={18} /></button>
+            </div>
+            <div className="mh-drawer-body">
+              <input className="ff-input" value={yeniAd} onChange={e => setYeniAd(e.target.value)}
+                placeholder="Firma adı" autoFocus onKeyDown={e => e.key==='Enter' && firmaEkle()} />
+              <div style={{display:'flex',gap:8,marginTop:12,justifyContent:'flex-end'}}>
+                <button className="mh-secondary-btn" onClick={() => setYeniModal(false)}>Vazgeç</button>
+                <button className="mh-primary-btn" disabled={kaydediyor || !yeniAd.trim()} onClick={firmaEkle}>
+                  {kaydediyor ? '…' : 'Kaydet'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Ödeme türü seçici — ağaç yapısı (Nakit / Kredi Kartı → kart / Banka Havalesi → banka / Cari / yeni ekle).
+function OdemeTuruSecici({ tur, detay, onChange, odemeYontemleri, showToast, onYontemiEklendi }) {
+  const [yeniModal, setYeniModal] = useState(null); // 'kart' | 'banka' | 'diger'
+  const [yeniAd, setYeniAd] = useState('');
+  const [kaydediyor, setKaydediyor] = useState(false);
+
+  const kartlar = odemeYontemleri.filter(o => o.tur === 'Kredi Kartı' && o.ad);
+  const bankalar = odemeYontemleri.filter(o => o.tur === 'Banka Havalesi' && o.ad);
+
+  async function yeniEkle(yeniTur) {
+    if (!yeniAd.trim()) return;
+    setKaydediyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=odemeYontemiEkle', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tur: yeniTur, ad: yeniAd.trim() }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      showToast(j.zatenVar ? 'Bu yöntem zaten var' : 'Eklendi');
+      onYontemiEklendi();
+      setYeniModal(null); setYeniAd('');
+    } catch(e) { showToast('Eklenemedi: ' + e.message); }
+    finally { setKaydediyor(false); }
+  }
+
+  return (
+    <div className="ff-odeme-wrap">
+      <div className="ff-odeme-row">
+        {['Nakit','Kredi Kartı','Banka Havalesi','Cari'].map(t => (
+          <button key={t} type="button"
+            className={`ff-odeme-btn ${tur===t ? 'ff-odeme-secili' : ''}`}
+            onClick={() => onChange(t, '')}>
+            {t}
+          </button>
+        ))}
+        <button type="button" className="ff-odeme-btn ff-odeme-yeni" onClick={() => setYeniModal('diger')}>
+          + Yeni Yöntem
+        </button>
+      </div>
+
+      {tur === 'Kredi Kartı' && (
+        <div className="ff-alt-secim">
+          {kartlar.map(k => (
+            <button key={k.id} type="button"
+              className={`ff-odeme-btn ${detay===k.ad ? 'ff-odeme-secili' : ''}`}
+              onClick={() => onChange('Kredi Kartı', k.ad)}>
+              {k.ad}
+            </button>
+          ))}
+          <button type="button" className="ff-odeme-btn ff-odeme-yeni" onClick={() => setYeniModal('kart')}>
+            + Yeni Kart
+          </button>
+        </div>
+      )}
+
+      {tur === 'Banka Havalesi' && (
+        <div className="ff-alt-secim">
+          {bankalar.map(b => (
+            <button key={b.id} type="button"
+              className={`ff-odeme-btn ${detay===b.ad ? 'ff-odeme-secili' : ''}`}
+              onClick={() => onChange('Banka Havalesi', b.ad)}>
+              {b.ad}
+            </button>
+          ))}
+          <button type="button" className="ff-odeme-btn ff-odeme-yeni" onClick={() => setYeniModal('banka')}>
+            + Yeni Banka
+          </button>
+        </div>
+      )}
+
+      {yeniModal && (
+        <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={() => setYeniModal(null)}>
+          <div className="mh-modal-wide" onClick={e=>e.stopPropagation()} style={{maxWidth:360}}>
+            <div className="mh-drawer-head">
+              <span>{yeniModal==='kart' ? 'Yeni Kart Ekle' : yeniModal==='banka' ? 'Yeni Banka Ekle' : 'Yeni Ödeme Yöntemi'}</span>
+              <button onClick={() => setYeniModal(null)}><X size={18}/></button>
+            </div>
+            <div className="mh-drawer-body">
+              <input className="ff-input" value={yeniAd} onChange={e=>setYeniAd(e.target.value)} autoFocus
+                placeholder={yeniModal==='kart' ? 'Kart adı (örn. Garanti Kredi Kartı)' : yeniModal==='banka' ? 'Banka adı' : 'Ödeme yöntemi adı'}
+                onKeyDown={e=>e.key==='Enter' && yeniEkle(yeniModal==='kart'?'Kredi Kartı':yeniModal==='banka'?'Banka Havalesi':'Diğer')} />
+              <div style={{display:'flex',gap:8,marginTop:12,justifyContent:'flex-end'}}>
+                <button className="mh-secondary-btn" onClick={()=>setYeniModal(null)}>Vazgeç</button>
+                <button className="mh-primary-btn" disabled={kaydediyor||!yeniAd.trim()}
+                  onClick={() => yeniEkle(yeniModal==='kart'?'Kredi Kartı':yeniModal==='banka'?'Banka Havalesi':'Diğer')}>
+                  {kaydediyor ? '…' : 'Ekle'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// 1. Fatura ve Fiş Girişi sekmesi
+// ============================================================
+function FaturaFisGirisiSekmesi({ showToast }) {
+  const simdi = bugunTR();
+  const [tarih, setTarih] = useState(simdi);
+  const [seciliFirma, setSeciliFirma] = useState(null);
+  const [firmaAdi, setFirmaAdi] = useState('');
+  const [faturaNo, setFaturaNo] = useState('');
+  const [aciklama, setAciklama] = useState('');
+  const [giderKat, setGiderKat] = useState('');
+  const [odemeTuru, setOdemeTuru] = useState('Nakit');
+  const [odemeDetay, setOdemeDetay] = useState('');
+  const [faturaTutari, setFaturaTutari] = useState('');
+  const [kdvTutari, setKdvTutari] = useState('');
+  const [iskontoTutari, setIskontoTutari] = useState('');
+  const [odemeTutari, setOdemeTutari] = useState('');
+  const [kaydediyor, setKaydediyor] = useState(false);
+
+  const [firmalar, setFirmalar] = useState([]);
+  const [kategoriler, setKategoriler] = useState([]);
+  const [odemeYontemleri, setOdemeYontemleri] = useState([]);
+  const [bekleyenFaturalar, setBekleyenFaturalar] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  async function yukle() {
+    setLoading(true);
+    try {
+      const [ffRes, kRes] = await Promise.all([
+        fetch('/api/muhasebe?resource=faturaFis'),
+        fetch('/api/muhasebe?resource=kategoriler'),
+      ]);
+      const ffJson = await ffRes.json();
+      const kJson = await kRes.json();
+      setFirmalar(ffJson.firmalar || []);
+      setOdemeYontemleri(ffJson.odemeYontemleri || []);
+      if (kJson.kategoriler?.length) setKategoriler(kJson.kategoriler);
+    } catch { showToast('Veriler yüklenemedi'); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { yukle(); }, []);
+
+  async function firmaSecildi(firma) {
+    setSeciliFirma(firma);
+    setFirmaAdi(firma ? firma.firmaAdi : '');
+    if (!firma) { setBekleyenFaturalar([]); return; }
+    try {
+      const res = await fetch(`/api/muhasebe?resource=bekleyenFaturalar&firmaAdi=${encodeURIComponent(firma.firmaAdi)}`);
+      const j = await res.json();
+      setBekleyenFaturalar(j.records || []);
+    } catch { setBekleyenFaturalar([]); }
+  }
+
+  function faturaOnayla(f) {
+    setFaturaNo(f.faturaNo || '');
+    setAciklama('');
+    setGiderKat(f.kategori || '');
+    setFaturaTutari(String(f.tutar || ''));
+    setKdvTutari(String(f.kdvTutari || ''));
+    setIskontoTutari('');
+    setOdemeTutari('');
+  }
+
+  async function kaydet(e) {
+    e.preventDefault();
+    if (!seciliFirma) { showToast('Önce bir firma seçin'); return; }
+    if (!faturaTutari) { showToast('Fatura tutarı gerekli'); return; }
+    setKaydediyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=faturaFis', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tarih, firmaAdi: seciliFirma.firmaAdi, faturaNo, aciklama,
+          giderKategorisi: giderKat, odemeTuru, odemeDetay,
+          faturaTutari, kdvTutari, iskontoTutari, odemeTutari,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      showToast('Kayıt eklendi');
+      setFaturaNo(''); setAciklama(''); setGiderKat(''); setFaturaTutari('');
+      setKdvTutari(''); setIskontoTutari(''); setOdemeTutari('');
+      await yukle();
+      await firmaSecildi(seciliFirma);
+    } catch(err) { showToast('Kaydedilemedi: ' + err.message); }
+    finally { setKaydediyor(false); }
+  }
+
+  const guncelBakiye = seciliFirma ? seciliFirma.bakiye : null;
+
+  return (
+    <div className="ff-ana-grid">
+      {/* SOL ÜST — Form */}
+      <div className="ff-form-panel">
+        <h3 className="ff-panel-baslik">Fatura / Fiş Girişi</h3>
+        {loading ? <p className="mh-empty">Yükleniyor…</p> : (
+          <form onSubmit={kaydet} className="ff-form">
+            <label className="ff-label">Tarih</label>
+            <TarihSecici value={tarih} onChange={setTarih} />
+
+            <label className="ff-label">Firma <span className="ff-zorunlu">*</span></label>
+            <FirmaSecici value={firmaAdi} onChange={firmaSecildi} firmalar={firmalar}
+              showToast={showToast} onFirmaEklendi={(ad) => yukle()} />
+
+            {seciliFirma && (
+              <div className="ff-bakiye-satir">
+                <span className="ff-bakiye-etiket">Güncel Bakiye:</span>
+                <span className={`ff-bakiye-deger ${guncelBakiye > 0.01 ? 'ff-borc' : guncelBakiye < -0.01 ? 'ff-alacak' : ''}`}>
+                  {guncelBakiye > 0.01 ? 'Borçlu' : guncelBakiye < -0.01 ? 'Alacaklı' : 'Hesap Yok'}
+                  {Math.abs(guncelBakiye) > 0.01 && <> — {TL(Math.abs(guncelBakiye))}</>}
+                </span>
+              </div>
+            )}
+
+            <label className="ff-label">Fatura No</label>
+            <input className="ff-input" value={faturaNo} onChange={e=>setFaturaNo(e.target.value)} placeholder="Opsiyonel" />
+
+            <label className="ff-label">Açıklama</label>
+            <input className="ff-input" value={aciklama} onChange={e=>setAciklama(e.target.value)} placeholder="Opsiyonel" />
+
+            <label className="ff-label">Gider Kategorisi</label>
+            <div className="ff-kat-wrap">
+              <select className="ff-select" value={giderKat} onChange={e=>setGiderKat(e.target.value)}>
+                <option value="">— Seçin —</option>
+                {kategoriler.map(k=><option key={k} value={k}>{k}</option>)}
+              </select>
+            </div>
+
+            <label className="ff-label">Ödeme Türü</label>
+            <OdemeTuruSecici tur={odemeTuru} detay={odemeDetay}
+              onChange={(t,d)=>{setOdemeTuru(t);setOdemeDetay(d);}}
+              odemeYontemleri={odemeYontemleri} showToast={showToast}
+              onYontemiEklendi={yukle} />
+
+            <div className="ff-tutarlar-grid">
+              <div>
+                <label className="ff-label">Fatura Tutarı <span className="ff-zorunlu">*</span></label>
+                <input className="ff-input ff-tutar" type="number" step="0.01" min="0" value={faturaTutari} onChange={e=>setFaturaTutari(e.target.value)} placeholder="0,00" />
+              </div>
+              <div>
+                <label className="ff-label">KDV Tutarı</label>
+                <input className="ff-input ff-tutar" type="number" step="0.01" min="0" value={kdvTutari} onChange={e=>setKdvTutari(e.target.value)} placeholder="0,00" />
+              </div>
+              <div>
+                <label className="ff-label">İskonto</label>
+                <input className="ff-input ff-tutar" type="number" step="0.01" min="0" value={iskontoTutari} onChange={e=>setIskontoTutari(e.target.value)} placeholder="0,00" />
+              </div>
+              <div>
+                <label className="ff-label">Ödeme Tutarı</label>
+                <input className="ff-input ff-tutar" type="number" step="0.01" min="0" value={odemeTutari} onChange={e=>setOdemeTutari(e.target.value)} placeholder="0,00" />
+              </div>
+            </div>
+
+            <button type="submit" className="mh-primary-btn ff-kaydet-btn" disabled={kaydediyor || !seciliFirma || !faturaTutari}>
+              {kaydediyor ? 'Kaydediliyor…' : 'Kaydet'}
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* SAĞ + ALT — Uyumsoft fatura kartları */}
+      <div className="ff-kart-panel">
+        <h3 className="ff-panel-baslik">
+          {seciliFirma ? `${seciliFirma.firmaAdi} — İşlenmemiş Faturalar (${bekleyenFaturalar.length})` : 'Firma seçince faturalar listelenir'}
+        </h3>
+        {bekleyenFaturalar.length === 0 && seciliFirma && (
+          <p className="mh-empty">Bu firma için işlenmemiş XML fatura yok.</p>
+        )}
+        {!seciliFirma && <p className="mh-empty">Sol taraftan firma seçin.</p>}
+        <div className="ff-kart-grid">
+          {bekleyenFaturalar.map(f => (
+            <div key={f.faturaID} className="ff-fatura-kart">
+              <div className="ff-kart-ust">
+                <span className="ff-kart-tarih">{f.tarih}</span>
+                <span className="ff-kart-no">{f.faturaNo || '—'}</span>
+              </div>
+              <div className="ff-kart-firma">{f.firmaAdi}</div>
+              <div className="ff-kart-kat">{f.kategori}</div>
+              <div className="ff-kart-tutarlar">
+                <span>Tutar: <strong>{TL(f.tutar)}</strong></span>
+                {f.kdvTutari > 0 && <span>KDV: {TL(f.kdvTutari)}</span>}
+                <span className="ff-kart-satirsayisi">{f.satirSayisi} kalem</span>
+              </div>
+              <button type="button" className="ff-kart-onayla" onClick={() => faturaOnayla(f)}>
+                Formu Doldur
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 2. Tahsilat Makbuzu sekmesi
+// ============================================================
+function TahsilatMakbuzuSekmesi({ showToast }) {
+  const simdi = bugunTR();
+  const [tarih, setTarih] = useState(simdi);
+  const [seciliFirma, setSeciliFirma] = useState(null);
+  const [firmaAdi, setFirmaAdi] = useState('');
+  const [faturaNo, setFaturaNo] = useState('');
+  const [aciklama, setAciklama] = useState('');
+  const [odemeTuru, setOdemeTuru] = useState('Nakit');
+  const [odemeDetay, setOdemeDetay] = useState('');
+  const [tutar, setTutar] = useState('');
+  const [kaydediyor, setKaydediyor] = useState(false);
+
+  const [firmalar, setFirmalar] = useState([]);
+  const [odemeYontemleri, setOdemeYontemleri] = useState([]);
+  const [bekleyenOdemeler, setBekleyenOdemeler] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  async function yukle() {
+    setLoading(true);
+    try {
+      const [tRes, oRes] = await Promise.all([
+        fetch('/api/muhasebe?resource=tahsilat'),
+        fetch('/api/muhasebe?resource=bekleyenOdemeler'),
+      ]);
+      const tJson = await tRes.json();
+      const oJson = await oRes.json();
+      setFirmalar(tJson.firmalar || []);
+      setOdemeYontemleri(tJson.odemeYontemleri || []);
+      setBekleyenOdemeler(oJson.records || []);
+    } catch { showToast('Veriler yüklenemedi'); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { yukle(); }, []);
+
+  function firmaSecildi(firma) {
+    setSeciliFirma(firma);
+    setFirmaAdi(firma ? firma.firmaAdi : '');
+  }
+
+  function ekstreEslestir(ekstre) {
+    setTutar(String(ekstre.tutar));
+    setFaturaNo('');
+    setAciklama(ekstre.aciklama || '');
+  }
+
+  async function kaydet(e) {
+    e.preventDefault();
+    if (!seciliFirma) { showToast('Önce firma seçin'); return; }
+    if (!tutar) { showToast('Tutar gerekli'); return; }
+    setKaydediyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=tahsilat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tarih, firmaAdi: seciliFirma.firmaAdi, faturaNo, aciklama, odemeTuru, odemeDetay, tutar }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      showToast('Tahsilat kaydedildi');
+      setFaturaNo(''); setAciklama(''); setTutar('');
+      await yukle();
+      setSeciliFirma(prev => prev ? firmalar.find(f=>f.firmaAdi===prev.firmaAdi) || prev : null);
+    } catch(err) { showToast('Kaydedilemedi: ' + err.message); }
+    finally { setKaydediyor(false); }
+  }
+
+  const guncelBakiye = seciliFirma ? seciliFirma.bakiye : null;
+  const yeniTutar = Number(tutar) || 0;
+  const yeniBakiye = guncelBakiye !== null ? Math.round((guncelBakiye - yeniTutar) * 100) / 100 : null;
+
+  return (
+    <div className="ff-ana-grid">
+      {/* SOL ÜST — Form */}
+      <div className="ff-form-panel">
+        <h3 className="ff-panel-baslik">Tahsilat Makbuzu</h3>
+        {loading ? <p className="mh-empty">Yükleniyor…</p> : (
+          <form onSubmit={kaydet} className="ff-form">
+            <label className="ff-label">Tarih</label>
+            <TarihSecici value={tarih} onChange={setTarih} />
+
+            <label className="ff-label">Firma <span className="ff-zorunlu">*</span></label>
+            <FirmaSecici value={firmaAdi} onChange={firmaSecildi} firmalar={firmalar}
+              showToast={showToast} onFirmaEklendi={yukle} />
+
+            {seciliFirma && (
+              <div className="ff-bakiye-blok">
+                <div className="ff-bakiye-satir">
+                  <span className="ff-bakiye-etiket">Önceki Bakiye:</span>
+                  <span className={`ff-bakiye-deger ${guncelBakiye > 0.01 ? 'ff-borc' : guncelBakiye < -0.01 ? 'ff-alacak' : ''}`}>
+                    {TL(Math.abs(guncelBakiye))} ({guncelBakiye > 0.01 ? 'Borçlu' : guncelBakiye < -0.01 ? 'Alacaklı' : 'Hesap Yok'})
+                  </span>
+                </div>
+                {tutar && (
+                  <div className="ff-bakiye-satir">
+                    <span className="ff-bakiye-etiket">Kayıt Sonrası:</span>
+                    <span className={`ff-bakiye-deger ${yeniBakiye > 0.01 ? 'ff-borc' : yeniBakiye < -0.01 ? 'ff-alacak' : 'ff-hesap-yok'}`}>
+                      {TL(Math.abs(yeniBakiye))} ({yeniBakiye > 0.01 ? 'Borçlu' : yeniBakiye < -0.01 ? 'Alacaklı' : 'Hesap Yok'})
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <label className="ff-label">Fatura No</label>
+            <input className="ff-input" value={faturaNo} onChange={e=>setFaturaNo(e.target.value)} placeholder="Opsiyonel" />
+
+            <label className="ff-label">Açıklama</label>
+            <input className="ff-input" value={aciklama} onChange={e=>setAciklama(e.target.value)} placeholder="Opsiyonel" />
+
+            <label className="ff-label">Ödeme Türü</label>
+            <OdemeTuruSecici tur={odemeTuru} detay={odemeDetay}
+              onChange={(t,d)=>{setOdemeTuru(t);setOdemeDetay(d);}}
+              odemeYontemleri={odemeYontemleri} showToast={showToast} onYontemiEklendi={yukle} />
+
+            <label className="ff-label">Ödeme Tutarı <span className="ff-zorunlu">*</span></label>
+            <input className="ff-input ff-tutar" type="number" step="0.01" min="0" value={tutar} onChange={e=>setTutar(e.target.value)} placeholder="0,00" />
+
+            <button type="submit" className="mh-primary-btn ff-kaydet-btn" disabled={kaydediyor || !seciliFirma || !tutar}>
+              {kaydediyor ? 'Kaydediliyor…' : 'Kaydet'}
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* SAĞ + ALT — Ekstre ödeme kartları */}
+      <div className="ff-kart-panel">
+        <h3 className="ff-panel-baslik">Banka Ekstresinden Gelen Ödemeler ({bekleyenOdemeler.length})</h3>
+        {bekleyenOdemeler.length === 0 && <p className="mh-empty">Eşleştirilmemiş ödeme yok.</p>}
+        <div className="ff-kart-grid">
+          {bekleyenOdemeler.map(e => (
+            <div key={e.id} className="ff-fatura-kart ff-odeme-kart">
+              <div className="ff-kart-ust">
+                <span className="ff-kart-tarih">{e.tarih}</span>
+                <span className="ff-kart-tutar-buyuk">{TL(e.tutar)}</span>
+              </div>
+              <div className="ff-kart-aciklama">{e.aciklama || '—'}</div>
+              {e.saticiAdi && <div className="ff-kart-firma">{e.saticiAdi}</div>}
+              <button type="button" className="ff-kart-onayla" onClick={() => ekstreEslestir(e)}>
+                Tutarı Aktar
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 3. Banka / Kart Takip sekmesi
+// ============================================================
+function BankaKartTakipSekmesi({ showToast }) {
+  const [hareketler, setHareketler] = useState([]);
+  const [hesaplar, setHesaplar] = useState([]);
+  const [seciliHesap, setSeciliHesap] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  async function yukle(hesap) {
+    setLoading(true);
+    try {
+      const url = `/api/muhasebe?resource=bankaKartHareket${hesap ? '&hesapAdi='+encodeURIComponent(hesap) : ''}`;
+      const res = await fetch(url);
+      const j = await res.json();
+      setHareketler(j.records || []);
+      if (j.hesaplar) setHesaplar(j.hesaplar);
+    } catch { showToast('Veriler yüklenemedi'); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { yukle(''); }, []);
+
+  function hesapSec(ad) { setSeciliHesap(ad); yukle(ad); }
+
+  const toplamGiren = hareketler.filter(h=>h.yon==='GİREN').reduce((s,h)=>s+h.tutar,0);
+  const toplamGiden = hareketler.filter(h=>h.yon==='GİDEN').reduce((s,h)=>s+h.tutar,0);
+
+  return (
+    <div className="ff-banka-wrap">
+      <div className="ff-banka-hesap-serim">
+        <button className={`ff-odeme-btn ${!seciliHesap ? 'ff-odeme-secili':''}`} onClick={()=>hesapSec('')}>Tümü</button>
+        {hesaplar.map(h=>(
+          <button key={h.id} className={`ff-odeme-btn ${seciliHesap===h.ad ? 'ff-odeme-secili':''}`} onClick={()=>hesapSec(h.ad)}>
+            {h.tur==='Kredi Kartı' ? '💳' : '🏦'} {h.ad}
+          </button>
+        ))}
+      </div>
+
+      <div className="ff-banka-kpi">
+        <div className="mh-kpi-card"><span className="mh-kpi-label">Toplam Giren</span><span className="mh-kpi-value mh-kpi-yesil-val">{TL(toplamGiren)}</span></div>
+        <div className="mh-kpi-card"><span className="mh-kpi-label">Toplam Giden</span><span className="mh-kpi-value mh-kpi-kirmizi-val">{TL(toplamGiden)}</span></div>
+        <div className="mh-kpi-card"><span className="mh-kpi-label">Net Bakiye</span><span className="mh-kpi-value">{TL(toplamGiren-toplamGiden)}</span></div>
+      </div>
+
+      <div className="mh-table-card">
+        {loading ? <p className="mh-empty">Yükleniyor…</p> : hareketler.length === 0 ? (
+          <p className="mh-empty">Bu hesapta henüz hareket yok.</p>
+        ) : (
+          <table className="mh-excel-table">
+            <thead>
+              <tr><th>Tarih</th><th>Hesap</th><th>Yön</th><th>Tutar</th><th>Açıklama</th></tr>
+            </thead>
+            <tbody>
+              {hareketler.map(h=>(
+                <tr key={h.id}>
+                  <td>{h.tarih}</td>
+                  <td>{h.hesapTuru}{h.hesapAdi ? ` — ${h.hesapAdi}` : ''}</td>
+                  <td><span className={`mh-durum ${h.yon==='GİREN' ? 'mh-durum-yesil':'mh-durum-kirmizi'}`}>{h.yon}</span></td>
+                  <td className="mh-tutar-cell">{TL(h.tutar)}</td>
+                  <td>{h.aciklama}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr><td colSpan={3}>Toplam</td><td className="mh-tutar-cell">{TL(toplamGiden)}</td><td></td></tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
     </div>
   );
 }
