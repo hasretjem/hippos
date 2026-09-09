@@ -272,7 +272,15 @@ export default function GunSonu({ data, onNavigate }) {
   function removeEkstraCari(idx) { setEkstraCariler((prev) => prev.filter((_, i) => i !== idx)); }
   const cariToplam = otomatikCariListesi.reduce((s, ad) => s + cariGosterilenTutar(ad), 0) + ekstraCariler.reduce((s, r) => s + parseNum(r.tutar), 0) + bireyselCariToplam;
 
-  // Dünden Devir artık HİÇ elle girilemez — sadece bir önceki Gün Sonu kaydından otomatik
+  // Cari tahsilatlar (havale hariç) cirodan DÜŞÜLÜR — müşteri cari borcunu ödediğinde
+  // bu ayrı bir gelir değil, daha önce cari olarak atılmış satışın tahsilat dönüşümüdür.
+  // Bu tutar zaten cariToplam içinde sayılıyor olurdu, çift sayımı önlemek için düşülür.
+  const bugunCariTahsilatDusulen = bugunCariOdemeToplamı;
+
+  // TOPLAM CİRO: Nakit + POS + Yemek Kartı + Cari (bugün atılan)
+  // − Günlük Kasa Harcamaları (o günün giderleri)
+  // − Cari Tahsilatlar (havale hariç) = o günün NET geliri
+  const toplamCiro = toplamNakitPara + cariToplam + posToplam + genelYemekToplami - gunlukKasaToplam - bugunCariTahsilatDusulen;
   // gelir (yoksa 0). Düzeltmek gerekirse Sheets'ten yapılmalı, buradan değil.
   // Yeni Sheet yapısında bu değer anaKasaTakibi.yarinaDevir altında geliyor — api/gunsonu.js
   // eski (3 sütunlu) kayıtları da aynı şekle çevirip döndürdüğü için burada tek bir okuma
@@ -389,6 +397,8 @@ export default function GunSonu({ data, onNavigate }) {
           kart: posToplam,
           yemek: genelYemekToplami,
           cari: cariToplam,
+          cariTahsilat: -bugunCariTahsilatDusulen,
+          toplam: toplamCiro,
         },
 
         anaKasaTakibi: {
@@ -517,17 +527,18 @@ export default function GunSonu({ data, onNavigate }) {
 
               <div className="gs-row-total main" style={{marginTop:8}}><span>TOPLAM CARİ TUTARI</span><strong>{TL(cariToplam)}</strong></div>
 
-              {/* Cariden Gelen Ödemeler — bilgi amaçlı, cirodan düşülmez */}
+              {/* Ödenen Cari Tutarları — havale hariç, cirodan DÜŞÜLÜR */}
               {bugunCariOdemeToplamı > 0 && (
                 <div className="gs-cari-odeme-panel">
-                  <span className="gs-subhead">Cariden Gelen Ödemeler</span>
+                  <span className="gs-subhead">Ödenen Cari Tutarları</span>
+                  <p className="gs-hint" style={{margin:'2px 0 6px',fontSize:11}}>Havale hariç tahsilatlar toplam cirodan düşülür</p>
                   {Object.entries(bugunCariOdemeOzeti).map(([tur, tutar]) => (
                     <div key={tur} className="gs-cari-row">
                       <span className="ad">{tur}</span>
                       <strong>{TL(tutar)}</strong>
                     </div>
                   ))}
-                  <div className="gs-row-total"><span>TOPLAM TAHSİLAT</span><strong>{TL(bugunCariOdemeToplamı)}</strong></div>
+                  <div className="gs-row-total"><span>TOPLAM TAHSİLAT</span><strong className="neg">−{TL(bugunCariOdemeToplamı)}</strong></div>
                 </div>
               )}
             </section>
@@ -622,7 +633,7 @@ export default function GunSonu({ data, onNavigate }) {
               <div className="gs-bilgi-tarih">
                 <span className="gun">{new Date().toLocaleDateString('tr-TR', { weekday: 'long' })}</span>
                 <span className="tarih">{new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
-                <div className="gs-bilgi-toplam-ciro"><span>TOPLAM CİRO</span><strong>{TL(toplamNakitPara + cariToplam + posToplam + genelYemekToplami + gunlukKasaToplam)}</strong></div>
+                <div className="gs-bilgi-toplam-ciro"><span>TOPLAM CİRO</span><strong>{TL(toplamCiro)}</strong></div>
               </div>
 
               <span className="gs-subhead big">Ciro Karşılaştırma</span>

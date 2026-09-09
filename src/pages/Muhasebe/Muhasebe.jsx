@@ -2757,12 +2757,19 @@ function FaturaFisGirisiSekmesi({ showToast }) {
               showToast={showToast} onFirmaEklendi={() => yukle()} />
 
             {seciliFirma && (
-              <div className="ff-bakiye-satir">
-                <span className="ff-bakiye-etiket">Güncel Bakiye:</span>
-                <span className={`ff-bakiye-deger ${guncelBakiye > 0.01 ? 'ff-borc' : guncelBakiye < -0.01 ? 'ff-alacak' : ''}`}>
-                  {guncelBakiye > 0.01 ? 'Borçlu' : guncelBakiye < -0.01 ? 'Alacaklı' : 'Hesap Yok'}
-                  {Math.abs(guncelBakiye) > 0.01 && <> — {TL(Math.abs(guncelBakiye))}</>}
-                </span>
+              <div className="ff-bakiye-blok">
+                <div className="ff-bakiye-satir">
+                  <span className="ff-bakiye-etiket">Bakiye Durumu</span>
+                  <span className={`ff-bakiye-deger ${guncelBakiye > 0.01 ? 'ff-borc' : guncelBakiye < -0.01 ? 'ff-alacak' : ''}`}>
+                    {guncelBakiye > 0.01 ? 'Borçlu' : guncelBakiye < -0.01 ? 'Alacaklı' : 'Hesap Yok'}
+                  </span>
+                </div>
+                <div className="ff-bakiye-satir">
+                  <span className="ff-bakiye-etiket">Bakiye Tutarı</span>
+                  <span className={`ff-bakiye-deger ${guncelBakiye > 0.01 ? 'ff-borc' : guncelBakiye < -0.01 ? 'ff-alacak' : ''}`}>
+                    {guncelBakiye > 0.01 ? '+' : guncelBakiye < -0.01 ? '-' : ''}{TL(Math.abs(guncelBakiye))}
+                  </span>
+                </div>
               </div>
             )}
 
@@ -2926,16 +2933,18 @@ function TahsilatMakbuzuSekmesi({ showToast }) {
             {seciliFirma && (
               <div className="ff-bakiye-blok">
                 <div className="ff-bakiye-satir">
-                  <span className="ff-bakiye-etiket">Önceki Bakiye:</span>
+                  <span className="ff-bakiye-etiket">Önceki Bakiyesi</span>
                   <span className={`ff-bakiye-deger ${guncelBakiye > 0.01 ? 'ff-borc' : guncelBakiye < -0.01 ? 'ff-alacak' : ''}`}>
-                    {TL(Math.abs(guncelBakiye))} ({guncelBakiye > 0.01 ? 'Borçlu' : guncelBakiye < -0.01 ? 'Alacaklı' : 'Hesap Yok'})
+                    {guncelBakiye > 0.01 ? '+' : guncelBakiye < -0.01 ? '-' : ''}{TL(Math.abs(guncelBakiye))}
                   </span>
                 </div>
                 {tutar && (
                   <div className="ff-bakiye-satir">
-                    <span className="ff-bakiye-etiket">Kayıt Sonrası:</span>
+                    <span className="ff-bakiye-etiket">
+                      {yeniBakiye > 0.01 ? 'Borç Bakiyesi' : yeniBakiye < -0.01 ? 'Alacaklı Bakiyesi' : 'Bakiye'}
+                    </span>
                     <span className={`ff-bakiye-deger ${yeniBakiye > 0.01 ? 'ff-borc' : yeniBakiye < -0.01 ? 'ff-alacak' : 'ff-hesap-yok'}`}>
-                      {TL(Math.abs(yeniBakiye))} ({yeniBakiye > 0.01 ? 'Borçlu' : yeniBakiye < -0.01 ? 'Alacaklı' : 'Hesap Yok'})
+                      {yeniBakiye > 0.01 ? '+' : yeniBakiye < -0.01 ? '-' : ''}{TL(Math.abs(yeniBakiye))}
                     </span>
                   </div>
                 )}

@@ -760,10 +760,10 @@
 .ff-kart-aciklama { font-size: 11px; color: #83786B; line-height: 1.4; }
 .ff-kart-onayla {
   margin-top: 4px; padding: 6px 12px; border-radius: 8px; border: none;
-  background: #393E41; color: #F6F7EB; font-size: 12px; font-weight: 600; cursor: pointer;
-  align-self: flex-start;
+  background: #393E41; color: #F5F0E8 !important; font-size: 12px; font-weight: 700; cursor: pointer;
+  align-self: flex-start; letter-spacing: 0.02em;
 }
-.ff-kart-onayla:hover { background: #2A2E31; }
+.ff-kart-onayla:hover { background: #2A2E31; color: #F5F0E8 !important; }
 
 /* Banka/Kart Takip */
 .ff-banka-wrap { display: flex; flex-direction: column; gap: 16px; }

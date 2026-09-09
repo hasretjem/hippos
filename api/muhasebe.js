@@ -1906,31 +1906,27 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // Yeni firma kaydı — ayrı "Fatura Firmaları" sekmesine yazılır. gunlukHarcama=true
-    // ile açılan firmalar kasa harcama mini formunda görünür, false olanlar görünmez.
+    // Yeni firma kaydı — ayrı "Fatura Firmaları" sekmesine yazılır.
     if (resource === 'faturaFisFirmaEkle') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
       const { firmaAdi, giderKategorisi, gunlukHarcama } = req.body || {};
       if (!firmaAdi || !String(firmaAdi).trim()) return res.status(400).json({ error: 'firmaAdi gerekli' });
       const ad = String(firmaAdi).trim();
+      await ensureTab(sheets, FF_FIRMA_TAB.tab, FF_FIRMA_TAB.headers);
       const mevcut = await getRows(sheets, FF_FIRMA_TAB);
       const adNorm = metinNormalize(ad);
       if (mevcut.some((r) => metinNormalize(r[1]) === adNorm)) {
         return res.status(200).json({ ok: true, zatenVar: true, firmaAdi: ad });
       }
-      await ensureTab(sheets, FF_FIRMA_TAB, ['ID', 'FirmaAdi', 'GiderKategorisi', 'GunlukHarcama', 'KayitZamani']);
-      const rows = await getRows(sheets, FF_FIRMA_TAB);
-      if (rows[0] && rows[0].length < 5) {
-        // Eski header'ı genişlet — ensureTab yeterli, gerçek append aşağıda
-      }
+      const id = benzersizId();
       await sheets.spreadsheets.values.append({
         spreadsheetId: SHEET_ID,
         range: `${FF_FIRMA_TAB.tab}!A2:E`,
         valueInputOption: 'USER_ENTERED',
         insertDataOption: 'INSERT_ROWS',
-        requestBody: { values: [[benzersizId(), ad, giderKategorisi || '', gunlukHarcama ? 'TRUE' : 'FALSE', new Date().toISOString()]] },
+        requestBody: { values: [[id, ad, giderKategorisi || '', gunlukHarcama ? 'TRUE' : 'FALSE', new Date().toISOString()]] },
       });
-      return res.status(200).json({ ok: true, firmaAdi: ad });
+      return res.status(200).json({ ok: true, firmaAdi: ad, id });
     }
 
     // Günlük harcama firmalarını listele (GunlukHarcama=TRUE olanlar)
