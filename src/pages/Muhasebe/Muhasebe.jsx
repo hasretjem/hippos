@@ -2659,19 +2659,17 @@ function FaturaFisGirisiSekmesi({ showToast }) {
   const [odemeTuru, setOdemeTuru] = useState('Nakit');
   const [odemeDetay, setOdemeDetay] = useState('');
   const [faturaTutari, setFaturaTutari] = useState('');
-  const [kdvTutari, setKdvTutari] = useState('');
-  const [iskontoTutari, setIskontoTutari] = useState('');
-  const [odemeTutari, setOdemeTutari] = useState('');
   const [kaydediyor, setKaydediyor] = useState(false);
 
   const [firmalar, setFirmalar] = useState([]);
   const [kategoriler, setKategoriler] = useState([]);
   const [odemeYontemleri, setOdemeYontemleri] = useState([]);
   const [bekleyenFaturalar, setBekleyenFaturalar] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingForm, setLoadingForm] = useState(true);
+  const [loadingKartlar, setLoadingKartlar] = useState(true);
 
   async function yukle() {
-    setLoading(true);
+    setLoadingForm(true);
     try {
       const [ffRes, kRes] = await Promise.all([
         fetch('/api/muhasebe?resource=faturaFis'),
@@ -2683,29 +2681,40 @@ function FaturaFisGirisiSekmesi({ showToast }) {
       setOdemeYontemleri(ffJson.odemeYontemleri || []);
       if (kJson.kategoriler?.length) setKategoriler(kJson.kategoriler);
     } catch { showToast('Veriler yüklenemedi'); }
-    finally { setLoading(false); }
+    finally { setLoadingForm(false); }
   }
-  useEffect(() => { yukle(); }, []);
 
-  async function firmaSecildi(firma) {
-    setSeciliFirma(firma);
-    setFirmaAdi(firma ? firma.firmaAdi : '');
-    if (!firma) { setBekleyenFaturalar([]); return; }
+  // Firma seçili değilse tüm bekleyen faturalar, seçiliyse sadece o firmaya ait.
+  async function bekleyenYukle(firma) {
+    setLoadingKartlar(true);
     try {
-      const res = await fetch(`/api/muhasebe?resource=bekleyenFaturalar&firmaAdi=${encodeURIComponent(firma.firmaAdi)}`);
-      const j = await res.json();
+      const url = firma
+        ? `/api/muhasebe?resource=bekleyenFaturalar&firmaAdi=${encodeURIComponent(firma.firmaAdi)}`
+        : '/api/muhasebe?resource=bekleyenFaturalar';
+      const j = await (await fetch(url)).json();
       setBekleyenFaturalar(j.records || []);
     } catch { setBekleyenFaturalar([]); }
+    finally { setLoadingKartlar(false); }
+  }
+
+  useEffect(() => { yukle(); bekleyenYukle(null); }, []);
+
+  function firmaSecildi(firma) {
+    setSeciliFirma(firma);
+    setFirmaAdi(firma ? firma.firmaAdi : '');
+    bekleyenYukle(firma);
   }
 
   function faturaOnayla(f) {
+    // Firma henüz seçilmediyse, karttan otomatik seç
+    if (!seciliFirma && f.firmaAdi) {
+      const bulunan = firmalar.find(fi => fi.firmaAdi === f.firmaAdi);
+      if (bulunan) { setSeciliFirma(bulunan); setFirmaAdi(bulunan.firmaAdi); }
+    }
     setFaturaNo(f.faturaNo || '');
     setAciklama('');
     setGiderKat(f.kategori || '');
     setFaturaTutari(String(f.tutar || ''));
-    setKdvTutari(String(f.kdvTutari || ''));
-    setIskontoTutari('');
-    setOdemeTutari('');
   }
 
   async function kaydet(e) {
@@ -2718,17 +2727,15 @@ function FaturaFisGirisiSekmesi({ showToast }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tarih, firmaAdi: seciliFirma.firmaAdi, faturaNo, aciklama,
-          giderKategorisi: giderKat, odemeTuru, odemeDetay,
-          faturaTutari, kdvTutari, iskontoTutari, odemeTutari,
+          giderKategorisi: giderKat, odemeTuru, odemeDetay, faturaTutari,
         }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'hata');
       showToast('Kayıt eklendi');
       setFaturaNo(''); setAciklama(''); setGiderKat(''); setFaturaTutari('');
-      setKdvTutari(''); setIskontoTutari(''); setOdemeTutari('');
       await yukle();
-      await firmaSecildi(seciliFirma);
+      await bekleyenYukle(seciliFirma);
     } catch(err) { showToast('Kaydedilemedi: ' + err.message); }
     finally { setKaydediyor(false); }
   }
@@ -2740,14 +2747,14 @@ function FaturaFisGirisiSekmesi({ showToast }) {
       {/* SOL ÜST — Form */}
       <div className="ff-form-panel">
         <h3 className="ff-panel-baslik">Fatura / Fiş Girişi</h3>
-        {loading ? <p className="mh-empty">Yükleniyor…</p> : (
+        {loadingForm ? <p className="mh-empty">Yükleniyor…</p> : (
           <form onSubmit={kaydet} className="ff-form">
             <label className="ff-label">Tarih</label>
             <TarihSecici value={tarih} onChange={setTarih} />
 
             <label className="ff-label">Firma <span className="ff-zorunlu">*</span></label>
             <FirmaSecici value={firmaAdi} onChange={firmaSecildi} firmalar={firmalar}
-              showToast={showToast} onFirmaEklendi={(ad) => yukle()} />
+              showToast={showToast} onFirmaEklendi={() => yukle()} />
 
             {seciliFirma && (
               <div className="ff-bakiye-satir">
@@ -2779,61 +2786,52 @@ function FaturaFisGirisiSekmesi({ showToast }) {
               odemeYontemleri={odemeYontemleri} showToast={showToast}
               onYontemiEklendi={yukle} />
 
-            <div className="ff-tutarlar-grid">
-              <div>
-                <label className="ff-label">Fatura Tutarı <span className="ff-zorunlu">*</span></label>
-                <input className="ff-input ff-tutar" type="number" step="0.01" min="0" value={faturaTutari} onChange={e=>setFaturaTutari(e.target.value)} placeholder="0,00" />
-              </div>
-              <div>
-                <label className="ff-label">KDV Tutarı</label>
-                <input className="ff-input ff-tutar" type="number" step="0.01" min="0" value={kdvTutari} onChange={e=>setKdvTutari(e.target.value)} placeholder="0,00" />
-              </div>
-              <div>
-                <label className="ff-label">İskonto</label>
-                <input className="ff-input ff-tutar" type="number" step="0.01" min="0" value={iskontoTutari} onChange={e=>setIskontoTutari(e.target.value)} placeholder="0,00" />
-              </div>
-              <div>
-                <label className="ff-label">Ödeme Tutarı</label>
-                <input className="ff-input ff-tutar" type="number" step="0.01" min="0" value={odemeTutari} onChange={e=>setOdemeTutari(e.target.value)} placeholder="0,00" />
-              </div>
-            </div>
+            <label className="ff-label">Fatura Tutarı <span className="ff-zorunlu">*</span></label>
+            <input className="ff-input ff-tutar" type="number" step="0.01" min="0"
+              value={faturaTutari} onChange={e=>setFaturaTutari(e.target.value)} placeholder="0,00" />
 
-            <button type="submit" className="mh-primary-btn ff-kaydet-btn" disabled={kaydediyor || !seciliFirma || !faturaTutari}>
+            <button type="submit" className="mh-primary-btn ff-kaydet-btn"
+              disabled={kaydediyor || !seciliFirma || !faturaTutari}>
               {kaydediyor ? 'Kaydediliyor…' : 'Kaydet'}
             </button>
           </form>
         )}
       </div>
 
-      {/* SAĞ + ALT — Uyumsoft fatura kartları */}
+      {/* SAĞ + ALT — Uyumsoft fatura kartları (firma seçili değilse hepsi, seçiliyse filtreli) */}
       <div className="ff-kart-panel">
         <h3 className="ff-panel-baslik">
-          {seciliFirma ? `${seciliFirma.firmaAdi} — İşlenmemiş Faturalar (${bekleyenFaturalar.length})` : 'Firma seçince faturalar listelenir'}
+          {seciliFirma
+            ? `${seciliFirma.firmaAdi} — İşlenmemiş Faturalar (${bekleyenFaturalar.length})`
+            : `Tüm İşlenmemiş Faturalar (${bekleyenFaturalar.length})`}
         </h3>
-        {bekleyenFaturalar.length === 0 && seciliFirma && (
-          <p className="mh-empty">Bu firma için işlenmemiş XML fatura yok.</p>
-        )}
-        {!seciliFirma && <p className="mh-empty">Sol taraftan firma seçin.</p>}
-        <div className="ff-kart-grid">
-          {bekleyenFaturalar.map(f => (
-            <div key={f.faturaID} className="ff-fatura-kart">
-              <div className="ff-kart-ust">
-                <span className="ff-kart-tarih">{f.tarih}</span>
-                <span className="ff-kart-no">{f.faturaNo || '—'}</span>
+        {loadingKartlar
+          ? <p className="mh-empty">Yükleniyor…</p>
+          : bekleyenFaturalar.length === 0
+            ? <p className="mh-empty">İşlenmemiş XML fatura yok.</p>
+            : (
+              <div className="ff-kart-grid">
+                {bekleyenFaturalar.map(f => (
+                  <div key={f.faturaID} className="ff-fatura-kart">
+                    <div className="ff-kart-ust">
+                      <span className="ff-kart-tarih">{f.tarih}</span>
+                      <span className="ff-kart-no">{f.faturaNo || '—'}</span>
+                    </div>
+                    <div className="ff-kart-firma">{f.firmaAdi}</div>
+                    <div className="ff-kart-kat">{f.kategori}</div>
+                    <div className="ff-kart-tutarlar">
+                      <span>Tutar: <strong>{TL(f.tutar)}</strong></span>
+                      {f.kdvTutari > 0 && <span>KDV: {TL(f.kdvTutari)}</span>}
+                      <span className="ff-kart-satirsayisi">{f.satirSayisi} kalem</span>
+                    </div>
+                    <button type="button" className="ff-kart-onayla" onClick={() => faturaOnayla(f)}>
+                      Formu Doldur
+                    </button>
+                  </div>
+                ))}
               </div>
-              <div className="ff-kart-firma">{f.firmaAdi}</div>
-              <div className="ff-kart-kat">{f.kategori}</div>
-              <div className="ff-kart-tutarlar">
-                <span>Tutar: <strong>{TL(f.tutar)}</strong></span>
-                {f.kdvTutari > 0 && <span>KDV: {TL(f.kdvTutari)}</span>}
-                <span className="ff-kart-satirsayisi">{f.satirSayisi} kalem</span>
-              </div>
-              <button type="button" className="ff-kart-onayla" onClick={() => faturaOnayla(f)}>
-                Formu Doldur
-              </button>
-            </div>
-          ))}
-        </div>
+            )
+        }
       </div>
     </div>
   );
