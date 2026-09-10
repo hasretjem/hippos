@@ -1525,407 +1525,167 @@ function GelirDrawer({ onClose, onSaved }) {
   );
 }
 
-// ================== 3) TOPTANCILAR VE CARİ TAKİBİ ==================
-// Bakiye artık Sheets'teki eski 'Bakiye' sütunundan DEĞİL, Toptancı Hareketleri
-// tablosunun toplamından hesaplanıyor (fatura +, ödeme -). FIFO kapama: ödeme
-// yapıldığında en eski açık faturadan başlanarak borç düşülür (ekstre görünümünde
-// ve dip bakiyede yansır — ayrı bir "kapatma" alanı tutulmuyor, sadece toplamla hesaplanıyor).
+// ================== 3) TOPTANCILAR VE CARİ TAKİP ==================
+// Artık sadece "Fatura Firmaları" sheet'indeki firmalar listelenir.
+// Bakiye = Fatura ve Fişler toplamı − Tahsilat Makbuzları toplamı (backend hesaplar).
+// Ekstre: fatura+tahsilat girişleri koşu bakiyesiyle, en yeniden eskiye.
 function ToptancilarCariSekmesi({ showToast }) {
-  const [toptancilar, setToptancilar] = useState([]);
-  const [hareketler, setHareketler] = useState([]);
+  const [firmalar, setFirmalar] = useState([]); // { firmaAdi, bakiye, durum, giderKategorisi }
+  const [faturaKayitlari, setFaturaKayitlari] = useState([]);
+  const [tahsilatlar, setTahsilatlar] = useState([]);
   const [loading, setLoading] = useState(true);
   const [arama, setArama] = useState('');
   const [durumFiltre, setDurumFiltre] = useState('tumu');
-  const [odemeDrawerToptanci, setOdemeDrawerToptanci] = useState(null);
-  const [yeniCariModal, setYeniCariModal] = useState(false);
-  const [ekstreToptanci, setEkstreToptanci] = useState(null);
+  const [ekstreFirma, setEkstreFirma] = useState(null);
 
   async function yukle() {
     setLoading(true);
     try {
-      const [tRes, hRes] = await Promise.all([
-        fetch('/api/toptancilar'),
-        fetch('/api/muhasebe?resource=toptanciHareket'),
-      ]);
-      const tJson = await tRes.json();
-      const hJson = await hRes.json();
-      setToptancilar(tJson.records || []);
-      setHareketler(hJson.records || []);
-    } catch {
-      showToast('Veriler yüklenemedi');
-    } finally {
-      setLoading(false);
-    }
+      const res = await fetch('/api/muhasebe?resource=faturaFis');
+      const j = await res.json();
+      setFirmalar(j.firmalar || []);
+      setFaturaKayitlari(j.records || []);
+      // tahsilatları da çek
+      const tRes = await fetch('/api/muhasebe?resource=tahsilat');
+      const tJ = await tRes.json();
+      setTahsilatlar(tJ.records || []);
+    } catch { showToast('Veriler yüklenemedi'); }
+    finally { setLoading(false); }
   }
   useEffect(() => { yukle(); }, []);
 
-  // Her toptancı için: toplam fatura, toplam ödeme, bakiye, son işlem tarihi — hareketlerden.
-  const toptanciOzet = useMemo(() => {
-    const map = {};
-    toptancilar.forEach((t) => { map[t.id] = { ...t, toplamFatura: 0, toplamOdenen: 0, bakiye: 0, sonIslemTarihi: null, sonIslemTs: 0 }; });
-    hareketler.forEach((h) => {
-      const rec = map[h.toptanciId];
-      if (!rec) return;
-      if (h.tur === 'fatura') rec.toplamFatura += h.tutar;
-      if (h.tur === 'odeme') rec.toplamOdenen += h.tutar;
-      const ts = trTarihiCoz(h.tarih)?.getTime() || 0;
-      if (ts >= rec.sonIslemTs) { rec.sonIslemTs = ts; rec.sonIslemTarihi = h.tarih; }
-    });
-    Object.values(map).forEach((rec) => { rec.bakiye = Math.round((rec.toplamFatura - rec.toplamOdenen) * 100) / 100; });
-    return Object.values(map);
-  }, [toptancilar, hareketler]);
-
   const filtreli = useMemo(() => {
-    const q = arama.trim().toLocaleLowerCase('tr-TR');
-    return toptanciOzet
-      .filter((t) => !q || t.firmaAdi.toLocaleLowerCase('tr-TR').includes(q))
-      .filter((t) => {
-        if (durumFiltre === 'borclu') return t.bakiye > 0.01;
-        if (durumFiltre === 'alacakli') return t.bakiye < -0.01;
-        if (durumFiltre === 'sifir') return Math.abs(t.bakiye) <= 0.01;
-        return true;
-      })
-      .sort((a, b) => b.sonIslemTs - a.sonIslemTs);
-  }, [toptanciOzet, arama, durumFiltre]);
-
-  const kpi = useMemo(() => {
-    // Net borç = pozitif bakiyeler toplamı (gerçek borcumuz).
-    // Avans = negatif bakiyeler toplamı (fazla ödediklerimiz/alacaklarımız).
-    const netBorc = toptanciOzet.reduce((s, t) => s + Math.max(0, t.bakiye), 0);
-    const toplamAvans = toptanciOzet.reduce((s, t) => s + Math.max(0, -t.bakiye), 0);
-
-    // "Bu Ay Yapılan Ödeme" KPI'ı — sadece bu ayın ödemeleri.
-    // ÖNCEDEN: bu faturaya bakiyeyle tutarsız görünüyordu çünkü "Toplam Ödenen" sütunu
-    // tüm zamanları, KPI sadece bu ayı gösteriyordu. Şimdi KPI etiketi netleştirildi.
-    const buAyOdemeler = hareketler.filter((h) => h.tur === 'odeme' && tarihAraliktaMi(h.tarih, 'buAy'));
-    const buAyToplamOdeme = buAyOdemeler.reduce((s, h) => s + h.tutar, 0);
-
-    // Tüm zamanların toplam ödemesi — tablodaki "Toplam Ödenen" sütunlarının genel toplamıyla tutarlı.
-    const tumZamanlarToplamOdeme = hareketler.filter((h) => h.tur === 'odeme').reduce((s, h) => s + h.tutar, 0);
-
-    // 30+ gün gecikmiş açık borç (FIFO hesaplaması).
-    const otuzGunOnce = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    let gecikenBorc = 0;
-    const hareketlerByToptanci = {};
-    hareketler.forEach((h) => {
-      if (!hareketlerByToptanci[h.toptanciId]) hareketlerByToptanci[h.toptanciId] = [];
-      hareketlerByToptanci[h.toptanciId].push(h);
+    return firmalar.filter(f => {
+      if (arama && !f.firmaAdi.toLocaleLowerCase('tr').includes(arama.toLocaleLowerCase('tr'))) return false;
+      if (durumFiltre === 'borclu' && f.bakiye <= 0) return false;
+      if (durumFiltre === 'alacakli' && f.bakiye >= 0) return false;
+      return true;
     });
-    Object.values(hareketlerByToptanci).forEach((hs) => {
-      const kronolojik = [...hs].sort((a, b) => (trTarihiCoz(a.tarih)?.getTime() || 0) - (trTarihiCoz(b.tarih)?.getTime() || 0));
-      const acikFaturalar = [];
-      let odemeHavuzu = 0;
-      kronolojik.forEach((h) => {
-        if (h.tur === 'odeme') odemeHavuzu += h.tutar;
-        else acikFaturalar.push({ tutar: h.tutar, ts: trTarihiCoz(h.tarih)?.getTime() || 0 });
-      });
-      for (const f of acikFaturalar) {
-        if (odemeHavuzu <= 0) break;
-        const dusulen = Math.min(odemeHavuzu, f.tutar);
-        f.tutar -= dusulen;
-        odemeHavuzu -= dusulen;
-      }
-      acikFaturalar.forEach((f) => {
-        if (f.tutar > 0.01 && f.ts && f.ts < otuzGunOnce) gecikenBorc += f.tutar;
-      });
-    });
-
-    return { netBorc, toplamAvans, buAyToplamOdeme, tumZamanlarToplamOdeme, gecikenBorc };
-  }, [toptanciOzet, hareketler]);
+  }, [firmalar, arama, durumFiltre]);
 
   return (
     <div className="mh-yeni">
-      <div className="mh-kpi-row mh-kpi-row-4">
-        <div className="mh-kpi-card mh-kpi-danger">
-          <span className="mh-kpi-label">Toplam Borcumuz</span>
-          <span className="mh-kpi-value">{TL(kpi.netBorc)}</span>
-          <span className="mh-kpi-alt">Toptancılara açık borç</span>
-        </div>
-        {kpi.toplamAvans > 0.01 && (
-          <div className="mh-kpi-card mh-kpi-yesil">
-            <span className="mh-kpi-label">Toptancıdaki Avansımız</span>
-            <span className="mh-kpi-value">{TL(kpi.toplamAvans)}</span>
-            <span className="mh-kpi-alt">Fazla ödeme / alacak</span>
-          </div>
-        )}
-        <div className="mh-kpi-card mh-kpi-warning">
-          <span className="mh-kpi-label">30+ Gün Geciken Borç</span>
-          <span className="mh-kpi-value">{TL(kpi.gecikenBorc)}</span>
-          <span className="mh-kpi-alt">FIFO'ya göre vadesi geçmiş</span>
-        </div>
-        <div className="mh-kpi-card">
-          <span className="mh-kpi-label">Bu Ay Ödenen</span>
-          <span className="mh-kpi-value">{TL(kpi.buAyToplamOdeme)}</span>
-          <span className="mh-kpi-alt">Toplam tüm zaman: {TL(kpi.tumZamanlarToplamOdeme)}</span>
+      <div className="mh-top-bar">
+        <input className="mh-search" placeholder="Firma ara…" value={arama} onChange={e => setArama(e.target.value)} />
+        <div className="mh-filter-pills">
+          {[['tumu','Tümü'],['borclu','Borçlu'],['alacakli','Alacaklı']].map(([k,l]) => (
+            <button key={k} className={durumFiltre===k ? 'active' : ''} onClick={() => setDurumFiltre(k)}>{l}</button>
+          ))}
         </div>
       </div>
 
-      <div className="mh-actionbar">
-        <div className="mh-filter-left-search">
-          <Search size={15} />
-          <input placeholder="Tedarikçi / Firma Ara..." value={arama} onChange={(e) => setArama(e.target.value)} />
-        </div>
-        <div className="mh-actions">
-          <button className="mh-secondary-btn" onClick={() => setYeniCariModal(true)}><Users size={15} /> Yeni Cari Kartı</button>
-          <button className="mh-primary-btn" onClick={() => setOdemeDrawerToptanci({})}><Plus size={15} /> Ödeme Yap</button>
-        </div>
-      </div>
-
-      <div className="mh-filter-pills">
-        <button className={durumFiltre === 'tumu' ? 'active' : ''} onClick={() => setDurumFiltre('tumu')}>Tümü</button>
-        <button className={durumFiltre === 'borclu' ? 'active' : ''} onClick={() => setDurumFiltre('borclu')}>🔴 Borcumuz Olanlar</button>
-        <button className={durumFiltre === 'alacakli' ? 'active' : ''} onClick={() => setDurumFiltre('alacakli')}>🟢 Alacaklı Olduklarımız</button>
-        <button className={durumFiltre === 'sifir' ? 'active' : ''} onClick={() => setDurumFiltre('sifir')}>⚪ Bakiyesi Sıfır</button>
-      </div>
-
-      <div className="mh-table-card">
-        {loading ? (
-          <p className="mh-empty">Yükleniyor...</p>
-        ) : filtreli.length === 0 ? (
-          <p className="mh-empty">Kayıt bulunamadı.</p>
-        ) : (
+      {loading ? <p className="mh-empty">Yükleniyor…</p> : filtreli.length === 0 ? (
+        <p className="mh-empty">Kayıtlı firma yok. Fatura ve Fiş Girişi'nden firma ekleyin.</p>
+      ) : (
+        <div className="mh-table-card">
           <table className="mh-excel-table">
             <thead>
-              <tr>
-                <th>Tedarikçi / Firma Adı</th><th>Ana Harcama Grubu</th><th>Son İşlem Tarihi</th>
-                <th>Toplam Fatura</th><th>Toplam Ödenen</th><th>Güncel Bakiye (Borç)</th><th>İşlem</th>
-              </tr>
+              <tr><th>Firma</th><th>Kategori</th><th>Durum</th><th>Bakiye</th><th></th></tr>
             </thead>
             <tbody>
-              {filtreli.map((t) => (
-                <tr key={t.id}>
-                  <td><strong>{t.firmaAdi}</strong></td>
-                  <td>{t.kategori || '-'}</td>
-                  <td>{t.sonIslemTarihi || '-'}</td>
-                  <td className="mh-tutar-cell">{TL(t.toplamFatura)}</td>
-                  <td className="mh-tutar-cell">{TL(t.toplamOdenen)}</td>
-                  <td className="mh-tutar-cell">
-                    {Math.abs(t.bakiye) <= 0.01
-                      ? <span className="mh-durum mh-durum-notr">⚪ {TL(0)}</span>
-                      : t.bakiye > 0
-                        ? <span className="mh-durum mh-durum-kirmizi">🔴 {TL(t.bakiye)}</span>
-                        : <span className="mh-durum mh-durum-yesil">🟢 {TL(Math.abs(t.bakiye))}</span>}
+              {filtreli.map(f => (
+                <tr key={f.firmaAdi}>
+                  <td>{f.firmaAdi}</td>
+                  <td>{f.giderKategorisi || '—'}</td>
+                  <td>
+                    <span className={`mh-durum ${f.bakiye > 0.01 ? 'mh-durum-kirmizi' : f.bakiye < -0.01 ? 'mh-durum-yesil' : 'mh-durum-notr'}`}>
+                      {f.bakiye > 0.01 ? 'Borçlu' : f.bakiye < -0.01 ? 'Alacaklı' : 'Alacak/Borç Yok'}
+                    </span>
                   </td>
-                  <td className="mh-islem-cell">
-                    <button className="mh-mini-btn" onClick={() => setOdemeDrawerToptanci(t)}>Ödeme Yap</button>
-                    <button className="mh-mini-btn mh-mini-btn-ghost" onClick={() => setEkstreToptanci(t)}>Ekstre</button>
+                  <td className="mh-tutar-cell">
+                    {f.bakiye > 0.01 ? TL(f.bakiye) : f.bakiye < -0.01 ? TL(Math.abs(f.bakiye)) : '0 ₺'}
+                  </td>
+                  <td>
+                    <button className="mh-mini-btn" onClick={() => setEkstreFirma(f)}>Ekstre</button>
                   </td>
                 </tr>
               ))}
             </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={4}>Seçili Listenin Net Bakiyesi</td>
-                <td className="mh-tutar-cell">{TL(filtreli.reduce((s, t) => s + t.toplamOdenen, 0))}</td>
-                <td className="mh-tutar-cell">
-                  {(() => {
-                    const net = filtreli.reduce((s, t) => s + t.bakiye, 0);
-                    return net > 0.01
-                      ? <span className="mh-durum mh-durum-kirmizi">🔴 {TL(net)}</span>
-                      : net < -0.01
-                        ? <span className="mh-durum mh-durum-yesil">🟢 {TL(Math.abs(net))} avansımız var</span>
-                        : <span className="mh-durum mh-durum-notr">⚪ Sıfır</span>;
-                  })()}
-                </td>
-                <td></td>
-              </tr>
-            </tfoot>
           </table>
-        )}
-      </div>
-
-      {odemeDrawerToptanci && (
-        <ToptanciOdemeDrawer
-          toptancilar={toptancilar}
-          secili={odemeDrawerToptanci}
-          onClose={() => setOdemeDrawerToptanci(null)}
-          onSaved={(rec, kapatilan) => {
-            setHareketler((prev) => [rec, ...prev]);
-            setOdemeDrawerToptanci(null);
-            showToast(kapatilan > 0 ? `Ödeme kaydedildi, ${kapatilan} fatura kalemi ödendi olarak işaretlendi` : 'Ödeme kaydedildi');
-          }}
-        />
+        </div>
       )}
 
-      {yeniCariModal && (
-        <YeniToptanciModal
-          onClose={() => setYeniCariModal(false)}
-          onSaved={(rec) => { setToptancilar((prev) => [...prev, rec]); setYeniCariModal(false); showToast('Cari kartı açıldı'); }}
-        />
-      )}
-
-      {ekstreToptanci && (
+      {ekstreFirma && (
         <ToptanciEkstreModal
-          toptanci={ekstreToptanci}
-          hareketler={hareketler.filter((h) => h.toptanciId === ekstreToptanci.id).sort((a, b) => (trTarihiCoz(a.tarih)?.getTime() || 0) - (trTarihiCoz(b.tarih)?.getTime() || 0))}
-          onClose={() => setEkstreToptanci(null)}
+          firma={ekstreFirma}
+          faturaKayitlari={faturaKayitlari.filter(k => k.firmaAdi === ekstreFirma.firmaAdi)}
+          tahsilatlar={tahsilatlar.filter(t => t.firmaAdi === ekstreFirma.firmaAdi)}
+          onClose={() => setEkstreFirma(null)}
         />
       )}
     </div>
   );
 }
 
-function ToptanciOdemeDrawer({ toptancilar, secili, onClose, onSaved }) {
-  const [toptanciId, setToptanciId] = useState(secili.id || '');
-  const [tutar, setTutar] = useState('');
-  const [odemeYontemi, setOdemeYontemi] = useState('Banka Havalesi / EFT');
-  const [tarih, setTarih] = useState(bugunInputISO());
-  const [aciklama, setAciklama] = useState('');
-  const [saving, setSaving] = useState(false);
+function ToptanciEkstreModal({ firma, faturaKayitlari, tahsilatlar, onClose }) {
+  // Fatura ve tahsilat hareketlerini birleştir, en yeniden eskiye sırala
+  const hareketler = useMemo(() => {
+    const faturalar = faturaKayitlari.map(k => ({
+      id: k.id, tarih: k.tarih, tur: 'fatura',
+      aciklama: `${k.faturaNo ? k.faturaNo + ' — ' : ''}${k.aciklama || k.giderKategorisi || 'Fatura'}`,
+      tutar: k.faturaTutari,
+    }));
+    const odemeler = tahsilatlar.map(t => ({
+      id: t.id, tarih: t.tarih, tur: 'odeme',
+      aciklama: `${t.faturaNo ? t.faturaNo + ' — ' : ''}${t.aciklama || t.odemeTuru || 'Ödeme'}`,
+      tutar: t.tutar,
+    }));
+    return [...faturalar, ...odemeler].sort((a, b) => {
+      // DD.MM.YYYY → karşılaştırılabilir
+      const ts = s => { const m = String(s||'').match(/(\d{2})\.(\d{2})\.(\d{4})/); return m ? `${m[3]}${m[2]}${m[1]}` : ''; };
+      return ts(b.tarih).localeCompare(ts(a.tarih));
+    });
+  }, [faturaKayitlari, tahsilatlar]);
 
-  async function kaydet() {
-    if (!toptanciId || !tutar) return;
-    setSaving(true);
-    try {
-      const res = await fetch('/api/muhasebe?resource=toptanciHareket', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toptanciId, tarih: inputISOtoTr(tarih), tutar: ondalikParse(tutar), odemeYontemi, aciklama }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'save failed');
-      onSaved(json.record, json.kapatilanFaturaSayisi || 0);
-    } catch {
-      setSaving(false);
-    }
-  }
+  // Koşu bakiyesi: yukarıdan aşağıya (en yeni → en eski) koşu bakiyesi hesaplanır.
+  // En son hareketlerden geriye doğru gidilir — önce son bakiyeden başla, geri hesapla.
+  const toplamBakiye = faturaKayitlari.reduce((s, k) => s + k.faturaTutari, 0)
+    - tahsilatlar.reduce((s, t) => s + t.tutar, 0);
 
-  return (
-    <div className="mh-drawer-overlay" onClick={onClose}>
-      <div className="mh-drawer" onClick={(e) => e.stopPropagation()}>
-        <div className="mh-drawer-head">
-          <span>Ödeme / Tahsilat Yap</span>
-          <button onClick={onClose}><X size={18} /></button>
-        </div>
-        <div className="mh-drawer-body">
-          <div className="mh-field">
-            <label>Firma</label>
-            <select className="mh-tabbable" value={toptanciId} onChange={(e) => setToptanciId(e.target.value)} onKeyDown={handleTabEnter}>
-              <option value="">Seçiniz</option>
-              {toptancilar.map((t) => <option key={t.id} value={t.id}>{t.firmaAdi}</option>)}
-            </select>
-          </div>
-          <div className="mh-field">
-            <label>Ödeme Tutarı (TL)</label>
-            <input className="mh-tabbable" value={tutar} onChange={(e) => setTutar(e.target.value)} onKeyDown={handleTabEnter} inputMode="decimal" />
-          </div>
-          <div className="mh-field">
-            <label>Ödeme Yöntemi</label>
-            <select className="mh-tabbable" value={odemeYontemi} onChange={(e) => setOdemeYontemi(e.target.value)} onKeyDown={handleTabEnter}>
-              <option>Banka Havalesi / EFT</option><option>Nakit (Kasa)</option><option>Kredi Kartı</option>
-            </select>
-          </div>
-          <div className="mh-field">
-            <label>Tarih</label>
-            <input className="mh-tabbable" type="date" value={tarih} onChange={(e) => setTarih(e.target.value)} onKeyDown={handleTabEnter} />
-          </div>
-          <div className="mh-field">
-            <label>Açıklama / Dekont No</label>
-            <input className="mh-tabbable" value={aciklama} onChange={(e) => setAciklama(e.target.value)} onKeyDown={handleTabEnter} />
-          </div>
-        </div>
-        <div className="mh-drawer-foot">
-          <button className="mh-primary-btn" disabled={saving || !toptanciId || !tutar || !tarih} onClick={kaydet}>
-            <Check size={15} /> Kaydet
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+  let kosuBakiye = toplamBakiye;
+  const satirlar = hareketler.map(h => {
+    const satir = { ...h, kosuBakiye };
+    kosuBakiye = h.tur === 'fatura' ? kosuBakiye - h.tutar : kosuBakiye + h.tutar;
+    return satir;
+  });
 
-function YeniToptanciModal({ onClose, onSaved }) {
-  const [form, setForm] = useState({ firmaAdi: '', kategori: '', telefon: '', yetkiliKisi: '', adres: '', not: '' });
-  const [saving, setSaving] = useState(false);
-
-  async function kaydet() {
-    if (!form.firmaAdi.trim()) return;
-    setSaving(true);
-    try {
-      const res = await fetch('/api/toptancilar', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'save failed');
-      onSaved(json.record);
-    } catch {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="mh-drawer-overlay" onClick={onClose}>
-      <div className="mh-drawer" onClick={(e) => e.stopPropagation()}>
-        <div className="mh-drawer-head">
-          <span>Yeni Cari Kartı Aç</span>
-          <button onClick={onClose}><X size={18} /></button>
-        </div>
-        <div className="mh-drawer-body">
-          <div className="mh-field">
-            <label>Firma Adı</label>
-            <input className="mh-tabbable" autoFocus value={form.firmaAdi} lang="tr" autoCorrect="off" autoCapitalize="off" spellCheck="false"
-              onChange={(e) => setForm((p) => ({ ...p, firmaAdi: e.target.value }))} onKeyDown={handleTabEnter} />
-          </div>
-          <div className="mh-field">
-            <label>Ana Harcama Grubu</label>
-            <input className="mh-tabbable" value={form.kategori} placeholder="örn. Tavuk Alışı"
-              onChange={(e) => setForm((p) => ({ ...p, kategori: e.target.value }))} onKeyDown={handleTabEnter} />
-          </div>
-          <div className="mh-field">
-            <label>Telefon</label>
-            <input className="mh-tabbable" value={form.telefon} onChange={(e) => setForm((p) => ({ ...p, telefon: e.target.value }))} onKeyDown={handleTabEnter} />
-          </div>
-          <div className="mh-field">
-            <label>Yetkili Kişi</label>
-            <input className="mh-tabbable" value={form.yetkiliKisi} onChange={(e) => setForm((p) => ({ ...p, yetkiliKisi: e.target.value }))} onKeyDown={handleTabEnter} />
-          </div>
-          <div className="mh-field">
-            <label>Adres</label>
-            <textarea className="mh-tabbable" value={form.adres} onChange={(e) => setForm((p) => ({ ...p, adres: e.target.value }))} onKeyDown={handleTabEnter} />
-          </div>
-          <div className="mh-field">
-            <label>Not</label>
-            <textarea className="mh-tabbable" value={form.not} onChange={(e) => setForm((p) => ({ ...p, not: e.target.value }))} onKeyDown={handleTabEnter} />
-          </div>
-        </div>
-        <div className="mh-drawer-foot">
-          <button className="mh-primary-btn" disabled={saving || !form.firmaAdi.trim()} onClick={kaydet}>
-            <Check size={15} /> Kaydet
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ToptanciEkstreModal({ toptanci, hareketler, onClose }) {
-  let kosuBakiye = 0;
   return (
     <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={onClose}>
-      <div className="mh-modal-wide" onClick={(e) => e.stopPropagation()}>
+      <div className="mh-modal-wide" style={{maxWidth:660}} onClick={e => e.stopPropagation()}>
         <div className="mh-drawer-head">
-          <span>{toptanci.firmaAdi} — Hesap Ekstresi</span>
+          <span>{firma.firmaAdi} — Cari Hareketler</span>
           <button onClick={onClose}><X size={18} /></button>
         </div>
         <div className="mh-drawer-body">
-          {hareketler.length === 0 ? (
-            <p className="mh-empty">Hiç hareket yok.</p>
-          ) : (
+          <div style={{marginBottom:10,display:'flex',justifyContent:'flex-end',gap:16,fontSize:13}}>
+            <span>Toplam Bakiye:</span>
+            <strong className={toplamBakiye > 0.01 ? 'ff-borc' : toplamBakiye < -0.01 ? 'ff-alacak' : ''}>
+              {toplamBakiye > 0.01 ? 'Borçlu' : toplamBakiye < -0.01 ? 'Alacaklı' : 'Alacak/Borç Yok'} — {TL(Math.abs(toplamBakiye))}
+            </strong>
+          </div>
+          {satirlar.length === 0 ? <p className="mh-empty">Hiç hareket yok.</p> : (
             <table className="mh-excel-table">
-              <thead><tr><th>Tarih</th><th>Tür</th><th>Açıklama</th><th>Tutar</th><th>Bakiye</th></tr></thead>
+              <thead>
+                <tr><th>Tarih</th><th>Tür</th><th>Açıklama</th><th>Tutar</th><th>Koşu Bakiye</th></tr>
+              </thead>
               <tbody>
-                {hareketler.map((h) => {
-                  kosuBakiye += h.tur === 'fatura' ? h.tutar : -h.tutar;
-                  return (
-                    <tr key={h.id}>
-                      <td>{h.tarih}</td>
-                      <td>{h.tur === 'fatura' ? 'Fatura (+)' : 'Ödeme (-)'}</td>
-                      <td>{h.aciklama || '-'}</td>
-                      <td className="mh-tutar-cell">{h.tur === 'fatura' ? TL(h.tutar) : `-${TL(h.tutar)}`}</td>
-                      <td className="mh-tutar-cell">{TL(kosuBakiye)}</td>
-                    </tr>
-                  );
-                })}
+                {satirlar.map(h => (
+                  <tr key={h.id}>
+                    <td>{h.tarih}</td>
+                    <td>
+                      <span className={`mh-durum ${h.tur === 'fatura' ? 'mh-durum-kirmizi' : 'mh-durum-yesil'}`}>
+                        {h.tur === 'fatura' ? 'Borç (+)' : 'Ödeme (−)'}
+                      </span>
+                    </td>
+                    <td>{h.aciklama}</td>
+                    <td className="mh-tutar-cell">
+                      {h.tur === 'fatura' ? `+${TL(h.tutar)}` : `−${TL(h.tutar)}`}
+                    </td>
+                    <td className={`mh-tutar-cell ${h.kosuBakiye > 0.01 ? 'ff-borc' : h.kosuBakiye < -0.01 ? 'ff-alacak' : ''}`}>
+                      {TL(Math.abs(h.kosuBakiye))}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}

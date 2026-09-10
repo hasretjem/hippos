@@ -2063,6 +2063,20 @@ export default async function handler(req, res) {
       return res.status(200).json({ records, hesaplar });
     }
 
+    // Tek hareket ekle (günsonu POS → Ödeal, peşin ödeme vb.)
+    if (resource === 'bankaKartHareketEkle') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { tarih, hesapTuru, hesapAdi, yon, tutar, aciklama } = req.body || {};
+      if (!tutar || !hesapTuru) return res.status(400).json({ error: 'tutar ve hesapTuru gerekli' });
+      const now = new Date();
+      const trTarih = tarih || now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+      await appendRow(sheets, BANKA_KART_TAB, [
+        benzersizId(), trTarih, hesapTuru, hesapAdi || '', yon || 'GİREN',
+        ondalikParseServer(tutar), aciklama || '', '', now.toISOString(),
+      ]);
+      return res.status(200).json({ ok: true });
+    }
+
     // Uyumsoft'tan gelmiş ama bu ekrandan HENÜZ İŞLENMEMİŞ faturalar (kart olarak gösterilir).
     // Kaynak: mevcut XML içe aktarma verisi (Giderler sekmesi, FaturaID bazında gruplanır).
     if (resource === 'bekleyenFaturalar') {

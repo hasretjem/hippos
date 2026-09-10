@@ -414,6 +414,23 @@ export default function GunSonu({ data, onNavigate }) {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('save failed');
+
+      // Günsonu POS toplamını Banka/Kart Hareketleri sheet'ine otomatik yaz
+      // (tüm POS'lar Ödeal üzerinden, tek kalem olarak)
+      if (posToplam > 0) {
+        await fetch('/api/muhasebe?resource=bankaKartHareketEkle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tarih: bugunTarih,
+            hesapTuru: 'Kredi Kartı',
+            hesapAdi: 'Ödeal Kredi Kartı',
+            yon: 'GİREN',
+            tutar: posToplam,
+            aciklama: 'Günsonu postan gelen tutar',
+          }),
+        }).catch(() => {}); // POS kaydı günsonu kaydını bloklamamalı
+      }
       showToast('Gün sonu kaydedildi');
       if (data.clearHarcamaTaslagi) data.clearHarcamaTaslagi();
       const gsRes = await fetch('/api/gunsonu');
