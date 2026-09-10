@@ -1563,10 +1563,42 @@ function ToptancilarCariSekmesi({ showToast }) {
     });
   }, [firmalar, arama, durumFiltre]);
 
+  const kpi = useMemo(() => {
+    const toplamBorc = firmalar.filter(f => f.bakiye > 0.01).reduce((s, f) => s + f.bakiye, 0);
+    const toplamAlacak = firmalar.filter(f => f.bakiye < -0.01).reduce((s, f) => s + Math.abs(f.bakiye), 0);
+    const borcluSayisi = firmalar.filter(f => f.bakiye > 0.01).length;
+    const alacakliSayisi = firmalar.filter(f => f.bakiye < -0.01).length;
+    return { toplamBorc, toplamAlacak, borcluSayisi, alacakliSayisi };
+  }, [firmalar]);
+
   return (
     <div className="mh-yeni">
-      <div className="mh-top-bar">
-        <input className="mh-search" placeholder="Firma ara…" value={arama} onChange={e => setArama(e.target.value)} />
+
+      {/* KPI Kartları */}
+      <div className="mh-kpi-row mh-kpi-row-2" style={{marginBottom: 16}}>
+        <div className="mh-kpi-card mh-kpi-danger">
+          <span className="mh-kpi-label">Toplam Borç</span>
+          <span className="mh-kpi-value">{TL(kpi.toplamBorc)}</span>
+          <span className="mh-kpi-alt">{kpi.borcluSayisi} firma borçlu</span>
+        </div>
+        <div className="mh-kpi-card" style={{borderColor:'rgba(46,139,87,.3)', background:'rgba(46,139,87,.05)'}}>
+          <span className="mh-kpi-label">Toplam Alacak</span>
+          <span className="mh-kpi-value" style={{color:'#2E8B57'}}>{TL(kpi.toplamAlacak)}</span>
+          <span className="mh-kpi-alt">{kpi.alacakliSayisi} firma alacaklı</span>
+        </div>
+      </div>
+
+      {/* Arama + Filtre Barı */}
+      <div className="tc-arama-bar">
+        <div className="tc-arama-input-wrap">
+          <Search size={14} className="tc-arama-ikon" />
+          <input
+            className="tc-arama-input"
+            placeholder="Firma adı ara…"
+            value={arama}
+            onChange={e => setArama(e.target.value)}
+          />
+        </div>
         <div className="mh-filter-pills">
           {[['tumu','Tümü'],['borclu','Borçlu'],['alacakli','Alacaklı']].map(([k,l]) => (
             <button key={k} className={durumFiltre===k ? 'active' : ''} onClick={() => setDurumFiltre(k)}>{l}</button>

@@ -774,3 +774,19 @@
 @media (max-width: 700px) { .ff-banka-kpi { grid-template-columns: 1fr; } }
 .mh-kpi-yesil-val { color: #2E8B57; }
 .mh-kpi-kirmizi-val { color: #C0392B; }
+/* ---- Toptancı/Cari Takibi — arama barı ---- */
+.tc-arama-bar {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.tc-arama-input-wrap {
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px;
+  height: 38px; padding: 0 12px; border-radius: 10px;
+  border: 1.5px solid #E3DFCF; background: #fff;
+}
+.tc-arama-input-wrap:focus-within { border-color: #393E41; }
+.tc-arama-ikon { color: #83786B; flex-shrink: 0; }
+.tc-arama-input {
+  border: none; outline: none; flex: 1; font-size: 13px;
+  color: #393E41; background: none;
+}
+.tc-arama-input::placeholder { color: #B0A898; }
