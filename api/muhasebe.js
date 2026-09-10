@@ -842,7 +842,7 @@ function parseFaturaXml(xmlContent) {
 
 export default async function handler(req, res) {
   try {
-    const resource = req.method === 'GET' ? req.query.resource : (req.body || {}).resource;
+    const resource = req.query.resource || (req.body || {}).resource;
 
     const auth = getAuth();
     const sheets = google.sheets({ version: 'v4', auth });
