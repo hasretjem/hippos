@@ -2087,7 +2087,7 @@ export default async function handler(req, res) {
       }));
       if (req.query.firmaAdi) {
         const hedef = metinNormalize(req.query.firmaAdi);
-        records = records.filter((r) => metinNormalize(r.firmaAdi) === hedef);
+        records = records.filter((r) => metinNormalize(r.firmaAdi).includes(hedef) || hedef.includes(metinNormalize(r.firmaAdi)));
       }
       records.sort((a, b) => (trTarihiCozServer(b.tarih)?.getTime() || 0) - (trTarihiCozServer(a.tarih)?.getTime() || 0));
       return res.status(200).json({ records });
