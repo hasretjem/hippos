@@ -344,10 +344,17 @@ export default function Settings({ data, onNavigate }) {
 
   const totals = useMemo(() => {
     const t = { NAKİT: 0, 'KREDİ KARTI': 0, 'YEMEK KARTI': 0, CARİ: 0 };
+    const tahsilat = { NAKİT: 0, 'KREDİ KARTI': 0, 'YEMEK KARTI': 0, HAVALE: 0 };
     todaysSales.forEach((s) => {
-      if (t[s.method] !== undefined) t[s.method] += s.amount;
+      if (t[s.method] !== undefined) {
+        t[s.method] += s.amount;
+      } else if (s.method?.startsWith('TAHSİLAT_')) {
+        const tur = s.method.replace('TAHSİLAT_', '');
+        if (tahsilat[tur] !== undefined) tahsilat[tur] += s.amount;
+        else tahsilat[tur] = s.amount;
+      }
     });
-    return { ...t, total: t['NAKİT'] + t['KREDİ KARTI'] + t['YEMEK KARTI'] + t['CARİ'] };
+    return { ...t, total: t['NAKİT'] + t['KREDİ KARTI'] + t['YEMEK KARTI'] + t['CARİ'], tahsilat };
   }, [todaysSales]);
 
   const salesRowCount = todaysSales.length;
@@ -610,9 +617,13 @@ export default function Settings({ data, onNavigate }) {
             {revenueRevealed ? (
               <div className="st-revenue-body">
                 <div className="st-revenue-row"><Banknote size={15} /><span>Nakit</span><strong>{TL(totals['NAKİT'])}</strong></div>
+                {totals.tahsilat?.['NAKİT'] > 0 && <div className="st-revenue-sub"><span>+ Tahsilat</span><span>{TL(totals.tahsilat['NAKİT'])}</span></div>}
                 <div className="st-revenue-row"><CreditCard size={15} /><span>Kredi Kartı</span><strong>{TL(totals['KREDİ KARTI'])}</strong></div>
+                {totals.tahsilat?.['KREDİ KARTI'] > 0 && <div className="st-revenue-sub"><span>+ Tahsilat</span><span>{TL(totals.tahsilat['KREDİ KARTI'])}</span></div>}
                 <div className="st-revenue-row"><UtensilsCrossed size={15} /><span>Yemek Kartı</span><strong>{TL(totals['YEMEK KARTI'])}</strong></div>
+                {totals.tahsilat?.['YEMEK KARTI'] > 0 && <div className="st-revenue-sub"><span>+ Tahsilat</span><span>{TL(totals.tahsilat['YEMEK KARTI'])}</span></div>}
                 <div className="st-revenue-row"><BookOpen size={15} /><span>Cari</span><strong>{TL(totals['CARİ'])}</strong></div>
+                {totals.tahsilat?.['HAVALE'] > 0 && <div className="st-revenue-sub"><span>+ Havale Tahsilat</span><span>{TL(totals.tahsilat['HAVALE'])}</span></div>}
                 <div className="st-revenue-total"><span>TOPLAM CİRO</span><strong>{TL(totals.total)}</strong></div>
 
               </div>

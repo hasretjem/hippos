@@ -219,6 +219,10 @@ export default function Cariler({ data, onNavigate }) {
     if (tutar <= 0 || !selectedCari) return;
     const kalan = Math.max(0, getCariBakiye(selectedCari.id) - tutar);
     await addCariOdeme(selectedCari.id, { tutar, tur: odemeTur });
+    data.setSalesHistory((prev) => [
+      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedCari.ad, amount: tutar, method: `TAHSİLAT_${odemeTur}`, itemsCount: 0, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+      ...prev,
+    ]);
     setLastOdemeKalan(kalan);
     setOdemeModalOpen(false);
     setOdemeShareText(

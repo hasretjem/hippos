@@ -1145,3 +1145,10 @@
   vertical-align: middle;
 }
 .st-action-stok .st-action-title { display: inline-flex; align-items: center; }
+.st-revenue-sub {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 8px 4px 28px;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
