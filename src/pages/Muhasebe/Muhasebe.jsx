@@ -1568,14 +1568,14 @@ function ToptancilarCariSekmesi({ showToast }) {
     const toplamAlacak = firmalar.filter(f => f.bakiye < -0.01).reduce((s, f) => s + Math.abs(f.bakiye), 0);
     const borcluSayisi = firmalar.filter(f => f.bakiye > 0.01).length;
     const alacakliSayisi = firmalar.filter(f => f.bakiye < -0.01).length;
-    return { toplamBorc, toplamAlacak, borcluSayisi, alacakliSayisi };
+    return { toplamBorc, toplamAlacak, borcluSayisi, alacakliSayisi, net: toplamBorc - toplamAlacak };
   }, [firmalar]);
 
   return (
     <div className="mh-yeni">
 
       {/* KPI Kartları */}
-      <div className="mh-kpi-row mh-kpi-row-2" style={{marginBottom: 16}}>
+      <div className="mh-kpi-row" style={{marginBottom: 16, gridTemplateColumns:'1fr 1fr 1fr'}}>
         <div className="mh-kpi-card mh-kpi-danger">
           <span className="mh-kpi-label">Toplam Borç</span>
           <span className="mh-kpi-value">{TL(kpi.toplamBorc)}</span>
@@ -1585,6 +1585,16 @@ function ToptancilarCariSekmesi({ showToast }) {
           <span className="mh-kpi-label">Toplam Alacak</span>
           <span className="mh-kpi-value" style={{color:'#2E8B57'}}>{TL(kpi.toplamAlacak)}</span>
           <span className="mh-kpi-alt">{kpi.alacakliSayisi} firma alacaklı</span>
+        </div>
+        <div className={`mh-kpi-card ${kpi.net > 0.01 ? 'mh-kpi-danger' : kpi.net < -0.01 ? '' : ''}`}
+          style={kpi.net < -0.01 ? {borderColor:'rgba(46,139,87,.3)', background:'rgba(46,139,87,.05)'} : {}}>
+          <span className="mh-kpi-label">Net Pozisyon</span>
+          <span className="mh-kpi-value" style={{color: kpi.net > 0.01 ? '#C0392B' : kpi.net < -0.01 ? '#2E8B57' : '#83786B'}}>
+            {kpi.net > 0.01 ? `−${TL(kpi.net)}` : kpi.net < -0.01 ? `+${TL(Math.abs(kpi.net))}` : '0 ₺'}
+          </span>
+          <span className="mh-kpi-alt">
+            {kpi.net > 0.01 ? 'Net borçlusunuz' : kpi.net < -0.01 ? 'Net alacaklısınız' : 'Sıfır bakiye'}
+          </span>
         </div>
       </div>
 
