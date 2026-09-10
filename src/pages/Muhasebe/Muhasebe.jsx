@@ -2456,11 +2456,12 @@ function TarihSecici({ value, onChange }) {
 }
 
 // Firma autocomplete + yeni firma kaydı.
-function FirmaSecici({ value, onChange, firmalar, showToast, onFirmaEklendi }) {
+function FirmaSecici({ value, onChange, firmalar, kategoriler, showToast, onFirmaEklendi }) {
   const [input, setInput] = useState(value || '');
   const [acik, setAcik] = useState(false);
   const [yeniModal, setYeniModal] = useState(false);
   const [yeniAd, setYeniAd] = useState('');
+  const [yeniKat, setYeniKat] = useState('');
   const [kaydediyor, setKaydediyor] = useState(false);
   const ref = useRef(null);
 
@@ -2492,13 +2493,13 @@ function FirmaSecici({ value, onChange, firmalar, showToast, onFirmaEklendi }) {
     try {
       const res = await fetch('/api/muhasebe?resource=faturaFisFirmaEkle', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ firmaAdi: yeniAd.trim() }),
+        body: JSON.stringify({ firmaAdi: yeniAd.trim(), giderKategorisi: yeniKat }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'hata');
       showToast(j.zatenVar ? 'Bu firma zaten kayıtlı' : 'Firma eklendi');
       onFirmaEklendi(yeniAd.trim());
-      setYeniModal(false); setYeniAd('');
+      setYeniModal(false); setYeniAd(''); setYeniKat('');
     } catch(e) { showToast('Firma eklenemedi: ' + e.message); }
     finally { setKaydediyor(false); }
   }
@@ -2532,8 +2533,14 @@ function FirmaSecici({ value, onChange, firmalar, showToast, onFirmaEklendi }) {
               <button onClick={() => setYeniModal(false)}><X size={18} /></button>
             </div>
             <div className="mh-drawer-body">
+              <label className="ff-label">Firma Adı</label>
               <input className="ff-input" value={yeniAd} onChange={e => setYeniAd(e.target.value)}
-                placeholder="Firma adı" autoFocus onKeyDown={e => e.key==='Enter' && firmaEkle()} />
+                placeholder="Firma adı" autoFocus />
+              <label className="ff-label" style={{marginTop:10}}>Gider Kategorisi</label>
+              <select className="ff-select" value={yeniKat} onChange={e => setYeniKat(e.target.value)}>
+                <option value="">— Seçin —</option>
+                {(kategoriler || []).map(k => <option key={k} value={k}>{k}</option>)}
+              </select>
               <div style={{display:'flex',gap:8,marginTop:12,justifyContent:'flex-end'}}>
                 <button className="mh-secondary-btn" onClick={() => setYeniModal(false)}>Vazgeç</button>
                 <button className="mh-primary-btn" disabled={kaydediyor || !yeniAd.trim()} onClick={firmaEkle}>
@@ -2754,7 +2761,7 @@ function FaturaFisGirisiSekmesi({ showToast }) {
 
             <label className="ff-label">Firma <span className="ff-zorunlu">*</span></label>
             <FirmaSecici value={firmaAdi} onChange={firmaSecildi} firmalar={firmalar}
-              showToast={showToast} onFirmaEklendi={() => yukle()} />
+              kategoriler={kategoriler} showToast={showToast} onFirmaEklendi={() => yukle()} />
 
             {seciliFirma && (
               <div className="ff-bakiye-blok">
@@ -2861,21 +2868,25 @@ function TahsilatMakbuzuSekmesi({ showToast }) {
 
   const [firmalar, setFirmalar] = useState([]);
   const [odemeYontemleri, setOdemeYontemleri] = useState([]);
+  const [kategoriler, setKategoriler] = useState([]);
   const [bekleyenOdemeler, setBekleyenOdemeler] = useState([]);
   const [loading, setLoading] = useState(true);
 
   async function yukle() {
     setLoading(true);
     try {
-      const [tRes, oRes] = await Promise.all([
+      const [tRes, oRes, kRes] = await Promise.all([
         fetch('/api/muhasebe?resource=tahsilat'),
         fetch('/api/muhasebe?resource=bekleyenOdemeler'),
+        fetch('/api/muhasebe?resource=kategoriler'),
       ]);
       const tJson = await tRes.json();
       const oJson = await oRes.json();
+      const kJson = await kRes.json();
       setFirmalar(tJson.firmalar || []);
       setOdemeYontemleri(tJson.odemeYontemleri || []);
       setBekleyenOdemeler(oJson.records || []);
+      if (kJson.kategoriler?.length) setKategoriler(kJson.kategoriler);
     } catch { showToast('Veriler yüklenemedi'); }
     finally { setLoading(false); }
   }
@@ -2928,7 +2939,7 @@ function TahsilatMakbuzuSekmesi({ showToast }) {
 
             <label className="ff-label">Firma <span className="ff-zorunlu">*</span></label>
             <FirmaSecici value={firmaAdi} onChange={firmaSecildi} firmalar={firmalar}
-              showToast={showToast} onFirmaEklendi={yukle} />
+              kategoriler={kategoriler} showToast={showToast} onFirmaEklendi={yukle} />
 
             {seciliFirma && (
               <div className="ff-bakiye-blok">
