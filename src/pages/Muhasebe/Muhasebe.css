@@ -736,6 +736,8 @@
 }
 .ff-odeme-btn:hover { background: #F0EDE4; }
 .ff-odeme-secili { background: #393E41 !important; color: #F6F7EB !important; border-color: #393E41 !important; }
+.ff-alt-btn { }
+.ff-alt-secili { background: #C0392B !important; color: #F5F0E8 !important; border-color: #C0392B !important; }
 .ff-odeme-yeni { border-style: dashed; color: #83786B; }
 
 /* Tutar alanları */

@@ -2487,6 +2487,13 @@ function FirmaSecici({ value, onChange, firmalar, kategoriler, showToast, onFirm
     setAcik(true);
   }
 
+  function inputKeyDown(e) {
+    if (e.key === 'Enter' && acik && oneri.length === 1) {
+      e.preventDefault();
+      sec(oneri[0]);
+    }
+  }
+
   async function firmaEkle() {
     if (!yeniAd.trim()) return;
     setKaydediyor(true);
@@ -2507,7 +2514,7 @@ function FirmaSecici({ value, onChange, firmalar, kategoriler, showToast, onFirm
   return (
     <div className="ff-firma-wrap" ref={ref}>
       <div className="ff-firma-row">
-        <input className="ff-input" value={input} onChange={inputDegisti}
+        <input className="ff-input" value={input} onChange={inputDegisti} onKeyDown={inputKeyDown}
           onFocus={() => setAcik(true)} placeholder="Firma adı ara..." />
         <button type="button" className="ff-yeni-btn" title="Yeni firma ekle" onClick={() => setYeniModal(true)}>
           <Plus size={14} /> Yeni
@@ -2557,7 +2564,7 @@ function FirmaSecici({ value, onChange, firmalar, kategoriler, showToast, onFirm
 
 // Ödeme türü seçici — ağaç yapısı (Nakit / Kredi Kartı → kart / Banka Havalesi → banka / Cari / yeni ekle).
 function OdemeTuruSecici({ tur, detay, onChange, odemeYontemleri, showToast, onYontemiEklendi }) {
-  const [yeniModal, setYeniModal] = useState(null); // 'kart' | 'banka' | 'diger'
+  const [yeniModal, setYeniModal] = useState(null); // 'kart' | 'banka' | 'nakit' | 'diger'
   const [yeniAd, setYeniAd] = useState('');
   const [kaydediyor, setKaydediyor] = useState(false);
 
@@ -2596,11 +2603,23 @@ function OdemeTuruSecici({ tur, detay, onChange, odemeYontemleri, showToast, onY
         </button>
       </div>
 
+      {tur === 'Nakit' && (
+        <div className="ff-alt-secim">
+          {['Günlük Kasa','Çelik Kasa'].map(k => (
+            <button key={k} type="button"
+              className={`ff-odeme-btn ff-alt-btn ${detay===k ? 'ff-alt-secili' : ''}`}
+              onClick={() => onChange('Nakit', k)}>
+              {k}
+            </button>
+          ))}
+        </div>
+      )}
+
       {tur === 'Kredi Kartı' && (
         <div className="ff-alt-secim">
           {kartlar.map(k => (
             <button key={k.id} type="button"
-              className={`ff-odeme-btn ${detay===k.ad ? 'ff-odeme-secili' : ''}`}
+              className={`ff-odeme-btn ff-alt-btn ${detay===k.ad ? 'ff-alt-secili' : ''}`}
               onClick={() => onChange('Kredi Kartı', k.ad)}>
               {k.ad}
             </button>
@@ -2615,7 +2634,7 @@ function OdemeTuruSecici({ tur, detay, onChange, odemeYontemleri, showToast, onY
         <div className="ff-alt-secim">
           {bankalar.map(b => (
             <button key={b.id} type="button"
-              className={`ff-odeme-btn ${detay===b.ad ? 'ff-odeme-secili' : ''}`}
+              className={`ff-odeme-btn ff-alt-btn ${detay===b.ad ? 'ff-alt-secili' : ''}`}
               onClick={() => onChange('Banka Havalesi', b.ad)}>
               {b.ad}
             </button>
@@ -2652,6 +2671,13 @@ function OdemeTuruSecici({ tur, detay, onChange, odemeYontemleri, showToast, onY
   );
 }
 
+// Alt kırılım gerekli mi kontrol eden yardımcı (Cari hariç tüm türlerde detay zorunlu)
+function odemeTuruGecerli(tur, detay) {
+  if (!tur) return false;
+  if (tur === 'Cari') return true;
+  return !!detay; // Nakit→Günlük Kasa/Çelik Kasa, Kredi Kartı→hangi kart, Banka→hangi banka
+}
+
 // ============================================================
 // 1. Fatura ve Fiş Girişi sekmesi
 // ============================================================
@@ -2663,7 +2689,7 @@ function FaturaFisGirisiSekmesi({ showToast }) {
   const [faturaNo, setFaturaNo] = useState('');
   const [aciklama, setAciklama] = useState('');
   const [giderKat, setGiderKat] = useState('');
-  const [odemeTuru, setOdemeTuru] = useState('Nakit');
+  const [odemeTuru, setOdemeTuru] = useState('');
   const [odemeDetay, setOdemeDetay] = useState('');
   const [faturaTutari, setFaturaTutari] = useState('');
   const [kaydediyor, setKaydediyor] = useState(false);
@@ -2709,6 +2735,8 @@ function FaturaFisGirisiSekmesi({ showToast }) {
   function firmaSecildi(firma) {
     setSeciliFirma(firma);
     setFirmaAdi(firma ? firma.firmaAdi : '');
+    // Firma seçilince kayıtlı gider kategorisi otomatik gelsin
+    if (firma && firma.giderKategorisi) setGiderKat(firma.giderKategorisi);
     bekleyenYukle(firma);
   }
 
@@ -2727,9 +2755,12 @@ function FaturaFisGirisiSekmesi({ showToast }) {
   async function kaydet(e) {
     e.preventDefault();
     if (!seciliFirma) { showToast('Önce bir firma seçin'); return; }
+    if (!giderKat) { showToast('Gider kategorisi seçin'); return; }
+    if (!odemeTuruGecerli(odemeTuru, odemeDetay)) { showToast('Ödeme türünü seçin'); return; }
     if (!faturaTutari) { showToast('Fatura tutarı gerekli'); return; }
     setKaydediyor(true);
     try {
+      // 1) Fatura kaydı (Fatura ve Fişler sheet'ine)
       const res = await fetch('/api/muhasebe?resource=faturaFis', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2739,8 +2770,25 @@ function FaturaFisGirisiSekmesi({ showToast }) {
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'hata');
-      showToast('Kayıt eklendi');
+
+      // 2) Cari HARİÇ peşin ödemelerde: otomatik tahsilat kaydı da oluştur
+      //    (Tahsilat Makbuzları sheet'ine aynı tutarda ödeme yazılır)
+      if (odemeTuru !== 'Cari') {
+        const tRes = await fetch('/api/muhasebe?resource=tahsilat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tarih, firmaAdi: seciliFirma.firmaAdi, faturaNo,
+            aciklama: `Peşin ödeme — ${odemeTuru}${odemeDetay ? ' / ' + odemeDetay : ''}`,
+            odemeTuru, odemeDetay, tutar: faturaTutari,
+          }),
+        });
+        const tJ = await tRes.json();
+        if (!tRes.ok) console.error('Tahsilat kaydı oluşturulamadı:', tJ.error);
+      }
+
+      showToast(odemeTuru === 'Cari' ? 'Fatura kaydedildi (cariye atıldı)' : 'Fatura + ödeme kaydedildi');
       setFaturaNo(''); setAciklama(''); setGiderKat(''); setFaturaTutari('');
+      setOdemeTuru(''); setOdemeDetay('');
       await yukle();
       await bekleyenYukle(seciliFirma);
     } catch(err) { showToast('Kaydedilemedi: ' + err.message); }
@@ -2805,7 +2853,7 @@ function FaturaFisGirisiSekmesi({ showToast }) {
               value={faturaTutari} onChange={e=>setFaturaTutari(e.target.value)} placeholder="0,00" />
 
             <button type="submit" className="mh-primary-btn ff-kaydet-btn"
-              disabled={kaydediyor || !seciliFirma || !faturaTutari}>
+              disabled={kaydediyor || !seciliFirma || !faturaTutari || !giderKat || !odemeTuruGecerli(odemeTuru, odemeDetay)}>
               {kaydediyor ? 'Kaydediliyor…' : 'Kaydet'}
             </button>
           </form>
@@ -2861,7 +2909,7 @@ function TahsilatMakbuzuSekmesi({ showToast }) {
   const [firmaAdi, setFirmaAdi] = useState('');
   const [faturaNo, setFaturaNo] = useState('');
   const [aciklama, setAciklama] = useState('');
-  const [odemeTuru, setOdemeTuru] = useState('Nakit');
+  const [odemeTuru, setOdemeTuru] = useState('');
   const [odemeDetay, setOdemeDetay] = useState('');
   const [tutar, setTutar] = useState('');
   const [kaydediyor, setKaydediyor] = useState(false);
@@ -2976,7 +3024,7 @@ function TahsilatMakbuzuSekmesi({ showToast }) {
             <label className="ff-label">Ödeme Tutarı <span className="ff-zorunlu">*</span></label>
             <input className="ff-input ff-tutar" type="number" step="0.01" min="0" value={tutar} onChange={e=>setTutar(e.target.value)} placeholder="0,00" />
 
-            <button type="submit" className="mh-primary-btn ff-kaydet-btn" disabled={kaydediyor || !seciliFirma || !tutar}>
+            <button type="submit" className="mh-primary-btn ff-kaydet-btn" disabled={kaydediyor || !seciliFirma || !tutar || !odemeTuruGecerli(odemeTuru, odemeDetay)}>
               {kaydediyor ? 'Kaydediliyor…' : 'Kaydet'}
             </button>
           </form>

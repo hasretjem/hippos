@@ -466,17 +466,23 @@ function bakiyeDurumuEtiketi(bakiye) {
 // Arama listesi: firma defteri + fiilen işlem görmüş firmalar birleştirilir.
 function firmaListesiCikar(firmaRows, faturaKayitlari, tahsilatlar) {
   const harita = new Map();
-  const ekle = (ad) => {
+  const katMap = new Map(); // firmaAdi -> giderKategorisi
+  const ekle = (ad, kat) => {
     const temiz = String(ad || '').trim();
     if (!temiz) return;
     const anahtar = metinNormalize(temiz);
     if (!harita.has(anahtar)) harita.set(anahtar, temiz);
+    if (kat && !katMap.has(anahtar)) katMap.set(anahtar, kat);
   };
-  firmaRows.forEach((r) => ekle(r[1]));
-  faturaKayitlari.forEach((k) => ekle(k.firmaAdi));
+  firmaRows.forEach((r) => ekle(r[1], r[2])); // r[2] = GiderKategorisi
+  faturaKayitlari.forEach((k) => ekle(k.firmaAdi, k.giderKategorisi));
   tahsilatlar.forEach((t) => ekle(t.firmaAdi));
-  return [...harita.values()]
-    .map((ad) => ({ firmaAdi: ad, bakiye: firmaBakiyesi(ad, faturaKayitlari, tahsilatlar) }))
+  return [...harita.entries()]
+    .map(([anahtar, ad]) => ({
+      firmaAdi: ad,
+      bakiye: firmaBakiyesi(ad, faturaKayitlari, tahsilatlar),
+      giderKategorisi: katMap.get(anahtar) || '',
+    }))
     .map((f) => ({ ...f, durum: bakiyeDurumuEtiketi(f.bakiye) }))
     .sort((a, b) => a.firmaAdi.localeCompare(b.firmaAdi, 'tr'));
 }
