@@ -1905,6 +1905,12 @@ export default function useHipposData(scope = 'full') {
     if (!fatura) return;
     setCariFaturalar((prev) => prev.filter((f) => f.id !== faturaId));
     await supabase.from('cari_faturalar').delete().eq('id', faturaId).then(({ error }) => { if (error) console.error(error.message); });
+    // Ödeme kaydı: cari_odemeler'e yaz (panelde ve günsonu tahsilatlarında görünsün)
+    const odemeId = Date.now() + Math.floor(Math.random() * 1000);
+    const odemeTs = Date.now();
+    setCariOdemeler((prev) => [...prev, { id: odemeId, cariId: fatura.cariId, ts: odemeTs, tutar: fatura.tutar, tur: odemeTur }]);
+    supabase.from('cari_odemeler').insert({ id: odemeId, cari_id: fatura.cariId, ts: odemeTs, tutar: fatura.tutar, tur: odemeTur })
+      .then(({ error }) => { if (error) console.error('futura tam ödeme kaydı:', error.message); });
     // Fatura silindikten sonra bu carinin başka faturası ve hareketi kalmadıysa arşivle
     const kalanFatura = cariFaturalar.filter((f) => f.cariId === fatura.cariId && f.id !== faturaId);
     const kalanHareket = cariHareketler.filter((h) => h.cariId === fatura.cariId);
@@ -1927,6 +1933,12 @@ export default function useHipposData(scope = 'full') {
       .update({ tahsilat_tutar: yeniTahsilat, odeme_log: yeniLog })
       .eq('id', faturaId)
       .then(({ error }) => { if (error) console.error(error.message); });
+    // Ödeme kaydı: cari_odemeler'e yaz (panelde ve günsonu tahsilatlarında görünsün)
+    const odemeId = Date.now() + Math.floor(Math.random() * 1000);
+    const odemeTs = Date.now();
+    setCariOdemeler((prev) => [...prev, { id: odemeId, cariId: fatura.cariId, ts: odemeTs, tutar, tur: odemeTur }]);
+    supabase.from('cari_odemeler').insert({ id: odemeId, cari_id: fatura.cariId, ts: odemeTs, tutar, tur: odemeTur })
+      .then(({ error }) => { if (error) console.error('futura kısmi ödeme kaydı:', error.message); });
   }
 
   function getCariFaturalanmamisTutar(cariId) {

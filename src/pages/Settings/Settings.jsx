@@ -313,30 +313,6 @@ export default function Settings({ data, onNavigate }) {
   // ---- Anlık Ciro ----
   // Şifre kaldırıldı — sayfa açılır açılmaz göster, göz butonuyla gizle/göster.
   const [revenueRevealed, setRevenueRevealed] = useState(true);
-  const [usageData, setUsageData] = useState(null);
-
-
-  const [usageLoading, setUsageLoading] = useState(false);
-
-  async function fetchUsage() {
-    setUsageLoading(true);
-    try {
-      const res = await fetch('/api/usage');
-      const json = await res.json();
-      setUsageData(json);
-    } catch {
-      setUsageData(null);
-    } finally {
-      setUsageLoading(false);
-    }
-  }
-  // Sayfa açılır açılmaz bir kere çek, sonra 30 saniyede bir tazele — düz fetch, Realtime
-  // değil, kotaya hiç dokunmuyor.
-  useEffect(() => {
-    fetchUsage();
-    const id = setInterval(fetchUsage, 30000);
-    return () => clearInterval(id);
-  }, []);
 
   const todaysSales = useMemo(() => {
     const todayStr = new Date().toDateString();
@@ -416,64 +392,6 @@ export default function Settings({ data, onNavigate }) {
     <div className="st-shell">
       <div className="st-columns">
         <div className="st-left">
-
-          {/* Realtime Kullanım Sayacı — şifresiz, sayfaya girer girmez görünür. Kendisi
-              Realtime kotasına hiç dokunmuyor, düz fetch ile 30sn'de bir tazeleniyor,
-              tahmini bir rakamdır (Supabase'in kendi resmi rakamıyla birebir aynı olmayabilir). */}
-          <div className="st-usage-panel standalone">
-            <div className="st-usage-head">
-              <span>Realtime Mesaj Kullanımı (tahmini)</span>
-              <button onClick={fetchUsage} title="Tazele"><RefreshCw size={12} className={usageLoading ? 'spin' : ''} /></button>
-            </div>
-            {usageData ? (
-              <>
-                <div className={`st-usage-bar-wrap ${usageData.buAy >= 2000000 ? 'over' : usageData.buAy >= 1500000 ? 'warn' : 'ok'}`}>
-                  <div className="st-usage-bar" style={{ width: `${Math.min(100, (usageData.buAy / 2000000) * 100)}%` }} />
-                </div>
-                <div className="st-usage-numbers">
-                  <span>{usageData.buAy.toLocaleString('tr-TR')} / 2.000.000 (bu ay)</span>
-                  <span className="st-usage-24h">son 24 saat: {usageData.son24Saat.toLocaleString('tr-TR')}</span>
-                </div>
-
-                {usageData.tabloKirilimi && Object.keys(usageData.tabloKirilimi).length > 0 && (
-                  <div className="st-usage-breakdown">
-                    {Object.entries(usageData.tabloKirilimi)
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([table, count]) => (
-                        <div key={table} className="st-usage-breakdown-row">
-                          <span>{table}</span>
-                          <strong>{count}</strong>
-                        </div>
-                      ))}
-                  </div>
-                )}
-
-                {usageData.sonMesajlar && usageData.sonMesajlar.length > 0 && (
-                  <details className="st-usage-log">
-                    <summary>Son {usageData.sonMesajlar.length} mesaj</summary>
-                    <div className="st-usage-log-list">
-                      {usageData.sonMesajlar.map((ev, i) => (
-                        <div key={i} className="st-usage-log-row">
-                          <div className="left">
-                            <span className="table">{ev.table}</span>
-                            {ev.detail && <span className="detail">{ev.detail}</span>}
-                            {ev.dbTs && (
-                              <span className="dbts">
-                                DB'de gerçek değişme: {new Date(ev.dbTs).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                              </span>
-                            )}
-                          </div>
-                          <span className="time">alındı: {new Date(ev.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                )}
-              </>
-            ) : (
-              <p className="st-usage-empty">{usageLoading ? 'Yükleniyor...' : 'Veri yok'}</p>
-            )}
-          </div>
 
           <div className="st-actions-row">
             <button className="st-action-card" onClick={() => setMenuModalOpen(true)}>
