@@ -1601,12 +1601,21 @@ export default async function handler(req, res) {
         const gs = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Gün Sonu Kasa!A2:E' });
         gunSonuRows = gs.data.values || [];
       } catch { gunSonuRows = []; }
+      // Gün Sonu Kasa sütun düzeni: A=Tarih, B=NakitKüpür, C=KasaAvansı, D=POSToplam, E=POSSatırları...
+      // POSToplam = r[3] (D sütunu, 0-indexed)
+      // Tarih alanı eski kayıtlarda Excel serial date (46266 gibi) olabilir — dönüştür.
       const posByTarih = {};
       gunSonuRows.forEach((r) => {
-        const t = String(r[0] || '').trim();
+        const t = excelTarihiCoz(String(r[0] || '').trim());
         if (!t) return;
-        posByTarih[t] = (posByTarih[t] || 0) + sayiCoz(r[4]);
+        posByTarih[t] = (posByTarih[t] || 0) + sayiCoz(r[3]);
       });
+
+      // Ekstre tarihlerini de serial date'ten düzelt (eski yüklenen kayıtlar için)
+      const hakedislerDuzeltilmis = hakedisler.map(h => ({
+        ...h,
+        tarih: excelTarihiCoz(h.tarih) || h.tarih,
+      }));
 
       // Hakediş bankaya SABİT olarak ertesi gün yatar — eşleşen günsonu POS cirosu her
       // zaman (hakediş yatış tarihi - 1 gün). "En yakın olanı seç" gibi esnek bir arama
@@ -1618,7 +1627,7 @@ export default async function handler(req, res) {
         return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
       };
 
-      const sonuc = hakedisler.map((h) => {
+      const sonuc = hakedislerDuzeltilmis.map((h) => {
         const ciroTarihi = oncekiGun(h.tarih);
         const ciroTutari = ciroTarihi && posByTarih[ciroTarihi] !== undefined ? posByTarih[ciroTarihi] : null;
         const fark = ciroTutari !== null ? Math.round((ciroTutari - h.tutar) * 100) / 100 : null;
