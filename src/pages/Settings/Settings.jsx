@@ -8,8 +8,8 @@ import { MiniHarcamaFormu } from '../GunSonu/GunSonu';
 import {
   ListChecks, Calculator, Eye, EyeOff, Share2, Search, X,
   Banknote, CreditCard, UtensilsCrossed, BookOpen, ExternalLink, ChevronRight, ChevronDown,
-  Undo2, Wifi, WifiOff, Printer, Database, FileSpreadsheet, Triangle, Image as ImageIcon,
-  Wheat, Copy, Check, Receipt, AlertTriangle, ClipboardList,
+  Undo2, Wifi, WifiOff, Printer, Database, FileSpreadsheet, Triangle, Image as ImageIcon, RefreshCw,
+  Wheat, Copy, Check, Receipt, AlertTriangle, ClipboardList, ArrowUpDown,
 } from 'lucide-react';
 
 // Türkçe karakter duyarsız arama (İ/I/ı/i, ş/s, ğ/g, ü/u, ö/o, ç/c)
@@ -49,6 +49,7 @@ export default function Settings({ data, onNavigate }) {
     undoLastAction,
     ekmekStok,
     ekmekStokEkle,
+    cariOdemeler,
   } = data;
 
   const [now, setNow] = useState(new Date());
@@ -312,6 +313,30 @@ export default function Settings({ data, onNavigate }) {
   // ---- Anlık Ciro ----
   // Şifre kaldırıldı — sayfa açılır açılmaz göster, göz butonuyla gizle/göster.
   const [revenueRevealed, setRevenueRevealed] = useState(true);
+  const [usageData, setUsageData] = useState(null);
+
+
+  const [usageLoading, setUsageLoading] = useState(false);
+
+  async function fetchUsage() {
+    setUsageLoading(true);
+    try {
+      const res = await fetch('/api/usage');
+      const json = await res.json();
+      setUsageData(json);
+    } catch {
+      setUsageData(null);
+    } finally {
+      setUsageLoading(false);
+    }
+  }
+  // Sayfa açılır açılmaz bir kere çek, sonra 30 saniyede bir tazele — düz fetch, Realtime
+  // değil, kotaya hiç dokunmuyor.
+  useEffect(() => {
+    fetchUsage();
+    const id = setInterval(fetchUsage, 30000);
+    return () => clearInterval(id);
+  }, []);
 
   const todaysSales = useMemo(() => {
     const todayStr = new Date().toDateString();
@@ -320,18 +345,30 @@ export default function Settings({ data, onNavigate }) {
 
   const totals = useMemo(() => {
     const t = { NAKİT: 0, 'KREDİ KARTI': 0, 'YEMEK KARTI': 0, CARİ: 0 };
-    const tahsilat = { NAKİT: 0, 'KREDİ KARTI': 0, 'YEMEK KARTI': 0, HAVALE: 0 };
     todaysSales.forEach((s) => {
-      if (t[s.method] !== undefined) {
-        t[s.method] += s.amount;
-      } else if (s.method?.startsWith('TAHSİLAT_')) {
-        const tur = s.method.replace('TAHSİLAT_', '');
-        if (tahsilat[tur] !== undefined) tahsilat[tur] += s.amount;
-        else tahsilat[tur] = s.amount;
-      }
+      if (t[s.method] !== undefined) t[s.method] += s.amount;
     });
-    return { ...t, total: t['NAKİT'] + t['KREDİ KARTI'] + t['YEMEK KARTI'] + t['CARİ'], tahsilat };
-  }, [todaysSales]);
+    // Bugünkü cari tahsilatları ödeme türüne göre ayrıştır
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const tahsilatlar = { NAKİT: 0, 'KREDİ KARTI': 0, 'YEMEK KARTI': 0, HAVALE: 0, DİĞER: 0 };
+    (cariOdemeler || [])
+      .filter(o => o.ts >= todayStart.getTime())
+      .forEach(o => {
+        const tur = String(o.tur || '').toLocaleUpperCase('tr');
+        if (tur === 'NAKİT') tahsilatlar['NAKİT'] += o.tutar;
+        else if (tur === 'KREDİ KARTI') tahsilatlar['KREDİ KARTI'] += o.tutar;
+        else if (tur === 'YEMEK KARTI') tahsilatlar['YEMEK KARTI'] += o.tutar;
+        else if (tur === 'HAVALE' || tur === 'BANKA HAVALESİ') tahsilatlar['HAVALE'] += o.tutar;
+        else tahsilatlar['DİĞER'] += o.tutar;
+      });
+    const tahsilatToplam = Object.values(tahsilatlar).reduce((s, v) => s + v, 0);
+    return {
+      ...t,
+      tahsilatlar,
+      tahsilatToplam,
+      total: t['NAKİT'] + t['KREDİ KARTI'] + t['YEMEK KARTI'] + t['CARİ'],
+    };
+  }, [todaysSales, cariOdemeler]);
 
   const salesRowCount = todaysSales.length;
   const txCount = todaysSales.length;
@@ -379,6 +416,64 @@ export default function Settings({ data, onNavigate }) {
     <div className="st-shell">
       <div className="st-columns">
         <div className="st-left">
+
+          {/* Realtime Kullanım Sayacı — şifresiz, sayfaya girer girmez görünür. Kendisi
+              Realtime kotasına hiç dokunmuyor, düz fetch ile 30sn'de bir tazeleniyor,
+              tahmini bir rakamdır (Supabase'in kendi resmi rakamıyla birebir aynı olmayabilir). */}
+          <div className="st-usage-panel standalone">
+            <div className="st-usage-head">
+              <span>Realtime Mesaj Kullanımı (tahmini)</span>
+              <button onClick={fetchUsage} title="Tazele"><RefreshCw size={12} className={usageLoading ? 'spin' : ''} /></button>
+            </div>
+            {usageData ? (
+              <>
+                <div className={`st-usage-bar-wrap ${usageData.buAy >= 2000000 ? 'over' : usageData.buAy >= 1500000 ? 'warn' : 'ok'}`}>
+                  <div className="st-usage-bar" style={{ width: `${Math.min(100, (usageData.buAy / 2000000) * 100)}%` }} />
+                </div>
+                <div className="st-usage-numbers">
+                  <span>{usageData.buAy.toLocaleString('tr-TR')} / 2.000.000 (bu ay)</span>
+                  <span className="st-usage-24h">son 24 saat: {usageData.son24Saat.toLocaleString('tr-TR')}</span>
+                </div>
+
+                {usageData.tabloKirilimi && Object.keys(usageData.tabloKirilimi).length > 0 && (
+                  <div className="st-usage-breakdown">
+                    {Object.entries(usageData.tabloKirilimi)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([table, count]) => (
+                        <div key={table} className="st-usage-breakdown-row">
+                          <span>{table}</span>
+                          <strong>{count}</strong>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                {usageData.sonMesajlar && usageData.sonMesajlar.length > 0 && (
+                  <details className="st-usage-log">
+                    <summary>Son {usageData.sonMesajlar.length} mesaj</summary>
+                    <div className="st-usage-log-list">
+                      {usageData.sonMesajlar.map((ev, i) => (
+                        <div key={i} className="st-usage-log-row">
+                          <div className="left">
+                            <span className="table">{ev.table}</span>
+                            {ev.detail && <span className="detail">{ev.detail}</span>}
+                            {ev.dbTs && (
+                              <span className="dbts">
+                                DB'de gerçek değişme: {new Date(ev.dbTs).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </span>
+                            )}
+                          </div>
+                          <span className="time">alındı: {new Date(ev.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </>
+            ) : (
+              <p className="st-usage-empty">{usageLoading ? 'Yükleniyor...' : 'Veri yok'}</p>
+            )}
+          </div>
 
           <div className="st-actions-row">
             <button className="st-action-card" onClick={() => setMenuModalOpen(true)}>
@@ -535,14 +630,31 @@ export default function Settings({ data, onNavigate }) {
             {revenueRevealed ? (
               <div className="st-revenue-body">
                 <div className="st-revenue-row"><Banknote size={15} /><span>Nakit</span><strong>{TL(totals['NAKİT'])}</strong></div>
-                {totals.tahsilat?.['NAKİT'] > 0 && <div className="st-revenue-sub"><span>+ Tahsilat</span><span>{TL(totals.tahsilat['NAKİT'])}</span></div>}
                 <div className="st-revenue-row"><CreditCard size={15} /><span>Kredi Kartı</span><strong>{TL(totals['KREDİ KARTI'])}</strong></div>
-                {totals.tahsilat?.['KREDİ KARTI'] > 0 && <div className="st-revenue-sub"><span>+ Tahsilat</span><span>{TL(totals.tahsilat['KREDİ KARTI'])}</span></div>}
                 <div className="st-revenue-row"><UtensilsCrossed size={15} /><span>Yemek Kartı</span><strong>{TL(totals['YEMEK KARTI'])}</strong></div>
-                {totals.tahsilat?.['YEMEK KARTI'] > 0 && <div className="st-revenue-sub"><span>+ Tahsilat</span><span>{TL(totals.tahsilat['YEMEK KARTI'])}</span></div>}
                 <div className="st-revenue-row"><BookOpen size={15} /><span>Cari</span><strong>{TL(totals['CARİ'])}</strong></div>
-                {totals.tahsilat?.['HAVALE'] > 0 && <div className="st-revenue-sub"><span>+ Havale Tahsilat</span><span>{TL(totals.tahsilat['HAVALE'])}</span></div>}
                 <div className="st-revenue-total"><span>TOPLAM CİRO</span><strong>{TL(totals.total)}</strong></div>
+                {totals.tahsilatToplam > 0 && (
+                  <div className="st-tahsilat-blok">
+                    <div className="st-tahsilat-baslik">Cariden Tahsilatlar</div>
+                    {totals.tahsilatlar['NAKİT'] > 0 && (
+                      <div className="st-revenue-row st-tahsilat-row"><Banknote size={13} /><span>Nakit</span><strong>{TL(totals.tahsilatlar['NAKİT'])}</strong></div>
+                    )}
+                    {totals.tahsilatlar['KREDİ KARTI'] > 0 && (
+                      <div className="st-revenue-row st-tahsilat-row"><CreditCard size={13} /><span>Kredi Kartı</span><strong>{TL(totals.tahsilatlar['KREDİ KARTI'])}</strong></div>
+                    )}
+                    {totals.tahsilatlar['YEMEK KARTI'] > 0 && (
+                      <div className="st-revenue-row st-tahsilat-row"><UtensilsCrossed size={13} /><span>Yemek Kartı</span><strong>{TL(totals.tahsilatlar['YEMEK KARTI'])}</strong></div>
+                    )}
+                    {totals.tahsilatlar['HAVALE'] > 0 && (
+                      <div className="st-revenue-row st-tahsilat-row"><ArrowUpDown size={13} /><span>Havale</span><strong>{TL(totals.tahsilatlar['HAVALE'])}</strong></div>
+                    )}
+                    {totals.tahsilatlar['DİĞER'] > 0 && (
+                      <div className="st-revenue-row st-tahsilat-row"><BookOpen size={13} /><span>Diğer</span><strong>{TL(totals.tahsilatlar['DİĞER'])}</strong></div>
+                    )}
+                    <div className="st-tahsilat-toplam"><span>TAHSİLAT TOPLAMI</span><strong>{TL(totals.tahsilatToplam)}</strong></div>
+                  </div>
+                )}
 
               </div>
             ) : (
