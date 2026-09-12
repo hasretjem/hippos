@@ -40,7 +40,7 @@ function sablonHtmlOlustur(baslikSag, satirlar) {
   baslik.style.alignItems = 'baseline';
   baslik.innerHTML = `
     <span style="font-size:28px;font-weight:800;">Perpa Sandviç</span>
-    <span style="font-size:18px;font-weight:800;">${baslikSag}</span>
+    <span style="font-size:18px;font-weight:800;color:#1a1a1a;letter-spacing:0.12em;">${baslikSag}</span>
   `;
   el.appendChild(baslik);
 
