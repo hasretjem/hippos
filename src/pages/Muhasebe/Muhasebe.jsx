@@ -5,7 +5,7 @@ import { supabase } from '../../services/supabase';
 import FaturaXmlIce from './FaturaXmlIce/FaturaXmlIce';
 import {
   ArrowLeft, TrendingDown, TrendingUp, Truck, Users, ChefHat,
-  Plus, Upload, X, Check, Search, MessageCircle, Trash2,
+  Plus, Upload, X, Check, Search, MessageCircle, Trash2, FileSpreadsheet,
 } from 'lucide-react';
 
 // KRİTİK: Number("0,04") -> NaN döner (Türkçe ondalık virgülü). Tutar/oran input'larında
@@ -108,14 +108,60 @@ const ORTAK_ISLEM_TURLERI = ['Kasadan Nakit Çekim', 'Cepten Ödeme', 'Bağkur /
 export default function Muhasebe({ onNavigate }) {
   const [anaTab, setAnaTab] = useState('giderler'); // giderler | gelirler | toptancilar | ortaklar | receteler
   const [toast, setToast] = useState('');
+  const [xmlModalAcikGlobal, setXmlModalAcikGlobal] = useState(false);
+  const [ekstreYukleniyor, setEkstreYukleniyor] = useState(false);
+  const ekstreDosyaRef = React.useRef(null);
+
   function showToast(msg) {
     setToast(msg);
     setTimeout(() => setToast(''), 1800);
   }
 
+  // Sağ üst köşedeki global ekstre yükleme
+  async function globalDosyaIsle(file) {
+    if (!file) return;
+    if (!/\.xlsx?$/i.test(file.name)) { showToast('Lütfen .xlsx uzantılı ekstre dosyası seçin'); return; }
+    setEkstreYukleniyor(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let ikili = '';
+      const parcaBoyu = 8192;
+      for (let i = 0; i < bytes.length; i += parcaBoyu) {
+        ikili += String.fromCharCode.apply(null, bytes.subarray(i, i + parcaBoyu));
+      }
+      const b64 = btoa(ikili);
+      const res = await fetch('/api/muhasebe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resource: 'ekstreYukle', dosyaBase64: b64 }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'yükleme başarısız');
+      showToast(`${json.ozet?.eklenen ?? 0} yeni hareket işlendi`);
+    } catch (err) {
+      showToast('Yüklenemedi: ' + err.message);
+    } finally {
+      setEkstreYukleniyor(false);
+      if (ekstreDosyaRef.current) ekstreDosyaRef.current.value = '';
+    }
+  }
+
   return (
     <div className="mh-shell">
-      <button className="mh-back" onClick={() => onNavigate('settings')}><ArrowLeft size={16} /> Geri</button>
+      <div className="mh-header-row">
+        <button className="mh-back" onClick={() => onNavigate('settings')}><ArrowLeft size={16} /> Geri</button>
+        <div className="mh-global-actions">
+          <button className="mh-secondary-btn" onClick={() => setXmlModalAcikGlobal(true)}>
+            <Upload size={14} /> XML Yükle
+          </button>
+          <button className="mh-secondary-btn" disabled={ekstreYukleniyor}
+            onClick={() => ekstreDosyaRef.current?.click()}>
+            <FileSpreadsheet size={14} /> {ekstreYukleniyor ? 'İşleniyor…' : 'Ekstre Yükle'}
+          </button>
+          <input ref={ekstreDosyaRef} type="file" accept=".xlsx,.xls" hidden
+            onChange={(e) => { globalDosyaIsle(e.target.files?.[0]); }} />
+        </div>
+      </div>
 
       <div className="mh-tabs">
         <button className={anaTab === 'giderler' ? 'active' : ''} onClick={() => setAnaTab('giderler')}>
@@ -144,6 +190,21 @@ export default function Muhasebe({ onNavigate }) {
       </div>
 
       {toast && <div className="mh-toast">{toast}</div>}
+
+      {/* Global XML Fatura Yükleme Modal */}
+      {xmlModalAcikGlobal && (
+        <div className="mh-drawer-overlay" onClick={() => setXmlModalAcikGlobal(false)}>
+          <div className="mh-modal-wide" onClick={e => e.stopPropagation()} style={{maxWidth:560}}>
+            <div className="mh-drawer-head">
+              <span>XML Fatura Yükle</span>
+              <button onClick={() => setXmlModalAcikGlobal(false)}><X size={18} /></button>
+            </div>
+            <div className="mh-drawer-body">
+              <FaturaXmlIce showToast={showToast} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -152,7 +213,7 @@ export default function Muhasebe({ onNavigate }) {
 // Üç alt sekme: resmi fatura/fiş kayıtları, ham banka-kart ekstresi ve ikisi
 // arasında henüz eşleşmemiş harcamaların bekleme havuzu.
 function GiderlerSekmesi({ showToast }) {
-  const [altTab, setAltTab] = useState('faturalar');
+  const [altTab, setAltTab] = useState('faturaGiris');
   const [bekleyenSayisi, setBekleyenSayisi] = useState(null);
 
   async function bekleyenSayisiniTazele() {
@@ -160,23 +221,13 @@ function GiderlerSekmesi({ showToast }) {
       const r = await fetch('/api/muhasebe?resource=ekstre&durum=fatura_bekliyor');
       const j = await r.json();
       setBekleyenSayisi((j.records || []).length);
-    } catch { /* sayaç kritik değil, sessiz geç */ }
+    } catch { /* sessiz */ }
   }
   useEffect(() => { bekleyenSayisiniTazele(); }, []);
 
   return (
     <div className="mh-yeni">
       <div className="mh-alt-tabs">
-        <button className={altTab === 'faturalar' ? 'active' : ''} onClick={() => setAltTab('faturalar')}>
-          📄 Faturalar & Fişler
-        </button>
-        <button className={altTab === 'ekstre' ? 'active' : ''} onClick={() => setAltTab('ekstre')}>
-          💳 Kredi Kartı & Banka Ekstresi
-        </button>
-        <button className={altTab === 'bekleyen' ? 'active' : ''} onClick={() => setAltTab('bekleyen')}>
-          ⏳ Faturası Beklenenler
-          {bekleyenSayisi > 0 && <span className="mh-rozet-sayi">{bekleyenSayisi}</span>}
-        </button>
         <button className={altTab === 'faturaGiris' ? 'active' : ''} onClick={() => setAltTab('faturaGiris')}>
           🧾 Fatura ve Fiş Girişi
         </button>
@@ -188,9 +239,6 @@ function GiderlerSekmesi({ showToast }) {
         </button>
       </div>
 
-      {altTab === 'faturalar' && <FaturalarAltSekmesi showToast={showToast} />}
-      {altTab === 'ekstre' && <EkstreAltSekmesi showToast={showToast} yon="GİDEN" onDegisti={bekleyenSayisiniTazele} />}
-      {altTab === 'bekleyen' && <FaturaBekleyenlerAltSekmesi showToast={showToast} onDegisti={bekleyenSayisiniTazele} />}
       {altTab === 'faturaGiris' && <FaturaFisGirisiSekmesi showToast={showToast} />}
       {altTab === 'tahsilat' && <TahsilatMakbuzuSekmesi showToast={showToast} />}
       {altTab === 'bankaKart' && <BankaKartTakipSekmesi showToast={showToast} />}
@@ -1005,27 +1053,19 @@ function HakedisEslestirmeAltSekmesi({ showToast }) {
 // Giderler tarafıyla simetrik üç alt sekme: kendi kayıtlarımız, bankaya fiilen
 // yatanlar ve ikisi arasındaki farkın çözüldüğü hakediş havuzu.
 function GelirlerSekmesi({ showToast }) {
-  const [altTab, setAltTab] = useState('satislar');
+  const [altTab, setAltTab] = useState('gunsonu');
   return (
     <div className="mh-yeni">
       <div className="mh-alt-tabs">
-        <button className={altTab === 'satislar' ? 'active' : ''} onClick={() => setAltTab('satislar')}>
-          📊 Satışlar & Gün Sonu
-        </button>
         <button className={altTab === 'gunsonu' ? 'active' : ''} onClick={() => setAltTab('gunsonu')}>
           🧾 Gün Sonu Kayıtları
-        </button>
-        <button className={altTab === 'yatanlar' ? 'active' : ''} onClick={() => setAltTab('yatanlar')}>
-          🏦 Bankaya Yatanlar
         </button>
         <button className={altTab === 'hakedis' ? 'active' : ''} onClick={() => setAltTab('hakedis')}>
           ⚖️ Ciro & Hakediş Eşleştirme
         </button>
       </div>
 
-      {altTab === 'satislar' && <SatislarAltSekmesi showToast={showToast} />}
       {altTab === 'gunsonu' && <GunSonuKayitlariTablosu />}
-      {altTab === 'yatanlar' && <EkstreAltSekmesi showToast={showToast} yon="GELEN" />}
       {altTab === 'hakedis' && <HakedisEslestirmeAltSekmesi showToast={showToast} />}
     </div>
   );

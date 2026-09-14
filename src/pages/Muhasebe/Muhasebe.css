@@ -790,3 +790,19 @@
   color: #393E41; background: none;
 }
 .tc-arama-input::placeholder { color: #B0A898; }
+/* ---- Muhasebe sağ üst köşe global aksiyonlar ---- */
+.mh-header-row {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 4px;
+}
+.mh-global-actions {
+  display: flex; gap: 8px; align-items: center;
+}
+.mh-global-actions .mh-secondary-btn {
+  display: flex; align-items: center; gap: 6px; font-size: 13px;
+  padding: 7px 14px; border-radius: 8px; border: 1.5px solid #E3DFCF;
+  background: #fff; color: #393E41; cursor: pointer; font-weight: 600;
+  white-space: nowrap;
+}
+.mh-global-actions .mh-secondary-btn:hover { background: #F0EDE4; }
+.mh-global-actions .mh-secondary-btn:disabled { opacity: .5; cursor: default; }
