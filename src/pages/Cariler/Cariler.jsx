@@ -113,17 +113,49 @@ function FuturaModal({ onClose, futuraBaslangic, futuraBitis, futuraGunSec, onSu
     </div>
   );
 }
-function PersonelYonetim({ cariId, cariPersonel, addCariPersonel, deleteCariPersonel }) {
+function PersonelYonetim({ cariId, cariPersonel, addCariPersonel, deleteCariPersonel, updateCari }) {
   const [yeniAd, setYeniAd] = useState('');
+  const [duzenleId, setDuzenleId] = useState(null);
+  const [duzenleAd, setDuzenleAd] = useState('');
   const personeller = cariPersonel.filter((p) => p.cariId === cariId);
+
+  function duzenleKaydet(p) {
+    if (!duzenleAd.trim()) return;
+    // Supabase'de güncelle
+    import('../../../lib/supabaseClient').then(({ supabase }) => {
+      supabase.from('cari_personel').update({ ad: duzenleAd.trim() }).eq('id', p.id)
+        .then(({ error }) => { if (error) console.error(error.message); });
+    });
+    // Local state güncelle — parent'tan gelen prop olduğu için window event ile tetikle
+    window.dispatchEvent(new CustomEvent('personelGuncelle', { detail: { id: p.id, ad: duzenleAd.trim() } }));
+    setDuzenleId(null);
+    setDuzenleAd('');
+  }
+
   return (
     <div className="cr-personel-wrap">
       <label>Personel Listesi</label>
       {personeller.length === 0 && <p className="cr-empty" style={{fontSize:12}}>Henüz personel eklenmedi</p>}
       {personeller.map((p) => (
         <div key={p.id} className="cr-personel-row">
-          <span>{p.ad}</span>
-          <button onClick={() => deleteCariPersonel(p.id)}><X size={12} /></button>
+          {duzenleId === p.id ? (
+            <>
+              <input
+                className="cr-personel-duzenle-input"
+                value={duzenleAd}
+                onChange={(e) => setDuzenleAd(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') duzenleKaydet(p); if (e.key === 'Escape') setDuzenleId(null); }}
+                autoFocus
+              />
+              <button onClick={() => duzenleKaydet(p)} style={{color:'var(--olive)'}}>✓</button>
+              <button onClick={() => setDuzenleId(null)}><X size={12} /></button>
+            </>
+          ) : (
+            <>
+              <span onClick={() => { setDuzenleId(p.id); setDuzenleAd(p.ad); }} style={{cursor:'pointer'}}>{p.ad}</span>
+              <button onClick={() => deleteCariPersonel(p.id)}><X size={12} /></button>
+            </>
+          )}
         </div>
       ))}
       <div className="cr-personel-add">
@@ -699,18 +731,16 @@ export default function Cariler({ data, onNavigate }) {
                     <span className="cr-summary-tip">{selectedCari.tip === 'firma' ? 'Firma' : 'Bireysel'}</span>
                   </div>
                   <div className="cr-summary-actions">
+                    {/* Cari Bakiye Mesajı At */}
                     <div className="cr-ozet-btn-wrap">
-                      <button className="cr-ozet-btn" onClick={openOzet}><FileText size={14} /> Cari Özeti Oluştur</button>
+                      <button className="cr-ozet-btn" onClick={openOzet}><FileText size={14} /> Cari Bakiye Mesajı At</button>
                       {(() => {
                         const bugunStr = new Date().toISOString().slice(0, 10);
                         const gonderildi = selectedCari.ozetTarih === bugunStr;
-                        if (!selectedCari.telefon) return (
-                          <span className="cr-wa-etiket gri" title="Telefon yok">—</span>
-                        );
+                        if (!selectedCari.telefon) return <span className="cr-wa-etiket gri" title="Telefon yok">—</span>;
                         return (
                           <button
                             className={`cr-wa-etiket ${gonderildi ? 'gonderildi' : 'gonderilmedi'}`}
-                            title={gonderildi ? 'Gönderildi — iptal etmek için tıkla' : 'Gönderilmedi — tıkla işaretle'}
                             onClick={() => updateCari(selectedCari.id, { ozetTarih: gonderildi ? null : bugunStr })}
                           >
                             {gonderildi ? '\u2705 Gönderildi' : '\u274C Gönderilmedi'}
@@ -718,6 +748,28 @@ export default function Cariler({ data, onNavigate }) {
                         );
                       })()}
                     </div>
+                    {/* Tahsilat Mesajı At */}
+                    {(() => {
+                      const bugunStr = new Date().toISOString().slice(0, 10);
+                      const bugunOdeme = cariOdemeler.find((o) => o.cariId === selectedCari.id && new Date(o.ts).toISOString().slice(0, 10) === bugunStr);
+                      if (!bugunOdeme) return null;
+                      const tahsilatGonderildi = selectedCari.tahsilatMesajTarih === bugunStr;
+                      return (
+                        <div className="cr-ozet-btn-wrap">
+                          <button className="cr-ozet-btn cr-tahsilat-mesaj-btn" onClick={() => setOdemeShareOpen(true)}>
+                            <MessageCircle size={14} /> Tahsilat Mesajı At
+                          </button>
+                          {selectedCari.telefon ? (
+                            <button
+                              className={`cr-wa-etiket ${tahsilatGonderildi ? 'gonderildi' : 'gonderilmedi'}`}
+                              onClick={() => updateCari(selectedCari.id, { tahsilatMesajTarih: tahsilatGonderildi ? null : bugunStr })}
+                            >
+                              {tahsilatGonderildi ? '\u2705 Gönderildi' : '\u274C Gönderilmedi'}
+                            </button>
+                          ) : <span className="cr-wa-etiket gri">—</span>}
+                        </div>
+                      );
+                    })()}
                     <button className="cr-pay-btn" onClick={openOdemeModal}><Wallet size={15} /> Ödeme Al</button>
                   </div>
                 </div>

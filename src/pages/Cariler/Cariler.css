@@ -1007,3 +1007,16 @@
   cursor: pointer;
 }
 .cr-personel-ekle-btn:disabled { opacity: 0.4; }
+.cr-tahsilat-mesaj-btn {
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1.5px solid var(--border);
+}
+
+.cr-personel-duzenle-input {
+  flex: 1;
+  padding: 3px 6px;
+  border: 1px solid var(--olive);
+  border-radius: 6px;
+  font-size: 13px;
+}

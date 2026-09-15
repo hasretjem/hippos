@@ -140,6 +140,7 @@ function rowToCari(r) {
     iskonto: r.iskonto || 0,
     onOdeme: r.on_odeme || 0,
     ozetTarih: r.ozet_tarih || null,
+    tahsilatMesajTarih: r.tahsilat_mesaj_tarih || null,
     olusturmaTs: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
   };
 }
@@ -1824,6 +1825,7 @@ export default function useHipposData(scope = 'full') {
     if (patch.iskonto !== undefined) dbPatch.iskonto = patch.iskonto;
     if (patch.onOdeme !== undefined) dbPatch.on_odeme = patch.onOdeme;
     if (patch.ozetTarih !== undefined) dbPatch.ozet_tarih = patch.ozetTarih;
+    if (patch.tahsilatMesajTarih !== undefined) dbPatch.tahsilat_mesaj_tarih = patch.tahsilatMesajTarih;
     if (Object.keys(dbPatch).length === 0) return;
     supabase.from('cariler').update(dbPatch).eq('id', id).then(({ error }) => {
       if (error) console.error('cari güncellenemedi:', error.message);
@@ -1881,6 +1883,15 @@ export default function useHipposData(scope = 'full') {
       .then(({ error }) => { if (error) console.error('personel kaydedilemedi:', error.message); });
     return id;
   }
+
+  useEffect(() => {
+    function handlePersonelGuncelle(e) {
+      const { id, ad } = e.detail;
+      setCariPersonel((prev) => prev.map((p) => p.id === id ? { ...p, ad } : p));
+    }
+    window.addEventListener('personelGuncelle', handlePersonelGuncelle);
+    return () => window.removeEventListener('personelGuncelle', handlePersonelGuncelle);
+  }, []);
 
   function deleteCariPersonel(personelId) {
     setCariPersonel((prev) => prev.filter((p) => p.id !== personelId));

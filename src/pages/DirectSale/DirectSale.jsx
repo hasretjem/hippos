@@ -700,6 +700,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   function confirmSendWithWhatsapp() {
     if (!cariConfirm) return;
     const cari = cariConfirm.cari;
+    const personeller = (cariPersonel || []).filter((p) => p.cariId === cari.id);
+    if (cari.tip === 'firma' && personeller.length > 0 && !personelSecModal) {
+      setPersonelSecModal({ cariId: cari.id, cariAd: cari.ad, mod: 'whatsapp' });
+      setPersonelSecimAdi('');
+      return;
+    }
     if (!cari.telefon) {
       setCariWaPhoneEntry(true);
       setCariWaPhoneDraft('');
@@ -1491,7 +1497,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
       {/* ÖDEME YÖNTEMİ MODALI */}
       {personelSecModal && (
-        <div className="ds-modal-overlay" onClick={() => { handlePayToCari(personelSecModal.cariId); setPersonelSecModal(null); }}>
+        <div className="ds-modal-overlay" onClick={(e) => e.stopPropagation()}>
           <div className="ds-pay-modal-wrap" onClick={(e) => e.stopPropagation()}>
             <div className="ds-modal ds-pay-modal">
               <div className="ds-modal-head">
@@ -1501,7 +1507,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 {(cariPersonel || []).filter((p) => p.cariId === personelSecModal.cariId).map((p) => (
                   <button key={p.id} className="ds-personel-btn" onClick={() => {
                     setPersonelSecimAdi(p.ad);
-                    handlePayToCari(personelSecModal.cariId);
+                    if (personelSecModal.mod === 'whatsapp') {
+                      setCariConfirm((prev) => prev);
+                      confirmSendWithWhatsapp();
+                    } else {
+                      handlePayToCari(personelSecModal.cariId);
+                    }
                     setPersonelSecModal(null);
                   }}>
                     {p.ad}
@@ -1509,7 +1520,11 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 ))}
                 <button className="ds-personel-btn misafir" onClick={() => {
                   setPersonelSecimAdi('Misafir');
-                  handlePayToCari(personelSecModal.cariId);
+                  if (personelSecModal.mod === 'whatsapp') {
+                    confirmSendWithWhatsapp();
+                  } else {
+                    handlePayToCari(personelSecModal.cariId);
+                  }
                   setPersonelSecModal(null);
                 }}>
                   Misafir
@@ -1522,7 +1537,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   onChange={(e) => setPersonelSecimAdi(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && personelSecimAdi.trim()) {
-                      handlePayToCari(personelSecModal.cariId);
+                      if (personelSecModal.mod === 'whatsapp') confirmSendWithWhatsapp();
+                      else handlePayToCari(personelSecModal.cariId);
                       setPersonelSecModal(null);
                     }
                   }}
@@ -1531,7 +1547,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   className="ds-personel-ekle-btn"
                   disabled={!personelSecimAdi.trim()}
                   onClick={() => {
-                    handlePayToCari(personelSecModal.cariId);
+                    if (personelSecModal.mod === 'whatsapp') confirmSendWithWhatsapp();
+                    else handlePayToCari(personelSecModal.cariId);
                     setPersonelSecModal(null);
                   }}
                 >Onayla</button>
