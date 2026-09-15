@@ -121,12 +121,6 @@ function PersonelYonetim({ cariId, cariPersonel, addCariPersonel, deleteCariPers
 
   function duzenleKaydet(p) {
     if (!duzenleAd.trim()) return;
-    // Supabase'de güncelle
-    import('../../../lib/supabaseClient').then(({ supabase }) => {
-      supabase.from('cari_personel').update({ ad: duzenleAd.trim() }).eq('id', p.id)
-        .then(({ error }) => { if (error) console.error(error.message); });
-    });
-    // Local state güncelle — parent'tan gelen prop olduğu için window event ile tetikle
     window.dispatchEvent(new CustomEvent('personelGuncelle', { detail: { id: p.id, ad: duzenleAd.trim() } }));
     setDuzenleId(null);
     setDuzenleAd('');

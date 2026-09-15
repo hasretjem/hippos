@@ -1888,6 +1888,8 @@ export default function useHipposData(scope = 'full') {
     function handlePersonelGuncelle(e) {
       const { id, ad } = e.detail;
       setCariPersonel((prev) => prev.map((p) => p.id === id ? { ...p, ad } : p));
+      supabase.from('cari_personel').update({ ad }).eq('id', id)
+        .then(({ error }) => { if (error) console.error('personel güncellenemedi:', error.message); });
     }
     window.addEventListener('personelGuncelle', handlePersonelGuncelle);
     return () => window.removeEventListener('personelGuncelle', handlePersonelGuncelle);
