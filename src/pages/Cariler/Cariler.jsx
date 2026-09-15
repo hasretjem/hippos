@@ -268,6 +268,7 @@ export default function Cariler({ data, onNavigate }) {
   const [odemeShareOpen, setOdemeShareOpen] = useState(false);
   const [odemeShareText, setOdemeShareText] = useState('');
   const [lastOdemeKalan, setLastOdemeKalan] = useState(0);
+  const [bugunTahsilatYapildi, setBugunTahsilatYapildi] = useState({}); // { [cariId]: true }
 
   function openOdemeModal() {
     setOdemeTutar('');
@@ -296,6 +297,7 @@ export default function Cariler({ data, onNavigate }) {
         'Teşekkürler, iyi günler! 🙏✨',
       ].join('\n')
     );
+    setBugunTahsilatYapildi((prev) => ({ ...prev, [selectedCari.id]: true }));
     setOdemeShareOpen(true);
     if (kalan === 0) {
       archiveCari(selectedCari.id);
@@ -750,7 +752,8 @@ export default function Cariler({ data, onNavigate }) {
                       }
                       const bugunStr = localDateStr(Date.now());
                       const bugunOdeme = cariOdemeler.find((o) => o.cariId === selectedCari.id && localDateStr(o.ts) === bugunStr);
-                      if (!bugunOdeme) return null;
+                      const tahsilatVar = bugunOdeme || bugunTahsilatYapildi[selectedCari.id];
+                      if (!tahsilatVar) return null;
                       const tahsilatGonderildi = selectedCari.tahsilatMesajTarih === bugunStr;
                       return (
                         <div className="cr-ozet-btn-wrap">
