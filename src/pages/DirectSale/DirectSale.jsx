@@ -644,7 +644,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
       toplam: cariPay,
       mutfakNotu,
-      personelAd: personelSecModal ? (personelSecimAdi.trim() || 'Misafir') : null,
+      personelAd: personelSecimAdi.trim() || null,
     });
 
     setCariPickerOpen(false);
@@ -682,17 +682,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   // Onayla — sadece cariye işler, WhatsApp'a hiç dokunmaz
   function confirmSendPlain() {
     if (!cariConfirm) return;
-    const cari = cariConfirm.cari;
-    const personeller = (cariPersonel || []).filter((p) => p.cariId === cari.id);
-    if (cari.tip === 'firma' && personeller.length > 0) {
-      // Personeli olan firma — personel seçim modalı aç
-      setPersonelSecModal({ cariId: cari.id, cariAd: cari.ad });
-      setPersonelSecimAdi('');
-      setCariPickerOpen(false);
-      setCariConfirm(null);
-    } else {
-      handlePayToCari(cari.id);
-    }
+    handlePayToCari(cariConfirm.cari.id);
   }
 
   // WhatsApp'tan İlet — cariye işler VE müşteriye WhatsApp'tan (hazır mesajla) iletir.
@@ -700,12 +690,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   function confirmSendWithWhatsapp() {
     if (!cariConfirm) return;
     const cari = cariConfirm.cari;
-    const personeller = (cariPersonel || []).filter((p) => p.cariId === cari.id);
-    if (cari.tip === 'firma' && personeller.length > 0 && !personelSecModal) {
-      setPersonelSecModal({ cariId: cari.id, cariAd: cari.ad, mod: 'whatsapp' });
-      setPersonelSecimAdi('');
-      return;
-    }
     if (!cari.telefon) {
       setCariWaPhoneEntry(true);
       setCariWaPhoneDraft('');
@@ -1507,12 +1491,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 {(cariPersonel || []).filter((p) => p.cariId === personelSecModal.cariId).map((p) => (
                   <button key={p.id} className="ds-personel-btn" onClick={() => {
                     setPersonelSecimAdi(p.ad);
-                    if (personelSecModal.mod === 'whatsapp') {
-                      setCariConfirm((prev) => prev);
-                      confirmSendWithWhatsapp();
-                    } else {
-                      handlePayToCari(personelSecModal.cariId);
-                    }
+                    setCariConfirm({ cari: personelSecModal.cari });
                     setPersonelSecModal(null);
                   }}>
                     {p.ad}
@@ -1520,11 +1499,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 ))}
                 <button className="ds-personel-btn misafir" onClick={() => {
                   setPersonelSecimAdi('Misafir');
-                  if (personelSecModal.mod === 'whatsapp') {
-                    confirmSendWithWhatsapp();
-                  } else {
-                    handlePayToCari(personelSecModal.cariId);
-                  }
+                  setCariConfirm({ cari: personelSecModal.cari });
                   setPersonelSecModal(null);
                 }}>
                   Misafir
@@ -1537,8 +1512,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   onChange={(e) => setPersonelSecimAdi(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && personelSecimAdi.trim()) {
-                      if (personelSecModal.mod === 'whatsapp') confirmSendWithWhatsapp();
-                      else handlePayToCari(personelSecModal.cariId);
+                      setCariConfirm({ cari: personelSecModal.cari });
                       setPersonelSecModal(null);
                     }
                   }}
@@ -1547,12 +1521,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   className="ds-personel-ekle-btn"
                   disabled={!personelSecimAdi.trim()}
                   onClick={() => {
-                    if (personelSecModal.mod === 'whatsapp') confirmSendWithWhatsapp();
-                    else handlePayToCari(personelSecModal.cariId);
+                    setCariConfirm({ cari: personelSecModal.cari });
                     setPersonelSecModal(null);
                   }}
-                >Onayla</button>
+                >Devam</button>
               </div>
+              <button className="ds-personel-geri-btn" onClick={() => { setPersonelSecModal(null); setPersonelSecimAdi(''); }}>
+                Geri
+              </button>
             </div>
           </div>
         </div>
@@ -1767,7 +1743,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                       setCariPickerOpen(false);
                       handleOnOdemeKalanOde('CARİ', c.id);
                     } else {
-                      setCariConfirm({ cari: c });
+                      const personeller = (cariPersonel || []).filter((p) => p.cariId === c.id);
+                      if (personeller.length > 0) {
+                        setPersonelSecModal({ cariId: c.id, cariAd: c.ad, cari: c });
+                        setPersonelSecimAdi('');
+                      } else {
+                        setPersonelSecimAdi('');
+                        setCariConfirm({ cari: c });
+                      }
                     }
                   }}>
                           {c.ad}

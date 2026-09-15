@@ -1008,9 +1008,9 @@
 }
 .cr-personel-ekle-btn:disabled { opacity: 0.4; }
 .cr-tahsilat-mesaj-btn {
-  background: var(--panel-2);
-  color: var(--ink);
-  border: 1.5px solid var(--border);
+  background: #dc2626;
+  color: #fdf6e3;
+  border: none;
 }
 
 .cr-personel-duzenle-input {
