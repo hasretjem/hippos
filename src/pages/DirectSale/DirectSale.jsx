@@ -1650,6 +1650,54 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
         </div>
       )}
 
+      {/* CARİ ONAY MODALI — picker'dan bağımsız */}
+      {!cariPickerOpen && cariConfirm && (
+        <div className="ds-modal-overlay" onClick={() => setCariConfirm(null)}>
+          <div className="ds-modal ds-table-picker-modal ds-cari-modal" onClick={(e) => e.stopPropagation()}>
+            <>
+              <div className="ds-modal-head">
+                <h3>{cariWaPhoneEntry ? 'Numara Kaydet' : 'Cariye Gönder'}</h3>
+                <button className="ds-modal-x" onClick={() => { setCariConfirm(null); setCariWaPhoneEntry(false); }}><X size={16} /></button>
+              </div>
+              {!cariWaPhoneEntry ? (
+                <>
+                  <div className="ds-cari-confirm-name">{cariConfirm.cari.ad.toLocaleUpperCase('tr-TR')}</div>
+                  {personelSecimAdi && (
+                    <div className="ds-cari-confirm-personel">👤 {personelSecimAdi}</div>
+                  )}
+                  <div className="ds-cari-confirm-actions">
+                    <button className="ds-secondary-btn" onClick={() => setCariConfirm(null)}>İptal</button>
+                    <button className="ds-primary-btn" onClick={confirmSendPlain}>Onayla</button>
+                  </div>
+                  <button className="ds-cari-wa-btn" onClick={confirmSendWithWhatsapp}>
+                    <MessageCircle size={15} />
+                    {cariConfirm.cari.telefon ? 'WhatsApp\'tan İlet' : 'Kayıtlı Numarası Yok'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="ds-cari-confirm-name small">{cariConfirm.cari.ad.toLocaleUpperCase('tr-TR')}</div>
+                  <div className="ds-cari-phone-entry">
+                    <input
+                      autoFocus
+                      type="tel"
+                      placeholder="0532 123 45 67"
+                      value={cariWaPhoneDraft}
+                      onChange={(e) => setCariWaPhoneDraft(e.target.value)}
+                    />
+                    <button onClick={pasteIntoWaPhoneDraft} title="Panodan yapıştır"><ClipboardPaste size={15} /></button>
+                  </div>
+                  <div className="ds-cari-confirm-actions">
+                    <button className="ds-secondary-btn" onClick={() => setCariWaPhoneEntry(false)}>Geri</button>
+                    <button className="ds-primary-btn" disabled={!cariWaPhoneDraft.trim()} onClick={saveWaPhoneAndSend}>Kaydet ve Gönder</button>
+                  </div>
+                </>
+              )}
+            </>
+          </div>
+        </div>
+      )}
+
       {/* CARİ SEÇ MODALI */}
       {cariPickerOpen && (
         <div className="ds-modal-overlay" onClick={() => setCariPickerOpen(false)}>
@@ -1745,9 +1793,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                     } else {
                       const personeller = (cariPersonel || []).filter((p) => p.cariId === c.id);
                       if (personeller.length > 0) {
+                        setCariPickerOpen(false);
+                        setPayMode(false);
                         setPersonelSecModal({ cariId: c.id, cariAd: c.ad, cari: c });
                         setPersonelSecimAdi('');
-                        setPayMode(false);
                       } else {
                         setPersonelSecimAdi('');
                         setCariConfirm({ cari: c });
