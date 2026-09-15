@@ -1747,6 +1747,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                       if (personeller.length > 0) {
                         setPersonelSecModal({ cariId: c.id, cariAd: c.ad, cari: c });
                         setPersonelSecimAdi('');
+                        setCariPickerOpen(false);
                       } else {
                         setPersonelSecimAdi('');
                         setCariConfirm({ cari: c });
