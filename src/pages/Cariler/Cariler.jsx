@@ -891,44 +891,6 @@ export default function Cariler({ data, onNavigate }) {
                       }}
                     />
 
-                    {selectedCari.tip === 'firma' && (() => {
-                      const personeller = cariPersonel.filter((p) => p.cariId === selectedCari.id);
-                      const [yeniPersonelAd, setYeniPersonelAd] = useState('');
-                      return (
-                        <div className="cr-personel-wrap">
-                          <label>Personel Listesi</label>
-                          {personeller.length === 0 && <p className="cr-empty" style={{fontSize:12}}>Henüz personel eklenmedi</p>}
-                          {personeller.map((p) => (
-                            <div key={p.id} className="cr-personel-row">
-                              <span>{p.ad}</span>
-                              <button onClick={() => deleteCariPersonel(p.id)}><X size={12} /></button>
-                            </div>
-                          ))}
-                          <div className="cr-personel-add">
-                            <input
-                              placeholder="Personel adı"
-                              value={yeniPersonelAd}
-                              onChange={(e) => setYeniPersonelAd(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && yeniPersonelAd.trim()) {
-                                  addCariPersonel(selectedCari.id, yeniPersonelAd.trim());
-                                  setYeniPersonelAd('');
-                                }
-                              }}
-                            />
-                            <button
-                              className="cr-personel-ekle-btn"
-                              disabled={!yeniPersonelAd.trim()}
-                              onClick={() => {
-                                addCariPersonel(selectedCari.id, yeniPersonelAd.trim());
-                                setYeniPersonelAd('');
-                              }}
-                            >+ Ekle</button>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
                     {selectedCari.tip === 'firma' && (
                       <PersonelYonetim
                         cariId={selectedCari.id}
