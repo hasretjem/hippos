@@ -225,7 +225,13 @@ export default function Cariler({ data, onNavigate }) {
     const q = searchQuery.trim().toLowerCase();
     return cariler
       .filter((c) => c.tip === activeTab)
-      .filter((c) => showAllCariler || getCariBakiye(c.id) > 0) // "Hepsini Göster" kapalıyken pasif (borcu sıfır) cariler gizlenir
+      .filter((c) => {
+        if (showAllCariler) return true;
+        if (getCariBakiye(c.id) > 0) return true;
+        // Bugün tahsilat yapıldıysa borç sıfır olsa bile göster
+        const bugunBaslangic = new Date().setHours(0, 0, 0, 0);
+        return cariOdemeler.some((o) => o.cariId === c.id && o.ts >= bugunBaslangic);
+      }) // "Hepsini Göster" kapalıyken pasif (borcu sıfır) cariler gizlenir
       .filter((c) => !q || c.ad.toLowerCase().includes(q) || (c.telefon || '').includes(q) || (c.not || '').toLowerCase().includes(q))
       .sort((a, b) => {
         const bugunBaslangic = new Date().setHours(0, 0, 0, 0);
