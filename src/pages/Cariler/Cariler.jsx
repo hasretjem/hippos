@@ -529,6 +529,38 @@ export default function Cariler({ data, onNavigate }) {
             </button>
           </div>
 
+          {activeTab === 'bireysel' && (() => {
+            const toplam = cariler
+              .filter((c) => c.tip === 'bireysel')
+              .reduce((s, c) => s + getCariBakiye(c.id), 0);
+            return (
+              <div className="cr-sekme-toplam">
+                <span>Toplam Bakiye</span>
+                <strong>{TL(toplam)}</strong>
+              </div>
+            );
+          })()}
+
+          {activeTab === 'firma' && (() => {
+            const firmalar = cariler.filter((c) => c.tip === 'firma');
+            const faturaEdilmis = cariFaturalar
+              .filter((f) => firmalar.some((c) => c.id === f.cariId))
+              .reduce((s, f) => s + (f.tutar - (f.tahsilatTutar || 0)), 0);
+            const faturaEdilmemis = firmalar.reduce((s, c) => {
+              const hareketler = cariHareketler.filter((h) => h.cariId === c.id).reduce((a, h) => a + h.toplam, 0);
+              const odemeler = cariOdemeler.filter((o) => o.cariId === c.id).reduce((a, o) => a + o.tutar, 0);
+              return s + Math.max(0, hareketler - odemeler);
+            }, 0);
+            const toplam = faturaEdilmis + faturaEdilmemis;
+            return (
+              <div className="cr-sekme-toplam firma">
+                <div className="cr-sekme-toplam-row"><span>Fatura Edilmiş</span><span>{TL(faturaEdilmis)}</span></div>
+                <div className="cr-sekme-toplam-row"><span>Fatura Edilmemiş</span><span>{TL(faturaEdilmemis)}</span></div>
+                <div className="cr-sekme-toplam-row toplam"><span>Toplam</span><strong>{TL(toplam)}</strong></div>
+              </div>
+            );
+          })()}
+
           <div className="cr-search">
             <Search size={15} />
             <input ref={searchRef} type="text" placeholder="Ara..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
