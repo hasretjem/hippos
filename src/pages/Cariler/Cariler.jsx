@@ -729,7 +729,7 @@ export default function Cariler({ data, onNavigate }) {
                     <div className="cr-ozet-btn-wrap">
                       <button className="cr-ozet-btn" onClick={openOzet}><FileText size={14} /> Cari Bakiye Mesajı At</button>
                       {(() => {
-                        const bugunStr = new Date().toISOString().slice(0, 10);
+                        const bugunStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
                         const gonderildi = selectedCari.ozetTarih === bugunStr;
                         if (!selectedCari.telefon) return <span className="cr-wa-etiket gri" title="Telefon yok">—</span>;
                         return (
@@ -744,8 +744,12 @@ export default function Cariler({ data, onNavigate }) {
                     </div>
                     {/* Tahsilat Mesajı At */}
                     {(() => {
-                      const bugunStr = new Date().toISOString().slice(0, 10);
-                      const bugunOdeme = cariOdemeler.find((o) => o.cariId === selectedCari.id && new Date(o.ts).toISOString().slice(0, 10) === bugunStr);
+                      function localDateStr(ts) {
+                        const d = new Date(ts);
+                        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                      }
+                      const bugunStr = localDateStr(Date.now());
+                      const bugunOdeme = cariOdemeler.find((o) => o.cariId === selectedCari.id && localDateStr(o.ts) === bugunStr);
                       if (!bugunOdeme) return null;
                       const tahsilatGonderildi = selectedCari.tahsilatMesajTarih === bugunStr;
                       return (
