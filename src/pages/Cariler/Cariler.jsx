@@ -113,12 +113,47 @@ function FuturaModal({ onClose, futuraBaslangic, futuraBitis, futuraGunSec, onSu
     </div>
   );
 }
+function PersonelYonetim({ cariId, cariPersonel, addCariPersonel, deleteCariPersonel }) {
+  const [yeniAd, setYeniAd] = useState('');
+  const personeller = cariPersonel.filter((p) => p.cariId === cariId);
+  return (
+    <div className="cr-personel-wrap">
+      <label>Personel Listesi</label>
+      {personeller.length === 0 && <p className="cr-empty" style={{fontSize:12}}>Henüz personel eklenmedi</p>}
+      {personeller.map((p) => (
+        <div key={p.id} className="cr-personel-row">
+          <span>{p.ad}</span>
+          <button onClick={() => deleteCariPersonel(p.id)}><X size={12} /></button>
+        </div>
+      ))}
+      <div className="cr-personel-add">
+        <input
+          placeholder="Personel adı"
+          value={yeniAd}
+          onChange={(e) => setYeniAd(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && yeniAd.trim()) {
+              addCariPersonel(cariId, yeniAd.trim());
+              setYeniAd('');
+            }
+          }}
+        />
+        <button
+          className="cr-personel-ekle-btn"
+          disabled={!yeniAd.trim()}
+          onClick={() => { addCariPersonel(cariId, yeniAd.trim()); setYeniAd(''); }}
+        >+ Ekle</button>
+      </div>
+    </div>
+  );
+}
 
 export default function Cariler({ data, onNavigate }) {
   const {
     cariler, cariHareketler, cariOdemeler, cariFaturalar, cariGecmis,
     getCariBakiye, getCariSonHareket, getCariSonOdeme,
     addCari, updateCari, deleteCari, addCariOdeme, addCariFatura, futuraTamOde, futuraKismiOde, deleteCariHareketler, getCariFaturalanmamisTutar, archiveCari,
+    cariPersonel, addCariPersonel, deleteCariPersonel,
     cariTeslimatBildirimleri, onaylaCariTeslimatBildirim, reddetCariTeslimatBildirim,
   } = data;
 
@@ -452,10 +487,25 @@ export default function Cariler({ data, onNavigate }) {
       '📋 Önceki Cari Bakiye',
       TL(Math.max(0, oncekiCari)),
       '',
-      '🛒 Bugünkü Siparişler',
-      '━━━━━━━━━━━━━━',
-      ...(urunSatirlari.length ? urunSatirlari : ['(bugün sipariş yok)']),
-      '━━━━━━━━━━━━━━',
+      '\uD83D\uDED2 Bug\u00FCnk\u00FC Sipari\u015fler',
+      '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501',
+      ...(() => {
+        if (bugunkuHareketler.length === 0) return ['(bug\u00FCn sipari\u015f yok)'];
+        const firmaPersonelVar = selectedCari.tip === 'firma' && bugunkuHareketler.some((h) => h.personelAd);
+        if (firmaPersonelVar || selectedCari.tip === 'firma') {
+          // Firma — personel bazlı veya sipariş bazlı grupla
+          const satirlar = [];
+          bugunkuHareketler.forEach((h, i) => {
+            const baslik = h.personelAd || `Sipari\u015f ${i + 1}`;
+            satirlar.push(`${baslik}:`);
+            (h.urunler || []).forEach((u) => satirlar.push(`- ${u.ad} .. ${TL(u.fiyat)}`));
+            if (i < bugunkuHareketler.length - 1) satirlar.push('');
+          });
+          return satirlar;
+        }
+        return urunSatirlari.length ? urunSatirlari : ['(bug\u00FCn sipari\u015f yok)'];
+      })(),
+      '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501',
       ...(iskonto > 0 ? [`🏷️ %${iskonto} İskonto: -${TL(Math.round(bugunToplamHam * (iskonto / 100)))}`, ''] : []),
       `💰 Bugünkü Toplam: ${TL(bugunToplam)}`,
       '',
@@ -840,6 +890,53 @@ export default function Cariler({ data, onNavigate }) {
                         updateCari(selectedCari.id, { onOdeme: v });
                       }}
                     />
+
+                    {selectedCari.tip === 'firma' && (() => {
+                      const personeller = cariPersonel.filter((p) => p.cariId === selectedCari.id);
+                      const [yeniPersonelAd, setYeniPersonelAd] = useState('');
+                      return (
+                        <div className="cr-personel-wrap">
+                          <label>Personel Listesi</label>
+                          {personeller.length === 0 && <p className="cr-empty" style={{fontSize:12}}>Henüz personel eklenmedi</p>}
+                          {personeller.map((p) => (
+                            <div key={p.id} className="cr-personel-row">
+                              <span>{p.ad}</span>
+                              <button onClick={() => deleteCariPersonel(p.id)}><X size={12} /></button>
+                            </div>
+                          ))}
+                          <div className="cr-personel-add">
+                            <input
+                              placeholder="Personel adı"
+                              value={yeniPersonelAd}
+                              onChange={(e) => setYeniPersonelAd(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && yeniPersonelAd.trim()) {
+                                  addCariPersonel(selectedCari.id, yeniPersonelAd.trim());
+                                  setYeniPersonelAd('');
+                                }
+                              }}
+                            />
+                            <button
+                              className="cr-personel-ekle-btn"
+                              disabled={!yeniPersonelAd.trim()}
+                              onClick={() => {
+                                addCariPersonel(selectedCari.id, yeniPersonelAd.trim());
+                                setYeniPersonelAd('');
+                              }}
+                            >+ Ekle</button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {selectedCari.tip === 'firma' && (
+                      <PersonelYonetim
+                        cariId={selectedCari.id}
+                        cariPersonel={cariPersonel}
+                        addCariPersonel={addCariPersonel}
+                        deleteCariPersonel={deleteCariPersonel}
+                      />
+                    )}
 
                     <button className="cr-delete-cari-btn" onClick={() => askDeleteCari(selectedCari)}>
                       <Trash2 size={14} /> Cariyi Sil

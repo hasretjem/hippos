@@ -1519,3 +1519,44 @@
   .ds-header-actions { justify-content: stretch; }
   .ds-header-actions button { flex: 1; }
 }
+/* Personel seçim modalı */
+.ds-personel-listesi {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+.ds-personel-btn {
+  padding: 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-btn);
+  background: var(--panel-2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.ds-personel-btn:hover { background: var(--olive); color: #fff; border-color: var(--olive); }
+.ds-personel-btn.misafir { color: var(--ink-muted); font-style: italic; }
+.ds-personel-yeni {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.ds-personel-yeni input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.ds-personel-ekle-btn {
+  padding: 10px 16px;
+  background: var(--olive);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ds-personel-ekle-btn:disabled { opacity: 0.4; }

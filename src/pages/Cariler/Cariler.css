@@ -964,3 +964,46 @@
   font-size: 13px;
   font-weight: 800;
 }
+/* Personel yönetim */
+.cr-personel-wrap { margin: 12px 0; }
+.cr-personel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--panel-2);
+  border-radius: 8px;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+.cr-personel-row button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-muted);
+  padding: 2px;
+}
+.cr-personel-add {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.cr-personel-add input {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--panel-2);
+}
+.cr-personel-ekle-btn {
+  padding: 7px 14px;
+  background: var(--olive);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cr-personel-ekle-btn:disabled { opacity: 0.4; }

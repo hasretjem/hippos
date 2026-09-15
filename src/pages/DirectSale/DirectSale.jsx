@@ -50,6 +50,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     updateCari,
     addCariHareket,
     getCariBakiye,
+    cariPersonel,
   } = data;
 
   // Ürünün bağlı olduğu kategori objesini bulur — renk/italik/ikon fallback zinciri için.
@@ -588,6 +589,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [cariConfirm, setCariConfirm] = useState(null); // { cari }
   const [onOdemeKalan, setOnOdemeKalan] = useState(null); // { tutar, cariId, ... }
   const [cariPickerMod, setCariPickerMod] = useState('normal'); // 'normal' | 'onOdemeKalan'
+  const [personelSecModal, setPersonelSecModal] = useState(null); // { cariId, cariAd } — bekleyen sipariş
+  const [personelSecimAdi, setPersonelSecimAdi] = useState(''); // satış sayfasında yeni personel adı
   const [cariEditRowId, setCariEditRowId] = useState(null); // bireysel listede "Düzenle" açık olan satır
   const [cariEditDraft, setCariEditDraft] = useState({ telefon: '', adres: '' });
   const [cariWaPhoneEntry, setCariWaPhoneEntry] = useState(false);
@@ -641,6 +644,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
       toplam: cariPay,
       mutfakNotu,
+      personelAd: personelSecModal ? (personelSecimAdi.trim() || 'Misafir') : null,
     });
 
     setCariPickerOpen(false);
@@ -678,7 +682,17 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   // Onayla — sadece cariye işler, WhatsApp'a hiç dokunmaz
   function confirmSendPlain() {
     if (!cariConfirm) return;
-    handlePayToCari(cariConfirm.cari.id);
+    const cari = cariConfirm.cari;
+    const personeller = (cariPersonel || []).filter((p) => p.cariId === cari.id);
+    if (cari.tip === 'firma' && personeller.length > 0) {
+      // Personeli olan firma — personel seçim modalı aç
+      setPersonelSecModal({ cariId: cari.id, cariAd: cari.ad });
+      setPersonelSecimAdi('');
+      setCariPickerOpen(false);
+      setCariConfirm(null);
+    } else {
+      handlePayToCari(cari.id);
+    }
   }
 
   // WhatsApp'tan İlet — cariye işler VE müşteriye WhatsApp'tan (hazır mesajla) iletir.
@@ -1476,6 +1490,57 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       )}
 
       {/* ÖDEME YÖNTEMİ MODALI */}
+      {personelSecModal && (
+        <div className="ds-modal-overlay" onClick={() => { handlePayToCari(personelSecModal.cariId); setPersonelSecModal(null); }}>
+          <div className="ds-pay-modal-wrap" onClick={(e) => e.stopPropagation()}>
+            <div className="ds-modal ds-pay-modal">
+              <div className="ds-modal-head">
+                <h3>Kim yiyor? — {personelSecModal.cariAd}</h3>
+              </div>
+              <div className="ds-personel-listesi">
+                {(cariPersonel || []).filter((p) => p.cariId === personelSecModal.cariId).map((p) => (
+                  <button key={p.id} className="ds-personel-btn" onClick={() => {
+                    setPersonelSecimAdi(p.ad);
+                    handlePayToCari(personelSecModal.cariId);
+                    setPersonelSecModal(null);
+                  }}>
+                    {p.ad}
+                  </button>
+                ))}
+                <button className="ds-personel-btn misafir" onClick={() => {
+                  setPersonelSecimAdi('Misafir');
+                  handlePayToCari(personelSecModal.cariId);
+                  setPersonelSecModal(null);
+                }}>
+                  Misafir
+                </button>
+              </div>
+              <div className="ds-personel-yeni">
+                <input
+                  placeholder="Yeni isim gir..."
+                  value={personelSecimAdi}
+                  onChange={(e) => setPersonelSecimAdi(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && personelSecimAdi.trim()) {
+                      handlePayToCari(personelSecModal.cariId);
+                      setPersonelSecModal(null);
+                    }
+                  }}
+                />
+                <button
+                  className="ds-personel-ekle-btn"
+                  disabled={!personelSecimAdi.trim()}
+                  onClick={() => {
+                    handlePayToCari(personelSecModal.cariId);
+                    setPersonelSecModal(null);
+                  }}
+                >Onayla</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {onOdemeKalan && (
         <div className="ds-modal-overlay" onClick={(e) => e.stopPropagation()}>
           <div className="ds-pay-modal-wrap" onClick={(e) => e.stopPropagation()}>

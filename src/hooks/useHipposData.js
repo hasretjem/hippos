@@ -144,7 +144,7 @@ function rowToCari(r) {
   };
 }
 function rowToHareket(r) {
-  return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), urunler: r.urunler || [], toplam: Number(r.toplam), mutfakNotu: r.mutfak_notu || '' };
+  return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), urunler: r.urunler || [], toplam: Number(r.toplam), mutfakNotu: r.mutfak_notu || '', personelAd: r.personel_ad || null };
 }
 function rowToOdeme(r) {
   return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), tutar: Number(r.tutar), tur: r.tur };
@@ -1864,13 +1864,37 @@ export default function useHipposData(scope = 'full') {
     ));
   }
 
-  function addCariHareket(cariId, { urunler, toplam, mutfakNotu }) {
+  // ---- Cari Personel ----
+  const [cariPersonel, setCariPersonel] = useState([]);
+
+  useEffect(() => {
+    supabase.from('cari_personel').select('*').then(({ data }) => {
+      if (data) setCariPersonel(data.map((r) => ({ id: r.id, cariId: r.cari_id, ad: r.ad, eklenmeTs: Number(r.eklenme_ts) })));
+    });
+  }, []);
+
+  function addCariPersonel(cariId, ad) {
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    const eklenmeTs = Date.now();
+    setCariPersonel((prev) => [...prev, { id, cariId, ad, eklenmeTs }]);
+    supabase.from('cari_personel').insert({ id, cari_id: cariId, ad, eklenme_ts: eklenmeTs })
+      .then(({ error }) => { if (error) console.error('personel kaydedilemedi:', error.message); });
+    return id;
+  }
+
+  function deleteCariPersonel(personelId) {
+    setCariPersonel((prev) => prev.filter((p) => p.id !== personelId));
+    supabase.from('cari_personel').delete().eq('id', personelId)
+      .then(({ error }) => { if (error) console.error('personel silinemedi:', error.message); });
+  }
+
+  function addCariHareket(cariId, { urunler, toplam, mutfakNotu, personelAd }) {
     const id = Date.now() + Math.floor(Math.random() * 1000);
     const ts = Date.now();
-    setCariHareketler((prev) => [...prev, { id, cariId, ts, urunler, toplam, mutfakNotu: mutfakNotu || '' }]);
+    setCariHareketler((prev) => [...prev, { id, cariId, ts, urunler, toplam, mutfakNotu: mutfakNotu || '', personelAd: personelAd || null }]);
     supabase
       .from('cari_hareketler')
-      .insert({ id, cari_id: cariId, ts, urunler, toplam, mutfak_notu: mutfakNotu || '' })
+      .insert({ id, cari_id: cariId, ts, urunler, toplam, mutfak_notu: mutfakNotu || '', personel_ad: personelAd || null })
       .then(({ error }) => { if (error) console.error('cari hareketi kaydedilemedi:', error.message); });
     return id;
   }
@@ -2205,6 +2229,9 @@ export default function useHipposData(scope = 'full') {
     deleteCari,
     addCariHareket,
     addCariOdeme,
+    cariPersonel,
+    addCariPersonel,
+    deleteCariPersonel,
     addCariFatura,
     futuraTamOde,
     futuraKismiOde,
