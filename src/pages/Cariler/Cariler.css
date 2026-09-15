@@ -1012,6 +1012,9 @@
   color: #fdf6e3;
   border: none;
 }
+.cr-tahsilat-mesaj-btn svg {
+  color: #fdf6e3;
+}
 
 .cr-personel-duzenle-input {
   flex: 1;
