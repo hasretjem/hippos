@@ -1009,8 +1009,12 @@
 .cr-personel-ekle-btn:disabled { opacity: 0.4; }
 .cr-tahsilat-mesaj-btn {
   background: #dc2626;
-  color: #fdf6e3;
+  color: #fdf6e3 !important;
   border: none;
+}
+.cr-tahsilat-mesaj-btn svg {
+  color: #fdf6e3 !important;
+  stroke: #fdf6e3 !important;
 }
 .cr-tahsilat-mesaj-btn svg {
   color: #fdf6e3;
