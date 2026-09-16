@@ -1053,22 +1053,22 @@ export default function Cariler({ data, onNavigate }) {
                 const bugunStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                 updateCari(selectedCari.id, { tahsilatMesajTarih: bugunStr });
               }}><MessageCircle size={14} /> WhatsApp ile Paylaş</button>
-              {(() => {
-                const d = new Date();
-                const bugunStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                const gonderildi = selectedCari.tahsilatMesajTarih === bugunStr;
-                if (!selectedCari.telefon) return null;
-                return (
-                  <button
-                    className={`cr-wa-etiket ${gonderildi ? 'gonderildi' : 'gonderilmedi'}`}
-                    style={{width:'100%', marginTop:'6px'}}
-                    onClick={() => updateCari(selectedCari.id, { tahsilatMesajTarih: gonderildi ? null : bugunStr })}
-                  >
-                    {gonderildi ? '\u2705 Tahsilat mesajı gönderildi' : '\u274C Tahsilat mesajı gönderilmedi'}
-                  </button>
-                );
-              })()}
             </div>
+            {(() => {
+              const d = new Date();
+              const bugunStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+              const gonderildi = selectedCari.tahsilatMesajTarih === bugunStr;
+              if (!selectedCari.telefon) return null;
+              return (
+                <button
+                  className={`cr-wa-etiket ${gonderildi ? 'gonderildi' : 'gonderilmedi'}`}
+                  style={{width:'100%', marginTop:'8px'}}
+                  onClick={() => updateCari(selectedCari.id, { tahsilatMesajTarih: gonderildi ? null : bugunStr })}
+                >
+                  {gonderildi ? '\u2705 Tahsilat mesajı gönderildi' : '\u274C Tahsilat mesajı gönderilmedi'}
+                </button>
+              );
+            })()}
           </div>
         </div>
       )}

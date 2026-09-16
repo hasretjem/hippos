@@ -324,18 +324,18 @@ export default function Settings({ data, onNavigate }) {
     todaysSales.forEach((s) => {
       if (t[s.method] !== undefined) t[s.method] += s.amount;
     });
-    // Bugünkü cari tahsilatları ödeme türüne göre ayrıştır
-    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    // Bugünkü cari tahsilatları salesHistory'deki TAHSİLAT_ kayıtlarından oku
+    // (cariOdemeler archiveCari tarafından silinebildiği için güvenilmez)
     const tahsilatlar = { NAKİT: 0, 'KREDİ KARTI': 0, 'YEMEK KARTI': 0, HAVALE: 0, DİĞER: 0 };
-    (cariOdemeler || [])
-      .filter(o => o.ts >= todayStart.getTime())
-      .forEach(o => {
-        const tur = String(o.tur || '').toLocaleUpperCase('tr');
-        if (tur === 'NAKİT') tahsilatlar['NAKİT'] += o.tutar;
-        else if (tur === 'KREDİ KARTI') tahsilatlar['KREDİ KARTI'] += o.tutar;
-        else if (tur === 'YEMEK KARTI') tahsilatlar['YEMEK KARTI'] += o.tutar;
-        else if (tur === 'HAVALE' || tur === 'BANKA HAVALESİ') tahsilatlar['HAVALE'] += o.tutar;
-        else tahsilatlar['DİĞER'] += o.tutar;
+    todaysSales
+      .filter(s => s.method?.startsWith('TAHSİLAT_'))
+      .forEach(s => {
+        const tur = s.method.replace('TAHSİLAT_', '');
+        if (tur === 'NAKİT') tahsilatlar['NAKİT'] += s.amount;
+        else if (tur === 'KREDİ KARTI') tahsilatlar['KREDİ KARTI'] += s.amount;
+        else if (tur === 'YEMEK KARTI') tahsilatlar['YEMEK KARTI'] += s.amount;
+        else if (tur === 'HAVALE' || tur === 'BANKA HAVALESİ') tahsilatlar['HAVALE'] += s.amount;
+        else tahsilatlar['DİĞER'] += s.amount;
       });
     const tahsilatToplam = Object.values(tahsilatlar).reduce((s, v) => s + v, 0);
     return {
@@ -344,7 +344,7 @@ export default function Settings({ data, onNavigate }) {
       tahsilatToplam,
       total: t['NAKİT'] + t['KREDİ KARTI'] + t['YEMEK KARTI'] + t['CARİ'],
     };
-  }, [todaysSales, cariOdemeler]);
+  }, [todaysSales]);
 
   const salesRowCount = todaysSales.length;
   const txCount = todaysSales.length;
