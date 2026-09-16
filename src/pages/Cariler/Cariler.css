@@ -1008,9 +1008,13 @@
 }
 .cr-personel-ekle-btn:disabled { opacity: 0.4; }
 .cr-tahsilat-mesaj-btn {
-  background: #dc2626;
+  background: #dc2626 !important;
   color: #fdf6e3 !important;
   border: none;
+}
+.cr-tahsilat-mesaj-btn:hover {
+  background: #b91c1c !important;
+  color: #fdf6e3 !important;
 }
 .cr-tahsilat-mesaj-btn svg {
   color: #fdf6e3 !important;

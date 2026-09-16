@@ -763,7 +763,30 @@ export default function Cariler({ data, onNavigate }) {
                       const tahsilatGonderildi = selectedCari.tahsilatMesajTarih === bugunStr;
                       return (
                         <div className="cr-ozet-btn-wrap">
-                          <button className="cr-ozet-btn cr-tahsilat-mesaj-btn" onClick={() => setOdemeShareOpen(true)}>
+                          <button className="cr-ozet-btn cr-tahsilat-mesaj-btn" onClick={() => {
+                            const bugunOdemeler = cariOdemeler
+                              .filter((o) => {
+                                const d = new Date(o.ts);
+                                const bugun = new Date();
+                                return o.cariId === selectedCari.id &&
+                                  d.getFullYear() === bugun.getFullYear() &&
+                                  d.getMonth() === bugun.getMonth() &&
+                                  d.getDate() === bugun.getDate();
+                              })
+                              .sort((a, b) => b.ts - a.ts);
+                            const sonOdeme = bugunOdemeler[0];
+                            const tutar = sonOdeme ? sonOdeme.tutar : 0;
+                            const kalan = getCariBakiye(selectedCari.id);
+                            setOdemeShareText([
+                              `\uD83D\uDC9A Merhaba ${selectedCari.ad},`,
+                              '',
+                              `\u2705 ${TL(tutar)} tutarındaki tahsilatınız alınmıştır.`,
+                              `\uD83D\uDCCA Güncel bakiyeniz: ${TL(kalan)}`,
+                              '',
+                              'Teşekkürler, iyi günler! \uD83D\uDE4F\u2728',
+                            ].join('\n'));
+                            setOdemeShareOpen(true);
+                          }}>
                             <MessageCircle size={14} /> Tahsilat Mesajı At
                           </button>
                           {selectedCari.telefon ? (
