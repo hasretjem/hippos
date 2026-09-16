@@ -228,9 +228,10 @@ export default function Cariler({ data, onNavigate }) {
       .filter((c) => {
         if (showAllCariler) return true;
         if (getCariBakiye(c.id) > 0) return true;
-        // Bugün tahsilat yapıldıysa borç sıfır olsa bile göster
+        // Bugün tahsilat yapıldıysa veya bugün arşivlendiyse borç sıfır olsa bile göster
         const bugunBaslangic = new Date().setHours(0, 0, 0, 0);
-        return cariOdemeler.some((o) => o.cariId === c.id && o.ts >= bugunBaslangic);
+        return cariOdemeler.some((o) => o.cariId === c.id && o.ts >= bugunBaslangic)
+          || cariGecmis.some((g) => g.cariId === c.id && g.ts >= bugunBaslangic);
       }) // "Hepsini Göster" kapalıyken pasif (borcu sıfır) cariler gizlenir
       .filter((c) => !q || c.ad.toLowerCase().includes(q) || (c.telefon || '').includes(q) || (c.not || '').toLowerCase().includes(q))
       .sort((a, b) => {
@@ -242,7 +243,7 @@ export default function Cariler({ data, onNavigate }) {
         if (bYeni !== aYeni) return bYeni - aYeni;
         return a.ad.localeCompare(b.ad, 'tr');
       });
-  }, [cariler, activeTab, searchQuery, cariHareketler, cariOdemeler, showAllCariler]);
+  }, [cariler, activeTab, searchQuery, cariHareketler, cariOdemeler, cariGecmis, showAllCariler]);
 
   const selectedCari = cariler.find((c) => c.id === selectedCariId) || null;
 
