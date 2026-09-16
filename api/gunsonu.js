@@ -141,7 +141,6 @@ export default async function handler(req, res) {
   try {
     const auth = getAuth();
     const sheets = google.sheets({ version: 'v4', auth });
-    await ensureTab(sheets);
 
     if (req.method === 'GET') {
       const result = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${TAB}!A2:${LAST_COL}` });
@@ -149,6 +148,8 @@ export default async function handler(req, res) {
       const records = rows.filter((r) => r[0]).map(rowToRecord);
       return res.status(200).json({ records });
     }
+
+    await ensureTab(sheets);
 
     if (req.method === 'POST') {
       const { tarih } = req.body || {};

@@ -1245,6 +1245,7 @@ function ciroToplam(ciro) {
 function GunSonuKayitlariTablosu() {
   const [kayitlar, setKayitlar] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hata, setHata] = useState(false);
   const [detay, setDetay] = useState(null); // { tip, kayit }
 
   const simdi = new Date();
@@ -1252,20 +1253,26 @@ function GunSonuKayitlariTablosu() {
   const [ayFiltre, setAyFiltre] = useState(String(simdi.getMonth() + 1));
   const [gunFiltre, setGunFiltre] = useState('tumu');
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
+  async function veriYukle() {
+    setLoading(true);
+    setHata(false);
+    for (let deneme = 0; deneme < 2; deneme++) {
       try {
         const res = await fetch('/api/gunsonu');
+        if (!res.ok) throw new Error('http ' + res.status);
         const json = await res.json();
         setKayitlar(json.records || []);
-      } catch {
-        setKayitlar([]);
-      } finally {
         setLoading(false);
+        return;
+      } catch {
+        if (deneme === 0) await new Promise((r) => setTimeout(r, 1200));
       }
-    })();
-  }, []);
+    }
+    setHata(true);
+    setLoading(false);
+  }
+
+  useEffect(() => { veriYukle(); }, []);
 
   const yillar = useMemo(() => {
     const s = new Set(kayitlar.map((k) => trTarihiCoz(k.tarih)?.getFullYear()).filter(Boolean));
@@ -1318,6 +1325,11 @@ function GunSonuKayitlariTablosu() {
       <div className="mh-table-card">
         {loading ? (
           <p className="mh-empty">Yükleniyor...</p>
+        ) : hata ? (
+          <p className="mh-empty">
+            Kayıtlar yüklenemedi (geçici bir bağlantı sorunu olabilir).{' '}
+            <button className="mh-secondary-btn small" onClick={veriYukle}>Tekrar Dene</button>
+          </p>
         ) : filtreli.length === 0 ? (
           <p className="mh-empty">Bu filtrede gün sonu kaydı yok.</p>
         ) : (
