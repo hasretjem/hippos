@@ -2156,7 +2156,7 @@ export default function useHipposData(scope = 'full') {
   }
   // Onaylama: SADECE burada gerçek bir cari ödemesi oluşur ve bakiye düşer. Paketçinin
   // bildirimi kendi başına ASLA cari verisini etkilemez — onay bu ayrımın tek geçidi.
-  function onaylaCariTeslimatBildirim(id) {
+  async function onaylaCariTeslimatBildirim(id) {
     const bildirim = cariTeslimatBildirimleri.find((c) => c.id === id);
     if (!bildirim) return;
     const onayTs = Date.now();
@@ -2165,7 +2165,11 @@ export default function useHipposData(scope = 'full') {
       if (error) console.error(error.message);
     });
     // Gerçek ödeme kaydı — bakiyeyi düşüren tek yer burası.
-    addCariOdeme(bildirim.cariId, { tutar: bildirim.tutar, tur: bildirim.odemeYontemi });
+    const kalanBakiye = Math.max(0, getCariBakiye(bildirim.cariId) - bildirim.tutar);
+    await addCariOdeme(bildirim.cariId, { tutar: bildirim.tutar, tur: bildirim.odemeYontemi });
+    if (kalanBakiye === 0) {
+      archiveCari(bildirim.cariId);
+    }
   }
   function reddetCariTeslimatBildirim(id, onayNotu) {
     const onayTs = Date.now();
