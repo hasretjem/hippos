@@ -356,7 +356,8 @@ const FATURA_FIS_TAB = {
   tab: 'Fatura ve Fişler',
   headers: ['ID', 'Tarih', 'Gun', 'Ay', 'Yil', 'FirmaAdi', 'FaturaNo', 'Aciklama', 'GiderKategorisi',
     'OdemeTuru', 'OdemeDetay', 'FaturaTutari', 'KdvTutari', 'IskontoTutari', 'OdemeTutari',
-    'BakiyeDurumu', 'BakiyeTutari', 'KaynakFaturaID', 'GunlukHarcama', 'KayitZamani'],
+    'BakiyeDurumu', 'BakiyeTutari', 'KaynakFaturaID', 'GunlukHarcama', 'KayitZamani',
+    'AnaKasaHarcama'],
 };
 
 function rowToFaturaFis(r) {
@@ -370,6 +371,12 @@ function rowToFaturaFis(r) {
     kaynakFaturaID: r[17] || '',
     gunlukHarcama: r[18] === 'TRUE' || r[18] === true,
     kayitZamani: r[19] || '',
+    // Yeni sütun (16 Eylül): hızlı nakit gider hangi kasadan çıktı?
+    // TRUE  -> Ana Kasa  (yarına devir ana kasadan düşülür, ciroyu etkilemez)
+    // FALSE -> Günlük Kasa (o günün cirosuna GERİ EKLENİR — kasiyer harcanan parayı
+    //          sayamadığı için nakit sayımı eksik kalıyor, bu tutar telafi ediyor)
+    // Eski satırlarda sütun yok (undefined) -> false = günlük kasa sayılır.
+    anaKasaHarcama: r[20] === 'TRUE' || r[20] === true,
   };
 }
 
@@ -1958,23 +1965,109 @@ export default async function handler(req, res) {
     // Tarih otomatik (bugün), fatura no yok, ödeme türü Nakit (sabitleştirildi), bakiye hesabı yok.
     if (resource === 'gunlukHarcamaKaydet') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-      const { firmaAdi, giderKategorisi, aciklama, faturaTutari, giderId } = req.body || {};
+      const { firmaAdi, giderKategorisi, aciklama, faturaTutari, giderId, kaynak } = req.body || {};
       if (!firmaAdi || !String(firmaAdi).trim()) return res.status(400).json({ error: 'firmaAdi gerekli' });
       if (!faturaTutari) return res.status(400).json({ error: 'faturaTutari gerekli' });
       const now = new Date();
       const trTarih = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
       const p = trTarihiParcala(trTarih);
       const fTutar = ondalikParseServer(faturaTutari);
-      // Var olan gider id'si gönderilmişse satırı GÜNCELLEMEYİZ — satır silinmez,
-      // kullanıcı kaydedince YENİ satır eklenir (her kaydet yeni satır = günlük harcama defteri mantığı).
-      // Eski satır id'si frontend'de görünür referans olarak kalır (gider kodu).
+      const anaKasaFlag = kaynak === 'anaKasa' ? 'TRUE' : 'FALSE';
+
+      // DEĞİŞİKLİK (16 Eylül): Eskiden giderId gönderilse bile HER KAYDET yeni satır
+      // ekliyordu — bu yüzden aynı gider düzenlenince sheet'te mükerrer satır oluşuyordu.
+      // Artık giderId varsa o satır bulunup GÜNCELLENİYOR (tek kaynak ilkesi), yoksa
+      // yeni satır ekleniyor.
+      if (giderId) {
+        const rows = await getRows(sheets, FATURA_FIS_TAB);
+        const idx = rows.findIndex((r) => r[0] === giderId);
+        if (idx >= 0) {
+          const rowValues = [...rows[idx]];
+          // Eski satır kısa olabilir (AnaKasaHarcama sütunu eklenmeden yazılmış) —
+          // sheet genişliğine tamamlanmazsa update aralığı ile değer sayısı uyuşmaz.
+          while (rowValues.length < FATURA_FIS_TAB.headers.length) rowValues.push('');
+          rowValues[5] = String(firmaAdi).trim();
+          rowValues[7] = aciklama || '';
+          rowValues[8] = giderKategorisi || '';
+          rowValues[11] = fTutar;
+          rowValues[18] = 'TRUE';
+          rowValues[20] = anaKasaFlag;
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID,
+            range: `${FATURA_FIS_TAB.tab}!A${idx + 2}:${lastCol(FATURA_FIS_TAB.headers)}${idx + 2}`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [rowValues] },
+          });
+          return res.status(200).json({ ok: true, id: giderId, guncellendi: true });
+        }
+        // id gönderildi ama satır bulunamadı (silinmiş olabilir) — yeni satır olarak eklenir.
+      }
+
       const id = giderId || benzersizId();
       await appendRow(sheets, FATURA_FIS_TAB, [
         id, trTarih, p.gun, p.ay, p.yil, String(firmaAdi).trim(), '', aciklama || '',
         giderKategorisi || '', 'Nakit', '', fTutar, 0, 0, 0,
-        'Hesap Yok', 0, '', 'TRUE', now.toISOString(),
+        'Hesap Yok', 0, '', 'TRUE', now.toISOString(), anaKasaFlag,
       ]);
       return res.status(200).json({ ok: true, id });
+    }
+
+    // Bugünün hızlı nakit giderlerini listele — Gün Sonu ve Yönetim Paneli'ndeki
+    // harcama bölümlerinin TEK veri kaynağı. İki ekran da aynı listeyi gösterir.
+    // ?tarih=GG.AA.YYYY verilmezse bugün (Europe/Istanbul) alınır.
+    if (resource === 'gunlukHarcamalar') {
+      if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+      const hedefTarih = req.query.tarih
+        || new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+      const rows = await getRows(sheets, FATURA_FIS_TAB);
+      const kayitlar = rows
+        .map(rowToFaturaFis)
+        .filter((k) => k.gunlukHarcama && k.tarih === hedefTarih)
+        .map((k) => ({
+          id: k.id, firmaAdi: k.firmaAdi, giderKategorisi: k.giderKategorisi,
+          aciklama: k.aciklama, tutar: k.faturaTutari,
+          kaynak: k.anaKasaHarcama ? 'anaKasa' : 'gunlukKasa',
+          kayitZamani: k.kayitZamani,
+        }));
+      const anaKasa = kayitlar.filter((k) => k.kaynak === 'anaKasa');
+      const gunlukKasa = kayitlar.filter((k) => k.kaynak === 'gunlukKasa');
+      return res.status(200).json({
+        tarih: hedefTarih,
+        anaKasa,
+        gunlukKasa,
+        anaKasaToplam: anaKasa.reduce((s, k) => s + k.tutar, 0),
+        gunlukKasaToplam: gunlukKasa.reduce((s, k) => s + k.tutar, 0),
+      });
+    }
+
+    // Hızlı nakit gider satırını sil. Sheets'te satır fiziksel olarak silinir
+    // (deleteDimension) — böylece liste ve toplamlar anında doğru kalır.
+    if (resource === 'gunlukHarcamaSil') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { giderId } = req.body || {};
+      if (!giderId) return res.status(400).json({ error: 'giderId gerekli' });
+      const rows = await getRows(sheets, FATURA_FIS_TAB);
+      const idx = rows.findIndex((r) => r[0] === giderId);
+      if (idx < 0) return res.status(404).json({ error: 'Kayıt bulunamadı' });
+      const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+      const sheet = meta.data.sheets.find((s) => s.properties.title === FATURA_FIS_TAB.tab);
+      if (!sheet) return res.status(404).json({ error: 'Sekme bulunamadı' });
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SHEET_ID,
+        requestBody: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: sheet.properties.sheetId,
+                dimension: 'ROWS',
+                startIndex: idx + 1, // 0-tabanlı; +1 başlık satırı için
+                endIndex: idx + 2,
+              },
+            },
+          }],
+        },
+      });
+      return res.status(200).json({ ok: true });
     }
 
     // Yeni ödeme yöntemi / kart / banka ekleme.

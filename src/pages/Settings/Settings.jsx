@@ -4,7 +4,7 @@ import '../GunSonu/GunSonu.css';
 import { TL, EKMEK_TURLERI_STOK } from '../../hooks/useHipposData';
 import { supabase } from '../../services/supabase';
 import GununMenusu from './GununMenusu';
-import { MiniHarcamaFormu } from '../GunSonu/GunSonu';
+import { MiniHarcamaFormu, useGunlukHarcamalar } from '../GunSonu/GunSonu';
 import {
   ListChecks, Calculator, Eye, EyeOff, Share2, Search, X,
   Banknote, CreditCard, UtensilsCrossed, BookOpen, ExternalLink, ChevronRight, ChevronDown,
@@ -57,6 +57,10 @@ export default function Settings({ data, onNavigate }) {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Hızlı nakit giderler — Gün Sonu ekranıyla AYNI veri kaynağı (Fatura/Fiş sheet'i).
+  // Buradan girilen gider Gün Sonu'nda da görünür, orada girilen burada görünür.
+  const harcamalar = useGunlukHarcamalar();
 
   const [toast, setToast] = useState('');
   function showToast(msg) {
@@ -589,10 +593,14 @@ export default function Settings({ data, onNavigate }) {
             <div className="st-harcama-hint">Buraya girdiklerin Gün Sonu Al sayfasına aktarılır ve Fatura/Fiş kaydı oluşturur</div>
 
             <span className="st-subhead">Günlük Kasadan Harcamalar</span>
-            <MiniHarcamaFormu baslik="" showToast={showToast} />
+            <MiniHarcamaFormu baslik="" showToast={showToast}
+              kaynak="gunlukKasa" kayitlar={harcamalar.gunlukKasa} onDegisim={harcamalar.yenile} />
+            <div className="st-harcama-total"><span>GÜNLÜK KASA TOPLAMI</span><strong>{TL(harcamalar.gunlukKasaToplam)}</strong></div>
 
             <span className="st-subhead" style={{ marginTop: 16 }}>Ana Kasadan Harcamalar</span>
-            <MiniHarcamaFormu baslik="" showToast={showToast} />
+            <MiniHarcamaFormu baslik="" showToast={showToast}
+              kaynak="anaKasa" kayitlar={harcamalar.anaKasa} onDegisim={harcamalar.yenile} />
+            <div className="st-harcama-total"><span>ANA KASA TOPLAMI</span><strong>{TL(harcamalar.anaKasaToplam)}</strong></div>
           </aside>
         </div>
       </div>

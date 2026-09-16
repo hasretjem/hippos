@@ -120,9 +120,13 @@ function recordToRow({ tarih, toplamNakitPara, nakitKupurDetayi, kasaAvansi, pos
     posToplam ?? 0,
     j(posTutarlari),
     anaKasaToplam ?? 0,
-    j(anaKasaHarcamalar),
+    // KULLANIMDAN KALKTI (16 Eylül): harcama satır detayı artık buraya yazılmıyor.
+    // Giderlerin adı/açıklaması TEK KAYNAK olarak Fatura ve Fişler sekmesinde tutuluyor
+    // (GunlukHarcama=TRUE, AnaKasaHarcama sütunu hangi kasadan çıktığını söylüyor).
+    // Sütunlar eski kayıtlar okunabilsin diye yerinde bırakıldı, yenilerine [] yazılıyor.
+    j(anaKasaHarcamalar ?? []),
     gunlukKasaToplam ?? 0,
-    j(gunlukKasaHarcamalar),
+    j(gunlukKasaHarcamalar ?? []),
     cariToplam ?? 0,
     j(cariDetay),
     genelYemekToplami ?? 0,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import './GunSonu.css';
 import { TL } from '../../hooks/useHipposData';
 // NOT: html2canvas npm paketi olarak KURULMUYOR — proje github.dev üzerinden yönetildiği
@@ -160,30 +160,16 @@ export default function GunSonu({ data, onNavigate }) {
   function updatePosRow(idx, field, value) { setPosTutarlari((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r))); }
   function removePosRow(idx) { setPosTutarlari((prev) => prev.filter((_, i) => i !== idx)); }
 
-  const harcamaTaslagi = data.harcamaTaslagi || { anaKasa: [], gunlukKasa: [] };
-  const [anaKasaHarcamalar, setAnaKasaHarcamalar] = useState(() =>
-    harcamaTaslagi.anaKasa.length ? harcamaTaslagi.anaKasa : [{ ad: '', tutar: '' }, { ad: '', tutar: '' }, { ad: '', tutar: '' }]
-  );
-  const anaKasaToplam = anaKasaHarcamalar.reduce((s, r) => s + parseNum(r.tutar), 0);
-  const [gunlukKasaHarcamalar, setGunlukKasaHarcamalar] = useState(() =>
-    harcamaTaslagi.gunlukKasa.length ? harcamaTaslagi.gunlukKasa : [{ ad: '', tutar: '' }, { ad: '', tutar: '' }, { ad: '', tutar: '' }]
-  );
-  const gunlukKasaToplam = gunlukKasaHarcamalar.reduce((s, r) => s + parseNum(r.tutar), 0);
-  const harcamaSeedRef = useRef(false);
-  useEffect(() => {
-    if (harcamaSeedRef.current) return;
-    if (!harcamaTaslagi.anaKasa.length && !harcamaTaslagi.gunlukKasa.length) return;
-    const anaBos = anaKasaHarcamalar.every((r) => !r.ad.trim() && !r.tutar);
-    const gunlukBos = gunlukKasaHarcamalar.every((r) => !r.ad.trim() && !r.tutar);
-    if (!anaBos || !gunlukBos) { harcamaSeedRef.current = true; return; }
-    harcamaSeedRef.current = true;
-    if (harcamaTaslagi.anaKasa.length) setAnaKasaHarcamalar(harcamaTaslagi.anaKasa);
-    if (harcamaTaslagi.gunlukKasa.length) setGunlukKasaHarcamalar(harcamaTaslagi.gunlukKasa);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [harcamaTaslagi]);
-  function addRow(setter) { setter((prev) => [...prev, { ad: '', tutar: '' }]); }
-  function updateRow(setter, idx, field, value) { setter((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r))); }
-  function removeRow(setter, idx) { setter((prev) => prev.filter((_, i) => i !== idx)); }
+  // Harcamalar artık ekranda ayrı bir state'te tutulmuyor — TEK KAYNAK Fatura/Fiş sheet'i.
+  // Hem bu ekran hem Yönetim Paneli aynı hook'la aynı veriyi çeker; toplamlar da buradan
+  // hesaplanır, böylece iki ekran arasında kopya/çelişki oluşmaz.
+  const {
+    anaKasa: anaKasaHarcamalar,
+    gunlukKasa: gunlukKasaHarcamalar,
+    anaKasaToplam,
+    gunlukKasaToplam,
+    yenile: harcamalariYenile,
+  } = useGunlukHarcamalar();
 
   const [yemekKolonlari, setYemekKolonlari] = useState(['Şirket Telefonu', 'Paket']);
   const [yemekTutarlari, setYemekTutarlari] = useState({});
@@ -278,9 +264,16 @@ export default function GunSonu({ data, onNavigate }) {
   const bugunCariTahsilatDusulen = bugunCariOdemeToplamı;
 
   // TOPLAM CİRO: Nakit + POS + Yemek Kartı + Cari (bugün atılan)
-  // − Günlük Kasa Harcamaları (o günün giderleri)
+  // + Günlük Kasa Harcamaları
   // − Cari Tahsilatlar (havale hariç) = o günün NET geliri
-  const toplamCiro = toplamNakitPara + cariToplam + posToplam + genelYemekToplami - gunlukKasaToplam - bugunCariTahsilatDusulen;
+  //
+  // DÜZELTME (16 Eylül): burada eskiden "- gunlukKasaToplam" vardı ve bu YANLIŞTI.
+  // Kasiyer "Toplam Nakit" alanına kasada FİİLEN duran parayı sayarak yazıyor; gün içinde
+  // nakitten yapılan harcama (örn. 20 TL ekmek) kasadan çıktığı için o para zaten
+  // sayıma girmiyor. Yani toplamNakitPara harcama düşülmüş HALDE geliyor.
+  // O harcama bir satış kaybı değil, sadece bir gider — cironun bundan etkilenmemesi için
+  // harcanan tutar ciroya GERİ EKLENİR. (Giderin kendisi Fatura/Fiş sheet'inden takip edilir.)
+  const toplamCiro = toplamNakitPara + gunlukKasaToplam + cariToplam + posToplam + genelYemekToplami - bugunCariTahsilatDusulen;
   // gelir (yoksa 0). Düzeltmek gerekirse Sheets'ten yapılmalı, buradan değil.
   // Yeni Sheet yapısında bu değer anaKasaTakibi.yarinaDevir altında geliyor — api/gunsonu.js
   // eski (3 sütunlu) kayıtları da aynı şekle çevirip döndürdüğü için burada tek bir okuma
@@ -365,11 +358,11 @@ export default function GunSonu({ data, onNavigate }) {
         posToplam,
         posTutarlari, // [{ label, tutar }]
 
+        // Harcama SATIR DETAYI Gün Sonu Kasa sheet'ine artık YAZILMIYOR (16 Eylül kararı):
+        // giderin adı/açıklaması Fatura/Fiş sheet'inde tutuluyor ve takip oradan yapılıyor.
+        // Buraya sadece hesabı etkileyen toplam rakamlar gidiyor — çift kayıt/çelişki olmasın.
         anaKasaToplam,
-        anaKasaHarcamalar, // [{ ad, tutar }]
-
         gunlukKasaToplam,
-        gunlukKasaHarcamalar, // [{ ad, tutar }]
 
         cariToplam,
         cariDetay: {
@@ -609,12 +602,14 @@ export default function GunSonu({ data, onNavigate }) {
             <section className="gs-card">
               <h2><Calculator size={16} /> Harcamalar</h2>
 
-              <span className="gs-subhead">Ana Kasadan Harcamalar <span className="gs-hint">(günlük ciroyu etkilemez)</span></span>
-              <MiniHarcamaFormu baslik="" showToast={showToast} />
+              <span className="gs-subhead">Ana Kasadan Harcamalar <span className="gs-hint">(günlük ciroyu etkilemez, yarına devirden düşer)</span></span>
+              <MiniHarcamaFormu baslik="" showToast={showToast}
+                kaynak="anaKasa" kayitlar={anaKasaHarcamalar} onDegisim={harcamalariYenile} />
               <div className="gs-row-total main"><span>ANA KASA TOPLAMI</span><strong>{TL(anaKasaToplam)}</strong></div>
 
-              <span className="gs-subhead" style={{ marginTop: 14 }}>Günlük Kasadan Harcamalar</span>
-              <MiniHarcamaFormu baslik="" showToast={showToast} />
+              <span className="gs-subhead" style={{ marginTop: 14 }}>Günlük Kasadan Harcamalar <span className="gs-hint">(ciroya geri eklenir)</span></span>
+              <MiniHarcamaFormu baslik="" showToast={showToast}
+                kaynak="gunlukKasa" kayitlar={gunlukKasaHarcamalar} onDegisim={harcamalariYenile} />
               <div className="gs-row-total main"><span>GÜNLÜK KASA TOPLAMI</span><strong>{TL(gunlukKasaToplam)}</strong></div>
             </section>
 
@@ -754,11 +749,51 @@ export default function GunSonu({ data, onNavigate }) {
   );
 }
 // ============================================================
+// Hızlı nakit giderlerin TEK veri kaynağı.
+// Gün Sonu ekranı ile Yönetim Paneli'ndeki harcama bölümü aynı veriye bakar:
+// ikisi de bu hook ile Fatura/Fiş sheet'inden o günün kayıtlarını çeker.
+// Hiçbir yerde ayrı kopya tutulmaz — bir ekrandan girilen diğerinde de görünür.
+// ============================================================
+export function useGunlukHarcamalar() {
+  const [veri, setVeri] = useState({ anaKasa: [], gunlukKasa: [], anaKasaToplam: 0, gunlukKasaToplam: 0 });
+
+  const yenile = useCallback(async () => {
+    try {
+      const res = await fetch('/api/muhasebe?resource=gunlukHarcamalar');
+      const j = await res.json();
+      if (res.ok) setVeri(j);
+    } catch { /* sessiz — ağ hatası ekranı kilitlemesin */ }
+  }, []);
+
+  useEffect(() => { yenile(); }, [yenile]);
+
+  return { ...veri, yenile };
+}
+
+// ============================================================
 // Mini Fiş Girişi — Kasa Harcama bölümünde kullanılır.
 // Girilen bilgiler Fatura ve Fişler sheet'ine GunlukHarcama=TRUE olarak kaydedilir.
 // ============================================================
-export function MiniHarcamaFormu({ baslik, showToast }) {
+export function MiniHarcamaFormu({ baslik, showToast, kaynak = 'gunlukKasa', kayitlar, onDegisim }) {
+  // Sunucudan gelen (bugün kaydedilmiş) satırlar + kullanıcının henüz kaydetmediği boş satırlar
+  // birlikte tek listede tutulur. Kaydedilmiş satırların id'si dolu, yenilerinki null.
   const [satirlar, setSatirlar] = useState([{ id: null, neIcin: '', tutar: '', aciklama: '' }]);
+
+  // Sunucu listesi değişince (sayfa açılışı, diğer ekrandan kayıt, kendi kaydımız sonrası)
+  // kaydedilmiş satırlar tazelenir; kullanıcının yazmakta olduğu boş satırlar korunur.
+  useEffect(() => {
+    if (!kayitlar) return;
+    setSatirlar((prev) => {
+      const kaydedilmemis = prev.filter((r) => !r.id);
+      const sunucu = kayitlar.map((k) => ({
+        id: k.id, neIcin: k.firmaAdi, tutar: String(k.tutar ?? ''), aciklama: k.aciklama || '',
+      }));
+      const liste = [...sunucu, ...kaydedilmemis];
+      // Her zaman en altta yeni giriş için boş bir satır dursun.
+      if (!liste.some((r) => !r.id)) liste.push({ id: null, neIcin: '', tutar: '', aciklama: '' });
+      return liste;
+    });
+  }, [kayitlar]);
   const [firmalar, setFirmalar] = useState([]); // { firmaAdi, giderKategorisi }
   const [yeniGiderModal, setYeniGiderModal] = useState(false);
   const [yeniGiderAd, setYeniGiderAd] = useState('');
@@ -833,13 +868,37 @@ export function MiniHarcamaFormu({ baslik, showToast }) {
         body: JSON.stringify({
           firmaAdi: s.neIcin, giderKategorisi: firma?.giderKategorisi || '',
           aciklama: s.aciklama, faturaTutari: s.tutar, giderId: s.id || undefined,
+          kaynak, // 'anaKasa' | 'gunlukKasa' — Fatura/Fiş sheet'inde AnaKasaHarcama sütununa yazılır
         }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error);
-      showToast('Kaydedildi');
+      showToast(j.guncellendi ? 'Güncellendi' : 'Kaydedildi');
       setSatirlar(prev => prev.map((r, i) => i === idx ? { ...r, id: j.id } : r));
+      // Üst ekran listeyi/toplamları tazelesin (Gün Sonu ciro ve ana kasa devri buna bağlı).
+      onDegisim?.();
     } catch(e) { showToast('Kaydedilemedi: ' + e.message); }
+  }
+
+  async function satirSil(idx) {
+    const s = satirlar[idx];
+    // Henüz kaydedilmemiş satır: sadece ekrandan kaldır, sunucuya gitme.
+    if (!s.id) {
+      setSatirlar(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev);
+      return;
+    }
+    if (!window.confirm(`"${s.neIcin}" harcaması silinsin mi?`)) return;
+    try {
+      const res = await fetch('/api/muhasebe?resource=gunlukHarcamaSil', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ giderId: s.id }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error);
+      showToast('Silindi');
+      setSatirlar(prev => prev.filter((_, i) => i !== idx));
+      onDegisim?.();
+    } catch(e) { showToast('Silinemedi: ' + e.message); }
   }
 
   async function yeniGiderEkle() {
@@ -892,6 +951,7 @@ export function MiniHarcamaFormu({ baslik, showToast }) {
             <button className="gs-mini-aciklama-btn" title="Not ekle"
               onClick={() => setAciklamaAcik(prev => ({ ...prev, [idx]: !prev[idx] }))}>📝</button>
             <button className="gs-mini-kaydet" onClick={() => satirKaydet(idx)}>✓</button>
+            <button className="gs-mini-sil" title="Sil" onClick={() => satirSil(idx)}>✕</button>
           </div>
           {aciklamaAcik[idx] && (
             <div className="gs-mini-aciklama-pop">

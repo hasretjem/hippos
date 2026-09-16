@@ -406,10 +406,12 @@
   width: 72px; height: 28px; font-size: 12px; border-radius: 6px; border: 1px solid #E3DFCF;
   background: #fff; color: #393E41; padding: 0 6px; text-align: right;
 }
-.gs-mini-aciklama-btn, .gs-mini-kaydet {
+.gs-mini-aciklama-btn, .gs-mini-kaydet, .gs-mini-sil {
   height: 28px; width: 28px; border-radius: 6px; border: 1px solid #E3DFCF;
   background: #fff; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center;
 }
+.gs-mini-sil { color: #B44C43; font-weight: 700; flex-shrink: 0; }
+.gs-mini-sil:hover { background: #FBEDEB; border-color: #B44C43; }
 .gs-mini-kaydet { background: #393E41; color: #F5F0E8 !important; border-color: #393E41; font-weight: 700; }
 .gs-mini-kaydet:hover { background: #2A2E31; color: #F5F0E8 !important; }
 .gs-gider-kod { font-size: 9px; color: #B0A898; font-family: monospace; min-width: 44px; }
