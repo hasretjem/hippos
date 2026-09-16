@@ -283,7 +283,13 @@ export default function GunSonu({ data, onNavigate }) {
   // Ana Kasa harcaması AYRI bir satırda gösterilip SADECE Yarına Devir hesabında düşülür.
   // Böylece ekranda hangi rakamın nereden geldiği (sayılan nakit, ana kasa harcaması,
   // sonuç) karışmadan ayrı ayrı görülebiliyor.
-  const yarinaDevirAnaKasa = dundenDevirAnaKasa + toplamNakitPara - anaKasaToplam;
+  // DÜZELTME (16 Eylül): burada eskiden "- anaKasaToplam" vardı ve bu YANLIŞTI.
+  // Kasiyer kasayı sayarken ana kasadan harcanan para fiziksel olarak zaten çekmeceden
+  // çıkmış olduğu için toplamNakitPara'ya girmiyor (zaten düşülmüş hâlde geliyor).
+  // Formülde bir de "-" yazmak aynı tutarı İKİ KEZ düşürmek anlamına gelirdi.
+  // Günlük kasa harcaması ciroya geri eklendiği gibi, ana kasa harcaması da
+  // yarına devir hesabına geri EKLENİR.
+  const yarinaDevirAnaKasa = dundenDevirAnaKasa + toplamNakitPara + anaKasaToplam;
 
   // Enter'a basınca fareyle sıradaki alana tıklamayı beklemeden, DOM sırasındaki bir sonraki
   // "gs-tabbable" alanına odaklanır — sayfadaki neredeyse her giriş kutusunda kullanılıyor.
