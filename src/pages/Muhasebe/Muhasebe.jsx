@@ -176,6 +176,12 @@ export default function Muhasebe({ onNavigate }) {
         <button className={anaTab === 'ortaklar' ? 'active' : ''} onClick={() => setAnaTab('ortaklar')}>
           <Users size={15} /> Ortaklar Cari Takip
         </button>
+        <button className={anaTab === 'personel' ? 'active' : ''} onClick={() => setAnaTab('personel')}>
+          <Users size={15} /> Personel
+        </button>
+        <button className={anaTab === 'sabitGiderler' ? 'active' : ''} onClick={() => setAnaTab('sabitGiderler')}>
+          <FileSpreadsheet size={15} /> Sabit Giderler
+        </button>
         <button className={anaTab === 'receteler' ? 'active' : ''} onClick={() => setAnaTab('receteler')}>
           <ChefHat size={15} /> Reçeteler
         </button>
@@ -186,6 +192,8 @@ export default function Muhasebe({ onNavigate }) {
         {anaTab === 'gelirler' && <GelirlerSekmesi showToast={showToast} />}
         {anaTab === 'toptancilar' && <ToptancilarCariSekmesi showToast={showToast} />}
         {anaTab === 'ortaklar' && <OrtaklarCariSekmesi showToast={showToast} />}
+        {anaTab === 'personel' && <PersonelSekmesi showToast={showToast} />}
+        {anaTab === 'sabitGiderler' && <SabitGiderlerSekmesi showToast={showToast} />}
         {anaTab === 'receteler' && <ReceteSekmesi showToast={showToast} />}
       </div>
 
@@ -3135,6 +3143,768 @@ function HesapAyarModal({ hesap, devirTarihi, showToast, onClose, onSaved }) {
             <button className="mh-primary-btn" disabled={kaydediyor || !acilisTarihi} onClick={kaydet}>
               {kaydediyor ? '…' : 'Kaydet'}
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// PERSONEL + SABİT GİDERLER (tahakkuk modülü)
+// Tahakkuk = ayın 1'ine cari borç. Ödeme = cari borçtan düşen tahsilat.
+// ============================================================
+
+function donemBugun() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function donemEtiket(donem) {
+  if (!donem) return '';
+  const [y, a] = donem.split('-');
+  const aylar = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  return `${aylar[Number(a) - 1]} ${y}`;
+}
+
+function PersonelSekmesi({ showToast }) {
+  const [donem, setDonem] = useState(donemBugun());
+  const [personeller, setPersoneller] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [formModal, setFormModal] = useState(null);      // {} = yeni, kayıt = düzenle
+  const [odemeModal, setOdemeModal] = useState(null);
+  const [devamsizlikModal, setDevamsizlikModal] = useState(null);
+  const [hareketModal, setHareketModal] = useState(null);
+  const [tahakkukEdiliyor, setTahakkukEdiliyor] = useState(false);
+
+  async function yukle() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/muhasebe?resource=personel&donem=${donem}`);
+      const j = await res.json();
+      setPersoneller(j.personeller || []);
+    } catch { showToast('Personel listesi yüklenemedi'); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { yukle(); }, [donem]);
+
+  async function tahakkuk(kayit) {
+    setTahakkukEdiliyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=tahakkukEt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(kayit ? { tip: 'Personel', kayitId: kayit.id, donem } : { tip: 'Personel', toplu: true, donem }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      const atl = (j.atlanan || []).filter(a => !a.tutarsiz);
+      showToast(
+        (j.yazilan || []).length
+          ? `${j.yazilan.length} tahakkuk yazıldı${atl.length ? `, ${atl.length} zaten edilmişti (mükerrer kayıt yok)` : ''}`
+          : (atl.length ? `Bu dönem zaten tahakkuk edilmiş (${donemEtiket(donem)}) — mükerrer kayıt yapılmadı` : 'Tahakkuk edilecek kayıt yok')
+      );
+      yukle();
+    } catch (e) { showToast('Tahakkuk edilemedi: ' + e.message); }
+    finally { setTahakkukEdiliyor(false); }
+  }
+
+  const aktifler = personeller.filter(p => !p.cikisTarihi || (p.bakiye > 0.01) || cikisBuDonem(p, donem));
+  const bekleyenTahakkuk = aktifler.filter(p => !p.tahakkukEdildi && !p.cikisTarihi).length;
+
+  return (
+    <div className="mh-yeni">
+      <div style={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:10, marginBottom:12 }}>
+        <strong>Dönem:</strong>
+        <input type="month" className="ff-input" style={{width:160}} value={donem} onChange={e=>setDonem(e.target.value)} />
+        <button className="mh-primary-btn" disabled={tahakkukEdiliyor} onClick={()=>tahakkuk(null)}>
+          {tahakkukEdiliyor ? '…' : `Toplu Tahakkuk Et (${donemEtiket(donem)})`}
+        </button>
+        <button className="mh-secondary-btn" onClick={()=>setFormModal({})}>+ Yeni Personel</button>
+        {bekleyenTahakkuk > 0 && <span style={{color:'#c62828'}}>{bekleyenTahakkuk} personel bu dönem tahakkuk edilmedi</span>}
+      </div>
+
+      <div className="mh-table-card">
+        {loading ? <p className="mh-empty">Yükleniyor…</p> : aktifler.length === 0 ? (
+          <p className="mh-empty">Henüz personel eklenmemiş.</p>
+        ) : (
+          <table className="mh-excel-table">
+            <thead>
+              <tr>
+                <th>Ad Soyad</th><th>Görev</th><th>Telefon</th><th>İşe Giriş</th>
+                <th>Net Maaş</th><th>Kalan Nakit</th><th>Kalan Havale</th><th>Toplam Kalan</th>
+                <th>Son Tahakkuk</th><th>Durum</th><th>İşlemler</th>
+              </tr>
+            </thead>
+            <tbody>
+              {aktifler.map(p => (
+                <tr key={p.id}>
+                  <td>{p.adSoyad}</td>
+                  <td>{p.gorev}</td>
+                  <td>{p.telefon}</td>
+                  <td>{p.iseGiris}</td>
+                  <td className="mh-tutar-cell">{TL(p.netMaas)}</td>
+                  <td className="mh-tutar-cell">{TL(p.kalanNakit)}</td>
+                  <td className="mh-tutar-cell">{TL(p.kalanHavale)}</td>
+                  <td className="mh-tutar-cell"><strong>{TL(p.bakiye)}</strong></td>
+                  <td>{p.sonTahakkukDonem ? `${donemEtiket(p.sonTahakkukDonem)} (${p.sonTahakkukTarih})` : '—'}</td>
+                  <td>
+                    <div style={{display:'flex',flexDirection:'column',gap:3,alignItems:'flex-start'}}>
+                      {p.cikisTarihi && <span className="mh-durum mh-durum-kirmizi">Çıkış yapıldı</span>}
+                      {!p.tahakkukEdildi && !p.cikisTarihi && <span className="mh-durum mh-durum-kirmizi">Bu ay tahakkuk yok</span>}
+                      {p.eskiBorcVar && <span className="mh-durum mh-durum-kirmizi">Geçen aydan ödenmemiş maaş var</span>}
+                      {p.devamsizGun > 0 && (
+                        <button className="mh-durum mh-durum-kirmizi" style={{cursor:'pointer',border:'none'}}
+                          onClick={()=>setDevamsizlikModal(p)}>
+                          Bu ay {p.devamsizGun} gün gelmedi
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+                      {!p.tahakkukEdildi && !p.cikisTarihi && (
+                        <button className="mh-secondary-btn" onClick={()=>setFormModal({ ...p, tahakkukIste:true })}>Tahakkuk Et</button>
+                      )}
+                      <button className="mh-secondary-btn" onClick={()=>setOdemeModal(p)}>Ödeme Yap</button>
+                      <button className="mh-secondary-btn" onClick={()=>setDevamsizlikModal(p)}>İşe Gelmedi</button>
+                      <button className="mh-secondary-btn" onClick={()=>setHareketModal({ ad:p.adSoyad })}>Hareketler</button>
+                      <button className="mh-secondary-btn" onClick={()=>setFormModal(p)}>Düzenle</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {formModal && (
+        <PersonelFormModal kayit={formModal} donem={donem} showToast={showToast}
+          onTahakkuk={(k,tutar)=>tahakkukTekil('Personel',k,tutar,donem,showToast,()=>{setFormModal(null);yukle();})}
+          onClose={()=>setFormModal(null)} onSaved={()=>{setFormModal(null);yukle();}} />
+      )}
+      {odemeModal && (
+        <TahakkukOdemeModal tip="Personel" kayit={odemeModal} donem={donem} showToast={showToast}
+          onClose={()=>setOdemeModal(null)} onSaved={()=>{setOdemeModal(null);yukle();}} />
+      )}
+      {devamsizlikModal && (
+        <DevamsizlikModal personel={devamsizlikModal} donem={donem} showToast={showToast}
+          onClose={()=>setDevamsizlikModal(null)} onSaved={()=>{setDevamsizlikModal(null);yukle();}} />
+      )}
+      {hareketModal && (
+        <HareketDokumuModal ad={hareketModal.ad} onClose={()=>setHareketModal(null)} />
+      )}
+    </div>
+  );
+}
+
+function cikisBuDonem(p, donem) {
+  if (!p.cikisTarihi) return false;
+  const d = trStrToDate(p.cikisTarihi);
+  if (!d) return false;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === donem;
+}
+
+// Tekil tahakkuk — hem personel hem sabit gider için.
+async function tahakkukTekil(tip, kayit, tutar, donem, showToast, bitince) {
+  try {
+    const res = await fetch('/api/muhasebe?resource=tahakkukEt', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tip, kayitId: kayit.id, donem, tutar }),
+    });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || 'hata');
+    if ((j.atlanan || []).some(a => !a.tutarsiz)) {
+      const a = j.atlanan[0];
+      showToast(`Bu kaydı ${donemEtiket(donem)} döneminde zaten tahakkuk ettiniz — mükerrer kayıt yapılmadı`);
+    } else if ((j.yazilan || []).length) {
+      showToast('Tahakkuk edildi');
+    } else {
+      showToast('Tutar girilmediği için tahakkuk yapılmadı');
+    }
+    bitince?.();
+  } catch (e) { showToast('Tahakkuk edilemedi: ' + e.message); }
+}
+
+function PersonelFormModal({ kayit, donem, showToast, onClose, onSaved, onTahakkuk }) {
+  const yeni = !kayit.id;
+  const [adSoyad, setAdSoyad] = useState(kayit.adSoyad || '');
+  const [telefon, setTelefon] = useState(kayit.telefon || '');
+  const [gorev, setGorev] = useState(kayit.gorev || '');
+  const [iseGiris, setIseGiris] = useState(kayit.iseGiris || bugunTR());
+  const [netMaas, setNetMaas] = useState(kayit.netMaas ? String(kayit.netMaas) : '');
+  const [nakitLimit, setNakitLimit] = useState(kayit.nakitLimit ? String(kayit.nakitLimit) : '');
+  const [havaleLimit, setHavaleLimit] = useState(kayit.havaleLimit ? String(kayit.havaleLimit) : '');
+  const [cikisTarihi, setCikisTarihi] = useState(kayit.cikisTarihi || '');
+  const [kaydediyor, setKaydediyor] = useState(false);
+  // Tahakkuk isteğiyle açıldıysa ilk ay kıst önerisi hesaplanır.
+  const [tahakkukTutar, setTahakkukTutar] = useState('');
+
+  const maas = Number(String(netMaas).replace(',', '.')) || 0;
+  const nl = Number(String(nakitLimit).replace(',', '.')) || 0;
+  const hl = Number(String(havaleLimit).replace(',', '.')) || 0;
+  const sinirHatasi = maas > 0 && Math.abs(nl + hl - maas) > 0.01;
+
+  useEffect(() => {
+    if (!kayit.tahakkukIste) return;
+    // İlk ay kıstı: işe giriş bu dönemdeyse (maaş / 30) x kalan gün önerilir.
+    const g = trStrToDate(kayit.iseGiris || '');
+    const [y, a] = donem.split('-');
+    if (g && g.getFullYear() === Number(y) && g.getMonth() + 1 === Number(a)) {
+      const calisilan = 30 - g.getDate() + 1;
+      setTahakkukTutar(String(Math.round((kayit.netMaas / 30) * calisilan * 100) / 100));
+    } else {
+      setTahakkukTutar(String(kayit.netMaas || ''));
+    }
+  }, []);
+
+  async function kaydet() {
+    if (!adSoyad.trim()) { showToast('Ad soyad gerekli'); return; }
+    if (sinirHatasi) { showToast('Nakit + havale sınırı net maaşa eşit olmalı'); return; }
+    setKaydediyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=personel', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: kayit.id, adSoyad, telefon, gorev, iseGiris, netMaas, nakitLimit, havaleLimit, cikisTarihi }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      showToast(yeni ? 'Personel eklendi' : 'Güncellendi');
+      onSaved();
+    } catch (e) { showToast('Kaydedilemedi: ' + e.message); }
+    finally { setKaydediyor(false); }
+  }
+
+  return (
+    <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={onClose}>
+      <div className="mh-modal-wide" onClick={e=>e.stopPropagation()} style={{maxWidth:460}}>
+        <div className="mh-drawer-head">
+          <span>{kayit.tahakkukIste ? 'Tahakkuk Et' : (yeni ? 'Yeni Personel' : 'Personel Düzenle')}</span>
+          <button onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="mh-drawer-body">
+          {kayit.tahakkukIste ? (
+            <>
+              <p className="mh-hint">{kayit.adSoyad} — {donemEtiket(donem)} dönemi. Tahakkuk ayın 1'ine cari borç olarak yazılır.</p>
+              <label className="ff-label">Tahakkuk tutarı (ilk ay için gün hesabıyla önerildi, değiştirebilirsiniz)</label>
+              <input className="ff-input" type="number" step="any" value={tahakkukTutar} onChange={e=>setTahakkukTutar(e.target.value)} />
+              <div style={{display:'flex',gap:8,marginTop:12,justifyContent:'flex-end'}}>
+                <button className="mh-secondary-btn" onClick={onClose}>Vazgeç</button>
+                <button className="mh-primary-btn" onClick={()=>onTahakkuk(kayit, tahakkukTutar)}>Tahakkuk Et</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="ff-label">Ad Soyad *</label>
+              <input className="ff-input" value={adSoyad} onChange={e=>setAdSoyad(e.target.value)} />
+              <label className="ff-label">Görev</label>
+              <input className="ff-input" value={gorev} onChange={e=>setGorev(e.target.value)} placeholder="Aşçı yardımcısı, tezgahtar…" />
+              <label className="ff-label">Cep Telefonu</label>
+              <input className="ff-input" value={telefon} onChange={e=>setTelefon(e.target.value)} />
+              <label className="ff-label">İşe Giriş Tarihi</label>
+              <TarihSecici value={iseGiris} onChange={setIseGiris} />
+              <label className="ff-label">Net Maaş</label>
+              <input className="ff-input" type="number" step="any" value={netMaas} onChange={e=>setNetMaas(e.target.value)} />
+              <label className="ff-label">Nakit Ödeme Üst Sınırı</label>
+              <input className="ff-input" type="number" step="any" value={nakitLimit} onChange={e=>setNakitLimit(e.target.value)} />
+              <label className="ff-label">Havale Ödeme Üst Sınırı</label>
+              <input className="ff-input" type="number" step="any" value={havaleLimit} onChange={e=>setHavaleLimit(e.target.value)} />
+              {sinirHatasi && (
+                <p className="mh-hint" style={{color:'#c62828'}}>
+                  Nakit + havale = {TL(nl+hl)}, net maaş {TL(maas)}. İkisinin toplamı net maaşa eşit olmalı.
+                </p>
+              )}
+              {!yeni && (
+                <>
+                  <label className="ff-label">İşten Çıkış Tarihi (boşsa çalışıyor)</label>
+                  <TarihSecici value={cikisTarihi || ''} onChange={setCikisTarihi} />
+                  {cikisTarihi && <p className="mh-hint">Çıkış verilen personel dönem bitince listeden düşer; borcu varsa görünmeye devam eder.</p>}
+                </>
+              )}
+              <div style={{display:'flex',gap:8,marginTop:12,justifyContent:'flex-end'}}>
+                <button className="mh-secondary-btn" onClick={onClose}>Vazgeç</button>
+                <button className="mh-primary-btn" disabled={kaydediyor || sinirHatasi} onClick={kaydet}>
+                  {kaydediyor ? '…' : 'Kaydet'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// Ödeme modalı — personel ve sabit gider için ortak.
+function TahakkukOdemeModal({ tip, kayit, donem, showToast, onClose, onSaved }) {
+  const ad = tip === 'Personel' ? kayit.adSoyad : kayit.ad;
+  const [tarih, setTarih] = useState(bugunTR());
+  const [odemeTuru, setOdemeTuru] = useState('Nakit');
+  const [odemeDetay, setOdemeDetay] = useState('');
+  const [kasaKaynak, setKasaKaynak] = useState('gunlukKasa');
+  const [tutar, setTutar] = useState('');
+  const [aciklama, setAciklama] = useState('');
+  const [kaydediyor, setKaydediyor] = useState(false);
+  const [odemeYontemleri, setOdemeYontemleri] = useState([]);
+  const [avansAcik, setAvansAcik] = useState(false);
+  const [avansGun, setAvansGun] = useState('');
+
+  const bugunMu = tarih === bugunTR();
+  useEffect(() => { if (!bugunMu && kasaKaynak === 'gunlukKasa') setKasaKaynak('anaKasa'); }, [tarih]);
+
+  useEffect(() => {
+    fetch('/api/muhasebe?resource=faturaFis').then(r=>r.json())
+      .then(j => setOdemeYontemleri(j.odemeYontemleri || [])).catch(()=>{});
+  }, []);
+
+  // Cepten ödemeler her zaman seçilebilir (işletme kartı yanımızda değilken).
+  const hesaplar = (tur) => {
+    const liste = odemeYontemleri.filter(o => o.tur === tur).map(o => o.ad);
+    return [...new Set([...liste, 'Hasret Cepten', 'Hasan Cepten'])];
+  };
+
+  const gunlukUcret = tip === 'Personel' && kayit.netMaas ? kayit.netMaas / 30 : 0;
+  const avansSonuc = gunlukUcret * (Number(avansGun) || 0);
+
+  async function kaydet() {
+    setKaydediyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=tahakkukOdeme', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tip, kayitId: kayit.id, tarih, odemeTuru, odemeDetay, tutar, kasaKaynak, aciklama }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      showToast(`Ödeme kaydedildi — kalan borç ${TL(j.yeniBakiye)}`);
+      onSaved();
+    } catch (e) { showToast(e.message); }
+    finally { setKaydediyor(false); }
+  }
+
+  return (
+    <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={onClose}>
+      <div className="mh-modal-wide" onClick={e=>e.stopPropagation()} style={{maxWidth:460}}>
+        <div className="mh-drawer-head">
+          <span>{ad} — Ödeme Yap</span>
+          <button onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="mh-drawer-body">
+          <div className="ff-banka-kpi" style={{marginBottom:10}}>
+            <div className="mh-kpi-card"><span className="mh-kpi-label">Kalan Borç</span><span className="mh-kpi-value">{TL(kayit.bakiye)}</span></div>
+            {tip === 'Personel' && (<>
+              <div className="mh-kpi-card"><span className="mh-kpi-label">Kalan Nakit</span><span className="mh-kpi-value">{TL(kayit.kalanNakit)}</span></div>
+              <div className="mh-kpi-card"><span className="mh-kpi-label">Kalan Havale</span><span className="mh-kpi-value">{TL(kayit.kalanHavale)}</span></div>
+            </>)}
+          </div>
+          {tip === 'Personel' && kayit.devamsizGun > 0 && (
+            <p className="mh-hint" style={{color:'#c62828'}}>
+              Bu ay {kayit.devamsizGun} gün devamsızlık var — karşılığı yaklaşık {TL(gunlukUcret * kayit.devamsizGun)}.
+              Kesinti yapmak için listedeki devamsızlık rozetini kullanın.
+            </p>
+          )}
+
+          <label className="ff-label">Ödeme Tarihi</label>
+          <TarihSecici value={tarih} onChange={setTarih} />
+
+          <label className="ff-label">Ödeme Türü</label>
+          <div className="ff-odeme-turleri">
+            {['Nakit','Banka Havalesi','Kredi Kartı'].map(t => (
+              <button key={t} type="button" className={`ff-odeme-btn ${odemeTuru===t?'ff-odeme-secili':''}`}
+                onClick={()=>{setOdemeTuru(t);setOdemeDetay('');}}>{t}</button>
+            ))}
+          </div>
+
+          {odemeTuru === 'Nakit' && (
+            <>
+              <label className="ff-label">Kasa</label>
+              <div className="ff-odeme-turleri">
+                <button type="button" className={`ff-odeme-btn ${kasaKaynak==='anaKasa'?'ff-odeme-secili':''}`}
+                  onClick={()=>setKasaKaynak('anaKasa')}>Ana Kasa</button>
+                {bugunMu && (
+                  <button type="button" className={`ff-odeme-btn ${kasaKaynak==='gunlukKasa'?'ff-odeme-secili':''}`}
+                    onClick={()=>setKasaKaynak('gunlukKasa')}>Günlük Kasa</button>
+                )}
+              </div>
+              {!bugunMu && <p className="mh-hint">Geçmiş tarihli ödeme: o günün günsonu kapandığı için sadece ana kasa seçilebilir.</p>}
+            </>
+          )}
+
+          {(odemeTuru === 'Banka Havalesi' || odemeTuru === 'Kredi Kartı') && (
+            <>
+              <label className="ff-label">Hesap / Kart</label>
+              <select className="ff-select" value={odemeDetay} onChange={e=>setOdemeDetay(e.target.value)}>
+                <option value="">— Seçin —</option>
+                {hesaplar(odemeTuru).map(h => <option key={h} value={h}>{h}</option>)}
+              </select>
+              {(odemeDetay === 'Hasret Cepten' || odemeDetay === 'Hasan Cepten') && (
+                <p className="mh-hint">Bu ödeme ortaklar carisine alacak olarak da yazılır.</p>
+              )}
+            </>
+          )}
+
+          {tip === 'Personel' && (
+            <>
+              <button className="mh-secondary-btn" style={{marginTop:10}} onClick={()=>setAvansAcik(a=>!a)}>
+                Avans Hesapla
+              </button>
+              {avansAcik && (
+                <div className="mh-table-card" style={{padding:10,marginTop:8}}>
+                  <p className="mh-hint">Günlük ücret: {TL(gunlukUcret)} (net maaş ÷ 30)</p>
+                  <label className="ff-label">Çalışılan gün</label>
+                  <input className="ff-input" type="number" step="0.5" value={avansGun} onChange={e=>setAvansGun(e.target.value)} />
+                  <p style={{marginTop:6}}><strong>Hesaplanan: {TL(avansSonuc)}</strong></p>
+                  <p className="mh-hint">Tutarı aşağıya kendiniz yazın.</p>
+                </div>
+              )}
+            </>
+          )}
+
+          <label className="ff-label">Ödeme Tutarı *</label>
+          <input className="ff-input" type="number" step="any" value={tutar} onChange={e=>setTutar(e.target.value)} />
+          <label className="ff-label">Açıklama</label>
+          <input className="ff-input" value={aciklama} onChange={e=>setAciklama(e.target.value)} placeholder="Avans, maaş, kısmi ödeme…" />
+
+          <div style={{display:'flex',gap:8,marginTop:12,justifyContent:'flex-end'}}>
+            <button className="mh-secondary-btn" onClick={onClose}>Vazgeç</button>
+            <button className="mh-primary-btn" disabled={kaydediyor || !tutar} onClick={kaydet}>
+              {kaydediyor ? '…' : 'Ödemeyi Kaydet'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Devamsızlık: kayıt ekle/sil + kesinti uygula.
+function DevamsizlikModal({ personel, donem, showToast, onClose, onSaved }) {
+  const [tarih, setTarih] = useState(bugunTR());
+  const [tur, setTur] = useState('Tam');
+  const [aciklama, setAciklama] = useState('');
+  const [kaydediyor, setKaydediyor] = useState(false);
+  const [kesintiAcik, setKesintiAcik] = useState(false);
+  const [kesintiKaynak, setKesintiKaynak] = useState('Nakit');
+  const [kesintiTutar, setKesintiTutar] = useState('');
+
+  const gunlukUcret = personel.netMaas ? personel.netMaas / 30 : 0;
+  const onerilen = Math.round(gunlukUcret * (personel.devamsizGun || 0) * 100) / 100;
+
+  async function ekle() {
+    setKaydediyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=devamsizlik', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ personelId: personel.id, tarih, tur, aciklama }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      showToast('Devamsızlık kaydedildi');
+      onSaved();
+    } catch (e) { showToast('Kaydedilemedi: ' + e.message); }
+    finally { setKaydediyor(false); }
+  }
+
+  async function sil(id) {
+    try {
+      const res = await fetch('/api/muhasebe?resource=devamsizlik', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ islem: 'sil', id }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'hata');
+      showToast('Silindi'); onSaved();
+    } catch (e) { showToast('Silinemedi: ' + e.message); }
+  }
+
+  async function kesintiYap() {
+    setKaydediyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=tahakkukOdeme', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tip: 'Personel', kayitId: personel.id, tarih: bugunTR(),
+          odemeTuru: 'Kesinti', limitKaynak: kesintiKaynak, tutar: kesintiTutar,
+          aciklama: `Devamsızlık kesintisi (${personel.devamsizGun} gün)`,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      showToast(`Kesinti uygulandı — kalan borç ${TL(j.yeniBakiye)}`);
+      onSaved();
+    } catch (e) { showToast(e.message); }
+    finally { setKaydediyor(false); }
+  }
+
+  return (
+    <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={onClose}>
+      <div className="mh-modal-wide" onClick={e=>e.stopPropagation()} style={{maxWidth:460}}>
+        <div className="mh-drawer-head">
+          <span>{personel.adSoyad} — Devamsızlık</span>
+          <button onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="mh-drawer-body">
+          <p><strong>{donemEtiket(donem)} toplam: {personel.devamsizGun || 0} gün</strong></p>
+          {(personel.devamsizlik || []).length > 0 && (
+            <table className="mh-excel-table" style={{marginBottom:10}}>
+              <thead><tr><th>Tarih</th><th>Tür</th><th>Açıklama</th><th></th></tr></thead>
+              <tbody>
+                {personel.devamsizlik.map(d => (
+                  <tr key={d.id}>
+                    <td>{d.tarih}</td><td>{d.tur}</td><td>{d.aciklama}</td>
+                    <td><button className="mh-secondary-btn" onClick={()=>sil(d.id)}>Sil</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          <label className="ff-label">Gelmediği Gün</label>
+          <TarihSecici value={tarih} onChange={setTarih} />
+          <label className="ff-label">Tür</label>
+          <div className="ff-odeme-turleri">
+            {['Tam','Yarım'].map(t => (
+              <button key={t} type="button" className={`ff-odeme-btn ${tur===t?'ff-odeme-secili':''}`}
+                onClick={()=>setTur(t)}>{t} gün</button>
+            ))}
+          </div>
+          <label className="ff-label">Açıklama</label>
+          <input className="ff-input" value={aciklama} onChange={e=>setAciklama(e.target.value)} />
+          <button className="mh-primary-btn" style={{marginTop:10}} disabled={kaydediyor} onClick={ekle}>
+            Devamsızlık Ekle
+          </button>
+
+          <hr style={{margin:'14px 0',opacity:0.3}} />
+          <p className="mh-hint">Günlük ücret {TL(gunlukUcret)} — {personel.devamsizGun || 0} gün karşılığı {TL(onerilen)}</p>
+          <button className="mh-secondary-btn" onClick={()=>{setKesintiAcik(a=>!a);setKesintiTutar(String(onerilen||''));}}>
+            Kesinti Yap
+          </button>
+          {kesintiAcik && (
+            <div className="mh-table-card" style={{padding:10,marginTop:8}}>
+              <label className="ff-label">Nereden düşülsün?</label>
+              <div className="ff-odeme-turleri">
+                {['Nakit','Havale'].map(k => (
+                  <button key={k} type="button" className={`ff-odeme-btn ${kesintiKaynak===k?'ff-odeme-secili':''}`}
+                    onClick={()=>setKesintiKaynak(k)}>{k} sınırından</button>
+                ))}
+              </div>
+              <label className="ff-label">Kesinti tutarı</label>
+              <input className="ff-input" type="number" step="any" value={kesintiTutar} onChange={e=>setKesintiTutar(e.target.value)} />
+              <p className="mh-hint">Kesinti cari borçtan düşer, gider o kadar azalır.</p>
+              <button className="mh-primary-btn" style={{marginTop:8}} disabled={kaydediyor || !kesintiTutar} onClick={kesintiYap}>
+                Kesintiyi Uygula
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HareketDokumuModal({ ad, onClose }) {
+  const [veri, setVeri] = useState(null);
+  useEffect(() => {
+    fetch(`/api/muhasebe?resource=tahakkukHareket&ad=${encodeURIComponent(ad)}`)
+      .then(r=>r.json()).then(setVeri).catch(()=>setVeri({ hareketler: [] }));
+  }, [ad]);
+
+  return (
+    <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={onClose}>
+      <div className="mh-modal-wide" onClick={e=>e.stopPropagation()} style={{maxWidth:640}}>
+        <div className="mh-drawer-head">
+          <span>{ad} — Hareket Dökümü</span>
+          <button onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="mh-drawer-body">
+          {!veri ? <p className="mh-empty">Yükleniyor…</p> : (veri.hareketler || []).length === 0 ? (
+            <p className="mh-empty">Hareket yok.</p>
+          ) : (
+            <>
+              <p><strong>Güncel bakiye: {TL(veri.bakiye || 0)}</strong></p>
+              <table className="mh-excel-table">
+                <thead><tr><th>Tarih</th><th>Tür</th><th>Kanal</th><th>Tutar</th><th>Açıklama</th></tr></thead>
+                <tbody>
+                  {veri.hareketler.map(h => (
+                    <tr key={h.id}>
+                      <td>{h.tarih}</td>
+                      <td><span className={`mh-durum ${h.tip==='Tahakkuk'?'mh-durum-kirmizi':'mh-durum-yesil'}`}>{h.tip}</span></td>
+                      <td>{h.kanal}</td>
+                      <td className="mh-tutar-cell">{TL(h.tutar)}</td>
+                      <td>{h.aciklama}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SabitGiderlerSekmesi({ showToast }) {
+  const [donem, setDonem] = useState(donemBugun());
+  const [giderler, setGiderler] = useState([]);
+  const [kategoriler, setKategoriler] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [formModal, setFormModal] = useState(null);
+  const [odemeModal, setOdemeModal] = useState(null);
+  const [hareketModal, setHareketModal] = useState(null);
+  const [tahakkukEdiliyor, setTahakkukEdiliyor] = useState(false);
+
+  async function yukle() {
+    setLoading(true);
+    try {
+      const [gRes, kRes] = await Promise.all([
+        fetch(`/api/muhasebe?resource=sabitGider&donem=${donem}`),
+        fetch('/api/muhasebe?resource=kategoriler'),
+      ]);
+      const g = await gRes.json();
+      const k = await kRes.json();
+      setGiderler(g.giderler || []);
+      setKategoriler(k.kategoriler || []);
+    } catch { showToast('Liste yüklenemedi'); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { yukle(); }, [donem]);
+
+  async function topluTahakkuk() {
+    setTahakkukEdiliyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=tahakkukEt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tip: 'SabitGider', toplu: true, donem }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      const atl = (j.atlanan || []).filter(a => !a.tutarsiz);
+      showToast((j.yazilan || []).length
+        ? `${j.yazilan.length} tahakkuk yazıldı${atl.length ? `, ${atl.length} zaten edilmişti (mükerrer kayıt yok)` : ''}`
+        : (atl.length ? 'Bu dönem zaten tahakkuk edilmiş — mükerrer kayıt yapılmadı' : 'Tahakkuk edilecek kayıt yok'));
+      yukle();
+    } catch (e) { showToast('Tahakkuk edilemedi: ' + e.message); }
+    finally { setTahakkukEdiliyor(false); }
+  }
+
+  const aktifler = giderler.filter(g => !g.pasif || g.bakiye > 0.01);
+
+  return (
+    <div className="mh-yeni">
+      <div style={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:10, marginBottom:12 }}>
+        <strong>Dönem:</strong>
+        <input type="month" className="ff-input" style={{width:160}} value={donem} onChange={e=>setDonem(e.target.value)} />
+        <button className="mh-primary-btn" disabled={tahakkukEdiliyor} onClick={topluTahakkuk}>
+          {tahakkukEdiliyor ? '…' : `Toplu Tahakkuk Et (${donemEtiket(donem)})`}
+        </button>
+        <button className="mh-secondary-btn" onClick={()=>setFormModal({})}>+ Yeni Sabit Gider</button>
+      </div>
+
+      <div className="mh-table-card">
+        {loading ? <p className="mh-empty">Yükleniyor…</p> : aktifler.length === 0 ? (
+          <p className="mh-empty">Henüz sabit gider tanımlanmamış.</p>
+        ) : (
+          <table className="mh-excel-table">
+            <thead>
+              <tr><th>Gider</th><th>Kategori</th><th>Aylık Tutar</th><th>Ödeme Günü</th><th>Kalan Borç</th><th>Son Tahakkuk</th><th>Durum</th><th>İşlemler</th></tr>
+            </thead>
+            <tbody>
+              {aktifler.map(g => (
+                <tr key={g.id}>
+                  <td>{g.ad}</td>
+                  <td>{g.kategori}</td>
+                  <td className="mh-tutar-cell">{TL(g.tutar)}</td>
+                  <td>{g.odemeGunu ? `Her ayın ${g.odemeGunu}'i` : '—'}</td>
+                  <td className="mh-tutar-cell"><strong>{TL(g.bakiye)}</strong></td>
+                  <td>{g.sonTahakkukDonem ? `${donemEtiket(g.sonTahakkukDonem)} (${g.sonTahakkukTarih})` : '—'}</td>
+                  <td>
+                    {g.pasif && <span className="mh-durum mh-durum-kirmizi">Pasif</span>}
+                    {!g.pasif && !g.tahakkukEdildi && <span className="mh-durum mh-durum-kirmizi">Bu ay tahakkuk yok</span>}
+                  </td>
+                  <td>
+                    <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+                      {!g.tahakkukEdildi && !g.pasif && (
+                        <button className="mh-secondary-btn"
+                          onClick={()=>tahakkukTekil('SabitGider', g, g.tutar, donem, showToast, yukle)}>Tahakkuk Et</button>
+                      )}
+                      <button className="mh-secondary-btn" onClick={()=>setOdemeModal(g)}>Ödeme Yap</button>
+                      <button className="mh-secondary-btn" onClick={()=>setHareketModal({ ad:g.ad })}>Hareketler</button>
+                      <button className="mh-secondary-btn" onClick={()=>setFormModal(g)}>Düzenle</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {formModal && (
+        <SabitGiderFormModal kayit={formModal} kategoriler={kategoriler} showToast={showToast}
+          onClose={()=>setFormModal(null)} onSaved={()=>{setFormModal(null);yukle();}} />
+      )}
+      {odemeModal && (
+        <TahakkukOdemeModal tip="SabitGider" kayit={odemeModal} donem={donem} showToast={showToast}
+          onClose={()=>setOdemeModal(null)} onSaved={()=>{setOdemeModal(null);yukle();}} />
+      )}
+      {hareketModal && <HareketDokumuModal ad={hareketModal.ad} onClose={()=>setHareketModal(null)} />}
+    </div>
+  );
+}
+
+function SabitGiderFormModal({ kayit, kategoriler, showToast, onClose, onSaved }) {
+  const yeni = !kayit.id;
+  const [ad, setAd] = useState(kayit.ad || '');
+  const [kategori, setKategori] = useState(kayit.kategori || '');
+  const [tutar, setTutar] = useState(kayit.tutar ? String(kayit.tutar) : '');
+  const [odemeGunu, setOdemeGunu] = useState(kayit.odemeGunu || '');
+  const [pasif, setPasif] = useState(!!kayit.pasif);
+  const [kaydediyor, setKaydediyor] = useState(false);
+
+  async function kaydet() {
+    if (!ad.trim()) { showToast('Gider adı gerekli'); return; }
+    setKaydediyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=sabitGider', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: kayit.id, ad, kategori, tutar, odemeGunu, pasif }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      showToast(yeni ? 'Sabit gider eklendi' : 'Güncellendi');
+      onSaved();
+    } catch (e) { showToast('Kaydedilemedi: ' + e.message); }
+    finally { setKaydediyor(false); }
+  }
+
+  return (
+    <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={onClose}>
+      <div className="mh-modal-wide" onClick={e=>e.stopPropagation()} style={{maxWidth:420}}>
+        <div className="mh-drawer-head">
+          <span>{yeni ? 'Yeni Sabit Gider' : 'Sabit Gider Düzenle'}</span>
+          <button onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="mh-drawer-body">
+          <label className="ff-label">Gider Adı *</label>
+          <input className="ff-input" value={ad} onChange={e=>setAd(e.target.value)} placeholder="Perpa Yönetim — Kira" />
+          <label className="ff-label">Kategori</label>
+          <select className="ff-select" value={kategori} onChange={e=>setKategori(e.target.value)}>
+            <option value="">— Seçin —</option>
+            {kategoriler.map(k => <option key={k} value={k}>{k}</option>)}
+          </select>
+          <label className="ff-label">Aylık Tutar</label>
+          <input className="ff-input" type="number" step="any" value={tutar} onChange={e=>setTutar(e.target.value)} />
+          <label className="ff-label">Ödeme Günü (ayın kaçı)</label>
+          <input className="ff-input" type="number" min="1" max="31" value={odemeGunu} onChange={e=>setOdemeGunu(e.target.value)} />
+          <p className="mh-hint">Bu tarih sadece hatırlatma amaçlıdır, o gün ödemek zorunda değilsiniz.</p>
+          {!yeni && (
+            <label style={{display:'flex',alignItems:'center',gap:8,marginTop:8}}>
+              <input type="checkbox" checked={pasif} onChange={e=>setPasif(e.target.checked)} />
+              Pasif (artık tahakkuk edilmesin)
+            </label>
+          )}
+          <div style={{display:'flex',gap:8,marginTop:12,justifyContent:'flex-end'}}>
+            <button className="mh-secondary-btn" onClick={onClose}>Vazgeç</button>
+            <button className="mh-primary-btn" disabled={kaydediyor} onClick={kaydet}>{kaydediyor ? '…' : 'Kaydet'}</button>
           </div>
         </div>
       </div>

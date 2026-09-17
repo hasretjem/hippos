@@ -383,11 +383,13 @@ function rowToFaturaFis(r) {
 const TAHSILAT_TAB = {
   tab: 'Tahsilat Makbuzları',
   headers: ['ID', 'Tarih', 'Gun', 'Ay', 'Yil', 'FirmaAdi', 'FaturaNo', 'Aciklama',
-    'OdemeTuru', 'OdemeDetay', 'Tutar', 'OncekiBakiye', 'YeniBakiye', 'KaynakEkstreID', 'KayitZamani'],
+    'OdemeTuru', 'OdemeDetay', 'Tutar', 'OncekiBakiye', 'YeniBakiye', 'KaynakEkstreID', 'KayitZamani',
+    'KasaKaynak', 'LimitKaynak'],
 };
 
 function rowToTahsilat(r) {
   return {
+    kasaKaynak: r[15] || '', limitKaynak: r[16] || '',
     id: r[0], tarih: r[1], gun: r[2], ay: r[3], yil: r[4], firmaAdi: r[5] || '',
     faturaNo: r[6] || '', aciklama: r[7] || '', odemeTuru: r[8] || '', odemeDetay: r[9] || '',
     tutar: sayiCoz(r[10]), oncekiBakiye: sayiCoz(r[11]), yeniBakiye: sayiCoz(r[12]),
@@ -454,6 +456,72 @@ function hesapHareketiGerekir(odemeTuru) {
 // "Devir" ödeme türü kasa/banka hareketi ÜRETMEZ (hesapHareketiGerekir false döner).
 // Devir faturaları bu kategoriyle yazılır; gider raporları bu kategoriyi hariç tutmalı.
 const DEVIR_KATEGORI = 'Devir (Gider Değil)';
+
+// ---- Personel + Sabit Giderler (tahakkuk modülü) ----
+// Tahakkuk = ayın 1'ine "Cari" fatura satırı (borç doğar). Ödeme = Tahsilat satırı
+// (borç düşer). Böylece cari/banka/kasa mantığı mevcut altyapıyla aynı çalışır.
+const PERSONEL_TAB = {
+  tab: 'Personel',
+  headers: ['ID', 'AdSoyad', 'Telefon', 'Gorev', 'IseGiris', 'NetMaas',
+    'NakitLimit', 'HavaleLimit', 'CikisTarihi', 'KayitZamani'],
+};
+const SABIT_GIDER_TAB = {
+  tab: 'Sabit Giderler',
+  headers: ['ID', 'Ad', 'Kategori', 'Tutar', 'OdemeGunu', 'Pasif', 'KayitZamani'],
+};
+const TAHAKKUK_TAB = {
+  tab: 'Tahakkuklar',
+  headers: ['ID', 'Tip', 'KayitId', 'Ad', 'Donem', 'Tarih', 'Tutar', 'FaturaFisId', 'KayitZamani'],
+};
+const DEVAMSIZLIK_TAB = {
+  tab: 'Devamsızlık',
+  headers: ['ID', 'PersonelId', 'Tarih', 'Tur', 'Aciklama', 'KayitZamani'],
+};
+const PERSONEL_KATEGORI = 'Personel Gideri';
+// Cepten ödeme yöntemleri -> ortaklar carisine alacak (yatırım) yazar.
+const CEPTEN_ORTAK = { 'Hasret Cepten': 'Hasret Cem Arslan', 'Hasan Cepten': 'Hasan Arslan' };
+
+function rowToPersonel(r) {
+  return {
+    id: r[0], adSoyad: r[1] || '', telefon: r[2] || '', gorev: r[3] || '',
+    iseGiris: r[4] || '', netMaas: sayiCoz(r[5]), nakitLimit: sayiCoz(r[6]),
+    havaleLimit: sayiCoz(r[7]), cikisTarihi: r[8] || '', kayitZamani: r[9] || '',
+  };
+}
+function rowToSabitGider(r) {
+  return {
+    id: r[0], ad: r[1] || '', kategori: r[2] || '', tutar: sayiCoz(r[3]),
+    odemeGunu: r[4] || '', pasif: r[5] === 'TRUE', kayitZamani: r[6] || '',
+  };
+}
+function rowToTahakkuk(r) {
+  return {
+    id: r[0], tip: r[1] || '', kayitId: r[2] || '', ad: r[3] || '', donem: r[4] || '',
+    tarih: r[5] || '', tutar: sayiCoz(r[6]), faturaFisId: r[7] || '', kayitZamani: r[8] || '',
+  };
+}
+function rowToDevamsizlik(r) {
+  return {
+    id: r[0], personelId: r[1] || '', tarih: r[2] || '', tur: r[3] || 'Tam',
+    aciklama: r[4] || '', kayitZamani: r[5] || '',
+  };
+}
+
+// 'GG.AA.YYYY' -> '2026-10' ; geçersizse ''
+function donemAnahtari(trTarih) {
+  const d = trTarihiCozServer(trTarih);
+  if (!d) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+// '2026-10' -> '01.10.2026' (tahakkuk her zaman ayın 1'ine yazılır)
+function donemIlkGunu(donem) {
+  const [y, a] = String(donem).split('-');
+  return `01.${a}.${y}`;
+}
+function bugununDonemi() {
+  const d = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+  return donemAnahtari(d);
+}
 
 const AYAR_TAB = { tab: 'Muhasebe Ayarları', headers: ['Anahtar', 'Deger', 'KayitZamani'] };
 
@@ -2045,7 +2113,10 @@ export default async function handler(req, res) {
       if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
       const hedefTarih = req.query.tarih
         || new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
-      const rows = await getRows(sheets, FATURA_FIS_TAB);
+      const [rows, tahRowsGH] = await Promise.all([
+        getRows(sheets, FATURA_FIS_TAB),
+        getRows(sheets, TAHSILAT_TAB),
+      ]);
       const kayitlar = rows
         .map(rowToFaturaFis)
         .filter((k) => k.gunlukHarcama && k.tarih === hedefTarih)
@@ -2053,8 +2124,17 @@ export default async function handler(req, res) {
           id: k.id, firmaAdi: k.firmaAdi, giderKategorisi: k.giderKategorisi,
           aciklama: k.aciklama, tutar: k.faturaTutari,
           kaynak: k.anaKasaHarcama ? 'anaKasa' : 'gunlukKasa',
-          kayitZamani: k.kayitZamani,
-        }));
+          kayitZamani: k.kayitZamani, silinebilir: true,
+        }))
+        // Personel / sabit gider NAKİT ödemeleri de kasadan çıkar; bu ekranlarda
+        // görünür ama buradan silinemez (kaynağı Tahsilat Makbuzları).
+        .concat(tahRowsGH.map(rowToTahsilat)
+          .filter((t) => t.kasaKaynak && t.tarih === hedefTarih)
+          .map((t) => ({
+            id: t.id, firmaAdi: t.firmaAdi, giderKategorisi: 'Personel / Sabit Gider Ödemesi',
+            aciklama: t.aciklama, tutar: t.tutar, kaynak: t.kasaKaynak,
+            kayitZamani: t.kayitZamani, silinebilir: false,
+          })));
       const anaKasa = kayitlar.filter((k) => k.kaynak === 'anaKasa');
       const gunlukKasa = kayitlar.filter((k) => k.kaynak === 'gunlukKasa');
       return res.status(200).json({
@@ -2278,6 +2358,336 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, devirTarihi });
       }
       return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // ============================================================
+    // PERSONEL + SABİT GİDERLER (tahakkuk modülü)
+    // ============================================================
+
+    // Personel listesi: kayıt bilgileri + bu dönemin cari durumu.
+    if (resource === 'personel') {
+      if (req.method === 'GET') {
+        const donem = req.query.donem || bugununDonemi();
+        const [pRows, ffRows, tahRows, tkRows, dvRows] = await Promise.all([
+          getRows(sheets, PERSONEL_TAB),
+          getRows(sheets, FATURA_FIS_TAB),
+          getRows(sheets, TAHSILAT_TAB),
+          getRows(sheets, TAHAKKUK_TAB),
+          getRows(sheets, DEVAMSIZLIK_TAB),
+        ]);
+        const kayitlar = ffRows.map(rowToFaturaFis);
+        const tahsilatlar = tahRows.map(rowToTahsilat);
+        const tahakkuklar = tkRows.map(rowToTahakkuk);
+        const devamsizliklar = dvRows.map(rowToDevamsizlik);
+
+        const personeller = pRows.map(rowToPersonel).map((pr) => {
+          const kendiTahakkuk = tahakkuklar.filter((t) => t.tip === 'Personel' && t.kayitId === pr.id);
+          const buDonem = kendiTahakkuk.find((t) => t.donem === donem);
+          const sonTahakkuk = kendiTahakkuk.slice().sort((a, b) => (a.donem < b.donem ? 1 : -1))[0];
+          // Dönem içi ödemeler (kesinti dahil) — limitler her ay sıfırlanır.
+          const donemOdemeleri = tahsilatlar.filter((t) => t.firmaAdi === pr.adSoyad && donemAnahtari(t.tarih) === donem);
+          const odenenNakit = donemOdemeleri
+            .filter((t) => t.odemeTuru === 'Nakit' || (t.odemeTuru === 'Kesinti' && t.limitKaynak === 'Nakit'))
+            .reduce((x, t) => x + t.tutar, 0);
+          const odenenHavale = donemOdemeleri
+            .filter((t) => t.odemeTuru !== 'Nakit' && !(t.odemeTuru === 'Kesinti' && t.limitKaynak === 'Nakit'))
+            .reduce((x, t) => x + t.tutar, 0);
+          const dv = devamsizliklar.filter((d) => d.personelId === pr.id && donemAnahtari(d.tarih) === donem);
+          const devamsizGun = dv.reduce((x, d) => x + (d.tur === 'Yarım' ? 0.5 : 1), 0);
+          const r2 = (x) => Math.round(x * 100) / 100;
+          return {
+            ...pr,
+            bakiye: firmaBakiyesi(pr.adSoyad, kayitlar, tahsilatlar),
+            buDonemTahakkuk: buDonem ? buDonem.tutar : 0,
+            tahakkukEdildi: !!buDonem,
+            sonTahakkukDonem: sonTahakkuk ? sonTahakkuk.donem : '',
+            sonTahakkukTarih: sonTahakkuk ? sonTahakkuk.tarih : '',
+            kalanNakit: r2(Math.max(0, pr.nakitLimit - odenenNakit)),
+            kalanHavale: r2(Math.max(0, pr.havaleLimit - odenenHavale)),
+            devamsizGun,
+            devamsizlik: dv,
+            // Önceki dönemlerden kapanmamış tahakkuk var mı? (bakiye > bu dönem kalanı)
+            eskiBorcVar: firmaBakiyesi(pr.adSoyad, kayitlar, tahsilatlar) > (buDonem ? buDonem.tutar : 0) + 0.01,
+          };
+        });
+        return res.status(200).json({ personeller, donem });
+      }
+
+      if (req.method === 'POST') {
+        const { id, adSoyad, telefon, gorev, iseGiris, netMaas, nakitLimit, havaleLimit, cikisTarihi } = req.body || {};
+        if (!adSoyad || !String(adSoyad).trim()) return res.status(400).json({ error: 'adSoyad gerekli' });
+        const maas = ondalikParseServer(netMaas || 0);
+        const nl = ondalikParseServer(nakitLimit || 0);
+        const hl = ondalikParseServer(havaleLimit || 0);
+        if (maas > 0 && Math.abs(nl + hl - maas) > 0.01) {
+          return res.status(400).json({ error: 'Nakit + havale sınırı net maaşa eşit olmalı' });
+        }
+        const rows = await getRows(sheets, PERSONEL_TAB);
+        const satir = [id || benzersizId(), String(adSoyad).trim(), telefon || '', gorev || '',
+          iseGiris || '', maas, nl, hl, cikisTarihi || '', new Date().toISOString()];
+        const idx = id ? rows.findIndex((r) => r[0] === id) : -1;
+        if (idx >= 0) {
+          satir[9] = rows[idx][9] || satir[9];
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID,
+            range: `${PERSONEL_TAB.tab}!A${idx + 2}:${lastCol(PERSONEL_TAB.headers)}${idx + 2}`,
+            valueInputOption: 'USER_ENTERED', requestBody: { values: [satir] },
+          });
+          return res.status(200).json({ ok: true, id: satir[0], guncellendi: true });
+        }
+        await appendRow(sheets, PERSONEL_TAB, satir);
+        return res.status(200).json({ ok: true, id: satir[0] });
+      }
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // Devamsızlık kaydı ekle / sil.
+    if (resource === 'devamsizlik') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { islem, id, personelId, tarih, tur, aciklama } = req.body || {};
+      if (islem === 'sil') {
+        if (!id) return res.status(400).json({ error: 'id gerekli' });
+        const rows = await getRows(sheets, DEVAMSIZLIK_TAB);
+        const idx = rows.findIndex((r) => r[0] === id);
+        if (idx < 0) return res.status(404).json({ error: 'Kayıt bulunamadı' });
+        const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+        const sheet = meta.data.sheets.find((x) => x.properties.title === DEVAMSIZLIK_TAB.tab);
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: SHEET_ID,
+          requestBody: { requests: [{ deleteDimension: { range: {
+            sheetId: sheet.properties.sheetId, dimension: 'ROWS', startIndex: idx + 1, endIndex: idx + 2,
+          } } }] },
+        });
+        return res.status(200).json({ ok: true });
+      }
+      if (!personelId || !tarih) return res.status(400).json({ error: 'personelId ve tarih gerekli' });
+      await appendRow(sheets, DEVAMSIZLIK_TAB, [
+        benzersizId(), personelId, tarih, tur === 'Yarım' ? 'Yarım' : 'Tam',
+        aciklama || '', new Date().toISOString(),
+      ]);
+      return res.status(200).json({ ok: true });
+    }
+
+    // Sabit gider tanımları.
+    if (resource === 'sabitGider') {
+      if (req.method === 'GET') {
+        const donem = req.query.donem || bugununDonemi();
+        const [sgRows, ffRows, tahRows, tkRows] = await Promise.all([
+          getRows(sheets, SABIT_GIDER_TAB),
+          getRows(sheets, FATURA_FIS_TAB),
+          getRows(sheets, TAHSILAT_TAB),
+          getRows(sheets, TAHAKKUK_TAB),
+        ]);
+        const kayitlar = ffRows.map(rowToFaturaFis);
+        const tahsilatlar = tahRows.map(rowToTahsilat);
+        const tahakkuklar = tkRows.map(rowToTahakkuk);
+        const giderler = sgRows.map(rowToSabitGider).map((sg) => {
+          const kendi = tahakkuklar.filter((t) => t.tip === 'SabitGider' && t.kayitId === sg.id);
+          const buDonem = kendi.find((t) => t.donem === donem);
+          const son = kendi.slice().sort((a, b) => (a.donem < b.donem ? 1 : -1))[0];
+          return {
+            ...sg,
+            bakiye: firmaBakiyesi(sg.ad, kayitlar, tahsilatlar),
+            tahakkukEdildi: !!buDonem,
+            buDonemTahakkuk: buDonem ? buDonem.tutar : 0,
+            sonTahakkukDonem: son ? son.donem : '',
+            sonTahakkukTarih: son ? son.tarih : '',
+          };
+        });
+        return res.status(200).json({ giderler, donem });
+      }
+      if (req.method === 'POST') {
+        const { id, ad, kategori, tutar, odemeGunu, pasif } = req.body || {};
+        if (!ad || !String(ad).trim()) return res.status(400).json({ error: 'ad gerekli' });
+        const rows = await getRows(sheets, SABIT_GIDER_TAB);
+        const satir = [id || benzersizId(), String(ad).trim(), kategori || '',
+          ondalikParseServer(tutar || 0), odemeGunu || '', pasif ? 'TRUE' : 'FALSE', new Date().toISOString()];
+        const idx = id ? rows.findIndex((r) => r[0] === id) : -1;
+        if (idx >= 0) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID,
+            range: `${SABIT_GIDER_TAB.tab}!A${idx + 2}:${lastCol(SABIT_GIDER_TAB.headers)}${idx + 2}`,
+            valueInputOption: 'USER_ENTERED', requestBody: { values: [satir] },
+          });
+          return res.status(200).json({ ok: true, id: satir[0], guncellendi: true });
+        }
+        await appendRow(sheets, SABIT_GIDER_TAB, satir);
+        return res.status(200).json({ ok: true, id: satir[0] });
+      }
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // Tahakkuk: seçili kayıt veya tüm liste için ayın 1'ine cari borç yazar.
+    // Aynı dönemde ikinci kez yazmaz (mükerrer koruması).
+    if (resource === 'tahakkukEt') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { tip, kayitId, donem: donemGelen, tutar: tutarGelen, toplu } = req.body || {};
+      if (tip !== 'Personel' && tip !== 'SabitGider') return res.status(400).json({ error: 'tip geçersiz' });
+      const donem = donemGelen || bugununDonemi();
+      const tarih = donemIlkGunu(donem);
+
+      const [kayitRows, tkRows] = await Promise.all([
+        getRows(sheets, tip === 'Personel' ? PERSONEL_TAB : SABIT_GIDER_TAB),
+        getRows(sheets, TAHAKKUK_TAB),
+      ]);
+      const mevcut = tkRows.map(rowToTahakkuk).filter((t) => t.tip === tip && t.donem === donem);
+      let hedefler = (tip === 'Personel' ? kayitRows.map(rowToPersonel) : kayitRows.map(rowToSabitGider));
+      // Çıkış yapılmış personel ve pasif sabit gider tahakkuk edilmez.
+      hedefler = hedefler.filter((h) => (tip === 'Personel'
+        ? !(h.cikisTarihi && trTarihiCozServer(h.cikisTarihi) && trTarihiCozServer(h.cikisTarihi) < trTarihiCozServer(tarih))
+        : !h.pasif));
+      if (!toplu) {
+        if (!kayitId) return res.status(400).json({ error: 'kayitId gerekli' });
+        hedefler = hedefler.filter((h) => h.id === kayitId);
+        if (!hedefler.length) return res.status(404).json({ error: 'Kayıt bulunamadı' });
+      }
+
+      const yazilan = [];
+      const atlanan = [];
+      for (const h of hedefler) {
+        const ad = tip === 'Personel' ? h.adSoyad : h.ad;
+        const oncekiTahakkuk = mevcut.find((t) => t.kayitId === h.id);
+        if (oncekiTahakkuk) { atlanan.push({ ad, tarih: oncekiTahakkuk.kayitZamani, donem }); continue; }
+        const tutar = (!toplu && tutarGelen !== undefined && tutarGelen !== null && tutarGelen !== '')
+          ? ondalikParseServer(tutarGelen)
+          : (tip === 'Personel' ? h.netMaas : h.tutar);
+        if (!tutar) { atlanan.push({ ad, tutarsiz: true }); continue; }
+
+        const ffId = benzersizId();
+        const p = trTarihiParcala(tarih);
+        const now = new Date();
+        await appendRow(sheets, FATURA_FIS_TAB, [
+          ffId, tarih, p.gun, p.ay, p.yil, ad, '', `${donem} dönemi tahakkuku`,
+          tip === 'Personel' ? PERSONEL_KATEGORI : (h.kategori || 'Diğer Giderler'),
+          'Cari', '', tutar, 0, 0, 0, bakiyeDurumuEtiketi(tutar), tutar, '', 'FALSE', now.toISOString(), 'FALSE',
+        ]);
+        await appendRow(sheets, TAHAKKUK_TAB, [
+          benzersizId(), tip, h.id, ad, donem, tarih, tutar, ffId, now.toISOString(),
+        ]);
+        yazilan.push({ ad, tutar });
+      }
+      return res.status(200).json({ ok: true, yazilan, atlanan, donem });
+    }
+
+    // Personel / sabit gider ödemesi. Cari borçtan düşer, gerekiyorsa banka-kart
+    // hareketi, kasa kaydı ve ortak cari alacağı oluşturur.
+    if (resource === 'tahakkukOdeme') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { tip, kayitId, tarih, odemeTuru, odemeDetay, tutar, kasaKaynak, aciklama, limitKaynak } = req.body || {};
+      if (tip !== 'Personel' && tip !== 'SabitGider') return res.status(400).json({ error: 'tip geçersiz' });
+      if (!kayitId) return res.status(400).json({ error: 'kayitId gerekli' });
+      const odenen = ondalikParseServer(tutar);
+      if (!odenen || odenen <= 0) return res.status(400).json({ error: 'tutar gerekli' });
+
+      const now = new Date();
+      const bugun = now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+      const trTarih = tarih || bugun;
+      const donem = donemAnahtari(trTarih);
+
+      const [kayitRows, ffRows, tahRows, tkRows] = await Promise.all([
+        getRows(sheets, tip === 'Personel' ? PERSONEL_TAB : SABIT_GIDER_TAB),
+        getRows(sheets, FATURA_FIS_TAB),
+        getRows(sheets, TAHSILAT_TAB),
+        getRows(sheets, TAHAKKUK_TAB),
+      ]);
+      const kayit = (tip === 'Personel' ? kayitRows.map(rowToPersonel) : kayitRows.map(rowToSabitGider))
+        .find((k) => k.id === kayitId);
+      if (!kayit) return res.status(404).json({ error: 'Kayıt bulunamadı' });
+      const ad = tip === 'Personel' ? kayit.adSoyad : kayit.ad;
+
+      const kayitlar = ffRows.map(rowToFaturaFis);
+      const tahsilatlar = tahRows.map(rowToTahsilat);
+      const tahakkuklar = tkRows.map(rowToTahakkuk);
+
+      // Kural: tahakkuk edilmeden ödeme yapılmaz (bakiye eksiye düşmesin).
+      const bakiye = firmaBakiyesi(ad, kayitlar, tahsilatlar);
+      if (bakiye <= 0) return res.status(400).json({ error: 'Bu kayıt için açık borç yok — önce tahakkuk edin' });
+      if (odenen > bakiye + 0.01) {
+        return res.status(400).json({ error: `Kalan borç ${bakiye.toFixed(2)} TL, daha fazlası ödenemez` });
+      }
+      if (!tahakkuklar.some((t) => t.tip === tip && t.kayitId === kayitId)) {
+        return res.status(400).json({ error: 'Önce tahakkuk edin' });
+      }
+
+      // Nakit ödemede geçmiş tarihte günlük kasa seçilemez (günsonu zinciri bozulmasın).
+      const kasa = kasaKaynak === 'gunlukKasa' ? 'gunlukKasa' : (kasaKaynak === 'anaKasa' ? 'anaKasa' : '');
+      if (odemeTuru === 'Nakit') {
+        if (!kasa) return res.status(400).json({ error: 'Nakit ödemede kasa seçimi gerekli' });
+        if (kasa === 'gunlukKasa' && trTarih !== bugun) {
+          return res.status(400).json({ error: 'Geçmiş tarihli nakit ödeme yalnızca ana kasadan yapılabilir' });
+        }
+      }
+
+      // Personel sınır kontrolü (limitler her dönem sıfırlanır).
+      if (tip === 'Personel' && kayit.netMaas > 0) {
+        const donemOdemeleri = tahsilatlar.filter((t) => t.firmaAdi === ad && donemAnahtari(t.tarih) === donem);
+        const nakitMi = odemeTuru === 'Nakit' || (odemeTuru === 'Kesinti' && limitKaynak === 'Nakit');
+        const oncekiAyniKanal = donemOdemeleri
+          .filter((t) => (t.odemeTuru === 'Nakit' || (t.odemeTuru === 'Kesinti' && t.limitKaynak === 'Nakit')) === nakitMi)
+          .reduce((x, t) => x + t.tutar, 0);
+        const sinir = nakitMi ? kayit.nakitLimit : kayit.havaleLimit;
+        if (sinir > 0 && oncekiAyniKanal + odenen > sinir + 0.01) {
+          const kalan = Math.max(0, sinir - oncekiAyniKanal);
+          return res.status(400).json({
+            error: `${nakitMi ? 'Nakit' : 'Havale'} ödeme üst sınırı aşıldı — kalan ${kalan.toFixed(2)} TL`,
+          });
+        }
+      }
+
+      const yeniBakiye = Math.round((bakiye - odenen) * 100) / 100;
+      const id = benzersizId();
+      const p = trTarihiParcala(trTarih);
+      await appendRow(sheets, TAHSILAT_TAB, [
+        id, trTarih, p.gun, p.ay, p.yil, ad, '', aciklama || '',
+        odemeTuru || '', odemeDetay || '', odenen, bakiye, yeniBakiye, '', now.toISOString(),
+        odemeTuru === 'Nakit' ? kasa : '', limitKaynak || '',
+      ]);
+
+      // Kredi kartı / havale -> banka-kart hareketi. Cepten ödeme -> ortak carisi.
+      const ortak = CEPTEN_ORTAK[odemeDetay];
+      if (ortak) {
+        await appendRow(sheets, ORTAK_HAREKET_TAB, [
+          benzersizId(), ortak, trTarih, 'İşletme Gideri', 'yatirim', odenen,
+          odemeTuru || '', `${ad} — ${aciklama || 'ödeme'}`, now.toISOString(),
+        ]);
+      } else if (hesapHareketiGerekir(odemeTuru)) {
+        await appendRow(sheets, BANKA_KART_TAB, [
+          benzersizId(), trTarih, odemeTuru, odemeDetay || '', 'GİDEN', odenen,
+          `${tip === 'Personel' ? 'Personel' : 'Sabit gider'} — ${ad}`, id, now.toISOString(),
+        ]);
+      }
+
+      return res.status(200).json({ ok: true, id, oncekiBakiye: bakiye, yeniBakiye });
+    }
+
+    // Bir personel / sabit gider için hareket dökümü (tahakkuklar + ödemeler).
+    if (resource === 'tahakkukHareket') {
+      if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+      const ad = req.query.ad || '';
+      if (!ad) return res.status(400).json({ error: 'ad gerekli' });
+      const [ffRows, tahRows] = await Promise.all([
+        getRows(sheets, FATURA_FIS_TAB),
+        getRows(sheets, TAHSILAT_TAB),
+      ]);
+      const kayitlar = ffRows.map(rowToFaturaFis);
+      const tahsilatlar = tahRows.map(rowToTahsilat);
+      const hareketler = [
+        ...kayitlar.filter((k) => k.firmaAdi === ad).map((k) => ({
+          tip: 'Tahakkuk', id: k.id, tarih: k.tarih, tutar: k.faturaTutari,
+          kanal: k.odemeTuru, aciklama: k.aciklama,
+        })),
+        ...tahsilatlar.filter((t) => t.firmaAdi === ad).map((t) => ({
+          tip: t.odemeTuru === 'Kesinti' ? 'Kesinti' : 'Ödeme', id: t.id, tarih: t.tarih, tutar: t.tutar,
+          kanal: `${t.odemeTuru}${t.odemeDetay ? ' — ' + t.odemeDetay : ''}${t.kasaKaynak ? ' (' + (t.kasaKaynak === 'anaKasa' ? 'Ana Kasa' : 'Günlük Kasa') + ')' : ''}`,
+          aciklama: t.aciklama,
+        })),
+      ].sort((a, b) => {
+        const da = trTarihiCozServer(a.tarih); const db = trTarihiCozServer(b.tarih);
+        return (da ? da.getTime() : 0) - (db ? db.getTime() : 0);
+      });
+      return res.status(200).json({
+        ad, hareketler, bakiye: firmaBakiyesi(ad, kayitlar, tahsilatlar),
+      });
     }
 
     // Uyumsoft'tan gelmiş ama bu ekrandan HENÜZ İŞLENMEMİŞ faturalar (kart olarak gösterilir).

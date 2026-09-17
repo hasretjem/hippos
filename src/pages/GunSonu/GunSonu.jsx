@@ -793,6 +793,9 @@ export function MiniHarcamaFormu({ baslik, showToast, kaynak = 'gunlukKasa', kay
       const kaydedilmemis = prev.filter((r) => !r.id);
       const sunucu = kayitlar.map((k) => ({
         id: k.id, neIcin: k.firmaAdi, tutar: String(k.tutar ?? ''), aciklama: k.aciklama || '',
+        // Personel / sabit gider nakit ödemeleri burada sadece görünür; kaynağı
+        // Tahsilat Makbuzları olduğu için bu ekrandan düzenlenip silinemez.
+        salt: k.silinebilir === false,
       }));
       const liste = [...sunucu, ...kaydedilmemis];
       // Her zaman en altta yeni giriş için boş bir satır dursun.
@@ -936,6 +939,7 @@ export function MiniHarcamaFormu({ baslik, showToast, kaynak = 'gunlukKasa', kay
               <input
                 className="gs-mini-ara gs-tabbable"
                 placeholder="Ne için? Ara..."
+                readOnly={s.salt}
                 value={aramalar[idx] !== undefined ? aramalar[idx] : s.neIcin}
                 onChange={e => neIcinAra(idx, e.target.value)}
                 onFocus={() => setDropdownAcik(prev => ({ ...prev, [idx]: true }))}
@@ -953,11 +957,15 @@ export function MiniHarcamaFormu({ baslik, showToast, kaynak = 'gunlukKasa', kay
               )}
             </div>
             <input type="number" placeholder="0" className="gs-mini-tutar gs-tabbable" value={s.tutar}
-              onChange={e => satirGuncelle(idx, 'tutar', e.target.value)} />
+              readOnly={s.salt} onChange={e => satirGuncelle(idx, 'tutar', e.target.value)} />
             <button className="gs-mini-aciklama-btn" title="Not ekle"
               onClick={() => setAciklamaAcik(prev => ({ ...prev, [idx]: !prev[idx] }))}>📝</button>
-            <button className="gs-mini-kaydet" onClick={() => satirKaydet(idx)}>✓</button>
-            <button className="gs-mini-sil" title="Sil" onClick={() => satirSil(idx)}>✕</button>
+            {s.salt ? (
+              <span className="gs-mini-kilit" title="Personel / sabit gider ödemesi — Muhasebe ekranından yönetilir">🔒</span>
+            ) : (<>
+              <button className="gs-mini-kaydet" onClick={() => satirKaydet(idx)}>✓</button>
+              <button className="gs-mini-sil" title="Sil" onClick={() => satirSil(idx)}>✕</button>
+            </>)}
           </div>
           {aciklamaAcik[idx] && (
             <div className="gs-mini-aciklama-pop">
