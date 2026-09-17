@@ -148,7 +148,7 @@ function rowToHareket(r) {
   return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), urunler: r.urunler || [], toplam: Number(r.toplam), mutfakNotu: r.mutfak_notu || '', personelAd: r.personel_ad || null };
 }
 function rowToOdeme(r) {
-  return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), tutar: Number(r.tutar), tur: r.tur };
+  return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), tutar: Number(r.tutar), tur: r.tur, kaynak: r.kaynak || 'hareket' };
 }
 function rowToFatura(r) {
   return {
@@ -1945,8 +1945,8 @@ export default function useHipposData(scope = 'full') {
     // Ödeme kaydı: cari_odemeler'e yaz (panelde ve günsonu tahsilatlarında görünsün)
     const odemeId = Date.now() + Math.floor(Math.random() * 1000);
     const odemeTs = Date.now();
-    setCariOdemeler((prev) => [...prev, { id: odemeId, cariId: fatura.cariId, ts: odemeTs, tutar: fatura.tutar, tur: odemeTur }]);
-    supabase.from('cari_odemeler').insert({ id: odemeId, cari_id: fatura.cariId, ts: odemeTs, tutar: fatura.tutar, tur: odemeTur })
+    setCariOdemeler((prev) => [...prev, { id: odemeId, cariId: fatura.cariId, ts: odemeTs, tutar: fatura.tutar, tur: odemeTur, kaynak: 'fatura' }]);
+    supabase.from('cari_odemeler').insert({ id: odemeId, cari_id: fatura.cariId, ts: odemeTs, tutar: fatura.tutar, tur: odemeTur, kaynak: 'fatura' })
       .then(({ error }) => { if (error) console.error('futura tam ödeme kaydı:', error.message); });
     // Fatura silindikten sonra bu carinin başka faturası ve hareketi kalmadıysa arşivle
     const kalanFatura = cariFaturalar.filter((f) => f.cariId === fatura.cariId && f.id !== faturaId);
@@ -1973,8 +1973,8 @@ export default function useHipposData(scope = 'full') {
     // Ödeme kaydı: cari_odemeler'e yaz (panelde ve günsonu tahsilatlarında görünsün)
     const odemeId = Date.now() + Math.floor(Math.random() * 1000);
     const odemeTs = Date.now();
-    setCariOdemeler((prev) => [...prev, { id: odemeId, cariId: fatura.cariId, ts: odemeTs, tutar, tur: odemeTur }]);
-    supabase.from('cari_odemeler').insert({ id: odemeId, cari_id: fatura.cariId, ts: odemeTs, tutar, tur: odemeTur })
+    setCariOdemeler((prev) => [...prev, { id: odemeId, cariId: fatura.cariId, ts: odemeTs, tutar, tur: odemeTur, kaynak: 'fatura' }]);
+    supabase.from('cari_odemeler').insert({ id: odemeId, cari_id: fatura.cariId, ts: odemeTs, tutar, tur: odemeTur, kaynak: 'fatura' })
       .then(({ error }) => { if (error) console.error('futura kısmi ödeme kaydı:', error.message); });
   }
 
