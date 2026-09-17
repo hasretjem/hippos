@@ -1036,13 +1036,23 @@ export default async function handler(req, res) {
     if (resource === 'kategoriler') {
       if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
       await ensureKategoriSeed(sheets);
-      let rows = await getRows(sheets, KATEGORI_TAB);
-      if (!rows.some((r) => metinNormalize(r[1]) === metinNormalize(DEVIR_KATEGORI))) {
+      // getRows yerine doğrudan oku — ensureTab ikinci kez çağrılmasın (API kota tasarrufu).
+      const katResult = await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: `${KATEGORI_TAB.tab}!A2:${lastCol(KATEGORI_TAB.headers)}`,
+      });
+      let katRows = ((katResult.data.values || []).filter((r) => r[0]));
+      if (!katRows.some((r) => metinNormalize(r[1]) === metinNormalize(DEVIR_KATEGORI))) {
         const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
-        await appendRow(sheets, KATEGORI_TAB, [benzersizId(), DEVIR_KATEGORI, tarih]);
-        rows = await getRows(sheets, KATEGORI_TAB);
+        const lc = lastCol(KATEGORI_TAB.headers);
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID, range: `${KATEGORI_TAB.tab}!A2:${lc}`,
+          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
+          requestBody: { values: [[benzersizId(), DEVIR_KATEGORI, tarih]] },
+        });
+        katRows.push([benzersizId(), DEVIR_KATEGORI, tarih]);
       }
-      return res.status(200).json({ kategoriler: rows.map((r) => r[1]).filter(Boolean), devirKategori: DEVIR_KATEGORI });
+      return res.status(200).json({ kategoriler: katRows.map((r) => r[1]).filter(Boolean), devirKategori: DEVIR_KATEGORI });
     }
 
     if (resource === 'kategoriEkle') {
