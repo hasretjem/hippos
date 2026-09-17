@@ -1788,7 +1788,8 @@ export default function useHipposData(scope = 'full') {
   // ================== CARİ YÖNETİMİ ==================
   function getCariBakiye(cariId) {
     const borc = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
-    const odenen = cariOdemeler.filter((o) => o.cariId === cariId).reduce((s, o) => s + o.tutar, 0);
+    // Sadece hareket kaynaklı ödemeler hareket borcundan düşülür; fatura ödemeleri karışmaz
+    const odenen = cariOdemeler.filter((o) => o.cariId === cariId && (o.kaynak || 'hareket') !== 'fatura').reduce((s, o) => s + o.tutar, 0);
     const faturaKalan = cariFaturalar.filter((f) => f.cariId === cariId).reduce((s, f) => s + (f.tutar - (f.tahsilatTutar || 0)), 0);
     return Math.max(0, borc + faturaKalan - odenen);
   }
