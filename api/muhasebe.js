@@ -399,7 +399,8 @@ function rowToTahsilat(r) {
 // GunlukHarcama=TRUE olanlar kasa harcama mini formunda görünür, FALSE olanlar sadece muhasebede.
 const FF_FIRMA_TAB = { tab: 'Fatura Firmaları', headers: ['ID', 'FirmaAdi', 'GiderKategorisi', 'GunlukHarcama', 'KayitZamani'] };
 
-const ODEME_YONTEMI_TAB = { tab: 'Ödeme Yöntemleri', headers: ['ID', 'Tur', 'Ad', 'KayitZamani'] };
+// Limit/AcilisBakiyesi/AcilisTarihi sütunları sonradan eklendi (eski satırlar boş kalır = 0).
+const ODEME_YONTEMI_TAB = { tab: 'Ödeme Yöntemleri', headers: ['ID', 'Tur', 'Ad', 'KayitZamani', 'Limit', 'AcilisBakiyesi', 'AcilisTarihi'] };
 const VARSAYILAN_ODEME_YONTEMLERI = [
   ['Nakit', ''],
   ['Kredi Kartı', 'Ödeal Kredi Kartı'],
@@ -410,7 +411,10 @@ const VARSAYILAN_ODEME_YONTEMLERI = [
 ];
 
 function rowToOdemeYontemi(r) {
-  return { id: r[0], tur: r[1] || '', ad: r[2] || '' };
+  return {
+    id: r[0], tur: r[1] || '', ad: r[2] || '',
+    limit: sayiCoz(r[4]), acilisBakiyesi: sayiCoz(r[5]), acilisTarihi: r[6] || '',
+  };
 }
 
 // Sekme yoksa varsayılan yöntemlerle tohumlanır; varsa dokunulmaz (kullanıcının
@@ -444,6 +448,76 @@ function rowToBankaKartHareket(r) {
 // Sadece kart/banka üzerinden yapılan ödemeler hesap hareketine düşer (nakit ve cari düşmez).
 function hesapHareketiGerekir(odemeTuru) {
   return odemeTuru === 'Kredi Kartı' || odemeTuru === 'Banka Havalesi';
+}
+
+// ---- Devir (eski sistemden açılış) ----
+// "Devir" ödeme türü kasa/banka hareketi ÜRETMEZ (hesapHareketiGerekir false döner).
+// Devir faturaları bu kategoriyle yazılır; gider raporları bu kategoriyi hariç tutmalı.
+const DEVIR_KATEGORI = 'Devir (Gider Değil)';
+
+const AYAR_TAB = { tab: 'Muhasebe Ayarları', headers: ['Anahtar', 'Deger', 'KayitZamani'] };
+
+// Okuma sekmeyi OLUŞTURMAZ: aynı anda birden fazla ekran açılınca paralel isteklerin
+// ikisi birden sekme eklemeye çalışıp hata vermesin. Sekme yoksa ayar boş sayılır;
+// sekme sadece ayar kaydedilirken (POST) oluşturulur.
+async function ayarGetir(sheets, anahtar) {
+  try {
+    const rows = await getRowsAnahtarli(sheets, AYAR_TAB, false);
+    const r = rows.find((x) => x[0] === anahtar);
+    return r ? String(r[1] || '') : '';
+  } catch {
+    return '';
+  }
+}
+
+async function getRowsAnahtarli(sheets, tabConfig, olustur = true) {
+  if (olustur) await ensureTab(sheets, tabConfig.tab, tabConfig.headers);
+  const result = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `${tabConfig.tab}!A2:${lastCol(tabConfig.headers)}`,
+  });
+  return (result.data.values || []).filter((r) => r[0]);
+}
+
+// Devir tarihi DAHİL ve öncesi eski sistemde kalır; true = kart olarak gösterilebilir.
+function devirSonrasiMi(tarihStr, devirTarihi) {
+  if (!devirTarihi) return true;
+  const t = trTarihiCozServer(tarihStr);
+  if (!t) return true;
+  return t.getTime() > devirTarihi.getTime();
+}
+
+// Hesap bazlı güncel durum. Açılış tarihi DAHİL ve öncesindeki hareketler açılış
+// tutarının içinde sayılır, sadece SONRAKİ hareketler eklenir.
+// Limit > 0 ise hesap kredi kartı gibi hesaplanır: açılış tutarı = kart borcu.
+function hesapOzetleri(yontemler, hareketler) {
+  const r2 = (x) => Math.round(x * 100) / 100;
+  return yontemler
+    .filter((o) => hesapHareketiGerekir(o.tur) && o.ad)
+    .map((o) => {
+      const acilis = trTarihiCozServer(o.acilisTarihi);
+      let giren = 0;
+      let giden = 0;
+      hareketler.forEach((h) => {
+        if (h.hesapAdi !== o.ad) return;
+        if (acilis) {
+          const t = trTarihiCozServer(h.tarih);
+          if (t && t.getTime() <= acilis.getTime()) return;
+        }
+        if (h.yon === 'GİREN') giren += h.tutar;
+        else if (h.yon === 'GİDEN') giden += h.tutar;
+      });
+      const temel = {
+        id: o.id, tur: o.tur, ad: o.ad, limit: o.limit,
+        acilisBakiyesi: o.acilisBakiyesi, acilisTarihi: o.acilisTarihi,
+        giren: r2(giren), giden: r2(giden),
+      };
+      if (o.limit > 0) {
+        const borc = r2(o.acilisBakiyesi + giden - giren);
+        return { ...temel, kartModu: true, borc, kullanilabilir: r2(o.limit - borc) };
+      }
+      return { ...temel, kartModu: false, bakiye: r2(o.acilisBakiyesi + giren - giden) };
+    });
 }
 
 function trTarihiParcala(trTarih) {
@@ -959,75 +1033,16 @@ export default async function handler(req, res) {
     }
 
     // ---- Kategori sözlüğü (Kategori Sözlüğü sekmesi — sabit değil, kullanıcı ekleyebiliyor) ----
-    // ---- BİR KERELİK ONARIM (4 Eylül 2026) — FaturaID eksik giden 20 eski Gider satırını
-    // BelgeNo'ya (fatura no) göre gruplayıp FaturaID doldurur + eksik Toptancı Hareketleri'ni
-    // oluşturur. Bu endpoint tek seferlik kullanım için, iş bitince koddan kaldırılacak.
-    if (resource === 'onarimFaturaId') {
-      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-      const giderRows = await getRows(sheets, GIDER_TAB);
-      const bozukSatirlar = giderRows.map((r, i) => ({ r, i })).filter(({ r }) => !r[10] && r[7]);
-      const gruplar = {};
-      bozukSatirlar.forEach(({ r, i }) => {
-        const belgeNo = r[7];
-        if (!gruplar[belgeNo]) gruplar[belgeNo] = { satirlar: [], tedarikciAdi: (r[3] || '').split(' — ')[0], tarih: r[1] };
-        gruplar[belgeNo].satirlar.push(i);
-      });
-
-      const TOPTANCILAR_TABCONFIG = { tab: 'Toptancılar', headers: ['ID', 'Firma Adı', 'Kategori', 'Telefon', 'Yetkili Kişi', 'Adres', 'Not', 'Bakiye', 'Eklenme Tarihi', 'Durum'] };
-      const toptancilarRows = await getRows(sheets, TOPTANCILAR_TABCONFIG);
-      const sonuc = [];
-
-      for (const [belgeNo, grup] of Object.entries(gruplar)) {
-        const faturaId = benzersizId();
-        // Her satırı yeni FaturaID ile güncelle.
-        for (const idx of grup.satirlar) {
-          const rowValues = [...giderRows[idx]];
-          rowValues[10] = faturaId;
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A${idx + 2}:${GIDER_LAST_COL}${idx + 2}`,
-            valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
-          });
-        }
-        // Toptancı bul/oluştur.
-        const tedNorm = metinNormalize(grup.tedarikciAdi);
-        let eslesen = toptancilarRows.find((r) => metinNormalize(r[1]) === tedNorm);
-        let toptanciId;
-        if (eslesen) {
-          toptanciId = eslesen[0];
-        } else {
-          toptanciId = benzersizId();
-          const ilkSatir = giderRows[grup.satirlar[0]];
-          await appendRow(sheets, TOPTANCILAR_TABCONFIG, [
-            toptanciId, grup.tedarikciAdi, ilkSatir[2] || '', '', '', '', 'XML faturadan otomatik oluşturuldu (onarım)', 0, grup.tarih, 'aktif',
-          ]);
-          toptancilarRows.push([toptanciId, grup.tedarikciAdi]);
-        }
-        // Gider satırlarına toptanciId'yi de yaz (9. index) + Toptancı Hareketi oluştur.
-        let toplamTutar = 0;
-        for (const idx of grup.satirlar) {
-          const rowValues = [...giderRows[idx]];
-          rowValues[8] = toptanciId;
-          rowValues[10] = faturaId;
-          toplamTutar += sayiCoz(rowValues[4]);
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A${idx + 2}:${GIDER_LAST_COL}${idx + 2}`,
-            valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
-          });
-        }
-        await ensureTab(sheets, TOPTANCI_HAREKET_TAB.tab, TOPTANCI_HAREKET_TAB.headers);
-        await appendRow(sheets, TOPTANCI_HAREKET_TAB, [
-          benzersizId(), toptanciId, grup.tarih, 'fatura', Math.round(toplamTutar * 100) / 100, `Fatura No: ${belgeNo}`, faturaId, '', new Date().toISOString(),
-        ]);
-        sonuc.push({ belgeNo, faturaId, toptanciId, kalemSayisi: grup.satirlar.length, tutar: toplamTutar });
-      }
-      return res.status(200).json({ ok: true, onarilan: sonuc });
-    }
-
     if (resource === 'kategoriler') {
       if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
       await ensureKategoriSeed(sheets);
-      const rows = await getRows(sheets, KATEGORI_TAB);
-      return res.status(200).json({ kategoriler: rows.map((r) => r[1]).filter(Boolean) });
+      let rows = await getRows(sheets, KATEGORI_TAB);
+      if (!rows.some((r) => metinNormalize(r[1]) === metinNormalize(DEVIR_KATEGORI))) {
+        const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+        await appendRow(sheets, KATEGORI_TAB, [benzersizId(), DEVIR_KATEGORI, tarih]);
+        rows = await getRows(sheets, KATEGORI_TAB);
+      }
+      return res.status(200).json({ kategoriler: rows.map((r) => r[1]).filter(Boolean), devirKategori: DEVIR_KATEGORI });
     }
 
     if (resource === 'kategoriEkle') {
@@ -1895,6 +1910,7 @@ export default async function handler(req, res) {
         const p = trTarihiParcala(trTarih);
         const fTutar = ondalikParseServer(faturaTutari);
         const oTutar = ondalikParseServer(odemeTutari || 0);
+        const kategoriYaz = odemeTuru === 'Devir' ? DEVIR_KATEGORI : (giderKategorisi || '');
 
         // Kayıt SONRASI bakiye — mevcut bakiyeye bu faturanın kalan borcu ekleniyor.
         const [ffRows, tahRows] = await Promise.all([
@@ -1908,7 +1924,7 @@ export default async function handler(req, res) {
         const gunlukHarcama = req.body.gunlukHarcama === true || req.body.gunlukHarcama === 'true';
         await appendRow(sheets, FATURA_FIS_TAB, [
           id, trTarih, p.gun, p.ay, p.yil, String(firmaAdi).trim(), faturaNo || '', aciklama || '',
-          giderKategorisi || '', odemeTuru || '', odemeDetay || '', fTutar,
+          kategoriYaz, odemeTuru || '', odemeDetay || '', fTutar,
           ondalikParseServer(req.body.kdvTutari || 0),
           ondalikParseServer(req.body.iskontoTutari || 0),
           oTutar, bakiyeDurumuEtiketi(yeniBakiye), yeniBakiye, kaynakFaturaID || '',
@@ -2159,39 +2175,117 @@ export default async function handler(req, res) {
         getRows(sheets, BANKA_KART_TAB),
         ensureOdemeYontemleri(sheets),
       ]);
-      let records = hareketRows.map(rowToBankaKartHareket);
+      const tumHareketler = hareketRows.map(rowToBankaKartHareket);
+      const yontemler = oyRows.map(rowToOdemeYontemi);
+      let records = tumHareketler;
       if (req.query.hesapAdi) records = records.filter((r) => r.hesapAdi === req.query.hesapAdi);
-      const hesaplar = oyRows.map(rowToOdemeYontemi).filter((o) => hesapHareketiGerekir(o.tur) && o.ad);
-      return res.status(200).json({ records, hesaplar });
+      const hesaplar = yontemler.filter((o) => hesapHareketiGerekir(o.tur) && o.ad);
+      const ozet = hesapOzetleri(yontemler, tumHareketler);
+      return res.status(200).json({ records, hesaplar, ozet });
     }
 
     // Tek hareket ekle (günsonu POS → Ödeal, peşin ödeme vb.)
+    // kaynakId verilirse AYNI kaynak için yeni satır açılmaz, mevcut satır güncellenir
+    // (Günsonu aynı gün birden fazla kaydedilince POS'un mükerrer yazılmasını önler).
     if (resource === 'bankaKartHareketEkle') {
       if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-      const { tarih, hesapTuru, hesapAdi, yon, tutar, aciklama } = req.body || {};
-      if (!tutar || !hesapTuru) return res.status(400).json({ error: 'tutar ve hesapTuru gerekli' });
+      const { tarih, hesapTuru, hesapAdi, yon, tutar, aciklama, kaynakId } = req.body || {};
+      const tutarSayi = ondalikParseServer(tutar);
+      if (!hesapTuru || (!kaynakId && !tutarSayi)) return res.status(400).json({ error: 'tutar ve hesapTuru gerekli' });
       const now = new Date();
       const trTarih = tarih || now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+      const yonYaz = yon || 'GİREN';
+
+      if (kaynakId) {
+        const rows = await getRows(sheets, BANKA_KART_TAB);
+        let idx = rows.findIndex((r) => r[7] === kaynakId);
+        // Bu düzeltmeden ÖNCE yazılmış (KaynakID boş) aynı günün satırı varsa onu sahiplen.
+        if (idx < 0) {
+          idx = rows.findIndex((r) => !r[7] && r[1] === trTarih && (r[3] || '') === (hesapAdi || '')
+            && (r[4] || '') === yonYaz && (r[6] || '') === (aciklama || ''));
+        }
+        if (idx >= 0) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID,
+            range: `${BANKA_KART_TAB.tab}!A${idx + 2}:${lastCol(BANKA_KART_TAB.headers)}${idx + 2}`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [[rows[idx][0], trTarih, hesapTuru, hesapAdi || '', yonYaz, tutarSayi, aciklama || '', kaynakId, now.toISOString()]] },
+          });
+          return res.status(200).json({ ok: true, guncellendi: true });
+        }
+        if (!tutarSayi) return res.status(200).json({ ok: true, atlandi: true });
+      }
+
       await appendRow(sheets, BANKA_KART_TAB, [
-        benzersizId(), trTarih, hesapTuru, hesapAdi || '', yon || 'GİREN',
-        ondalikParseServer(tutar), aciklama || '', '', now.toISOString(),
+        benzersizId(), trTarih, hesapTuru, hesapAdi || '', yonYaz,
+        tutarSayi, aciklama || '', kaynakId || '', now.toISOString(),
       ]);
       return res.status(200).json({ ok: true });
+    }
+
+    // Banka/kart hesabının açılış bakiyesi, açılış tarihi ve limiti (Ödeme Yöntemleri satırı).
+    if (resource === 'hesapAyarKaydet') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { id, limit, acilisBakiyesi, acilisTarihi } = req.body || {};
+      if (!id) return res.status(400).json({ error: 'id gerekli' });
+      if (acilisTarihi && !trTarihiCozServer(acilisTarihi)) return res.status(400).json({ error: 'açılış tarihi GG.AA.YYYY olmalı' });
+      const rows = await ensureOdemeYontemleri(sheets);
+      const idx = rows.findIndex((r) => r[0] === id);
+      if (idx < 0) return res.status(404).json({ error: 'hesap bulunamadı' });
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `${ODEME_YONTEMI_TAB.tab}!E${idx + 2}:G${idx + 2}`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [[ondalikParseServer(limit), ondalikParseServer(acilisBakiyesi), acilisTarihi || '']] },
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    // Genel muhasebe ayarları — şimdilik sadece devir tarihi.
+    if (resource === 'muhasebeAyar') {
+      if (req.method === 'GET') {
+        return res.status(200).json({ devirTarihi: await ayarGetir(sheets, 'devirTarihi') });
+      }
+      if (req.method === 'POST') {
+        const devirTarihi = String((req.body || {}).devirTarihi || '').trim();
+        if (devirTarihi && !/^\d{2}\.\d{2}\.\d{4}$/.test(devirTarihi)) {
+          return res.status(400).json({ error: 'devir tarihi GG.AA.YYYY olmalı' });
+        }
+        const rows = await getRowsAnahtarli(sheets, AYAR_TAB);
+        const idx = rows.findIndex((r) => r[0] === 'devirTarihi');
+        const deger = [['devirTarihi', devirTarihi, new Date().toISOString()]];
+        if (idx >= 0) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID, range: `${AYAR_TAB.tab}!A${idx + 2}:C${idx + 2}`,
+            valueInputOption: 'RAW', requestBody: { values: deger },
+          });
+        } else {
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: SHEET_ID, range: `${AYAR_TAB.tab}!A2:C`,
+            valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', requestBody: { values: deger },
+          });
+        }
+        return res.status(200).json({ ok: true, devirTarihi });
+      }
+      return res.status(405).json({ error: 'Method not allowed' });
     }
 
     // Uyumsoft'tan gelmiş ama bu ekrandan HENÜZ İŞLENMEMİŞ faturalar (kart olarak gösterilir).
     // Kaynak: mevcut XML içe aktarma verisi (Giderler sekmesi, FaturaID bazında gruplanır).
     if (resource === 'bekleyenFaturalar') {
       if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-      const [giderRows, ffRows] = await Promise.all([
+      const [giderRows, ffRows, devirStr] = await Promise.all([
         getRows(sheets, GIDER_TAB),
         getRows(sheets, FATURA_FIS_TAB),
+        ayarGetir(sheets, 'devirTarihi'),
       ]);
+      const devirTarihi = trTarihiCozServer(devirStr);
       const islenmis = new Set(ffRows.map(rowToFaturaFis).map((r) => r.kaynakFaturaID).filter(Boolean));
 
       const gruplar = new Map();
       giderRows.map(rowToGider).forEach((g) => {
         if (!g.faturaId || islenmis.has(g.faturaId)) return;
+        if (!devirSonrasiMi(g.tarih, devirTarihi)) return; // devir öncesi fatura eski sistemde
         const mevcut = gruplar.get(g.faturaId) || {
           faturaID: g.faturaId, tarih: g.tarih, firmaAdi: g.tedarikciAciklama,
           faturaNo: g.belgeNo, kategori: g.kategori, tutar: 0, kdvTutari: 0, satirSayisi: 0,
@@ -2219,13 +2313,16 @@ export default async function handler(req, res) {
     // (Tahsilat Makbuzu ekranındaki kartlar).
     if (resource === 'bekleyenOdemeler') {
       if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-      const [ekstreRows, tahRows] = await Promise.all([
+      const [ekstreRows, tahRows, devirStr] = await Promise.all([
         getRows(sheets, EKSTRE_TAB),
         getRows(sheets, TAHSILAT_TAB),
+        ayarGetir(sheets, 'devirTarihi'),
       ]);
+      const devirTarihi = trTarihiCozServer(devirStr);
       const kullanilan = new Set(tahRows.map(rowToTahsilat).map((t) => t.kaynakEkstreID).filter(Boolean));
       const records = ekstreRows.map(rowToEkstre)
         .filter((e) => e.yon === 'GİDEN' && !kullanilan.has(e.id))
+        .filter((e) => devirSonrasiMi(excelTarihiCoz(e.tarih), devirTarihi))
         .sort((a, b) => (trTarihiCozServer(b.tarih)?.getTime() || 0) - (trTarihiCozServer(a.tarih)?.getTime() || 0));
       return res.status(200).json({ records });
     }

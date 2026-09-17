@@ -225,8 +225,48 @@ function GiderlerSekmesi({ showToast }) {
   }
   useEffect(() => { bekleyenSayisiniTazele(); }, []);
 
+  const [devirTarihi, setDevirTarihi] = useState('');
+  const [devirInput, setDevirInput] = useState('');
+  const [devirKaydediyor, setDevirKaydediyor] = useState(false);
+  useEffect(() => {
+    fetch('/api/muhasebe?resource=muhasebeAyar')
+      .then(r => r.json())
+      .then(j => { setDevirTarihi(j.devirTarihi || ''); setDevirInput(j.devirTarihi || ''); })
+      .catch(() => {});
+  }, []);
+
+  async function devirKaydet() {
+    const deger = devirInput.trim();
+    if (deger && !/^\d{2}\.\d{2}\.\d{4}$/.test(deger)) { showToast('Tarih GG.AA.YYYY olmalı (örn. 30.09.2026)'); return; }
+    setDevirKaydediyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=muhasebeAyar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ devirTarihi: deger }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      setDevirTarihi(deger);
+      showToast(deger ? 'Devir tarihi kaydedildi' : 'Devir tarihi kaldırıldı');
+    } catch (e) { showToast('Kaydedilemedi: ' + e.message); }
+    finally { setDevirKaydediyor(false); }
+  }
+
   return (
     <div className="mh-yeni">
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 14 }}>
+        <strong>Devir tarihi:</strong>
+        <input className="ff-input" style={{ width: 130 }} value={devirInput}
+          onChange={e => setDevirInput(e.target.value)} placeholder="GG.AA.YYYY" />
+        <button className="mh-secondary-btn" disabled={devirKaydediyor || devirInput.trim() === devirTarihi} onClick={devirKaydet}>
+          {devirKaydediyor ? '…' : 'Kaydet'}
+        </button>
+        <span style={{ opacity: 0.7 }}>
+          {devirTarihi
+            ? `${devirTarihi} ve öncesine ait XML faturalar ve ekstre ödemeleri kart olarak gösterilmez.`
+            : 'Belirlenmedi, tüm kartlar gösteriliyor.'}
+        </span>
+      </div>
       <div className="mh-alt-tabs">
         <button className={altTab === 'faturaGiris' ? 'active' : ''} onClick={() => setAltTab('faturaGiris')}>
           🧾 Fatura ve Fiş Girişi
@@ -239,9 +279,9 @@ function GiderlerSekmesi({ showToast }) {
         </button>
       </div>
 
-      {altTab === 'faturaGiris' && <FaturaFisGirisiSekmesi showToast={showToast} />}
-      {altTab === 'tahsilat' && <TahsilatMakbuzuSekmesi showToast={showToast} />}
-      {altTab === 'bankaKart' && <BankaKartTakipSekmesi showToast={showToast} />}
+      {altTab === 'faturaGiris' && <FaturaFisGirisiSekmesi key={'ff-' + devirTarihi} showToast={showToast} />}
+      {altTab === 'tahsilat' && <TahsilatMakbuzuSekmesi key={'th-' + devirTarihi} showToast={showToast} />}
+      {altTab === 'bankaKart' && <BankaKartTakipSekmesi showToast={showToast} devirTarihi={devirTarihi} />}
     </div>
   );
 }
@@ -2445,7 +2485,7 @@ function OdemeTuruSecici({ tur, detay, onChange, odemeYontemleri, showToast, onY
   return (
     <div className="ff-odeme-wrap">
       <div className="ff-odeme-row">
-        {['Nakit','Kredi Kartı','Banka Havalesi','Cari'].map(t => (
+        {['Nakit','Kredi Kartı','Banka Havalesi','Cari','Devir'].map(t => (
           <button key={t} type="button"
             className={`ff-odeme-btn ${tur===t ? 'ff-odeme-secili' : ''}`}
             onClick={() => onChange(t, '')}>
@@ -2456,6 +2496,12 @@ function OdemeTuruSecici({ tur, detay, onChange, odemeYontemleri, showToast, onY
           + Yeni Yöntem
         </button>
       </div>
+
+      {tur === 'Devir' && (
+        <p className="mh-hint" style={{ margin: '6px 0 0' }}>
+          Eski sistemden açılış bakiyesi. Kasa veya banka hareketi oluşturmaz.
+        </p>
+      )}
 
       {tur === 'Nakit' && (
         <div className="ff-alt-secim">
@@ -2525,10 +2571,13 @@ function OdemeTuruSecici({ tur, detay, onChange, odemeYontemleri, showToast, onY
   );
 }
 
+// Backend'deki DEVIR_KATEGORI ile birebir aynı olmalı.
+const DEVIR_KATEGORI = 'Devir (Gider Değil)';
+
 // Alt kırılım gerekli mi kontrol eden yardımcı (Cari hariç tüm türlerde detay zorunlu)
 function odemeTuruGecerli(tur, detay) {
   if (!tur) return false;
-  if (tur === 'Cari') return true;
+  if (tur === 'Cari' || tur === 'Devir') return true;
   return !!detay; // Nakit→Günlük Kasa/Çelik Kasa, Kredi Kartı→hangi kart, Banka→hangi banka
 }
 
@@ -2627,7 +2676,7 @@ function FaturaFisGirisiSekmesi({ showToast }) {
 
       // 2) Cari HARİÇ peşin ödemelerde: otomatik tahsilat kaydı da oluştur
       //    (Tahsilat Makbuzları sheet'ine aynı tutarda ödeme yazılır)
-      if (odemeTuru !== 'Cari') {
+      if (odemeTuru !== 'Cari' && odemeTuru !== 'Devir') {
         const tRes = await fetch('/api/muhasebe?resource=tahsilat', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2640,7 +2689,8 @@ function FaturaFisGirisiSekmesi({ showToast }) {
         if (!tRes.ok) console.error('Tahsilat kaydı oluşturulamadı:', tJ.error);
       }
 
-      showToast(odemeTuru === 'Cari' ? 'Fatura kaydedildi (cariye atıldı)' : 'Fatura + ödeme kaydedildi');
+      showToast(odemeTuru === 'Cari' ? 'Fatura kaydedildi (cariye atıldı)'
+        : odemeTuru === 'Devir' ? 'Devir bakiyesi kaydedildi' : 'Fatura + ödeme kaydedildi');
       setFaturaNo(''); setAciklama(''); setGiderKat(''); setFaturaTutari('');
       setOdemeTuru(''); setOdemeDetay('');
       await yukle();
@@ -2698,7 +2748,7 @@ function FaturaFisGirisiSekmesi({ showToast }) {
 
             <label className="ff-label">Ödeme Türü</label>
             <OdemeTuruSecici tur={odemeTuru} detay={odemeDetay}
-              onChange={(t,d)=>{setOdemeTuru(t);setOdemeDetay(d);}}
+              onChange={(t,d)=>{setOdemeTuru(t);setOdemeDetay(d);if(t==='Devir')setGiderKat(DEVIR_KATEGORI);}}
               odemeYontemleri={odemeYontemleri} showToast={showToast}
               onYontemiEklendi={yukle} />
 
@@ -2912,11 +2962,13 @@ function TahsilatMakbuzuSekmesi({ showToast }) {
 // ============================================================
 // 3. Banka / Kart Takip sekmesi
 // ============================================================
-function BankaKartTakipSekmesi({ showToast }) {
+function BankaKartTakipSekmesi({ showToast, devirTarihi }) {
   const [hareketler, setHareketler] = useState([]);
   const [hesaplar, setHesaplar] = useState([]);
+  const [ozet, setOzet] = useState([]);
   const [seciliHesap, setSeciliHesap] = useState('');
   const [loading, setLoading] = useState(true);
+  const [ayarModal, setAyarModal] = useState(null); // ozet satırı
 
   async function yukle(hesap) {
     setLoading(true);
@@ -2926,6 +2978,7 @@ function BankaKartTakipSekmesi({ showToast }) {
       const j = await res.json();
       setHareketler(j.records || []);
       if (j.hesaplar) setHesaplar(j.hesaplar);
+      if (j.ozet) setOzet(j.ozet);
     } catch { showToast('Veriler yüklenemedi'); }
     finally { setLoading(false); }
   }
@@ -2935,6 +2988,13 @@ function BankaKartTakipSekmesi({ showToast }) {
 
   const toplamGiren = hareketler.filter(h=>h.yon==='GİREN').reduce((s,h)=>s+h.tutar,0);
   const toplamGiden = hareketler.filter(h=>h.yon==='GİDEN').reduce((s,h)=>s+h.tutar,0);
+  const seciliOzet = seciliHesap ? ozet.find(o => o.ad === seciliHesap) : null;
+  const acilisDate = seciliOzet ? trStrToDate(seciliOzet.acilisTarihi) : null;
+
+  function hesapDurumu(o) {
+    if (o.kartModu) return <span style={{ color: "#c62828" }}>Borç {TL(o.borc)}</span>;
+    return <span>{TL(o.bakiye)}</span>;
+  }
 
   return (
     <div className="ff-banka-wrap">
@@ -2947,11 +3007,48 @@ function BankaKartTakipSekmesi({ showToast }) {
         ))}
       </div>
 
-      <div className="ff-banka-kpi">
-        <div className="mh-kpi-card"><span className="mh-kpi-label">Toplam Giren</span><span className="mh-kpi-value mh-kpi-yesil-val">{TL(toplamGiren)}</span></div>
-        <div className="mh-kpi-card"><span className="mh-kpi-label">Toplam Giden</span><span className="mh-kpi-value mh-kpi-kirmizi-val">{TL(toplamGiden)}</span></div>
-        <div className="mh-kpi-card"><span className="mh-kpi-label">Net Bakiye</span><span className="mh-kpi-value">{TL(toplamGiren-toplamGiden)}</span></div>
-      </div>
+      {!seciliHesap && (
+        <div className="mh-table-card" style={{ marginBottom: 12 }}>
+          <table className="mh-excel-table">
+            <thead>
+              <tr><th>Hesap</th><th>Açılış</th><th>Güncel Bakiye / Borç</th><th>Limit</th><th>Kullanılabilir</th><th></th></tr>
+            </thead>
+            <tbody>
+              {ozet.map(o => (
+                <tr key={o.id}>
+                  <td>{o.ad}</td>
+                  <td>{o.acilisTarihi ? `${o.acilisTarihi} — ${TL(o.acilisBakiyesi)}` : 'Girilmedi'}</td>
+                  <td className="mh-tutar-cell">{hesapDurumu(o)}</td>
+                  <td className="mh-tutar-cell">{o.kartModu ? TL(o.limit) : '—'}</td>
+                  <td className="mh-tutar-cell">{o.kartModu ? TL(o.kullanilabilir) : '—'}</td>
+                  <td><button className="mh-secondary-btn" onClick={() => setAyarModal(o)}>Açılış / Limit</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {seciliOzet ? (
+        <div className="ff-banka-kpi">
+          {seciliOzet.kartModu ? (<>
+            <div className="mh-kpi-card"><span className="mh-kpi-label">Kart Borcu</span><span className="mh-kpi-value mh-kpi-kirmizi-val">{TL(seciliOzet.borc)}</span></div>
+            <div className="mh-kpi-card"><span className="mh-kpi-label">Limit</span><span className="mh-kpi-value">{TL(seciliOzet.limit)}</span></div>
+            <div className="mh-kpi-card"><span className="mh-kpi-label">Kullanılabilir Limit</span><span className="mh-kpi-value mh-kpi-yesil-val">{TL(seciliOzet.kullanilabilir)}</span></div>
+          </>) : (<>
+            <div className="mh-kpi-card"><span className="mh-kpi-label">Açılış Bakiyesi</span><span className="mh-kpi-value">{TL(seciliOzet.acilisBakiyesi)}</span></div>
+            <div className="mh-kpi-card"><span className="mh-kpi-label">Açılıştan Sonra Giren / Giden</span><span className="mh-kpi-value">{TL(seciliOzet.giren)} / {TL(seciliOzet.giden)}</span></div>
+            <div className="mh-kpi-card"><span className="mh-kpi-label">Güncel Bakiye</span><span className="mh-kpi-value">{TL(seciliOzet.bakiye)}</span></div>
+          </>)}
+          <button className="mh-secondary-btn" onClick={() => setAyarModal(seciliOzet)}>Açılış / Limit</button>
+        </div>
+      ) : (
+        <div className="ff-banka-kpi">
+          <div className="mh-kpi-card"><span className="mh-kpi-label">Toplam Giren</span><span className="mh-kpi-value mh-kpi-yesil-val">{TL(toplamGiren)}</span></div>
+          <div className="mh-kpi-card"><span className="mh-kpi-label">Toplam Giden</span><span className="mh-kpi-value mh-kpi-kirmizi-val">{TL(toplamGiden)}</span></div>
+          <div className="mh-kpi-card"><span className="mh-kpi-label">Hareket Farkı</span><span className="mh-kpi-value">{TL(toplamGiren-toplamGiden)}</span></div>
+        </div>
+      )}
 
       <div className="mh-table-card">
         {loading ? <p className="mh-empty">Yükleniyor…</p> : hareketler.length === 0 ? (
@@ -2962,21 +3059,84 @@ function BankaKartTakipSekmesi({ showToast }) {
               <tr><th>Tarih</th><th>Hesap</th><th>Yön</th><th>Tutar</th><th>Açıklama</th></tr>
             </thead>
             <tbody>
-              {hareketler.map(h=>(
-                <tr key={h.id}>
-                  <td>{h.tarih}</td>
-                  <td>{h.hesapTuru}{h.hesapAdi ? ` — ${h.hesapAdi}` : ''}</td>
-                  <td><span className={`mh-durum ${h.yon==='GİREN' ? 'mh-durum-yesil':'mh-durum-kirmizi'}`}>{h.yon}</span></td>
-                  <td className="mh-tutar-cell">{TL(h.tutar)}</td>
-                  <td>{h.aciklama}</td>
-                </tr>
-              ))}
+              {hareketler.map(h=>{
+                const t = trStrToDate(h.tarih);
+                const oncesi = acilisDate && t && t.getTime() <= acilisDate.getTime();
+                return (
+                  <tr key={h.id} style={oncesi ? { opacity: 0.45 } : undefined}
+                    title={oncesi ? 'Açılış tarihi ve öncesi: açılış bakiyesine dahil, tekrar sayılmaz' : undefined}>
+                    <td>{h.tarih}</td>
+                    <td>{h.hesapTuru}{h.hesapAdi ? ` — ${h.hesapAdi}` : ''}</td>
+                    <td><span className={`mh-durum ${h.yon==='GİREN' ? 'mh-durum-yesil':'mh-durum-kirmizi'}`}>{h.yon}</span></td>
+                    <td className="mh-tutar-cell">{TL(h.tutar)}</td>
+                    <td>{h.aciklama}</td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
-              <tr><td colSpan={3}>Toplam</td><td className="mh-tutar-cell">{TL(toplamGiden)}</td><td></td></tr>
+              <tr><td colSpan={3}>Toplam Giren / Giden</td><td className="mh-tutar-cell">{TL(toplamGiren)} / {TL(toplamGiden)}</td><td></td></tr>
             </tfoot>
           </table>
         )}
+      </div>
+
+      {ayarModal && (
+        <HesapAyarModal hesap={ayarModal} devirTarihi={devirTarihi} showToast={showToast}
+          onClose={() => setAyarModal(null)}
+          onSaved={() => { setAyarModal(null); yukle(seciliHesap); }} />
+      )}
+    </div>
+  );
+}
+
+function HesapAyarModal({ hesap, devirTarihi, showToast, onClose, onSaved }) {
+  const [acilisTarihi, setAcilisTarihi] = useState(hesap.acilisTarihi || devirTarihi || bugunTR());
+  const [acilisBakiyesi, setAcilisBakiyesi] = useState(hesap.acilisBakiyesi ? String(hesap.acilisBakiyesi) : '');
+  const [limit, setLimit] = useState(hesap.limit ? String(hesap.limit) : '');
+  const [kaydediyor, setKaydediyor] = useState(false);
+  const kartModu = (Number(String(limit).replace(',', '.')) || 0) > 0;
+
+  async function kaydet() {
+    setKaydediyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=hesapAyarKaydet', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: hesap.id, acilisTarihi, acilisBakiyesi, limit }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      showToast('Hesap ayarı kaydedildi');
+      onSaved();
+    } catch (e) { showToast('Kaydedilemedi: ' + e.message); }
+    finally { setKaydediyor(false); }
+  }
+
+  return (
+    <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={onClose}>
+      <div className="mh-modal-wide" onClick={e=>e.stopPropagation()} style={{maxWidth:400}}>
+        <div className="mh-drawer-head">
+          <span>{hesap.ad} — Açılış / Limit</span>
+          <button onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="mh-drawer-body">
+          <label className="ff-label">Açılış tarihi</label>
+          <TarihSecici value={acilisTarihi} onChange={setAcilisTarihi} />
+          <p className="mh-hint">Bu tarih dahil önceki hareketler açılış tutarının içinde sayılır, sadece sonraki hareketler eklenir.</p>
+
+          <label className="ff-label">Limit (sadece kredi kartı, yoksa boş bırak)</label>
+          <input className="ff-input" type="number" step="any" min="0" value={limit} onChange={e=>setLimit(e.target.value)} placeholder="0" />
+
+          <label className="ff-label">{kartModu ? 'Açılıştaki kart borcu' : 'Açılıştaki hesap bakiyesi'}</label>
+          <input className="ff-input" type="number" step="any" value={acilisBakiyesi} onChange={e=>setAcilisBakiyesi(e.target.value)} placeholder="0" />
+
+          <div style={{display:'flex',gap:8,marginTop:12,justifyContent:'flex-end'}}>
+            <button className="mh-secondary-btn" onClick={onClose}>Vazgeç</button>
+            <button className="mh-primary-btn" disabled={kaydediyor || !acilisTarihi} onClick={kaydet}>
+              {kaydediyor ? '…' : 'Kaydet'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
