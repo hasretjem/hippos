@@ -478,6 +478,99 @@ const DEVAMSIZLIK_TAB = {
   headers: ['ID', 'PersonelId', 'Tarih', 'Tur', 'Aciklama', 'KayitZamani'],
 };
 const PERSONEL_KATEGORI = 'Personel Gideri';
+
+// ---- Yemek kartları (fatura kesimi + mutabakat) ----
+// Fatura toplamı = matrah + matrah*faturaKdv. Kesinti = matrah*oran, üstüne kendi KDV'si.
+// Bankaya yatacak = fatura toplamı - kesinti toplamı.
+const YK_KART_TAB = {
+  tab: 'Yemek Kartı Tanımları',
+  headers: ['ID', 'Ad', 'KomisyonOrani', 'FaturaKdv', 'KesintiKdv', 'Kesim10', 'Kesim20', 'Kesim30', 'Pasif', 'KayitZamani'],
+};
+const YK_FATURA_TAB = {
+  tab: 'Yemek Kartı Faturaları',
+  headers: ['ID', 'KartId', 'KartAdi', 'Donem', 'Kesim', 'FaturaTarihi', 'Matrah', 'Kdv', 'FaturaToplami',
+    'Vade', 'KesintiOran', 'KesintiMatrah', 'KesintiKdv', 'KesintiToplam', 'BankayaYatacak',
+    'GiderFaturaFisId', 'GelenTutar', 'GelisTarihi', 'GelenHesap', 'KayitZamani'],
+};
+const YEMEK_KARTI_KATEGORI = 'Yemek Kart-Banka Masf.';
+const GUNSONU_TAB = { tab: 'Gün Sonu Kasa', headers: [] };
+// Varsayılan kart tanımları (kullanıcının mevcut tablosundaki oran ve kesim günleri).
+const YK_VARSAYILAN = [
+  { ad: 'Setcard', oran: 0.08, kesim: [true, true, true] },
+  { ad: 'Pluxee', oran: 0.06, kesim: [true, true, true] },
+  { ad: 'Edenred', oran: 0.06, kesim: [true, true, true] },
+  { ad: 'Metropol', oran: 0.06, kesim: [true, false, true] },
+  { ad: 'Tokenflex', oran: 0.06, kesim: [false, false, true] },
+  { ad: 'Multinet', oran: 0.06, kesim: [false, false, true] },
+];
+
+function rowToYemekKarti(r) {
+  return {
+    id: r[0], ad: r[1] || '', komisyonOrani: sayiCoz(r[2]), faturaKdv: sayiCoz(r[3]) || 0.1,
+    kesintiKdv: sayiCoz(r[4]) || 0.2,
+    kesim10: r[5] === 'TRUE', kesim20: r[6] === 'TRUE', kesim30: r[7] === 'TRUE',
+    pasif: r[8] === 'TRUE', kayitZamani: r[9] || '',
+  };
+}
+function rowToYemekFaturasi(r) {
+  return {
+    id: r[0], kartId: r[1] || '', kartAdi: r[2] || '', donem: r[3] || '', kesim: r[4] || '',
+    faturaTarihi: r[5] || '', matrah: sayiCoz(r[6]), kdv: sayiCoz(r[7]), faturaToplami: sayiCoz(r[8]),
+    vade: r[9] || '', kesintiOran: sayiCoz(r[10]), kesintiMatrah: sayiCoz(r[11]),
+    kesintiKdv: sayiCoz(r[12]), kesintiToplam: sayiCoz(r[13]), bankayaYatacak: sayiCoz(r[14]),
+    giderFaturaFisId: r[15] || '', gelenTutar: sayiCoz(r[16]), gelisTarihi: r[17] || '',
+    gelenHesap: r[18] || '', kayitZamani: r[19] || '',
+  };
+}
+
+// Matrahtan tüm zinciri hesaplar (Excel'deki formüllerin birebir karşılığı).
+function yemekKartiHesapla(matrah, kart) {
+  const r2 = (x) => Math.round(x * 100) / 100;
+  const m = ondalikParseServer(matrah);
+  const kdv = r2(m * (kart.faturaKdv || 0.1));
+  const faturaToplami = r2(m + kdv);
+  const kesintiMatrah = r2(m * (kart.komisyonOrani || 0));
+  const kesintiKdv = r2(kesintiMatrah * (kart.kesintiKdv || 0.2));
+  const kesintiToplam = r2(kesintiMatrah + kesintiKdv);
+  return { matrah: m, kdv, faturaToplami, kesintiMatrah, kesintiKdv, kesintiToplam,
+    bankayaYatacak: r2(faturaToplami - kesintiToplam) };
+}
+
+// Kesim dönemi tarih aralığı: 10 -> ayın 1-10'u, 20 -> 11-20'si, 30 -> 21'den ay sonuna.
+function kesimAraligi(donem, kesim) {
+  const [y, a] = String(donem).split('-').map(Number);
+  const sonGun = new Date(y, a, 0).getDate();
+  if (Number(kesim) === 10) return [new Date(y, a - 1, 1), new Date(y, a - 1, 10)];
+  if (Number(kesim) === 20) return [new Date(y, a - 1, 11), new Date(y, a - 1, 20)];
+  return [new Date(y, a - 1, 21), new Date(y, a - 1, sonGun)];
+}
+
+// Gün Sonu Kasa sayfasındaki yemek kartı detaylarından dönem toplamlarını çıkarır.
+// N sütunu JSON: { kolonlar: [...], tutarlar: { marka: { kolon: tutar } } }
+async function gunsonuYemekToplamlari(sheets, bas, bit) {
+  let rows = [];
+  try {
+    const r = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID, range: `${GUNSONU_TAB.tab}!A2:Q`,
+    });
+    rows = r.data.values || [];
+  } catch { return {}; }
+  const toplam = {};
+  rows.forEach((r) => {
+    const t = trTarihiCozServer(r[0]);
+    if (!t || t < bas || t > bit) return;
+    let detay = {};
+    try { detay = JSON.parse(r[13] || '{}'); } catch { detay = {}; }
+    const tutarlar = detay.tutarlar || {};
+    Object.keys(tutarlar).forEach((marka) => {
+      const satir = tutarlar[marka] || {};
+      const markaToplam = Object.keys(satir).reduce((x, k) => x + (ondalikParseServer(satir[k]) || 0), 0);
+      const anahtar = metinNormalize(marka);
+      toplam[anahtar] = Math.round(((toplam[anahtar] || 0) + markaToplam) * 100) / 100;
+    });
+  });
+  return toplam;
+}
 // Cepten ödeme yöntemleri -> ortaklar carisine alacak (yatırım) yazar.
 const CEPTEN_ORTAK = { 'Hasret Cepten': 'Hasret Cem Arslan', 'Hasan Cepten': 'Hasan Arslan' };
 
@@ -2688,6 +2781,194 @@ export default async function handler(req, res) {
       return res.status(200).json({
         ad, hareketler, bakiye: firmaBakiyesi(ad, kayitlar, tahsilatlar),
       });
+    }
+
+    // ============================================================
+    // YEMEK KARTLARI (fatura kesimi + günsonu/banka mutabakatı)
+    // ============================================================
+
+    // Kart tanımları + seçili dönemin faturaları + günsonu karşılaştırması.
+    if (resource === 'yemekKarti') {
+      if (req.method === 'GET') {
+        const donem = req.query.donem || bugununDonemi();
+        const kesim = req.query.kesim || '10';
+        await ensureTab(sheets, YK_KART_TAB.tab, YK_KART_TAB.headers);
+        let kartRows = await getRows(sheets, YK_KART_TAB);
+        // İlk açılışta varsayılan kart listesi yazılır.
+        if (!kartRows.length) {
+          const now = new Date().toISOString();
+          for (const v of YK_VARSAYILAN) {
+            await appendRow(sheets, YK_KART_TAB, [
+              benzersizId(), v.ad, v.oran, 0.1, 0.2,
+              v.kesim[0] ? 'TRUE' : 'FALSE', v.kesim[1] ? 'TRUE' : 'FALSE', v.kesim[2] ? 'TRUE' : 'FALSE',
+              'FALSE', now,
+            ]);
+          }
+          kartRows = await getRows(sheets, YK_KART_TAB);
+        }
+        const kartlar = kartRows.map(rowToYemekKarti);
+        const fatRows = await getRows(sheets, YK_FATURA_TAB);
+        const faturalar = fatRows.map(rowToYemekFaturasi)
+          .filter((f) => f.donem === donem && String(f.kesim) === String(kesim));
+
+        const [bas, bit] = kesimAraligi(donem, kesim);
+        const gunsonu = await gunsonuYemekToplamlari(sheets, bas, bit);
+
+        const satirlar = kartlar.filter((k) => !k.pasif).map((k) => {
+          const kesilirMi = kesim === '10' ? k.kesim10 : (kesim === '20' ? k.kesim20 : k.kesim30);
+          const fatura = faturalar.find((f) => f.kartId === k.id) || null;
+          const gunsonuToplam = gunsonu[metinNormalize(k.ad)] || 0;
+          const r2 = (x) => Math.round(x * 100) / 100;
+          return {
+            kart: k,
+            kesilirMi,                    // false ise ekranda kırmızı, yine de girilebilir
+            fatura,
+            gunsonuToplam,
+            // Kontrol 1: dönem günsonu toplamı ile fatura toplamı (KDV dahil) aynı olmalı.
+            gunsonuFark: fatura ? r2(fatura.faturaToplami - gunsonuToplam) : 0,
+            // Kontrol 2: gelen para + kesinti = fatura toplamı olmalı.
+            bankaFark: fatura && fatura.gelenTutar
+              ? r2(fatura.faturaToplami - (fatura.gelenTutar + fatura.kesintiToplam)) : 0,
+            vadeFarkliMi: !!(fatura && fatura.gelisTarihi && fatura.vade && fatura.gelisTarihi !== fatura.vade),
+          };
+        });
+        return res.status(200).json({
+          satirlar, donem, kesim,
+          aralik: {
+            bas: bas.toLocaleDateString('tr-TR'), bit: bit.toLocaleDateString('tr-TR'),
+          },
+        });
+      }
+
+      // Kart tanımı ekle / güncelle (oran ve kesim günleri değişebilir).
+      if (req.method === 'POST') {
+        const { id, ad, komisyonOrani, faturaKdv, kesintiKdv, kesim10, kesim20, kesim30, pasif } = req.body || {};
+        if (!ad || !String(ad).trim()) return res.status(400).json({ error: 'ad gerekli' });
+        const rows = await getRows(sheets, YK_KART_TAB);
+        const satir = [id || benzersizId(), String(ad).trim(),
+          ondalikParseServer(komisyonOrani || 0), ondalikParseServer(faturaKdv || 0.1),
+          ondalikParseServer(kesintiKdv || 0.2),
+          kesim10 ? 'TRUE' : 'FALSE', kesim20 ? 'TRUE' : 'FALSE', kesim30 ? 'TRUE' : 'FALSE',
+          pasif ? 'TRUE' : 'FALSE', new Date().toISOString()];
+        const idx = id ? rows.findIndex((r) => r[0] === id) : -1;
+        if (idx >= 0) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID,
+            range: `${YK_KART_TAB.tab}!A${idx + 2}:${lastCol(YK_KART_TAB.headers)}${idx + 2}`,
+            valueInputOption: 'USER_ENTERED', requestBody: { values: [satir] },
+          });
+          return res.status(200).json({ ok: true, id: satir[0], guncellendi: true });
+        }
+        await appendRow(sheets, YK_KART_TAB, satir);
+        return res.status(200).json({ ok: true, id: satir[0] });
+      }
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // Fatura kesimi: hesap zincirini yazar ve kesinti tutarını gidere atar.
+    if (resource === 'yemekKartiFatura') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { id, kartId, donem, kesim, faturaTarihi, matrah, vade } = req.body || {};
+      if (!kartId || !donem || !kesim) return res.status(400).json({ error: 'kartId, donem ve kesim gerekli' });
+      if (!matrah) return res.status(400).json({ error: 'matrah gerekli' });
+
+      const kartRows = await getRows(sheets, YK_KART_TAB);
+      const kart = kartRows.map(rowToYemekKarti).find((k) => k.id === kartId);
+      if (!kart) return res.status(404).json({ error: 'Kart bulunamadı' });
+
+      const h = yemekKartiHesapla(matrah, kart);
+      const now = new Date();
+      const trTarih = faturaTarihi || now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+      const fatRows = await getRows(sheets, YK_FATURA_TAB);
+      const idx = id ? fatRows.findIndex((r) => r[0] === id)
+        : fatRows.findIndex((r) => r[1] === kartId && r[3] === donem && String(r[4]) === String(kesim));
+      const mevcut = idx >= 0 ? rowToYemekFaturasi(fatRows[idx]) : null;
+
+      // Kesinti tutarı gider olarak yazılır. Kart ödemesinden mahsup edildiği için
+      // "Mahsup" ödeme türüyle kapalı yazılır: cari borç doğurmaz, banka hareketi üretmez.
+      let giderId = mevcut ? mevcut.giderFaturaFisId : '';
+      const p = trTarihiParcala(trTarih);
+      const giderSatiri = [
+        giderId || benzersizId(), trTarih, p.gun, p.ay, p.yil, kart.ad, '',
+        `${donem} / ${kesim} kesimi komisyon`, YEMEK_KARTI_KATEGORI, 'Mahsup', '',
+        h.kesintiToplam, 0, 0, h.kesintiToplam, 'Hesap Yok', 0, '', 'FALSE', now.toISOString(), 'FALSE',
+      ];
+      if (giderId) {
+        const ffRows = await getRows(sheets, FATURA_FIS_TAB);
+        const gIdx = ffRows.findIndex((r) => r[0] === giderId);
+        if (gIdx >= 0) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID,
+            range: `${FATURA_FIS_TAB.tab}!A${gIdx + 2}:${lastCol(FATURA_FIS_TAB.headers)}${gIdx + 2}`,
+            valueInputOption: 'USER_ENTERED', requestBody: { values: [giderSatiri] },
+          });
+        } else { await appendRow(sheets, FATURA_FIS_TAB, giderSatiri); }
+      } else {
+        giderId = giderSatiri[0];
+        await appendRow(sheets, FATURA_FIS_TAB, giderSatiri);
+      }
+
+      const satir = [
+        mevcut ? mevcut.id : benzersizId(), kartId, kart.ad, donem, String(kesim), trTarih,
+        h.matrah, h.kdv, h.faturaToplami, vade || '', kart.komisyonOrani,
+        h.kesintiMatrah, h.kesintiKdv, h.kesintiToplam, h.bankayaYatacak, giderId,
+        mevcut ? mevcut.gelenTutar : 0, mevcut ? mevcut.gelisTarihi : '', mevcut ? mevcut.gelenHesap : '',
+        now.toISOString(),
+      ];
+      if (idx >= 0) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `${YK_FATURA_TAB.tab}!A${idx + 2}:${lastCol(YK_FATURA_TAB.headers)}${idx + 2}`,
+          valueInputOption: 'USER_ENTERED', requestBody: { values: [satir] },
+        });
+      } else {
+        await appendRow(sheets, YK_FATURA_TAB, satir);
+      }
+      return res.status(200).json({ ok: true, hesap: h, id: satir[0] });
+    }
+
+    // Para geldi: banka hareketi yazar, mutabakat farkını döndürür.
+    if (resource === 'yemekKartiOdeme') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { faturaId, gelenTutar, gelisTarihi, hesapAdi } = req.body || {};
+      if (!faturaId) return res.status(400).json({ error: 'faturaId gerekli' });
+      const gelen = ondalikParseServer(gelenTutar);
+      if (!gelen) return res.status(400).json({ error: 'gelen tutar gerekli' });
+
+      const fatRows = await getRows(sheets, YK_FATURA_TAB);
+      const idx = fatRows.findIndex((r) => r[0] === faturaId);
+      if (idx < 0) return res.status(404).json({ error: 'Fatura bulunamadı' });
+      const fatura = rowToYemekFaturasi(fatRows[idx]);
+
+      const now = new Date();
+      const trTarih = gelisTarihi || now.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+      const satir = [...fatRows[idx]];
+      while (satir.length < YK_FATURA_TAB.headers.length) satir.push('');
+      satir[16] = gelen; satir[17] = trTarih; satir[18] = hesapAdi || '';
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `${YK_FATURA_TAB.tab}!A${idx + 2}:${lastCol(YK_FATURA_TAB.headers)}${idx + 2}`,
+        valueInputOption: 'USER_ENTERED', requestBody: { values: [satir] },
+      });
+
+      // Bankaya giriş — aynı fatura için tekrar kaydedilirse satır güncellenir.
+      const kaynakId = `YKODEME-${faturaId}`;
+      const bkRows = await getRows(sheets, BANKA_KART_TAB);
+      const bIdx = bkRows.findIndex((r) => r[7] === kaynakId);
+      const bSatir = [bIdx >= 0 ? bkRows[bIdx][0] : benzersizId(), trTarih, 'Banka Havalesi',
+        hesapAdi || '', 'GİREN', gelen, `${fatura.kartAdi} hakedişi`, kaynakId, now.toISOString()];
+      if (bIdx >= 0) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `${BANKA_KART_TAB.tab}!A${bIdx + 2}:${lastCol(BANKA_KART_TAB.headers)}${bIdx + 2}`,
+          valueInputOption: 'USER_ENTERED', requestBody: { values: [bSatir] },
+        });
+      } else {
+        await appendRow(sheets, BANKA_KART_TAB, bSatir);
+      }
+
+      const fark = Math.round((fatura.faturaToplami - (gelen + fatura.kesintiToplam)) * 100) / 100;
+      return res.status(200).json({ ok: true, fark, vadeFarkli: !!(fatura.vade && fatura.vade !== trTarih) });
     }
 
     // Uyumsoft'tan gelmiş ama bu ekrandan HENÜZ İŞLENMEMİŞ faturalar (kart olarak gösterilir).

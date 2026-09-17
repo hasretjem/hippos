@@ -5,7 +5,7 @@ import { supabase } from '../../services/supabase';
 import FaturaXmlIce from './FaturaXmlIce/FaturaXmlIce';
 import {
   ArrowLeft, TrendingDown, TrendingUp, Truck, Users, ChefHat,
-  Plus, Upload, X, Check, Search, MessageCircle, Trash2, FileSpreadsheet,
+  Plus, Upload, X, Check, Search, MessageCircle, Trash2, FileSpreadsheet, CreditCard,
 } from 'lucide-react';
 
 // KRİTİK: Number("0,04") -> NaN döner (Türkçe ondalık virgülü). Tutar/oran input'larında
@@ -182,6 +182,9 @@ export default function Muhasebe({ onNavigate }) {
         <button className={anaTab === 'sabitGiderler' ? 'active' : ''} onClick={() => setAnaTab('sabitGiderler')}>
           <FileSpreadsheet size={15} /> Sabit Giderler
         </button>
+        <button className={anaTab === 'yemekKarti' ? 'active' : ''} onClick={() => setAnaTab('yemekKarti')}>
+          <CreditCard size={15} /> Yemek Kartları
+        </button>
         <button className={anaTab === 'receteler' ? 'active' : ''} onClick={() => setAnaTab('receteler')}>
           <ChefHat size={15} /> Reçeteler
         </button>
@@ -194,6 +197,7 @@ export default function Muhasebe({ onNavigate }) {
         {anaTab === 'ortaklar' && <OrtaklarCariSekmesi showToast={showToast} />}
         {anaTab === 'personel' && <PersonelSekmesi showToast={showToast} />}
         {anaTab === 'sabitGiderler' && <SabitGiderlerSekmesi showToast={showToast} />}
+        {anaTab === 'yemekKarti' && <YemekKartiSekmesi showToast={showToast} />}
         {anaTab === 'receteler' && <ReceteSekmesi showToast={showToast} />}
       </div>
 
@@ -3906,6 +3910,365 @@ function SabitGiderFormModal({ kayit, kategoriler, showToast, onClose, onSaved }
             <button className="mh-secondary-btn" onClick={onClose}>Vazgeç</button>
             <button className="mh-primary-btn" disabled={kaydediyor} onClick={kaydet}>{kaydediyor ? '…' : 'Kaydet'}</button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// YEMEK KARTLARI — fatura kesimi, günsonu ve banka mutabakatı
+// ============================================================
+
+function YemekKartiSekmesi({ showToast }) {
+  const [donem, setDonem] = useState(donemBugun());
+  const [kesim, setKesim] = useState('10');
+  const [satirlar, setSatirlar] = useState([]);
+  const [aralik, setAralik] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [faturaModal, setFaturaModal] = useState(null);
+  const [odemeModal, setOdemeModal] = useState(null);
+  const [kartModal, setKartModal] = useState(null);
+
+  async function yukle() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/muhasebe?resource=yemekKarti&donem=${donem}&kesim=${kesim}`);
+      const j = await res.json();
+      setSatirlar(j.satirlar || []);
+      setAralik(j.aralik || null);
+    } catch { showToast('Liste yüklenemedi'); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { yukle(); }, [donem, kesim]);
+
+  const toplamKesinti = satirlar.reduce((x, s) => x + (s.fatura ? s.fatura.kesintiToplam : 0), 0);
+  const toplamYatacak = satirlar.reduce((x, s) => x + (s.fatura ? s.fatura.bankayaYatacak : 0), 0);
+
+  return (
+    <div className="mh-yeni">
+      <div style={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:10, marginBottom:12 }}>
+        <strong>Dönem:</strong>
+        <input type="month" className="ff-input" style={{width:160}} value={donem} onChange={e=>setDonem(e.target.value)} />
+        <strong>Kesim:</strong>
+        <div className="ff-odeme-turleri">
+          {['10','20','30'].map(k => (
+            <button key={k} type="button" className={`ff-odeme-btn ${kesim===k?'ff-odeme-secili':''}`}
+              onClick={()=>setKesim(k)}>Ayın {k}'u</button>
+          ))}
+        </div>
+        {aralik && <span style={{opacity:0.7}}>Günsonu aralığı: {aralik.bas} – {aralik.bit}</span>}
+        <button className="mh-secondary-btn" onClick={()=>setKartModal({})}>Kart Tanımları</button>
+      </div>
+
+      <div className="mh-table-card">
+        {loading ? <p className="mh-empty">Yükleniyor…</p> : (
+          <table className="mh-excel-table">
+            <thead>
+              <tr>
+                <th>Firma</th><th>Fatura Tarihi</th><th>Matrah</th><th>KDV</th><th>Fatura Toplamı</th>
+                <th>Vade</th><th>Oran</th><th>Kesinti Toplamı</th><th>Bankaya Yatacak</th>
+                <th>Günsonu Toplamı</th><th>Fark</th><th>Gelen</th><th>İşlem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {satirlar.map(s => {
+                const f = s.fatura;
+                const gunsonuUyumsuz = f && Math.abs(s.gunsonuFark) > 1;
+                const bankaUyumsuz = f && f.gelenTutar > 0 && Math.abs(s.bankaFark) > 1;
+                return (
+                  <tr key={s.kart.id} style={!s.kesilirMi ? { background:'#fde8e6' } : undefined}
+                    title={!s.kesilirMi ? "Bu kartı bu kesimde normalde kesmiyorsunuz — yine de girebilirsiniz" : undefined}>
+                    <td><strong>{s.kart.ad}</strong></td>
+                    <td>{f ? f.faturaTarihi : '—'}</td>
+                    <td className="mh-tutar-cell">{f ? TL(f.matrah) : '—'}</td>
+                    <td className="mh-tutar-cell">{f ? TL(f.kdv) : '—'}</td>
+                    <td className="mh-tutar-cell">{f ? TL(f.faturaToplami) : '—'}</td>
+                    <td>{f ? f.vade : '—'}</td>
+                    <td>%{Math.round((s.kart.komisyonOrani || 0) * 100)}</td>
+                    <td className="mh-tutar-cell">{f ? TL(f.kesintiToplam) : '—'}</td>
+                    <td className="mh-tutar-cell"><strong>{f ? TL(f.bankayaYatacak) : '—'}</strong></td>
+                    <td className="mh-tutar-cell">{TL(s.gunsonuToplam)}</td>
+                    <td className="mh-tutar-cell">
+                      {f ? (
+                        <span className={`mh-durum ${gunsonuUyumsuz ? 'mh-durum-kirmizi' : 'mh-durum-yesil'}`}>
+                          {gunsonuUyumsuz ? TL(s.gunsonuFark) : 'Uyumlu'}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td className="mh-tutar-cell">
+                      {f && f.gelenTutar ? (
+                        <span className={`mh-durum ${bankaUyumsuz ? 'mh-durum-kirmizi' : 'mh-durum-yesil'}`}
+                          title={s.vadeFarkliMi ? `Vade ${f.vade}, gelen ${f.gelisTarihi}` : undefined}>
+                          {TL(f.gelenTutar)}{bankaUyumsuz ? ` (fark ${TL(s.bankaFark)})` : ''}
+                          {s.vadeFarkliMi ? ' • vade farklı' : ''}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td>
+                      <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                        <button className="mh-secondary-btn" onClick={()=>setFaturaModal(s)}>
+                          {f ? 'Düzenle' : 'Fatura Kes'}
+                        </button>
+                        {f && <button className="mh-secondary-btn" onClick={()=>setOdemeModal(s)}>Para Geldi</button>}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={7}>Toplam</td>
+                <td className="mh-tutar-cell">{TL(toplamKesinti)}</td>
+                <td className="mh-tutar-cell">{TL(toplamYatacak)}</td>
+                <td colSpan={4}></td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+      <p className="mh-hint">
+        Kırmızı satırlar bu kesimde normalde fatura kesmediğiniz kartlardır; gerekirse yine de girebilirsiniz.
+        Kesinti tutarı "{'Yemek Kart-Banka Masf.'}" kategorisinde gider olarak yazılır.
+      </p>
+
+      {faturaModal && (
+        <YemekKartiFaturaModal satir={faturaModal} donem={donem} kesim={kesim} showToast={showToast}
+          onClose={()=>setFaturaModal(null)} onSaved={()=>{setFaturaModal(null);yukle();}} />
+      )}
+      {odemeModal && (
+        <YemekKartiOdemeModal satir={odemeModal} showToast={showToast}
+          onClose={()=>setOdemeModal(null)} onSaved={()=>{setOdemeModal(null);yukle();}} />
+      )}
+      {kartModal && (
+        <YemekKartiTanimModal satirlar={satirlar} showToast={showToast}
+          onClose={()=>setKartModal(null)} onSaved={()=>{setKartModal(null);yukle();}} />
+      )}
+    </div>
+  );
+}
+
+function YemekKartiFaturaModal({ satir, donem, kesim, showToast, onClose, onSaved }) {
+  const f = satir.fatura;
+  const kart = satir.kart;
+  const [faturaTarihi, setFaturaTarihi] = useState(f ? f.faturaTarihi : bugunTR());
+  const [matrah, setMatrah] = useState(f ? String(f.matrah) : '');
+  const [vade, setVade] = useState(f ? f.vade : '');
+  const [kaydediyor, setKaydediyor] = useState(false);
+
+  // Canlı önizleme — sunucudaki hesapla birebir aynı formül.
+  const m = Number(String(matrah).replace(',', '.')) || 0;
+  const kdv = Math.round(m * (kart.faturaKdv || 0.1) * 100) / 100;
+  const faturaToplami = Math.round((m + kdv) * 100) / 100;
+  const kesintiMatrah = Math.round(m * (kart.komisyonOrani || 0) * 100) / 100;
+  const kesintiKdv = Math.round(kesintiMatrah * (kart.kesintiKdv || 0.2) * 100) / 100;
+  const kesintiToplam = Math.round((kesintiMatrah + kesintiKdv) * 100) / 100;
+  const yatacak = Math.round((faturaToplami - kesintiToplam) * 100) / 100;
+  const gunsonuFark = Math.round((faturaToplami - satir.gunsonuToplam) * 100) / 100;
+
+  async function kaydet() {
+    setKaydediyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=yemekKartiFatura', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: f ? f.id : undefined, kartId: kart.id, donem, kesim, faturaTarihi, matrah, vade }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      showToast('Fatura kaydedildi, kesinti gidere yazıldı');
+      onSaved();
+    } catch (e) { showToast('Kaydedilemedi: ' + e.message); }
+    finally { setKaydediyor(false); }
+  }
+
+  return (
+    <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={onClose}>
+      <div className="mh-modal-wide" onClick={e=>e.stopPropagation()} style={{maxWidth:440}}>
+        <div className="mh-drawer-head">
+          <span>{kart.ad} — Fatura Kesimi</span>
+          <button onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="mh-drawer-body">
+          {!satir.kesilirMi && (
+            <p className="mh-hint" style={{color:'#c62828'}}>
+              Bu kartı ayın {kesim}'unda normalde kesmiyorsunuz. Yine de kesebilirsiniz.
+            </p>
+          )}
+          <label className="ff-label">Fatura Tarihi</label>
+          <TarihSecici value={faturaTarihi} onChange={setFaturaTarihi} />
+          <label className="ff-label">Fatura Matrahı (KDV hariç) *</label>
+          <input className="ff-input" type="number" step="any" value={matrah} onChange={e=>setMatrah(e.target.value)} />
+          <label className="ff-label">Vade (paranın geleceği tarih)</label>
+          <TarihSecici value={vade || ''} onChange={setVade} />
+
+          <div className="mh-table-card" style={{padding:10,marginTop:10}}>
+            <table className="mh-excel-table">
+              <tbody>
+                <tr><td>Faturamızın KDV'si (%{Math.round((kart.faturaKdv||0.1)*100)})</td><td className="mh-tutar-cell">{TL(kdv)}</td></tr>
+                <tr><td>Fatura Toplamı</td><td className="mh-tutar-cell"><strong>{TL(faturaToplami)}</strong></td></tr>
+                <tr><td>Kesinti Matrahı (%{Math.round((kart.komisyonOrani||0)*100)})</td><td className="mh-tutar-cell">{TL(kesintiMatrah)}</td></tr>
+                <tr><td>Kesinti KDV'si</td><td className="mh-tutar-cell">{TL(kesintiKdv)}</td></tr>
+                <tr><td>Kesinti Toplamı (gidere yazılacak)</td><td className="mh-tutar-cell">{TL(kesintiToplam)}</td></tr>
+                <tr><td>Bankaya Yatacak Tutarımız</td><td className="mh-tutar-cell"><strong>{TL(yatacak)}</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mh-table-card" style={{padding:10,marginTop:8}}>
+            <p style={{margin:0}}>
+              Bu dönemin günsonu toplamı: <strong>{TL(satir.gunsonuToplam)}</strong>
+            </p>
+            {m > 0 && (
+              Math.abs(gunsonuFark) > 1
+                ? <p style={{margin:'6px 0 0',color:'#c62828'}}>Fatura toplamı ile günsonu arasında {TL(gunsonuFark)} fark var.</p>
+                : <p style={{margin:'6px 0 0',color:'#2e7d32'}}>Günsonu toplamıyla uyumlu.</p>
+            )}
+          </div>
+
+          <div style={{display:'flex',gap:8,marginTop:12,justifyContent:'flex-end'}}>
+            <button className="mh-secondary-btn" onClick={onClose}>Vazgeç</button>
+            <button className="mh-primary-btn" disabled={kaydediyor || !m} onClick={kaydet}>
+              {kaydediyor ? '…' : 'Kaydet'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function YemekKartiOdemeModal({ satir, showToast, onClose, onSaved }) {
+  const f = satir.fatura;
+  const [gelenTutar, setGelenTutar] = useState(f.gelenTutar ? String(f.gelenTutar) : String(f.bankayaYatacak));
+  const [gelisTarihi, setGelisTarihi] = useState(f.gelisTarihi || bugunTR());
+  const [hesapAdi, setHesapAdi] = useState(f.gelenHesap || '');
+  const [hesaplar, setHesaplar] = useState([]);
+  const [kaydediyor, setKaydediyor] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/muhasebe?resource=faturaFis').then(r=>r.json())
+      .then(j => setHesaplar((j.odemeYontemleri || []).filter(o => o.tur === 'Banka Havalesi').map(o => o.ad)))
+      .catch(()=>{});
+  }, []);
+
+  const gelen = Number(String(gelenTutar).replace(',', '.')) || 0;
+  const fark = Math.round((f.faturaToplami - (gelen + f.kesintiToplam)) * 100) / 100;
+  const vadeFarkli = f.vade && gelisTarihi !== f.vade;
+
+  async function kaydet() {
+    setKaydediyor(true);
+    try {
+      const res = await fetch('/api/muhasebe?resource=yemekKartiOdeme', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ faturaId: f.id, gelenTutar, gelisTarihi, hesapAdi }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      showToast(Math.abs(j.fark) > 1 ? `Kaydedildi — ${TL(j.fark)} fark var` : 'Kaydedildi, tutarlar uyumlu');
+      onSaved();
+    } catch (e) { showToast('Kaydedilemedi: ' + e.message); }
+    finally { setKaydediyor(false); }
+  }
+
+  return (
+    <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={onClose}>
+      <div className="mh-modal-wide" onClick={e=>e.stopPropagation()} style={{maxWidth:420}}>
+        <div className="mh-drawer-head">
+          <span>{f.kartAdi} — Para Geldi</span>
+          <button onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="mh-drawer-body">
+          <p className="mh-hint">Beklenen: {TL(f.bankayaYatacak)} — vade {f.vade || 'girilmemiş'}</p>
+          <label className="ff-label">Gelen Tutar *</label>
+          <input className="ff-input" type="number" step="any" value={gelenTutar} onChange={e=>setGelenTutar(e.target.value)} />
+          <label className="ff-label">Geliş Tarihi</label>
+          <TarihSecici value={gelisTarihi} onChange={setGelisTarihi} />
+          <label className="ff-label">Hangi Hesaba Geldi</label>
+          <select className="ff-select" value={hesapAdi} onChange={e=>setHesapAdi(e.target.value)}>
+            <option value="">— Seçin —</option>
+            {hesaplar.map(h => <option key={h} value={h}>{h}</option>)}
+          </select>
+
+          <div className="mh-table-card" style={{padding:10,marginTop:10}}>
+            <p style={{margin:0}}>Gelen + kesinti = {TL(gelen + f.kesintiToplam)}, fatura toplamı {TL(f.faturaToplami)}</p>
+            {Math.abs(fark) > 1
+              ? <p style={{margin:'6px 0 0',color:'#c62828'}}>{TL(fark)} fark var — eksik ya da fazla yatmış olabilir.</p>
+              : <p style={{margin:'6px 0 0',color:'#2e7d32'}}>Tutarlar uyumlu.</p>}
+            {vadeFarkli && <p style={{margin:'6px 0 0',color:'#c62828'}}>Vade {f.vade} idi, para {gelisTarihi} tarihinde gelmiş.</p>}
+          </div>
+
+          <div style={{display:'flex',gap:8,marginTop:12,justifyContent:'flex-end'}}>
+            <button className="mh-secondary-btn" onClick={onClose}>Vazgeç</button>
+            <button className="mh-primary-btn" disabled={kaydediyor || !gelen} onClick={kaydet}>
+              {kaydediyor ? '…' : 'Kaydet'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function YemekKartiTanimModal({ satirlar, showToast, onClose, onSaved }) {
+  const [duzenlenen, setDuzenlenen] = useState(null);
+
+  async function kaydet(k) {
+    try {
+      const res = await fetch('/api/muhasebe?resource=yemekKarti', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(k),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'hata');
+      showToast('Kart tanımı kaydedildi');
+      onSaved();
+    } catch (e) { showToast('Kaydedilemedi: ' + e.message); }
+  }
+
+  return (
+    <div className="mh-drawer-overlay mh-drawer-overlay-center" onClick={onClose}>
+      <div className="mh-modal-wide" onClick={e=>e.stopPropagation()} style={{maxWidth:560}}>
+        <div className="mh-drawer-head">
+          <span>Yemek Kartı Tanımları</span>
+          <button onClick={onClose}><X size={18}/></button>
+        </div>
+        <div className="mh-drawer-body">
+          <table className="mh-excel-table">
+            <thead><tr><th>Kart</th><th>Komisyon</th><th>10'u</th><th>20'si</th><th>30'u</th><th></th></tr></thead>
+            <tbody>
+              {satirlar.map(s => {
+                const k = duzenlenen && duzenlenen.id === s.kart.id ? duzenlenen : s.kart;
+                const duzenlemede = !!(duzenlenen && duzenlenen.id === s.kart.id);
+                return (
+                  <tr key={k.id}>
+                    <td>{k.ad}</td>
+                    <td>
+                      {duzenlemede ? (
+                        <input className="ff-input" style={{width:80}} type="number" step="0.01"
+                          value={k.komisyonOrani}
+                          onChange={e=>setDuzenlenen({ ...k, komisyonOrani: Number(e.target.value) })} />
+                      ) : `%${Math.round((k.komisyonOrani||0)*100)}`}
+                    </td>
+                    {['kesim10','kesim20','kesim30'].map(alan => (
+                      <td key={alan}>
+                        <input type="checkbox" checked={!!k[alan]} disabled={!duzenlemede}
+                          onChange={e=>setDuzenlenen({ ...k, [alan]: e.target.checked })} />
+                      </td>
+                    ))}
+                    <td>
+                      {duzenlemede ? (
+                        <button className="mh-primary-btn" onClick={()=>kaydet(k)}>Kaydet</button>
+                      ) : (
+                        <button className="mh-secondary-btn" onClick={()=>setDuzenlenen(s.kart)}>Düzenle</button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="mh-hint">Komisyon oranını ondalık girin: %6 için 0,06 — %8 için 0,08.</p>
         </div>
       </div>
     </div>
