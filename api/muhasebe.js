@@ -2635,8 +2635,15 @@ export default async function handler(req, res) {
         if (!hedefler.length) return res.status(404).json({ error: 'Kayıt bulunamadı' });
       }
 
+      // Satırlar önce hazırlanır, sonra iki TOPLU append ile yazılır. (Her kayıt için
+      // ayrı appendRow çağırmak, her çağrının kendi sekme kontrolüyle birlikte
+      // toplu tahakkukta onlarca Sheets isteği demek oluyordu — kota hatası.)
       const yazilan = [];
       const atlanan = [];
+      const ffSatirlari = [];
+      const tkSatirlari = [];
+      const now = new Date();
+      const p = trTarihiParcala(tarih);
       for (const h of hedefler) {
         const ad = tip === 'Personel' ? h.adSoyad : h.ad;
         const oncekiTahakkuk = mevcut.find((t) => t.kayitId === h.id);
@@ -2647,17 +2654,29 @@ export default async function handler(req, res) {
         if (!tutar) { atlanan.push({ ad, tutarsiz: true }); continue; }
 
         const ffId = benzersizId();
-        const p = trTarihiParcala(tarih);
-        const now = new Date();
-        await appendRow(sheets, FATURA_FIS_TAB, [
+        ffSatirlari.push([
           ffId, tarih, p.gun, p.ay, p.yil, ad, '', `${donem} dönemi tahakkuku`,
           tip === 'Personel' ? PERSONEL_KATEGORI : (h.kategori || 'Diğer Giderler'),
           'Cari', '', tutar, 0, 0, 0, bakiyeDurumuEtiketi(tutar), tutar, '', 'FALSE', now.toISOString(), 'FALSE',
         ]);
-        await appendRow(sheets, TAHAKKUK_TAB, [
-          benzersizId(), tip, h.id, ad, donem, tarih, tutar, ffId, now.toISOString(),
-        ]);
+        tkSatirlari.push([benzersizId(), tip, h.id, ad, donem, tarih, tutar, ffId, now.toISOString()]);
         yazilan.push({ ad, tutar });
+      }
+
+      if (ffSatirlari.length) {
+        await ensureTab(sheets, TAHAKKUK_TAB.tab, TAHAKKUK_TAB.headers);
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID,
+          range: `${FATURA_FIS_TAB.tab}!A2:${lastCol(FATURA_FIS_TAB.headers)}`,
+          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
+          requestBody: { values: ffSatirlari },
+        });
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID,
+          range: `${TAHAKKUK_TAB.tab}!A2:${lastCol(TAHAKKUK_TAB.headers)}`,
+          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
+          requestBody: { values: tkSatirlari },
+        });
       }
       return res.status(200).json({ ok: true, yazilan, atlanan, donem });
     }
@@ -2792,27 +2811,34 @@ export default async function handler(req, res) {
       if (req.method === 'GET') {
         const donem = req.query.donem || bugununDonemi();
         const kesim = req.query.kesim || '10';
-        await ensureTab(sheets, YK_KART_TAB.tab, YK_KART_TAB.headers);
         let kartRows = await getRows(sheets, YK_KART_TAB);
-        // İlk açılışta varsayılan kart listesi yazılır.
+        // İlk açılışta varsayılan kart listesi TEK istekte yazılır. (Döngü içinde
+        // appendRow çağırmak her satır için ayrı ensureTab + append demek oluyordu;
+        // altı kart = 18+ Sheets çağrısı, istek kotaya takılıp boş liste dönüyordu.)
         if (!kartRows.length) {
           const now = new Date().toISOString();
-          for (const v of YK_VARSAYILAN) {
-            await appendRow(sheets, YK_KART_TAB, [
-              benzersizId(), v.ad, v.oran, 0.1, 0.2,
-              v.kesim[0] ? 'TRUE' : 'FALSE', v.kesim[1] ? 'TRUE' : 'FALSE', v.kesim[2] ? 'TRUE' : 'FALSE',
-              'FALSE', now,
-            ]);
-          }
-          kartRows = await getRows(sheets, YK_KART_TAB);
+          const satirlarYeni = YK_VARSAYILAN.map((v) => ([
+            benzersizId(), v.ad, v.oran, 0.1, 0.2,
+            v.kesim[0] ? 'TRUE' : 'FALSE', v.kesim[1] ? 'TRUE' : 'FALSE', v.kesim[2] ? 'TRUE' : 'FALSE',
+            'FALSE', now,
+          ]));
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: SHEET_ID,
+            range: `${YK_KART_TAB.tab}!A2:${lastCol(YK_KART_TAB.headers)}`,
+            valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
+            requestBody: { values: satirlarYeni },
+          });
+          kartRows = satirlarYeni;
         }
         const kartlar = kartRows.map(rowToYemekKarti);
-        const fatRows = await getRows(sheets, YK_FATURA_TAB);
+        let fatRows = [];
+        try { fatRows = await getRows(sheets, YK_FATURA_TAB); } catch { fatRows = []; }
         const faturalar = fatRows.map(rowToYemekFaturasi)
           .filter((f) => f.donem === donem && String(f.kesim) === String(kesim));
 
         const [bas, bit] = kesimAraligi(donem, kesim);
-        const gunsonu = await gunsonuYemekToplamlari(sheets, bas, bit);
+        let gunsonu = {};
+        try { gunsonu = await gunsonuYemekToplamlari(sheets, bas, bit); } catch { gunsonu = {}; }
 
         const satirlar = kartlar.filter((k) => !k.pasif).map((k) => {
           const kesilirMi = kesim === '10' ? k.kesim10 : (kesim === '20' ? k.kesim20 : k.kesim30);

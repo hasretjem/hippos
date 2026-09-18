@@ -3185,8 +3185,9 @@ function PersonelSekmesi({ showToast }) {
     try {
       const res = await fetch(`/api/muhasebe?resource=personel&donem=${donem}`);
       const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `sunucu hatası (${res.status})`);
       setPersoneller(j.personeller || []);
-    } catch { showToast('Personel listesi yüklenemedi'); }
+    } catch (e) { showToast('Personel listesi yüklenemedi: ' + e.message); }
     finally { setLoading(false); }
   }
   useEffect(() => { yukle(); }, [donem]);
@@ -3765,9 +3766,10 @@ function SabitGiderlerSekmesi({ showToast }) {
       ]);
       const g = await gRes.json();
       const k = await kRes.json();
+      if (!gRes.ok) throw new Error(g.error || `sunucu hatası (${gRes.status})`);
       setGiderler(g.giderler || []);
       setKategoriler(k.kategoriler || []);
-    } catch { showToast('Liste yüklenemedi'); }
+    } catch (e) { showToast('Liste yüklenemedi: ' + e.message); }
     finally { setLoading(false); }
   }
   useEffect(() => { yukle(); }, [donem]);
@@ -3935,9 +3937,10 @@ function YemekKartiSekmesi({ showToast }) {
     try {
       const res = await fetch(`/api/muhasebe?resource=yemekKarti&donem=${donem}&kesim=${kesim}`);
       const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `sunucu hatası (${res.status})`);
       setSatirlar(j.satirlar || []);
       setAralik(j.aralik || null);
-    } catch { showToast('Liste yüklenemedi'); }
+    } catch (e) { showToast('Liste yüklenemedi: ' + e.message); }
     finally { setLoading(false); }
   }
   useEffect(() => { yukle(); }, [donem, kesim]);
