@@ -1,39 +1,19 @@
-import { google } from 'googleapis';
+// Toptancı cari kartları — artık Google Sheets'te değil, Supabase (Postgres)
+// mh_toptancilar tablosunda. Dönen JSON biçimi DEĞİŞMEDİ, ekran kodu aynen çalışır.
+import { createClient } from '@supabase/supabase-js';
 
-function getAuth() {
-  const b64 = process.env.GOOGLE_SERVICE_ACCOUNT_B64;
-  const creds = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
-  return new google.auth.JWT(creds.client_email, null, creds.private_key, [
-    'https://www.googleapis.com/auth/spreadsheets',
-  ]);
-}
+const db = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY,
+  { auth: { persistSession: false } },
+);
 
-const SHEET_ID = process.env.GOOGLE_SHEET_ID;
-const TAB = 'Toptancılar';
-const HEADERS = ['ID', 'Firma Adı', 'Kategori', 'Telefon', 'Yetkili Kişi', 'Adres', 'Not', 'Bakiye', 'Eklenme Tarihi', 'Durum'];
-const LAST_COL = 'J';
+const KOLONLAR = ['id', 'firma_adi', 'kategori', 'telefon', 'yetkili_kisi', 'adres', 'notlar', 'bakiye', 'eklenme_tarihi', 'durum'];
 
 export const TOPTANCI_KATEGORILERI = [
   'Manav', 'Kırmızı Et', 'Tavuk Eti', 'Ambalaj',
   'Baget Ekmek', 'Fırın Ekmeği', 'Kahvaltı ve Sandviç Malzemesi', 'Sulu Yemek Malzemesi',
 ];
-
-async function ensureTab(sheets) {
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-  const exists = meta.data.sheets.some((s) => s.properties.title === TAB);
-  if (!exists) {
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SHEET_ID,
-      requestBody: { requests: [{ addSheet: { properties: { title: TAB } } }] },
-    });
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID,
-      range: `${TAB}!A1`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [HEADERS] },
-    });
-  }
-}
 
 function rowToRecord(r) {
   return {
@@ -50,17 +30,28 @@ function rowToRecord(r) {
   };
 }
 
+function nesneyeCevir(rowValues) {
+  const o = {};
+  KOLONLAR.forEach((k, i) => {
+    const v = rowValues[i];
+    o[k] = v === null || v === undefined ? '' : String(v);
+  });
+  return o;
+}
+
+async function tumSatirlar() {
+  const { data, error } = await db.from('mh_toptancilar').select(KOLONLAR.join(',')).order('sira', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data || [])
+    .map((r) => KOLONLAR.map((k) => (r[k] === null || r[k] === undefined ? '' : r[k])))
+    .filter((r) => r[0]);
+}
+
 export default async function handler(req, res) {
   try {
-    const auth = getAuth();
-    const sheets = google.sheets({ version: 'v4', auth });
-    await ensureTab(sheets);
-
     if (req.method === 'GET') {
-      const result = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${TAB}!A2:${LAST_COL}` });
-      const rows = result.data.values || [];
-      const records = rows.filter((r) => r[0]).map(rowToRecord);
-      return res.status(200).json({ records, kategoriler: TOPTANCI_KATEGORILERI });
+      const rows = await tumSatirlar();
+      return res.status(200).json({ records: rows.map(rowToRecord), kategoriler: TOPTANCI_KATEGORILERI });
     }
 
     if (req.method === 'POST') {
@@ -69,21 +60,15 @@ export default async function handler(req, res) {
       const id = String(Date.now());
       const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
       const rowValues = [id, firmaAdi, kategori || '', telefon || '', yetkiliKisi || '', adres || '', notu || '', bakiye || 0, tarih, 'aktif'];
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SHEET_ID,
-        range: `${TAB}!A2`,
-        valueInputOption: 'USER_ENTERED',
-        insertDataOption: 'INSERT_ROWS',
-        requestBody: { values: [rowValues] },
-      });
+      const { error } = await db.from('mh_toptancilar').insert(nesneyeCevir(rowValues));
+      if (error) throw new Error(error.message);
       return res.status(200).json({ ok: true, record: rowToRecord(rowValues) });
     }
 
     if (req.method === 'PUT') {
       const { id, ...patch } = req.body || {};
       if (!id) return res.status(400).json({ error: 'id gerekli' });
-      const result = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${TAB}!A2:${LAST_COL}` });
-      const rows = result.data.values || [];
+      const rows = await tumSatirlar();
       const idx = rows.findIndex((r) => r[0] === id);
       if (idx === -1) return res.status(404).json({ error: 'kayıt bulunamadı' });
 
@@ -93,13 +78,8 @@ export default async function handler(req, res) {
         merged.id, merged.firmaAdi, merged.kategori, merged.telefon, merged.yetkiliKisi,
         merged.adres, merged.not, merged.bakiye, merged.eklenmeTarihi, merged.durum,
       ];
-      const rowNum = idx + 2;
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
-        range: `${TAB}!A${rowNum}:${LAST_COL}${rowNum}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: [rowValues] },
-      });
+      const { error } = await db.from('mh_toptancilar').upsert(nesneyeCevir(rowValues), { onConflict: 'id' });
+      if (error) throw new Error(error.message);
       return res.status(200).json({ ok: true, record: rowToRecord(rowValues) });
     }
 

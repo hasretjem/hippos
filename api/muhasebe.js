@@ -11,6 +11,105 @@ function getAuth() {
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
+// ============================================================
+// VERİ KATMANI — Google Sheets yerine Supabase (Postgres).
+// Eski Sheets sekmelerinin her biri bir Postgres tablosuna karşılık geliyor.
+// KOLON SIRASI eski başlık sırasıyla BİREBİR AYNI: satırlar yine dizi olarak
+// dönüyor, bu yüzden rowToX() ve tüm iş mantığı DEĞİŞMEDİ.
+// Haritada olmayan sekmeler (Gün Sonu Kasa, Malzeme Maliyet Geçmişi, eski
+// belge sekmeleri) hâlâ Sheets'ten okunuyor/yazılıyor — bilinçli.
+// ============================================================
+import { createClient } from '@supabase/supabase-js';
+
+const db = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY,
+  { auth: { persistSession: false } },
+);
+
+const TABLOLAR = {
+  'Kategori Sözlüğü': { tablo: 'mh_kategoriler', kolonlar: ['id', 'kategori_adi', 'tarih'] },
+  'Giderler': { tablo: 'mh_giderler', kolonlar: ['id', 'tarih', 'kategori', 'tedarikci_aciklama', 'tutar', 'kdv_orani', 'odeme_durumu', 'belge_no', 'toptanci_id', 'kayit_zamani', 'fatura_id'] },
+  'Gelirler': { tablo: 'mh_gelirler', kolonlar: ['id', 'tarih', 'kategori', 'musteri_firma', 'fatura_no', 'tutar', 'kdv_orani', 'vade_tarihi', 'tahsilat_durumu', 'kayit_zamani'] },
+  'Toptancı Hareketleri': { tablo: 'mh_toptanci_hareketleri', kolonlar: ['id', 'toptanci_id', 'tarih', 'tur', 'tutar', 'aciklama', 'kaynak_gider_id', 'odeme_yontemi', 'kayit_zamani'] },
+  'Ortaklar Hareketleri': { tablo: 'mh_ortak_hareketleri', kolonlar: ['id', 'ortak_adi', 'tarih', 'islem_turu', 'yon', 'tutar', 'kasa_banka', 'aciklama', 'kayit_zamani'] },
+  'Ekstre Hareketleri': { tablo: 'mh_ekstre', kolonlar: ['id', 'tarih', 'islem_turu', 'yon', 'tutar', 'aciklama', 'satici_adi', 'satici_kodu', 'kart_tipi', 'islem_hash', 'eslesme_durumu', 'eslesen_toptanci_id', 'eslesen_kayit_id', 'kategori', 'kayit_zamani'] },
+  'Fatura ve Fişler': { tablo: 'mh_fatura_fis', kolonlar: ['id', 'tarih', 'gun', 'ay', 'yil', 'firma_adi', 'fatura_no', 'aciklama', 'gider_kategorisi', 'odeme_turu', 'odeme_detay', 'fatura_tutari', 'kdv_tutari', 'iskonto_tutari', 'odeme_tutari', 'bakiye_durumu', 'bakiye_tutari', 'kaynak_fatura_id', 'gunluk_harcama', 'kayit_zamani', 'ana_kasa_harcama'] },
+  'Tahsilat Makbuzları': { tablo: 'mh_tahsilat', kolonlar: ['id', 'tarih', 'gun', 'ay', 'yil', 'firma_adi', 'fatura_no', 'aciklama', 'odeme_turu', 'odeme_detay', 'tutar', 'onceki_bakiye', 'yeni_bakiye', 'kaynak_ekstre_id', 'kayit_zamani', 'kasa_kaynak', 'limit_kaynak'] },
+  'Fatura Firmaları': { tablo: 'mh_firmalar', kolonlar: ['id', 'firma_adi', 'gider_kategorisi', 'gunluk_harcama', 'kayit_zamani'] },
+  'Ödeme Yöntemleri': { tablo: 'mh_odeme_yontemleri', kolonlar: ['id', 'tur', 'ad', 'kayit_zamani', 'limit_deger', 'acilis_bakiyesi', 'acilis_tarihi'] },
+  'Banka Kart Hareketleri': { tablo: 'mh_banka_kart', kolonlar: ['id', 'tarih', 'hesap_turu', 'hesap_adi', 'yon', 'tutar', 'aciklama', 'kaynak_id', 'kayit_zamani'] },
+  'Personel': { tablo: 'mh_personel', kolonlar: ['id', 'ad_soyad', 'telefon', 'gorev', 'ise_giris', 'net_maas', 'nakit_limit', 'havale_limit', 'cikis_tarihi', 'kayit_zamani'] },
+  'Sabit Giderler': { tablo: 'mh_sabit_giderler', kolonlar: ['id', 'ad', 'kategori', 'tutar', 'odeme_gunu', 'pasif', 'kayit_zamani'] },
+  'Tahakkuklar': { tablo: 'mh_tahakkuklar', kolonlar: ['id', 'tip', 'kayit_id', 'ad', 'donem', 'tarih', 'tutar', 'fatura_fis_id', 'kayit_zamani'] },
+  'Devamsızlık': { tablo: 'mh_devamsizlik', kolonlar: ['id', 'personel_id', 'tarih', 'tur', 'aciklama', 'kayit_zamani'] },
+  'Yemek Kartı Tanımları': { tablo: 'mh_yk_kartlar', kolonlar: ['id', 'ad', 'komisyon_orani', 'fatura_kdv', 'kesinti_kdv', 'kesim10', 'kesim20', 'kesim30', 'pasif', 'kayit_zamani'] },
+  'Yemek Kartı Faturaları': { tablo: 'mh_yk_faturalar', kolonlar: ['id', 'kart_id', 'kart_adi', 'donem', 'kesim', 'fatura_tarihi', 'matrah', 'kdv', 'fatura_toplami', 'vade', 'kesinti_oran', 'kesinti_matrah', 'kesinti_kdv', 'kesinti_toplam', 'bankaya_yatacak', 'gider_fatura_fis_id', 'gelen_tutar', 'gelis_tarihi', 'gelen_hesap', 'kayit_zamani'] },
+  'Muhasebe Ayarları': { tablo: 'mh_ayarlar', kolonlar: ['id', 'deger', 'kayit_zamani'] },
+  'Tedarikçi Kategori Sözlüğü': { tablo: 'mh_tedarikci_kategori', kolonlar: ['id', 'tedarikci_adi', 'kategori', 'tarih'] },
+  'Malzeme Eşleştirme Sözlüğü': { tablo: 'mh_eslestirme', kolonlar: ['id', 'tedarikci_adi', 'urun_kodu', 'urun_adi', 'malzeme_id', 'malzeme_adi', 'paket_miktari', 'paket_birimi', 'tarih'] },
+  'Fatura İçe Aktarma Log': { tablo: 'mh_xml_log', kolonlar: ['id', 'uuid', 'fatura_no', 'tedarikci_adi', 'toplam_tutar', 'gorulme_tarihi'] },
+  'Toptancılar': { tablo: 'mh_toptancilar', kolonlar: ['id', 'firma_adi', 'kategori', 'telefon', 'yetkili_kisi', 'adres', 'notlar', 'bakiye', 'eklenme_tarihi', 'durum'] },
+};
+
+function tabloBul(tabConfig) {
+  const ad = typeof tabConfig === 'string' ? tabConfig : (tabConfig && tabConfig.tab);
+  return TABLOLAR[ad] || null;
+}
+
+// Kolonlar text: Sheets de her şeyi metin veriyordu, mevcut sayı/tarih çözücüler
+// (ondalikParseServer, sayiCoz, trTarihiCozServer) buna göre yazılmış durumda.
+function metneCevir(v) {
+  if (v === null || v === undefined) return '';
+  return String(v);
+}
+
+function satirdanNesne(t, rowValues) {
+  const o = {};
+  t.kolonlar.forEach((k, i) => { o[k] = metneCevir(rowValues[i]); });
+  return o;
+}
+
+async function pgOku(t) {
+  const { data, error } = await db.from(t.tablo).select(t.kolonlar.join(',')).order('sira', { ascending: true });
+  if (error) throw new Error(`${t.tablo} okunamadı: ${error.message}`);
+  return (data || [])
+    .map((r) => t.kolonlar.map((k) => (r[k] === null || r[k] === undefined ? '' : r[k])))
+    .filter((r) => r[0]);
+}
+
+// Toplu ekleme. rowsValues = dizi dizisi (eski Sheets append'inin aldığı biçim).
+async function satirlarEkle(tabConfig, rowsValues) {
+  if (!rowsValues || !rowsValues.length) return;
+  const t = tabloBul(tabConfig);
+  if (!t) throw new Error(`Bilinmeyen tablo: ${tabConfig && tabConfig.tab}`);
+  const { error } = await db.from(t.tablo).insert(rowsValues.map((r) => satirdanNesne(t, r)));
+  if (error) throw new Error(`${t.tablo} yazılamadı: ${error.message}`);
+}
+
+// Tek satır güncelleme. rowValues[0] HER ZAMAN kayıt ID'si (eski kodda da öyleydi:
+// Sheets'te A sütunu ID idi ve satır tamamı yeniden yazılıyordu).
+async function satirGuncelle(tabConfig, rowValues) {
+  const t = tabloBul(tabConfig);
+  if (!t) throw new Error(`Bilinmeyen tablo: ${tabConfig && tabConfig.tab}`);
+  const { error } = await db.from(t.tablo).upsert(satirdanNesne(t, rowValues), { onConflict: 'id' });
+  if (error) throw new Error(`${t.tablo} güncellenemedi: ${error.message}`);
+}
+
+async function satirSil(tabConfig, id) {
+  const t = tabloBul(tabConfig);
+  if (!t) throw new Error(`Bilinmeyen tablo: ${tabConfig && tabConfig.tab}`);
+  const { error } = await db.from(t.tablo).delete().eq('id', id);
+  if (error) throw new Error(`${t.tablo} silinemedi: ${error.message}`);
+}
+
+async function tabloBos(t) {
+  const { count, error } = await db.from(t.tablo).select('id', { count: 'exact', head: true });
+  if (error) throw new Error(`${t.tablo} sayılamadı: ${error.message}`);
+  return !count;
+}
+
+
 // Tüm ID üretimlerinde kullanılıyor. Salt rakamlardan oluşan uzun ID'ler (örn.
 // Date.now() + rastgele ek, 16+ hane) Google Sheets tarafından otomatik olarak
 // SAYI'ya çevrilip yuvarlanabiliyor/bilimsel gösterime dönebiliyor (15-16 hane
@@ -425,13 +524,7 @@ async function ensureOdemeYontemleri(sheets) {
   const rows = await getRows(sheets, ODEME_YONTEMI_TAB);
   if (rows.length > 0) return rows;
   const now = new Date().toISOString();
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID,
-    range: `${ODEME_YONTEMI_TAB.tab}!A2:${lastCol(ODEME_YONTEMI_TAB.headers)}`,
-    valueInputOption: 'USER_ENTERED',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: { values: VARSAYILAN_ODEME_YONTEMLERI.map(([tur, ad]) => [benzersizId(), tur, ad, now]) },
-  });
+  await satirlarEkle(ODEME_YONTEMI_TAB, VARSAYILAN_ODEME_YONTEMLERI.map(([tur, ad]) => [benzersizId(), tur, ad, now]));
   return getRows(sheets, ODEME_YONTEMI_TAB);
 }
 
@@ -632,6 +725,8 @@ async function ayarGetir(sheets, anahtar) {
 }
 
 async function getRowsAnahtarli(sheets, tabConfig, olustur = true) {
+  const t = tabloBul(tabConfig);
+  if (t) return pgOku(t);
   if (olustur) await ensureTab(sheets, tabConfig.tab, tabConfig.headers);
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
@@ -744,21 +839,16 @@ const TEDARIKCI_TAB = { tab: 'Tedarikçi Kategori Sözlüğü', headers: ['ID', 
 // Öğrenen eşleştirme sözlüğü: tedarikçinin ürün kodu/adı -> kendi malzeme kaydımız.
 const ESLESTIRME_TAB = { tab: 'Malzeme Eşleştirme Sözlüğü', headers: ['ID', 'Tedarikçi Adı', 'Ürün Kodu', 'Ürün Adı', 'MalzemeID', 'Malzeme Adı', 'Paket Miktarı', 'Paket Birimi', 'Tarih'] };
 
-async function ensureKategoriSeed(sheets) {
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-  const exists = meta.data.sheets.some((s) => s.properties.title === KATEGORI_TAB.tab);
-  await ensureTab(sheets, KATEGORI_TAB.tab, KATEGORI_TAB.headers);
-  if (!exists) {
-    const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
-    const satirlar = VARSAYILAN_KATEGORILER.map((k, i) => [String(Date.now() + i), k, tarih]);
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID, range: `${KATEGORI_TAB.tab}!A2`, valueInputOption: 'USER_ENTERED',
-      insertDataOption: 'INSERT_ROWS', requestBody: { values: satirlar },
-    });
-  }
+async function ensureKategoriSeed() {
+  const t = tabloBul(KATEGORI_TAB);
+  if (!(await tabloBos(t))) return;
+  const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+  await satirlarEkle(KATEGORI_TAB, VARSAYILAN_KATEGORILER.map((k, i) => [`kat${Date.now()}${i}`, k, tarih]));
 }
 
 async function getRows(sheets, tabConfig) {
+  const t = tabloBul(tabConfig);
+  if (t) return pgOku(t);
   await ensureTab(sheets, tabConfig.tab, tabConfig.headers);
   const result = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
@@ -823,6 +913,8 @@ function sayiCoz(v) {
 }
 
 async function appendRow(sheets, tabConfig, rowValues) {
+  const t = tabloBul(tabConfig);
+  if (t) { await satirlarEkle(tabConfig, [rowValues]); return; }
   await ensureTab(sheets, tabConfig.tab, tabConfig.headers);
   // Tam sütun aralığı (A2:<lastCol>) veriliyor — sadece 'A2' gibi açık uçlu range
   // verilirse Sheets API bazen hedef genişliği yanlış tespit edip fazla sütunları
@@ -844,6 +936,8 @@ function metinNormalize(s) {
 }
 
 async function ensureTab(sheets, tab, headers) {
+  // Postgres'e taşınan sekmelerde yapacak bir şey yok (tablo migration ile kuruldu).
+  if (tabloBul(tab)) return;
   const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
   const exists = meta.data.sheets.some((s) => s.properties.title === tab);
   if (!exists) {
@@ -1174,13 +1268,7 @@ export default async function handler(req, res) {
 
       // Yeni görülen faturaları log'a yaz (varsa) — tek batch, satır sayısı kadar ayrı append yerine tek istek.
       if (yeniLogSatirlari.length) {
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_ID,
-          range: `${XML_LOG_TAB.tab}!A2`,
-          valueInputOption: 'USER_ENTERED',
-          insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: yeniLogSatirlari },
-        });
+        await satirlarEkle(XML_LOG_TAB, yeniLogSatirlari);
       }
 
       return res.status(200).json({
@@ -1194,24 +1282,104 @@ export default async function handler(req, res) {
     }
 
     // ---- Kategori sözlüğü (Kategori Sözlüğü sekmesi — sabit değil, kullanıcı ekleyebiliyor) ----
+    // ============================================================
+    // GECE ARŞİVİ — Postgres'teki muhasebe tablolarını Google Sheets'e yazar.
+    // Amaç: Sheets okunan yer değil, ARŞİV/yedek olsun. Program gün boyu
+    // Postgres kullanır, gecede bir bu iş çalışıp tabloları Sheets'e döker.
+    //
+    // KOTA: tüm tablolar TEK values.batchUpdate isteğiyle yazılır (22 ayrı
+    // istek yerine 1). Toplam Sheets isteği: metadata + (gerekirse sekme açma)
+    // + temizleme + yazma = en fazla 4.
+    //
+    // Sekme adları "Arşiv - X" biçiminde: mevcut sekmelerine DOKUNULMAZ,
+    // oradaki eski kayıtların olduğu gibi kalır.
+    // ============================================================
+    if (resource === 'arsivYaz') {
+      const gizli = process.env.REALTIME_SYNC_SECRET;
+      if (gizli && (req.query.secret || (req.body || {}).secret) !== gizli) {
+        return res.status(401).json({ error: 'yetkisiz' });
+      }
+
+      const basliklar = {
+        'Kategori Sözlüğü': KATEGORI_TAB.headers,
+        'Giderler': GIDER_TAB.headers,
+        'Gelirler': GELIR_TAB.headers,
+        'Toptancı Hareketleri': TOPTANCI_HAREKET_TAB.headers,
+        'Ortaklar Hareketleri': ORTAK_HAREKET_TAB.headers,
+        'Ekstre Hareketleri': EKSTRE_TAB.headers,
+        'Fatura ve Fişler': FATURA_FIS_TAB.headers,
+        'Tahsilat Makbuzları': TAHSILAT_TAB.headers,
+        'Fatura Firmaları': FF_FIRMA_TAB.headers,
+        'Ödeme Yöntemleri': ODEME_YONTEMI_TAB.headers,
+        'Banka Kart Hareketleri': BANKA_KART_TAB.headers,
+        'Personel': PERSONEL_TAB.headers,
+        'Sabit Giderler': SABIT_GIDER_TAB.headers,
+        'Tahakkuklar': TAHAKKUK_TAB.headers,
+        'Devamsızlık': DEVAMSIZLIK_TAB.headers,
+        'Yemek Kartı Tanımları': YK_KART_TAB.headers,
+        'Yemek Kartı Faturaları': YK_FATURA_TAB.headers,
+        'Muhasebe Ayarları': AYAR_TAB.headers,
+        'Tedarikçi Kategori Sözlüğü': TEDARIKCI_TAB.headers,
+        'Malzeme Eşleştirme Sözlüğü': ESLESTIRME_TAB.headers,
+        'Fatura İçe Aktarma Log': XML_LOG_TAB.headers,
+        'Toptancılar': ['ID', 'Firma Adı', 'Kategori', 'Telefon', 'Yetkili Kişi', 'Adres', 'Not', 'Bakiye', 'Eklenme Tarihi', 'Durum'],
+      };
+
+      // 1) Postgres'ten oku (Sheets'e hiç gitmeden)
+      const paketler = [];
+      for (const [tabAdi, headers] of Object.entries(basliklar)) {
+        const t = TABLOLAR[tabAdi];
+        const satirlar = await pgOku(t);
+        paketler.push({ hedef: `Arşiv - ${tabAdi}`, headers, satirlar });
+      }
+
+      // 2) Eksik arşiv sekmelerini TEK batchUpdate ile aç
+      const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+      const mevcutSekmeler = new Set(meta.data.sheets.map((s) => s.properties.title));
+      const acilacak = paketler.filter((p) => !mevcutSekmeler.has(p.hedef));
+      if (acilacak.length) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: SHEET_ID,
+          requestBody: { requests: acilacak.map((p) => ({ addSheet: { properties: { title: p.hedef } } })) },
+        });
+      }
+
+      // 3) Eski içeriği TEK batchClear ile temizle (silinen kayıtlar arşivde kalmasın)
+      await sheets.spreadsheets.values.batchClear({
+        spreadsheetId: SHEET_ID,
+        requestBody: { ranges: paketler.map((p) => `${p.hedef}!A:AZ`) },
+      });
+
+      // 4) Hepsini TEK batchUpdate ile yaz
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: SHEET_ID,
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: paketler.map((p) => ({
+            range: `${p.hedef}!A1`,
+            values: [p.headers, ...p.satirlar],
+          })),
+        },
+      });
+
+      const ozet = paketler.map((p) => ({ sekme: p.hedef, satir: p.satirlar.length }));
+      return res.status(200).json({
+        ok: true,
+        zaman: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
+        toplamSatir: ozet.reduce((a, b) => a + b.satir, 0),
+        tablolar: ozet,
+      });
+    }
+
     if (resource === 'kategoriler') {
       if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
       await ensureKategoriSeed(sheets);
-      // getRows yerine doğrudan oku — ensureTab ikinci kez çağrılmasın (API kota tasarrufu).
-      const katResult = await sheets.spreadsheets.values.get({
-        spreadsheetId: SHEET_ID,
-        range: `${KATEGORI_TAB.tab}!A2:${lastCol(KATEGORI_TAB.headers)}`,
-      });
-      let katRows = ((katResult.data.values || []).filter((r) => r[0]));
+      const katRows = await getRows(sheets, KATEGORI_TAB);
       if (!katRows.some((r) => metinNormalize(r[1]) === metinNormalize(DEVIR_KATEGORI))) {
         const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
-        const lc = lastCol(KATEGORI_TAB.headers);
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_ID, range: `${KATEGORI_TAB.tab}!A2:${lc}`,
-          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: [[benzersizId(), DEVIR_KATEGORI, tarih]] },
-        });
-        katRows.push([benzersizId(), DEVIR_KATEGORI, tarih]);
+        const devirSatiri = [benzersizId(), DEVIR_KATEGORI, tarih];
+        await satirlarEkle(KATEGORI_TAB, [devirSatiri]);
+        katRows.push(devirSatiri);
       }
       return res.status(200).json({ kategoriler: katRows.map((r) => r[1]).filter(Boolean), devirKategori: DEVIR_KATEGORI });
     }
@@ -1336,28 +1504,16 @@ export default async function handler(req, res) {
         await appendRow(sheets, TOPTANCILAR_TABCONFIG, yeniToptancilarSatirlari[0]);
         // İkiden fazla yeni toptancı varsa tek batch append yapıyoruz.
         if (yeniToptancilarSatirlari.length > 1) {
-          await sheets.spreadsheets.values.append({
-            spreadsheetId: SHEET_ID, range: `${TOPTANCILAR_TABCONFIG.tab}!A2:J`,
-            valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
-            requestBody: { values: yeniToptancilarSatirlari.slice(1) },
-          });
+          await satirlarEkle(TOPTANCILAR_TABCONFIG, yeniToptancilarSatirlari.slice(1));
         }
       }
       if (giderSatirlariToplu.length) {
         await ensureTab(sheets, GIDER_TAB.tab, GIDER_TAB.headers);
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A2:${GIDER_LAST_COL}`,
-          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: giderSatirlariToplu },
-        });
+        await satirlarEkle(GIDER_TAB, giderSatirlariToplu);
       }
       if (hareketSatirlariToplu.length) {
         await ensureTab(sheets, TOPTANCI_HAREKET_TAB.tab, TOPTANCI_HAREKET_TAB.headers);
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_ID, range: `${TOPTANCI_HAREKET_TAB.tab}!A2:${TOPTANCI_HAREKET_LAST_COL}`,
-          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: hareketSatirlariToplu },
-        });
+        await satirlarEkle(TOPTANCI_HAREKET_TAB, hareketSatirlariToplu);
       }
       if (maliyetSatirlariToplu.length) {
         await ensureTab(sheets, MALIYET_TAB.tab, MALIYET_TAB.headers);
@@ -1422,10 +1578,7 @@ export default async function handler(req, res) {
       });
       if (giderSatirlari.length) {
         await ensureTab(sheets, GIDER_TAB.tab, GIDER_TAB.headers);
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A2:${GIDER_LAST_COL}`, valueInputOption: 'USER_ENTERED',
-          insertDataOption: 'INSERT_ROWS', requestBody: { values: giderSatirlari },
-        });
+        await satirlarEkle(GIDER_TAB, giderSatirlari);
       }
 
       // Toptancı artık her zaman var (eşleşme yoksa yukarıda otomatik açıldı) — TEK bir borç
@@ -1482,11 +1635,7 @@ export default async function handler(req, res) {
         return [benzersizId(), kayitTarih, 'Diğer Gelirler', f.aliciAdi, f.faturaNo, f.toplamKdvDahil ?? 0, '', '', 'Tahsil Edildi', kayitZamani];
       });
       await ensureTab(sheets, GELIR_TAB.tab, GELIR_TAB.headers);
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SHEET_ID, range: `${GELIR_TAB.tab}!A2:${GELIR_LAST_COL}`,
-        valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
-        requestBody: { values: gelirSatirlari },
-      });
+      await satirlarEkle(GELIR_TAB, gelirSatirlari);
       return res.status(200).json({ ok: true, kaydedilen: gelirSatirlari.length });
     }
 
@@ -1580,10 +1729,7 @@ export default async function handler(req, res) {
           merged.saticiAdi, merged.saticiKodu, merged.kartTipi, merged.islemHash,
           merged.eslesmeDurumu, merged.eslesenToptanciId, merged.eslesenKayitId, merged.kategori, merged.kayitZamani,
         ];
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID, range: `${EKSTRE_TAB.tab}!A${idx + 2}:${EKSTRE_LAST_COL}${idx + 2}`,
-          valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
-        });
+        await satirGuncelle(EKSTRE_TAB, rowValues);
         return res.status(200).json({ ok: true, record: rowToEkstre(rowValues) });
       }
       return res.status(405).json({ error: 'Method not allowed' });
@@ -1703,19 +1849,11 @@ export default async function handler(req, res) {
 
       if (yeniSatirlar.length) {
         await ensureTab(sheets, EKSTRE_TAB.tab, EKSTRE_TAB.headers);
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_ID, range: `${EKSTRE_TAB.tab}!A2:${EKSTRE_LAST_COL}`,
-          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: yeniSatirlar },
-        });
+        await satirlarEkle(EKSTRE_TAB, yeniSatirlar);
       }
       if (toptanciOdemeleri.length) {
         await ensureTab(sheets, TOPTANCI_HAREKET_TAB.tab, TOPTANCI_HAREKET_TAB.headers);
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_ID, range: `${TOPTANCI_HAREKET_TAB.tab}!A2:${TOPTANCI_HAREKET_LAST_COL}`,
-          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: toptanciOdemeleri },
-        });
+        await satirlarEkle(TOPTANCI_HAREKET_TAB, toptanciOdemeleri);
       }
 
       return res.status(200).json({ ok: true, ozet });
@@ -1747,10 +1885,7 @@ export default async function handler(req, res) {
         ]);
         const rowValues = [...rows[idx]];
         rowValues[10] = 'toptanci_odemesi';
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID, range: `${EKSTRE_TAB.tab}!A${idx + 2}:${EKSTRE_LAST_COL}${idx + 2}`,
-          valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
-        });
+        await satirGuncelle(EKSTRE_TAB, rowValues);
         return res.status(200).json({ ok: true, islem: 'cariye_odeme' });
       }
 
@@ -1774,10 +1909,7 @@ export default async function handler(req, res) {
       rowValues[10] = 'gidere_islendi';
       rowValues[12] = giderId;
       rowValues[13] = kategori;
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID, range: `${EKSTRE_TAB.tab}!A${idx + 2}:${EKSTRE_LAST_COL}${idx + 2}`,
-        valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
-      });
+      await satirGuncelle(EKSTRE_TAB, rowValues);
       return res.status(200).json({ ok: true, giderId });
     }
 
@@ -1891,10 +2023,7 @@ export default async function handler(req, res) {
         const mevcut = rowToGider(rows[idx]);
         const merged = { ...mevcut, ...patch };
         const rowValues = [merged.id, merged.tarih, merged.kategori, merged.tedarikciAciklama, merged.tutar, merged.kdvOrani, merged.odemeDurumu, merged.belgeNo, merged.toptanciId, merged.kayitZamani, merged.faturaId];
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A${idx + 2}:${GIDER_LAST_COL}${idx + 2}`,
-          valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
-        });
+        await satirGuncelle(GIDER_TAB, rowValues);
         return res.status(200).json({ ok: true, record: rowToGider(rowValues) });
       }
       // Toplu güncelleme — aynı faturaId'ye ait TÜM satırların ödeme durumunu birlikte değiştirir
@@ -1907,10 +2036,7 @@ export default async function handler(req, res) {
         for (const { r, i } of eslesenIdx) {
           const rowValues = [...r];
           rowValues[6] = odemeDurumu;
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A${i + 2}:${GIDER_LAST_COL}${i + 2}`,
-            valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
-          });
+          await satirGuncelle(GIDER_TAB, rowValues);
         }
         return res.status(200).json({ ok: true, guncellenen: eslesenIdx.length });
       }
@@ -1947,10 +2073,7 @@ export default async function handler(req, res) {
         const mevcut = rowToGelir(rows[idx]);
         const merged = { ...mevcut, ...patch };
         const rowValues = [merged.id, merged.tarih, merged.kategori, merged.musteriFirma, merged.faturaNo, merged.tutar, merged.kdvOrani, merged.vadeTarihi, merged.tahsilatDurumu, merged.kayitZamani];
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID, range: `${GELIR_TAB.tab}!A${idx + 2}:${GELIR_LAST_COL}${idx + 2}`,
-          valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues] },
-        });
+        await satirGuncelle(GELIR_TAB, rowValues);
         return res.status(200).json({ ok: true, record: rowToGelir(rowValues) });
       }
       return res.status(405).json({ error: 'Method not allowed' });
@@ -2006,10 +2129,7 @@ export default async function handler(req, res) {
         for (const idx of kapatilanSatirIdx) {
           const rowValues2 = [...giderRows[idx]];
           rowValues2[6] = 'Ödendi';
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID, range: `${GIDER_TAB.tab}!A${idx + 2}:${GIDER_LAST_COL}${idx + 2}`,
-            valueInputOption: 'USER_ENTERED', requestBody: { values: [rowValues2] },
-          });
+          await satirGuncelle(GIDER_TAB, rowValues2);
         }
 
         return res.status(200).json({ ok: true, record: rowToToptanciHareket(rowValues), kapatilanFaturaSayisi: kapatilanSatirIdx.length });
@@ -2128,13 +2248,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, zatenVar: true, firmaAdi: ad });
       }
       const id = benzersizId();
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SHEET_ID,
-        range: `${FF_FIRMA_TAB.tab}!A2:E`,
-        valueInputOption: 'USER_ENTERED',
-        insertDataOption: 'INSERT_ROWS',
-        requestBody: { values: [[id, ad, giderKategorisi || '', gunlukHarcama ? 'TRUE' : 'FALSE', new Date().toISOString()]] },
-      });
+      await satirlarEkle(FF_FIRMA_TAB, [[id, ad, giderKategorisi || '', gunlukHarcama ? 'TRUE' : 'FALSE', new Date().toISOString()]]);
       return res.status(200).json({ ok: true, firmaAdi: ad, id });
     }
 
@@ -2179,12 +2293,7 @@ export default async function handler(req, res) {
           rowValues[11] = fTutar;
           rowValues[18] = 'TRUE';
           rowValues[20] = anaKasaFlag;
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID,
-            range: `${FATURA_FIS_TAB.tab}!A${idx + 2}:${lastCol(FATURA_FIS_TAB.headers)}${idx + 2}`,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [rowValues] },
-          });
+          await satirGuncelle(FATURA_FIS_TAB, rowValues);
           return res.status(200).json({ ok: true, id: giderId, guncellendi: true });
         }
         // id gönderildi ama satır bulunamadı (silinmiş olabilir) — yeni satır olarak eklenir.
@@ -2248,24 +2357,7 @@ export default async function handler(req, res) {
       const rows = await getRows(sheets, FATURA_FIS_TAB);
       const idx = rows.findIndex((r) => r[0] === giderId);
       if (idx < 0) return res.status(404).json({ error: 'Kayıt bulunamadı' });
-      const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-      const sheet = meta.data.sheets.find((s) => s.properties.title === FATURA_FIS_TAB.tab);
-      if (!sheet) return res.status(404).json({ error: 'Sekme bulunamadı' });
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: SHEET_ID,
-        requestBody: {
-          requests: [{
-            deleteDimension: {
-              range: {
-                sheetId: sheet.properties.sheetId,
-                dimension: 'ROWS',
-                startIndex: idx + 1, // 0-tabanlı; +1 başlık satırı için
-                endIndex: idx + 2,
-              },
-            },
-          }],
-        },
-      });
+      await satirSil(FATURA_FIS_TAB, giderId);
       return res.status(200).json({ ok: true });
     }
 
@@ -2388,12 +2480,7 @@ export default async function handler(req, res) {
             && (r[4] || '') === yonYaz && (r[6] || '') === (aciklama || ''));
         }
         if (idx >= 0) {
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID,
-            range: `${BANKA_KART_TAB.tab}!A${idx + 2}:${lastCol(BANKA_KART_TAB.headers)}${idx + 2}`,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [[rows[idx][0], trTarih, hesapTuru, hesapAdi || '', yonYaz, tutarSayi, aciklama || '', kaynakId, now.toISOString()]] },
-          });
+          await satirGuncelle(BANKA_KART_TAB, [rows[idx][0], trTarih, hesapTuru, hesapAdi || '', yonYaz, tutarSayi, aciklama || '', kaynakId, now.toISOString()]);
           return res.status(200).json({ ok: true, guncellendi: true });
         }
         if (!tutarSayi) return res.status(200).json({ ok: true, atlandi: true });
@@ -2415,12 +2502,12 @@ export default async function handler(req, res) {
       const rows = await ensureOdemeYontemleri(sheets);
       const idx = rows.findIndex((r) => r[0] === id);
       if (idx < 0) return res.status(404).json({ error: 'hesap bulunamadı' });
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
-        range: `${ODEME_YONTEMI_TAB.tab}!E${idx + 2}:G${idx + 2}`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [[ondalikParseServer(limit), ondalikParseServer(acilisBakiyesi), acilisTarihi || '']] },
-      });
+      const hesapSatiri = [...rows[idx]];
+      while (hesapSatiri.length < ODEME_YONTEMI_TAB.headers.length) hesapSatiri.push('');
+      hesapSatiri[4] = ondalikParseServer(limit);
+      hesapSatiri[5] = ondalikParseServer(acilisBakiyesi);
+      hesapSatiri[6] = acilisTarihi || '';
+      await satirGuncelle(ODEME_YONTEMI_TAB, hesapSatiri);
       return res.status(200).json({ ok: true });
     }
 
@@ -2434,20 +2521,7 @@ export default async function handler(req, res) {
         if (devirTarihi && !/^\d{2}\.\d{2}\.\d{4}$/.test(devirTarihi)) {
           return res.status(400).json({ error: 'devir tarihi GG.AA.YYYY olmalı' });
         }
-        const rows = await getRowsAnahtarli(sheets, AYAR_TAB);
-        const idx = rows.findIndex((r) => r[0] === 'devirTarihi');
-        const deger = [['devirTarihi', devirTarihi, new Date().toISOString()]];
-        if (idx >= 0) {
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID, range: `${AYAR_TAB.tab}!A${idx + 2}:C${idx + 2}`,
-            valueInputOption: 'RAW', requestBody: { values: deger },
-          });
-        } else {
-          await sheets.spreadsheets.values.append({
-            spreadsheetId: SHEET_ID, range: `${AYAR_TAB.tab}!A2:C`,
-            valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', requestBody: { values: deger },
-          });
-        }
+        await satirGuncelle(AYAR_TAB, ['devirTarihi', devirTarihi, new Date().toISOString()]);
         return res.status(200).json({ ok: true, devirTarihi });
       }
       return res.status(405).json({ error: 'Method not allowed' });
@@ -2521,11 +2595,7 @@ export default async function handler(req, res) {
         const idx = id ? rows.findIndex((r) => r[0] === id) : -1;
         if (idx >= 0) {
           satir[9] = rows[idx][9] || satir[9];
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID,
-            range: `${PERSONEL_TAB.tab}!A${idx + 2}:${lastCol(PERSONEL_TAB.headers)}${idx + 2}`,
-            valueInputOption: 'USER_ENTERED', requestBody: { values: [satir] },
-          });
+          await satirGuncelle(PERSONEL_TAB, satir);
           return res.status(200).json({ ok: true, id: satir[0], guncellendi: true });
         }
         await appendRow(sheets, PERSONEL_TAB, satir);
@@ -2543,14 +2613,7 @@ export default async function handler(req, res) {
         const rows = await getRows(sheets, DEVAMSIZLIK_TAB);
         const idx = rows.findIndex((r) => r[0] === id);
         if (idx < 0) return res.status(404).json({ error: 'Kayıt bulunamadı' });
-        const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-        const sheet = meta.data.sheets.find((x) => x.properties.title === DEVAMSIZLIK_TAB.tab);
-        await sheets.spreadsheets.batchUpdate({
-          spreadsheetId: SHEET_ID,
-          requestBody: { requests: [{ deleteDimension: { range: {
-            sheetId: sheet.properties.sheetId, dimension: 'ROWS', startIndex: idx + 1, endIndex: idx + 2,
-          } } }] },
-        });
+        await satirSil(DEVAMSIZLIK_TAB, id);
         return res.status(200).json({ ok: true });
       }
       if (!personelId || !tarih) return res.status(400).json({ error: 'personelId ve tarih gerekli' });
@@ -2597,11 +2660,7 @@ export default async function handler(req, res) {
           ondalikParseServer(tutar || 0), odemeGunu || '', pasif ? 'TRUE' : 'FALSE', new Date().toISOString()];
         const idx = id ? rows.findIndex((r) => r[0] === id) : -1;
         if (idx >= 0) {
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID,
-            range: `${SABIT_GIDER_TAB.tab}!A${idx + 2}:${lastCol(SABIT_GIDER_TAB.headers)}${idx + 2}`,
-            valueInputOption: 'USER_ENTERED', requestBody: { values: [satir] },
-          });
+          await satirGuncelle(SABIT_GIDER_TAB, satir);
           return res.status(200).json({ ok: true, id: satir[0], guncellendi: true });
         }
         await appendRow(sheets, SABIT_GIDER_TAB, satir);
@@ -2665,18 +2724,8 @@ export default async function handler(req, res) {
 
       if (ffSatirlari.length) {
         await ensureTab(sheets, TAHAKKUK_TAB.tab, TAHAKKUK_TAB.headers);
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_ID,
-          range: `${FATURA_FIS_TAB.tab}!A2:${lastCol(FATURA_FIS_TAB.headers)}`,
-          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: ffSatirlari },
-        });
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_ID,
-          range: `${TAHAKKUK_TAB.tab}!A2:${lastCol(TAHAKKUK_TAB.headers)}`,
-          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: tkSatirlari },
-        });
+        await satirlarEkle(FATURA_FIS_TAB, ffSatirlari);
+        await satirlarEkle(TAHAKKUK_TAB, tkSatirlari);
       }
       return res.status(200).json({ ok: true, yazilan, atlanan, donem });
     }
@@ -2822,12 +2871,7 @@ export default async function handler(req, res) {
             v.kesim[0] ? 'TRUE' : 'FALSE', v.kesim[1] ? 'TRUE' : 'FALSE', v.kesim[2] ? 'TRUE' : 'FALSE',
             'FALSE', now,
           ]));
-          await sheets.spreadsheets.values.append({
-            spreadsheetId: SHEET_ID,
-            range: `${YK_KART_TAB.tab}!A2:${lastCol(YK_KART_TAB.headers)}`,
-            valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
-            requestBody: { values: satirlarYeni },
-          });
+          await satirlarEkle(YK_KART_TAB, satirlarYeni);
           kartRows = satirlarYeni;
         }
         const kartlar = kartRows.map(rowToYemekKarti);
@@ -2878,11 +2922,7 @@ export default async function handler(req, res) {
           pasif ? 'TRUE' : 'FALSE', new Date().toISOString()];
         const idx = id ? rows.findIndex((r) => r[0] === id) : -1;
         if (idx >= 0) {
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID,
-            range: `${YK_KART_TAB.tab}!A${idx + 2}:${lastCol(YK_KART_TAB.headers)}${idx + 2}`,
-            valueInputOption: 'USER_ENTERED', requestBody: { values: [satir] },
-          });
+          await satirGuncelle(YK_KART_TAB, satir);
           return res.status(200).json({ ok: true, id: satir[0], guncellendi: true });
         }
         await appendRow(sheets, YK_KART_TAB, satir);
@@ -2923,11 +2963,7 @@ export default async function handler(req, res) {
         const ffRows = await getRows(sheets, FATURA_FIS_TAB);
         const gIdx = ffRows.findIndex((r) => r[0] === giderId);
         if (gIdx >= 0) {
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID,
-            range: `${FATURA_FIS_TAB.tab}!A${gIdx + 2}:${lastCol(FATURA_FIS_TAB.headers)}${gIdx + 2}`,
-            valueInputOption: 'USER_ENTERED', requestBody: { values: [giderSatiri] },
-          });
+          await satirGuncelle(FATURA_FIS_TAB, giderSatiri);
         } else { await appendRow(sheets, FATURA_FIS_TAB, giderSatiri); }
       } else {
         giderId = giderSatiri[0];
@@ -2942,11 +2978,7 @@ export default async function handler(req, res) {
         now.toISOString(),
       ];
       if (idx >= 0) {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `${YK_FATURA_TAB.tab}!A${idx + 2}:${lastCol(YK_FATURA_TAB.headers)}${idx + 2}`,
-          valueInputOption: 'USER_ENTERED', requestBody: { values: [satir] },
-        });
+        await satirGuncelle(YK_FATURA_TAB, satir);
       } else {
         await appendRow(sheets, YK_FATURA_TAB, satir);
       }
@@ -2971,11 +3003,7 @@ export default async function handler(req, res) {
       const satir = [...fatRows[idx]];
       while (satir.length < YK_FATURA_TAB.headers.length) satir.push('');
       satir[16] = gelen; satir[17] = trTarih; satir[18] = hesapAdi || '';
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
-        range: `${YK_FATURA_TAB.tab}!A${idx + 2}:${lastCol(YK_FATURA_TAB.headers)}${idx + 2}`,
-        valueInputOption: 'USER_ENTERED', requestBody: { values: [satir] },
-      });
+      await satirGuncelle(YK_FATURA_TAB, satir);
 
       // Bankaya giriş — aynı fatura için tekrar kaydedilirse satır güncellenir.
       const kaynakId = `YKODEME-${faturaId}`;
@@ -2984,11 +3012,7 @@ export default async function handler(req, res) {
       const bSatir = [bIdx >= 0 ? bkRows[bIdx][0] : benzersizId(), trTarih, 'Banka Havalesi',
         hesapAdi || '', 'GİREN', gelen, `${fatura.kartAdi} hakedişi`, kaynakId, now.toISOString()];
       if (bIdx >= 0) {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `${BANKA_KART_TAB.tab}!A${bIdx + 2}:${lastCol(BANKA_KART_TAB.headers)}${bIdx + 2}`,
-          valueInputOption: 'USER_ENTERED', requestBody: { values: [bSatir] },
-        });
+        await satirGuncelle(BANKA_KART_TAB, bSatir);
       } else {
         await appendRow(sheets, BANKA_KART_TAB, bSatir);
       }
