@@ -1925,16 +1925,28 @@ export default function useHipposData(scope = 'full') {
   }
 
   // Firma carilerinde: o ana kadarki faturalanmamış bakiyeyi bir faturaya bağlar.
-  function addCariFatura(cariId, { tarih, faturaNo, tutar, donemBaslangic, donemBitis }) {
+  async function addCariFatura(cariId, { tarih, faturaNo, tutar, donemBaslangic, donemBitis }) {
     const id = Date.now() + Math.floor(Math.random() * 1000);
     const eklenmeTs = Date.now();
     const fatura = { id, cariId, tarih, faturaNo, tutar, eklenmeTs, donemBaslangic: donemBaslangic || null, donemBitis: donemBitis || null, tahsilatTutar: 0 };
     setCariFaturalar((prev) => [...prev, fatura]);
-    supabase
+    const { error } = await supabase
       .from('cari_faturalar')
-      .insert({ id, cari_id: cariId, tarih, fatura_no: faturaNo, tutar, eklenme_ts: eklenmeTs, donem_baslangic: donemBaslangic || null, donem_bitis: donemBitis || null, tahsilat_tutar: 0 })
-      .then(({ error }) => { if (error) console.error('fatura kaydedilemedi:', error.message); });
+      .insert({ id, cari_id: cariId, tarih, fatura_no: faturaNo, tutar, eklenme_ts: eklenmeTs, donem_baslangic: donemBaslangic || null, donem_bitis: donemBitis || null, tahsilat_tutar: 0 });
+    if (error) {
+      console.error('fatura kaydedilemedi:', error.message);
+      setCariFaturalar((prev) => prev.filter((f) => f.id !== id));
+      return null;
+    }
     return id;
+  }
+
+  async function deleteCariOdemeler(odemeIds) {
+    const idSet = new Set(odemeIds);
+    setCariOdemeler((prev) => prev.filter((o) => !idSet.has(o.id)));
+    await Promise.all([...idSet].map((oid) =>
+      supabase.from('cari_odemeler').delete().eq('id', oid).then(({ error }) => { if (error) console.error(error.message); })
+    ));
   }
 
   // Futura: tam tahsilat — faturayı siler, bakiye 0 ise hareketleri de arşivler
@@ -2254,6 +2266,7 @@ export default function useHipposData(scope = 'full') {
     futuraTamOde,
     futuraKismiOde,
     deleteCariHareketler,
+    deleteCariOdemeler,
     getCariFaturalanmamisTutar,
     archiveCari,
     paketTeslimatlari,
