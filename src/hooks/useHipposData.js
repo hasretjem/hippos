@@ -165,7 +165,7 @@ function rowToFatura(r) {
   };
 }
 function rowToGecmis(r) {
-  return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), toplamTutar: Number(r.toplam_tutar), aciklama: r.aciklama };
+  return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), toplamTutar: Number(r.toplam_tutar), aciklama: r.aciklama, sonTahsilatTutar: r.son_tahsilat_tutar != null ? Number(r.son_tahsilat_tutar) : null };
 }
 
 function rowToPaketTeslimat(r) {
@@ -893,7 +893,15 @@ export default function useHipposData(scope = 'full') {
       setActionHistory((ah.data || []).map(rowToAction));
       setCariler((cr.data || []).map(rowToCari));
       setCariHareketler((ch.data || []).map(rowToHareket));
-      setCariOdemeler((co.data || []).map(rowToOdeme));
+      // Eski günlerin fatura tahsilat kayıtları (kaynak='fatura') sadece o günün günsonu için gerekli, sonrasında temizlenir
+      const bugunBaslangicTs = (() => { const t = new Date(); t.setHours(0, 0, 0, 0); return t.getTime(); })();
+      const tumOdemeler = (co.data || []).map(rowToOdeme);
+      const eskiFaturaOdemeSayisi = tumOdemeler.filter((o) => o.kaynak === 'fatura' && o.ts < bugunBaslangicTs).length;
+      setCariOdemeler(tumOdemeler.filter((o) => !(o.kaynak === 'fatura' && o.ts < bugunBaslangicTs)));
+      if (eskiFaturaOdemeSayisi > 0) {
+        supabase.from('cari_odemeler').delete().eq('kaynak', 'fatura').lt('ts', bugunBaslangicTs)
+          .then(({ error }) => { if (error) console.error('eski fatura tahsilatları temizlenemedi:', error.message); });
+      }
       setCariFaturalar((cf.data || []).map(rowToFatura));
       setCariGecmis((cg.data || []).map(rowToGecmis));
       setDataLoaded(true);
@@ -1965,7 +1973,7 @@ export default function useHipposData(scope = 'full') {
     const kalanFatura = cariFaturalar.filter((f) => f.cariId === fatura.cariId && f.id !== faturaId);
     const kalanHareket = cariHareketler.filter((h) => h.cariId === fatura.cariId);
     if (kalanFatura.length === 0 && kalanHareket.length === 0) {
-      archiveCari(fatura.cariId);
+      archiveCari(fatura.cariId, fatura.tutar);
     }
   }
 
@@ -1998,15 +2006,15 @@ export default function useHipposData(scope = 'full') {
   }
 
   // Bakiye sıfırlanınca geçmişi silmez — tek satırlık özet olarak arşivler, cariyi listeden gizler.
-  function archiveCari(cariId) {
+  function archiveCari(cariId, sonTahsilatTutar = null) {
     const toplam = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
     const ts = Date.now();
-    setCariGecmis((prev) => [...prev, { id: Date.now() + Math.floor(Math.random() * 1000), cariId, ts, toplamTutar: toplam, aciklama: 'Tamamlandı' }]);
+    setCariGecmis((prev) => [...prev, { id: Date.now() + Math.floor(Math.random() * 1000), cariId, ts, toplamTutar: toplam, aciklama: 'Tamamlandı', sonTahsilatTutar }]);
     setCariHareketler((prev) => prev.filter((h) => h.cariId !== cariId));
     setCariOdemeler((prev) => prev.filter((o) => o.cariId !== cariId));
     setCariFaturalar((prev) => prev.filter((f) => f.cariId !== cariId));
 
-    supabase.from('cari_gecmis').insert({ cari_id: cariId, ts, toplam_tutar: toplam, aciklama: 'Tamamlandı' }).then(({ error }) => {
+    supabase.from('cari_gecmis').insert({ cari_id: cariId, ts, toplam_tutar: toplam, aciklama: 'Tamamlandı', son_tahsilat_tutar: sonTahsilatTutar }).then(({ error }) => {
       if (error) console.error('cari arşivlenemedi:', error.message);
     });
     supabase.from('cari_hareketler').delete().eq('cari_id', cariId).then(({ error }) => { if (error) console.error(error.message); });
@@ -2181,7 +2189,7 @@ export default function useHipposData(scope = 'full') {
     const kalanBakiye = Math.max(0, getCariBakiye(bildirim.cariId) - bildirim.tutar);
     await addCariOdeme(bildirim.cariId, { tutar: bildirim.tutar, tur: bildirim.odemeYontemi });
     if (kalanBakiye === 0) {
-      archiveCari(bildirim.cariId);
+      archiveCari(bildirim.cariId, bildirim.tutar);
     }
   }
   function reddetCariTeslimatBildirim(id, onayNotu) {

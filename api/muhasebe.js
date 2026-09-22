@@ -1363,11 +1363,68 @@ export default async function handler(req, res) {
       });
 
       const ozet = paketler.map((p) => ({ sekme: p.hedef, satir: p.satirlar.length }));
+
+      // 5) TESLİMAT FOTOĞRAFI TEMİZLİĞİ — 7 günden eski fotoğraflar silinir.
+      // Arşivden bağımsız: burada bir hata olursa arşiv yine başarılı sayılır.
+      // DİKKAT: storage.remove() izin yoksa HATA VERMEDEN hiçbir şey silmez
+      // (bu yüzden eskiden 292 sahipsiz dosya birikmişti). O yüzden "silindi"
+      // sayısını istediğimiz listeden değil, Supabase'in DÖNDÜRDÜĞÜ listeden alıyoruz.
+      let fotoTemizlik;
+      try {
+        const KOVA = 'teslimat-fotograflari';
+        const sinir = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        const eskiler = [];
+        for (let offset = 0; ; offset += 1000) {
+          const { data, error } = await db.storage.from(KOVA).list('', {
+            limit: 1000, offset, sortBy: { column: 'created_at', order: 'asc' },
+          });
+          if (error) throw new Error(`liste alınamadı: ${error.message}`);
+          if (!data || !data.length) break;
+          for (const f of data) {
+            if (f.id && f.created_at && new Date(f.created_at).getTime() < sinir) eskiler.push(f.name);
+          }
+          if (data.length < 1000) break;
+        }
+
+        const silinenler = [];
+        for (let i = 0; i < eskiler.length; i += 100) {
+          const { data, error } = await db.storage.from(KOVA).remove(eskiler.slice(i, i + 100));
+          if (error) throw new Error(`silinemedi: ${error.message}`);
+          (data || []).forEach((d) => silinenler.push(d.name));
+        }
+
+        // Fotoğrafı silinen kayıtların bağlantısını temizle — ekranda kırık "Foto" butonu kalmasın.
+        let baglantiTemizlenen = 0;
+        for (let i = 0; i < silinenler.length; i += 100) {
+          const urlParcalari = silinenler.slice(i, i + 100);
+          for (const tablo of ['cari_teslimat_bildirimleri', 'paket_teslimatlari']) {
+            const { data: kayitlar, error: okuHata } = await db.from(tablo).select('id, foto_url').not('foto_url', 'is', null);
+            if (okuHata) continue;
+            const ilgili = (kayitlar || []).filter((k) => urlParcalari.some((ad) => (k.foto_url || '').endsWith(`/${KOVA}/${ad}`)));
+            if (!ilgili.length) continue;
+            const { error: gunHata } = await db.from(tablo).update({ foto_url: null }).in('id', ilgili.map((k) => k.id));
+            if (!gunHata) baglantiTemizlenen += ilgili.length;
+          }
+        }
+
+        fotoTemizlik = {
+          ok: true,
+          eskiDosya: eskiler.length,
+          silinen: silinenler.length,
+          baglantiTemizlenen,
+          // İstenen ile silinen farklıysa izin sorunu var demektir — cron cevabında görünür.
+          uyari: eskiler.length !== silinenler.length ? 'Bazı dosyalar silinemedi (izin sorunu olabilir)' : undefined,
+        };
+      } catch (e) {
+        fotoTemizlik = { ok: false, hata: e.message };
+      }
+
       return res.status(200).json({
         ok: true,
         zaman: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
         toplamSatir: ozet.reduce((a, b) => a + b.satir, 0),
         tablolar: ozet,
+        fotoTemizlik,
       });
     }
 

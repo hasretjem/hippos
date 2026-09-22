@@ -307,7 +307,7 @@ export default function Cariler({ data, onNavigate }) {
     setBugunTahsilatYapildi((prev) => ({ ...prev, [selectedCari.id]: true }));
     setOdemeShareOpen(true);
     if (kalan === 0) {
-      archiveCari(selectedCari.id);
+      archiveCari(selectedCari.id, tutar);
     }
   }
 
@@ -485,7 +485,7 @@ export default function Cariler({ data, onNavigate }) {
         .filter((h) => h.cariId === cariId && h.ts >= baslangicTs && h.ts <= bitisTs)
         .map((h) => ({ ts: h.ts, tip: 'siparis', aciklama: 'Sipariş', urunler: h.urunler, tutar: h.toplam })),
       ...cariOdemeler
-        .filter((o) => o.cariId === cariId && o.ts >= baslangicTs && o.ts <= bitisTs)
+        .filter((o) => o.cariId === cariId && o.kaynak !== 'fatura' && o.ts >= baslangicTs && o.ts <= bitisTs)
         .map((o) => ({ ts: o.ts, tip: 'odeme', aciklama: `Ödeme Alındı — ${o.tur}`, urunler: null, tutar: -o.tutar })),
     ].sort((a, b) => a.ts - b.ts);
     setDokumData({ cari: selectedCari, rows, baslangicTs, bitisTs });
@@ -583,7 +583,7 @@ export default function Cariler({ data, onNavigate }) {
     ? cariHareketler.filter((h) => h.cariId === selectedCari.id).sort((a, b) => b.ts - a.ts)
     : [];
   const odemelerListe = selectedCari
-    ? cariOdemeler.filter((o) => o.cariId === selectedCari.id).sort((a, b) => b.ts - a.ts)
+    ? cariOdemeler.filter((o) => o.cariId === selectedCari.id && o.kaynak !== 'fatura').sort((a, b) => b.ts - a.ts)
     : [];
   const toplamTahsilat = odemelerListe.reduce((s, o) => s + o.tutar, 0);
   // Hareketler ve Ödeme Hareketleri artık tek, kronolojik bir listede birleşik.
@@ -755,7 +755,9 @@ export default function Cariler({ data, onNavigate }) {
                       }
                       const bugunStr = localDateStr(Date.now());
                       const bugunOdeme = cariOdemeler.find((o) => o.cariId === selectedCari.id && localDateStr(o.ts) === bugunStr);
-                      const tahsilatVar = bugunOdeme || bugunTahsilatYapildi[selectedCari.id];
+                      // Tam ödenen cari arşivlenince ödeme kaydı silinir — bugünkü arşiv kaydına da bak
+                      const bugunArsiv = cariGecmis.filter((g) => g.cariId === selectedCari.id && localDateStr(g.ts) === bugunStr).sort((a, b) => b.ts - a.ts)[0];
+                      const tahsilatVar = bugunOdeme || bugunArsiv || bugunTahsilatYapildi[selectedCari.id];
                       if (!tahsilatVar) return null;
                       const tahsilatGonderildi = selectedCari.tahsilatMesajTarih === bugunStr;
                       return (
@@ -772,7 +774,7 @@ export default function Cariler({ data, onNavigate }) {
                               })
                               .sort((a, b) => b.ts - a.ts);
                             const sonOdeme = bugunOdemeler[0];
-                            const tutar = sonOdeme ? sonOdeme.tutar : 0;
+                            const tutar = sonOdeme ? sonOdeme.tutar : (bugunArsiv ? (bugunArsiv.sonTahsilatTutar ?? bugunArsiv.toplamTutar) : 0);
                             const kalan = getCariBakiye(selectedCari.id);
                             setOdemeShareText([
                               `\uD83D\uDC9A Merhaba ${selectedCari.ad},`,
