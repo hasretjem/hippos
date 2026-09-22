@@ -3028,7 +3028,10 @@ export default async function handler(req, res) {
         return res.status(200).json({
           satirlar, donem, kesim,
           aralik: {
-            bas: bas.toLocaleDateString('tr-TR'), bit: bit.toLocaleDateString('tr-TR'),
+            // Sunucu UTC'de çalışıyor: timeZone verilmezse gece yarısına yakın saatlerde
+            // dönem aralığı bir gün kayık görünür (kalıcı kural).
+            bas: bas.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' }),
+            bit: bit.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' }),
           },
         });
       }
