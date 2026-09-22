@@ -49,6 +49,12 @@ const TABLOLAR = {
   'Tedarikçi Kategori Sözlüğü': { tablo: 'mh_tedarikci_kategori', kolonlar: ['id', 'tedarikci_adi', 'kategori', 'tarih'] },
   'Malzeme Eşleştirme Sözlüğü': { tablo: 'mh_eslestirme', kolonlar: ['id', 'tedarikci_adi', 'urun_kodu', 'urun_adi', 'malzeme_id', 'malzeme_adi', 'paket_miktari', 'paket_birimi', 'tarih'] },
   'Fatura İçe Aktarma Log': { tablo: 'mh_xml_log', kolonlar: ['id', 'uuid', 'fatura_no', 'tedarikci_adi', 'toplam_tutar', 'gorulme_tarihi'] },
+  'Gün Sonu Kasa': { tablo: 'gs_kayitlar', kolonlar: ['tarih', 'toplam_nakit', 'nakit_kupur', 'kasa_avansi', 'pos_toplam', 'pos_satirlari', 'ana_kasa_toplam', 'ana_kasa_harcamalar', 'gunluk_kasa_toplam', 'gunluk_kasa_harcamalar', 'cari_toplam', 'cari_detay', 'yemek_toplam', 'yemek_detay', 'ciro', 'ana_kasa_takibi', 'kaydeden_saat'] },
+  'Malzeme Havuzu': { tablo: 'rc_malzemeler', kolonlar: ['id', 'malzeme_adi', 'birim', 'aktif', 'olusturulma_tarihi'] },
+  'Malzeme Maliyet Geçmişi': { tablo: 'rc_maliyet_gecmisi', kolonlar: ['id', 'malzeme_id', 'malzeme_adi', 'tarih', 'miktar', 'birim', 'toplam_fiyat', 'birim_maliyet', 'fatura_id'] },
+  'Reçete Geçmişi': { tablo: 'rc_receteler', kolonlar: ['id', 'urun_id', 'urun_adi', 'versiyon', 'aktif', 'baslangic_tarihi', 'bitis_tarihi'] },
+  'Reçete Kalemleri': { tablo: 'rc_recete_kalemleri', kolonlar: ['id', 'recete_id', 'malzeme_id', 'malzeme_adi', 'miktar', 'birim'] },
+  'Realtime Kullanım': { tablo: 'rt_kullanim', kolonlar: ['id', 'row_type', 'tarih', 'saat', 'total_messages', 'table_state', 'sales_history', 'cari_hareketler', 'cari_odemeler', 'cari_faturalar', 'packages', 'paket_teslimatlari', 'mutfak_hazir_notlar', 'presence_sync', 'presence_join', 'presence_leave', 'other', 'full_scope', 'paketci', 'mutfak', 'monthly_limit', 'usage_percent'] },
   'Toptancılar': { tablo: 'mh_toptancilar', kolonlar: ['id', 'firma_adi', 'kategori', 'telefon', 'yetkili_kisi', 'adres', 'notlar', 'bakiye', 'eklenme_tarihi', 'durum'] },
 };
 
@@ -643,10 +649,7 @@ function kesimAraligi(donem, kesim) {
 async function gunsonuYemekToplamlari(sheets, bas, bit) {
   let rows = [];
   try {
-    const r = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID, range: `${GUNSONU_TAB.tab}!A2:Q`,
-    });
-    rows = r.data.values || [];
+    rows = await getRows(sheets, GUNSONU_TAB);
   } catch { return {}; }
   const toplam = {};
   rows.forEach((r) => {
@@ -1323,6 +1326,13 @@ export default async function handler(req, res) {
         'Malzeme Eşleştirme Sözlüğü': ESLESTIRME_TAB.headers,
         'Fatura İçe Aktarma Log': XML_LOG_TAB.headers,
         'Toptancılar': ['ID', 'Firma Adı', 'Kategori', 'Telefon', 'Yetkili Kişi', 'Adres', 'Not', 'Bakiye', 'Eklenme Tarihi', 'Durum'],
+        // 23 Eylül'de taşınanlar — bunlar da her gece arşive yazılıyor.
+        'Gün Sonu Kasa': ['Tarih', 'Toplam Nakit Para', 'Nakit Küpür Detayı', 'Kasa Avansı', 'POS Toplamı', 'POS Satırları', 'Ana Kasa Toplamı', 'Ana Kasa Harcamaları', 'Günlük Kasa Toplamı', 'Günlük Kasa Harcamaları', 'Cari Toplam', 'Cari Detay', 'Yemek Kartı Toplam', 'Yemek Kartı Detay', 'Hippos Cirosu', 'Ana Kasa Takibi', 'Kaydeden Saat'],
+        'Malzeme Havuzu': ['ID', 'Malzeme Adı', 'Birim', 'Aktif', 'Oluşturulma Tarihi'],
+        'Malzeme Maliyet Geçmişi': MALIYET_TAB.headers,
+        'Reçete Geçmişi': ['ID', 'ÜrünID', 'Ürün Adı', 'Versiyon', 'Aktif', 'Başlangıç Tarihi', 'Bitiş Tarihi'],
+        'Reçete Kalemleri': ['ID', 'ReceteID', 'MalzemeID', 'Malzeme Adı', 'Miktar', 'Birim'],
+        'Realtime Kullanım': ['ID', 'row_type', 'date', 'hour', 'total_messages', 'table_state', 'sales_history', 'cari_hareketler', 'cari_odemeler', 'cari_faturalar', 'packages', 'paket_teslimatlari', 'mutfak_hazir_notlar', 'presence_sync', 'presence_join', 'presence_leave', 'other', 'full', 'paketci', 'mutfak', 'monthly_limit', 'usage_percent'],
       };
 
       // 1) Postgres'ten oku (Sheets'e hiç gitmeden)
@@ -1426,6 +1436,70 @@ export default async function handler(req, res) {
         tablolar: ozet,
         fotoTemizlik,
       });
+    }
+
+    // ============================================================
+    // TEK SEFERLİK VERİ TAŞIMA — Sheets'teki mevcut kayıtları Postgres'e kopyalar.
+    // 23 Eylül taşıması için: Gün Sonu Kasa, Malzeme Havuzu, Malzeme Maliyet Geçmişi,
+    // Reçete Geçmişi, Reçete Kalemleri, Realtime Kullanım.
+    // Güvenli: hedef tabloda AYNI anahtara sahip satır varsa üzerine yazar (upsert),
+    // yani iki kez çalıştırılsa da mükerrer kayıt OLUŞMAZ.
+    // İş bittikten ve doğrulandıktan sonra bu blok koddan kaldırılacak.
+    // ============================================================
+    if (resource === 'sheetsTasi') {
+      const gizli = process.env.REALTIME_SYNC_SECRET;
+      if (gizli && (req.query.secret || (req.body || {}).secret) !== gizli) {
+        return res.status(401).json({ error: 'yetkisiz' });
+      }
+
+      // [Sheets sekmesi, son sütun, anahtar kolonu] — anahtar Gün Sonu'nda tarih, diğerlerinde id.
+      const kaynaklar = [
+        ['Gün Sonu Kasa', 'Q', 'tarih'],
+        ['Malzeme Havuzu', 'E', 'id'],
+        ['Malzeme Maliyet Geçmişi', 'I', 'id'],
+        ['Reçete Geçmişi', 'G', 'id'],
+        ['Reçete Kalemleri', 'F', 'id'],
+        ['Realtime Kullanım', 'U', 'id'],
+      ];
+
+      const sonuc = [];
+      for (const [tabAdi, sonSutun, anahtar] of kaynaklar) {
+        const t = TABLOLAR[tabAdi];
+        try {
+          const r = await sheets.spreadsheets.values.get({
+            spreadsheetId: SHEET_ID, range: `${tabAdi}!A2:${sonSutun}`,
+          });
+          const satirlar = (r.data.values || []).filter((x) => x[0]);
+          if (!satirlar.length) { sonuc.push({ tabAdi, okunan: 0, yazilan: 0 }); continue; }
+
+          // Realtime Kullanım'da Sheets'te ID sütunu yok (anahtar row_type+date+hour),
+          // ID'yi burada üretiyoruz ki tablo anahtarı dolsun.
+          const nesneler = satirlar.map((satir) => {
+            const degerler = tabAdi === 'Realtime Kullanım'
+              ? [[satir[0], satir[1], satir[2]].map((v) => String(v ?? '')).join('|'), ...satir]
+              : satir;
+            const o = {};
+            t.kolonlar.forEach((k, i) => {
+              const v = degerler[i];
+              o[k] = v === null || v === undefined ? '' : String(v);
+            });
+            return o;
+          });
+
+          let yazilan = 0;
+          for (let i = 0; i < nesneler.length; i += 500) {
+            const dilim = nesneler.slice(i, i + 500);
+            const { error } = await db.from(t.tablo).upsert(dilim, { onConflict: anahtar });
+            if (error) throw new Error(error.message);
+            yazilan += dilim.length;
+          }
+          sonuc.push({ tabAdi, okunan: satirlar.length, yazilan });
+        } catch (e) {
+          sonuc.push({ tabAdi, hata: e.message });
+        }
+      }
+
+      return res.status(200).json({ ok: true, sonuc });
     }
 
     if (resource === 'kategoriler') {
@@ -1573,12 +1647,7 @@ export default async function handler(req, res) {
         await satirlarEkle(TOPTANCI_HAREKET_TAB, hareketSatirlariToplu);
       }
       if (maliyetSatirlariToplu.length) {
-        await ensureTab(sheets, MALIYET_TAB.tab, MALIYET_TAB.headers);
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_ID, range: `${MALIYET_TAB.tab}!A2`,
-          valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: maliyetSatirlariToplu },
-        });
+        await satirlarEkle(MALIYET_TAB, maliyetSatirlariToplu);
       }
 
       return res.status(200).json({
@@ -1662,11 +1731,7 @@ export default async function handler(req, res) {
           ];
         });
       if (maliyetSatirlari.length) {
-        await ensureTab(sheets, MALIYET_TAB.tab, MALIYET_TAB.headers);
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_ID, range: `${MALIYET_TAB.tab}!A2`, valueInputOption: 'USER_ENTERED',
-          insertDataOption: 'INSERT_ROWS', requestBody: { values: maliyetSatirlari },
-        });
+        await satirlarEkle(MALIYET_TAB, maliyetSatirlari);
       }
 
       return res.status(200).json({ ok: true, faturaId });
@@ -1980,17 +2045,18 @@ export default async function handler(req, res) {
       // Gün Sonu Kasa: A=Tarih, E=POS Toplamı
       let gunSonuRows = [];
       try {
-        const gs = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Gün Sonu Kasa!A2:E' });
-        gunSonuRows = gs.data.values || [];
+        gunSonuRows = await getRows(sheets, GUNSONU_TAB);
       } catch { gunSonuRows = []; }
-      // Gün Sonu Kasa sütun düzeni: A=Tarih, B=NakitKüpür, C=KasaAvansı, D=POSToplam, E=POSSatırları...
-      // POSToplam = r[3] (D sütunu, 0-indexed)
+      // Gün Sonu Kasa sütun düzeni (api/gunsonu.js HEADERS ile birebir):
+      // 0=Tarih, 1=Toplam Nakit Para, 2=Nakit Küpür, 3=Kasa Avansı, 4=POS Toplamı, 5=POS Satırları...
+      // DÜZELTME: burada POS Toplamı r[3] diye okunuyordu — o sütun Kasa Avansı.
+      // Doğrusu r[4]. Bu yüzden hakediş karşılaştırması yanlış sütunla yapılıyordu.
       // Tarih alanı eski kayıtlarda Excel serial date (46266 gibi) olabilir — dönüştür.
       const posByTarih = {};
       gunSonuRows.forEach((r) => {
         const t = excelTarihiCoz(String(r[0] || '').trim());
         if (!t) return;
-        posByTarih[t] = (posByTarih[t] || 0) + sayiCoz(r[3]);
+        posByTarih[t] = (posByTarih[t] || 0) + sayiCoz(r[4]);
       });
 
       // Ekstre tarihlerini de serial date'ten düzelt (eski yüklenen kayıtlar için)

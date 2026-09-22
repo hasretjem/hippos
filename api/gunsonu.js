@@ -1,70 +1,38 @@
-import { google } from 'googleapis';
+// Gün Sonu Kasa kayıtları — artık Google Sheets'te değil, Supabase (Postgres)
+// gs_kayitlar tablosunda. Kolon SIRASI eski Sheets başlıklarıyla BİREBİR aynı,
+// bu yüzden rowToRecord/recordToRow fonksiyonları HİÇ değişmedi.
+// Anahtar sütun ID değil TARİH (gün başına tek satır) — POST upsert ile yazıyor.
+import { createClient } from '@supabase/supabase-js';
 
-function getAuth() {
-  const b64 = process.env.GOOGLE_SERVICE_ACCOUNT_B64;
-  const creds = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
-  return new google.auth.JWT(creds.client_email, null, creds.private_key, [
-    'https://www.googleapis.com/auth/spreadsheets',
-  ]);
+const db = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY,
+  { auth: { persistSession: false } },
+);
+
+// Sheets başlık sırasıyla birebir: Tarih, Toplam Nakit Para, ... Kaydeden Saat
+const KOLONLAR = [
+  'tarih', 'toplam_nakit', 'nakit_kupur', 'kasa_avansi', 'pos_toplam', 'pos_satirlari',
+  'ana_kasa_toplam', 'ana_kasa_harcamalar', 'gunluk_kasa_toplam', 'gunluk_kasa_harcamalar',
+  'cari_toplam', 'cari_detay', 'yemek_toplam', 'yemek_detay', 'ciro', 'ana_kasa_takibi',
+  'kaydeden_saat',
+];
+
+function satirdanNesne(rowValues) {
+  const o = {};
+  KOLONLAR.forEach((k, i) => {
+    const v = rowValues[i];
+    o[k] = v === null || v === undefined ? '' : String(v);
+  });
+  return o;
 }
 
-const SHEET_ID = process.env.GOOGLE_SHEET_ID;
-const TAB = 'Gün Sonu Kasa';
-
-// Her kategori kendi sütununda. Değişken uzunluklu listeler (kupür adetleri, POS satırları,
-// harcama satırları, cari detayları, yemek kartı detayları) kendi hücrelerinde JSON olarak
-// tutuluyor — aksi halde sütun sayısı gün gün değişir ve tablo bozulurdu. Özet/toplam
-// rakamlar ise düz sayı olarak ayrı sütunlarda, Excel'de doğrudan okunsun/toplansın diye.
-const HEADERS = [
-  'Tarih',                    // A
-  'Toplam Nakit Para',        // B
-  'Nakit Küpür Detayı',       // C  JSON: { "5": adet, "10": adet, ... }
-  'Kasa Avansı',              // D
-  'POS Toplamı',              // E
-  'POS Satırları',            // F  JSON: [{ label, tutar }]
-  'Ana Kasa Toplamı',         // G
-  'Ana Kasa Harcamaları',     // H  JSON: [{ ad, tutar }]
-  'Günlük Kasa Toplamı',      // I
-  'Günlük Kasa Harcamaları',  // J  JSON: [{ ad, tutar }]
-  'Cari Toplam',              // K
-  'Cari Detay',               // L  JSON: { sabitler: {ad: tutar}, ekstra: [{ad, tutar}] }
-  'Yemek Kartı Toplam',       // M
-  'Yemek Kartı Detay',        // N  JSON: { kolonlar: [...], tutarlar: {marka: {kolon: tutar}} }
-  'Hippos Cirosu',            // O  JSON: { nakit, kart, yemek, cari }
-  'Ana Kasa Takibi',          // P  JSON: { dundenDevir, bugunkuNakit, anaKasaHarcama, yarinaDevir }
-  'Kaydeden Saat',            // Q
-];
-const LAST_COL = 'Q';
-
-async function ensureTab(sheets) {
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-  const tabInfo = meta.data.sheets.find((s) => s.properties.title === TAB);
-  if (!tabInfo) {
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SHEET_ID,
-      requestBody: { requests: [{ addSheet: { properties: { title: TAB } } }] },
-    });
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID,
-      range: `${TAB}!A1`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [HEADERS] },
-    });
-    return;
-  }
-  // Tab zaten vardı — eski (3 sütunlu) yapıdan geliyorsa başlık satırını yeni haline
-  // getir. Sadece A1:Q1 boşsa ya da eskiyse üzerine yazıyoruz, mevcut veri satırlarına
-  // dokunmuyoruz (onlar zaten kendi eski formatlarında okunabilir kalıyor).
-  const headRes = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${TAB}!A1:${LAST_COL}1` });
-  const currentHeaders = (headRes.data.values || [[]])[0];
-  if (currentHeaders.length < HEADERS.length || currentHeaders[1] !== HEADERS[1]) {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID,
-      range: `${TAB}!A1`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [HEADERS] },
-    });
-  }
+async function tumSatirlar() {
+  const { data, error } = await db.from('gs_kayitlar').select(KOLONLAR.join(',')).order('sira', { ascending: true });
+  if (error) throw new Error(`gs_kayitlar okunamadı: ${error.message}`);
+  return (data || [])
+    .map((r) => KOLONLAR.map((k) => (r[k] === null || r[k] === undefined ? '' : r[k])))
+    .filter((r) => r[0]);
 }
 
 function j(v) {
@@ -139,17 +107,10 @@ function recordToRow({ tarih, toplamNakitPara, nakitKupurDetayi, kasaAvansi, pos
 
 export default async function handler(req, res) {
   try {
-    const auth = getAuth();
-    const sheets = google.sheets({ version: 'v4', auth });
-
     if (req.method === 'GET') {
-      const result = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${TAB}!A2:${LAST_COL}` });
-      const rows = result.data.values || [];
-      const records = rows.filter((r) => r[0]).map(rowToRecord);
-      return res.status(200).json({ records });
+      const rows = await tumSatirlar();
+      return res.status(200).json({ records: rows.map(rowToRecord) });
     }
-
-    await ensureTab(sheets);
 
     if (req.method === 'POST') {
       const { tarih } = req.body || {};
@@ -157,28 +118,11 @@ export default async function handler(req, res) {
       const saat = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
 
       // Aynı tarihe ait kayıt varsa üzerine yaz (o gün birden fazla kez kaydedilebilsin diye).
-      const existing = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${TAB}!A2:A` });
-      const rows = existing.data.values || [];
-      const idx = rows.findIndex((r) => r[0] === tarih);
-
+      // Postgres upsert bunu tek işlemde yapıyor — önce "var mı" diye okumaya gerek yok.
       const rowValues = recordToRow(req.body, saat);
-      if (idx === -1) {
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SHEET_ID,
-          range: `${TAB}!A2`,
-          valueInputOption: 'USER_ENTERED',
-          insertDataOption: 'INSERT_ROWS',
-          requestBody: { values: [rowValues] },
-        });
-      } else {
-        const rowNum = idx + 2;
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_ID,
-          range: `${TAB}!A${rowNum}:${LAST_COL}${rowNum}`,
-          valueInputOption: 'USER_ENTERED',
-          requestBody: { values: [rowValues] },
-        });
-      }
+      const { error } = await db.from('gs_kayitlar').upsert(satirdanNesne(rowValues), { onConflict: 'tarih' });
+      if (error) throw new Error(`gün sonu kaydedilemedi: ${error.message}`);
+
       return res.status(200).json({ ok: true, tarih, saat });
     }
 

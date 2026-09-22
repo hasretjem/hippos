@@ -1,129 +1,37 @@
 import { createClient } from '@supabase/supabase-js';
-import { google } from 'googleapis';
 
 // SADECE OKUMA (Supabase) + SADECE YAZMA (Sheets) — hiçbir yeni Realtime channel/subscription
 // açmıyor. realtime_usage_log zaten var olan tablo, mevcut bumpUsageCounter mekanizmasının
-// yazdığı veriyi PERİYODİK olarak (saatte bir, dış zamanlayıcı ile) toplu okuyup Sheets'e TEK
-// satır halinde özetliyor — ham event'ler Supabase'de kalmaya devam ediyor, Sheets'e asla
-// tek tek yazılmıyor.
+// yazdığı veriyi PERİYODİK olarak (saatte bir, dış zamanlayıcı ile) toplu okuyup rt_kullanim
+// tablosuna TEK satır halinde özetliyor — ham event'ler realtime_usage_log'da kalmaya devam
+// ediyor, özet satırı asla tek tek yazılmıyor.
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
-function getSheetsAuth() {
-  const b64 = process.env.GOOGLE_SERVICE_ACCOUNT_B64;
-  const creds = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
-  return new google.auth.JWT(creds.client_email, null, creds.private_key, [
-    'https://www.googleapis.com/auth/spreadsheets',
-  ]);
-}
-const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
-// TEK sekme — hem saatlik hem günlük satırlar burada, row_type ile ayrılıyor
-// ('hourly' / 'daily'). Günlük satırlarda 'hour' boş, monthly_limit/usage_percent dolu;
-// saatlik satırlarda tam tersi.
-const TAB = 'Realtime Kullanım';
-const HEADERS = [
-  'row_type', 'date', 'hour', 'total_messages', 'table_state', 'sales_history', 'cari_hareketler',
-  'cari_odemeler', 'cari_faturalar', 'packages', 'paket_teslimatlari', 'mutfak_hazir_notlar',
-  'presence_sync', 'presence_join', 'presence_leave', 'other', 'full', 'paketci', 'mutfak',
-  'monthly_limit', 'usage_percent',
-];
 
 const MONTHLY_LIMIT = 2000000;
 
-async function ensureTab(sheets) {
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-  const exists = meta.data.sheets.some((s) => s.properties.title === TAB);
-  if (!exists) {
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SHEET_ID,
-      requestBody: { requests: [{ addSheet: { properties: { title: TAB } } }] },
-    });
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID,
-      range: `${TAB}!A1`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [HEADERS] },
-    });
-  }
-}
+// Kullanım logu artık Sheets'te değil, Supabase rt_kullanim tablosunda.
+// Kolon sırası eski Sheets başlıklarıyla birebir; anahtar = row_type + tarih + saat.
+const KOLONLAR = [
+  'row_type', 'tarih', 'saat', 'total_messages', 'table_state', 'sales_history', 'cari_hareketler',
+  'cari_odemeler', 'cari_faturalar', 'packages', 'paket_teslimatlari', 'mutfak_hazir_notlar',
+  'presence_sync', 'presence_join', 'presence_leave', 'other', 'full_scope', 'paketci', 'mutfak',
+  'monthly_limit', 'usage_percent',
+];
 
-function kategoriEsle(tableAdi) {
-  if (tableAdi === 'table_state') return 'table_state';
-  if (tableAdi === 'sales_history') return 'sales_history';
-  if (tableAdi === 'cari_hareketler') return 'cari_hareketler';
-  if (tableAdi === 'cari_odemeler') return 'cari_odemeler';
-  if (tableAdi === 'cari_faturalar') return 'cari_faturalar';
-  if (tableAdi === 'packages') return 'packages';
-  if (tableAdi === 'paket_teslimatlari') return 'paket_teslimatlari';
-  if (tableAdi === 'mutfak_hazir_notlar') return 'mutfak_hazir_notlar';
-  if (tableAdi === 'presence (sync)') return 'presence_sync';
-  if (tableAdi === 'presence (join)') return 'presence_join';
-  if (tableAdi === 'presence (leave)') return 'presence_leave';
-  return 'other';
-}
-
-function agregatOlustur(rows) {
-  const sonuc = {
-    total_messages: 0, table_state: 0, sales_history: 0, cari_hareketler: 0,
-    cari_odemeler: 0, cari_faturalar: 0, packages: 0, paket_teslimatlari: 0,
-    mutfak_hazir_notlar: 0, presence_sync: 0, presence_join: 0, presence_leave: 0, other: 0,
-    full: 0, paketci: 0, mutfak: 0,
-  };
-  rows.forEach((row) => {
-    const scope = row.scope;
-    (row.events || []).forEach((ev) => {
-      const kategori = kategoriEsle(ev.table);
-      sonuc[kategori] += 1;
-      sonuc.total_messages += 1;
-      if (scope === 'full') sonuc.full += 1;
-      else if (scope === 'paketci') sonuc.paketci += 1;
-      else if (scope === 'mutfak') sonuc.mutfak += 1;
-    });
-  });
-  return sonuc;
-}
-
-async function veriCek(baslangic, bitis) {
-  const { data, error } = await supabase
-    .from('realtime_usage_log')
-    .select('events, scope, ts')
-    .gte('ts', baslangic.toISOString())
-    .lt('ts', bitis.toISOString());
-  if (error) throw error;
-  return data || [];
-}
-
-async function mevcutSatiriBul(sheets, aramaDegerleri) {
-  const lastCol = String.fromCharCode(64 + HEADERS.length);
-  const result = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${TAB}!A2:${lastCol}` });
-  const rows = result.data.values || [];
-  for (let i = 0; i < rows.length; i++) {
-    const eslesiyorMu = aramaDegerleri.every((deger, idx) => (rows[i][idx] || '') === deger);
-    if (eslesiyorMu) return { rowIndex: i + 2, lastCol };
-  }
-  return { rowIndex: null, lastCol };
-}
-
+// aramaKolonSayisi: saatlik satırlarda 3 (tip+tarih+saat), günlük satırlarda 2 (tip+tarih).
+// Aynı anahtar tekrar yazılırsa üzerine yazılır — eski "satırı bul, varsa güncelle" mantığının
+// Postgres karşılığı, ama tek işlemde ve tüm tabloyu okumadan.
 async function satirYaz(sheets, rowValues, aramaKolonSayisi) {
-  await ensureTab(sheets);
-  const aramaDegerleri = rowValues.slice(0, aramaKolonSayisi).map((v) => String(v));
-  const { rowIndex, lastCol } = await mevcutSatiriBul(sheets, aramaDegerleri);
-  if (rowIndex) {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID,
-      range: `${TAB}!A${rowIndex}:${lastCol}${rowIndex}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [rowValues] },
-    });
-  } else {
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID,
-      range: `${TAB}!A2`,
-      valueInputOption: 'USER_ENTERED',
-      insertDataOption: 'INSERT_ROWS',
-      requestBody: { values: [rowValues] },
-    });
-  }
+  const anahtar = rowValues.slice(0, aramaKolonSayisi).map((v) => String(v ?? '')).join('|');
+  const kayit = { id: anahtar };
+  KOLONLAR.forEach((k, i) => {
+    const v = rowValues[i];
+    kayit[k] = v === null || v === undefined ? '' : String(v);
+  });
+  const { error } = await supabase.from('rt_kullanim').upsert(kayit, { onConflict: 'id' });
+  if (error) throw new Error(`rt_kullanim yazılamadı: ${error.message}`);
 }
 
 export default async function handler(req, res) {
@@ -149,11 +57,10 @@ export default async function handler(req, res) {
     const saatlikRows = await veriCek(hedefSaatBaslangic, hedefSaatBitis);
     const saatlikAgregat = agregatOlustur(saatlikRows);
 
-    const dateStr = hedefSaatBaslangic.toLocaleDateString('tr-TR');
+    const dateStr = hedefSaatBaslangic.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
     const hourStr = String(hedefSaatBaslangic.getHours()).padStart(2, '0');
 
-    const auth = getSheetsAuth();
-    const sheets = google.sheets({ version: 'v4', auth });
+    const sheets = null; // Sheets kullanılmıyor — satirYaz imzası korunsun diye duruyor
 
     const hourlyRowValues = [
       'hourly', dateStr, hourStr, saatlikAgregat.total_messages, saatlikAgregat.table_state,

@@ -1,14 +1,43 @@
-import { google } from 'googleapis';
+// Reçete & malzeme maliyet sistemi — artık Google Sheets'te değil, Supabase (Postgres).
+// Kolon SIRASI eski Sheets başlıklarıyla BİREBİR aynı; satırlar yine dizi olarak
+// dönüyor, bu yüzden rowToMalzeme/rowToRecete vb. ve tüm maliyet hesabı DEĞİŞMEDİ.
+// ÖNEMLİ: bu dosya satış akışından çağrılıyor (satılan her ürün için maliyet
+// snapshot'ı) — Sheets'in dakikalık okuma kotasına takılma riski böylece bitti.
+import { createClient } from '@supabase/supabase-js';
 
-function getAuth() {
-  const b64 = process.env.GOOGLE_SERVICE_ACCOUNT_B64;
-  const creds = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
-  return new google.auth.JWT(creds.client_email, null, creds.private_key, [
-    'https://www.googleapis.com/auth/spreadsheets',
-  ]);
+const db = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY,
+  { auth: { persistSession: false } },
+);
+
+const TABLOLAR = {
+  'Malzeme Havuzu': { tablo: 'rc_malzemeler', kolonlar: ['id', 'malzeme_adi', 'birim', 'aktif', 'olusturulma_tarihi'] },
+  'Malzeme Maliyet Geçmişi': { tablo: 'rc_maliyet_gecmisi', kolonlar: ['id', 'malzeme_id', 'malzeme_adi', 'tarih', 'miktar', 'birim', 'toplam_fiyat', 'birim_maliyet', 'fatura_id'] },
+  'Reçete Geçmişi': { tablo: 'rc_receteler', kolonlar: ['id', 'urun_id', 'urun_adi', 'versiyon', 'aktif', 'baslangic_tarihi', 'bitis_tarihi'] },
+  'Reçete Kalemleri': { tablo: 'rc_recete_kalemleri', kolonlar: ['id', 'recete_id', 'malzeme_id', 'malzeme_adi', 'miktar', 'birim'] },
+};
+
+function tabloBul(tabConfig) {
+  const ad = typeof tabConfig === 'string' ? tabConfig : (tabConfig && tabConfig.tab);
+  return TABLOLAR[ad] || null;
 }
 
-const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+function satirdanNesne(t, rowValues) {
+  const o = {};
+  t.kolonlar.forEach((k, i) => {
+    const v = rowValues[i];
+    o[k] = v === null || v === undefined ? '' : String(v);
+  });
+  return o;
+}
+
+async function satirGuncelle(tabConfig, rowValues) {
+  const t = tabloBul(tabConfig);
+  const { error } = await db.from(t.tablo).upsert(satirdanNesne(t, rowValues), { onConflict: 'id' });
+  if (error) throw new Error(`${t.tablo} güncellenemedi: ${error.message}`);
+}
+
 
 // ---- 4 sekme: malzeme havuzu, malzeme fiyat geçmişi, reçete başlıkları, reçete kalemleri.
 // Hepsi Sheets'te — Supabase'e SADECE satış anındaki maliyet snapshot'ı yazılıyor (sold_items).
@@ -71,45 +100,19 @@ function birimMaliyetiCevir(birimMaliyet, kaynakBirim, hedefBirim) {
   return (birimMaliyet / kaynakKatsayi) * hedefKatsayi;
 }
 
-async function ensureTab(sheets, tab, headers) {
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-  const exists = meta.data.sheets.some((s) => s.properties.title === tab);
-  if (!exists) {
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SHEET_ID,
-      requestBody: { requests: [{ addSheet: { properties: { title: tab } } }] },
-    });
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID,
-      range: `${tab}!A1`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [headers] },
-    });
-  }
-}
-
-function lastCol(headers) {
-  return String.fromCharCode(64 + headers.length);
-}
-
 async function getRows(sheets, tabConfig) {
-  await ensureTab(sheets, tabConfig.tab, tabConfig.headers);
-  const result = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
-    range: `${tabConfig.tab}!A2:${lastCol(tabConfig.headers)}`,
-  });
-  return (result.data.values || []).filter((r) => r[0]);
+  const t = tabloBul(tabConfig);
+  const { data, error } = await db.from(t.tablo).select(t.kolonlar.join(',')).order('sira', { ascending: true });
+  if (error) throw new Error(`${t.tablo} okunamadı: ${error.message}`);
+  return (data || [])
+    .map((r) => t.kolonlar.map((k) => (r[k] === null || r[k] === undefined ? '' : r[k])))
+    .filter((r) => r[0]);
 }
 
 async function appendRow(sheets, tabConfig, rowValues) {
-  await ensureTab(sheets, tabConfig.tab, tabConfig.headers);
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID,
-    range: `${tabConfig.tab}!A2`,
-    valueInputOption: 'USER_ENTERED',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: { values: [rowValues] },
-  });
+  const t = tabloBul(tabConfig);
+  const { error } = await db.from(t.tablo).insert(satirdanNesne(t, rowValues));
+  if (error) throw new Error(`${t.tablo} yazılamadı: ${error.message}`);
 }
 
 function rowToMalzeme(r) {
@@ -211,8 +214,7 @@ async function receteMaliyetiHesapla(sheets, urunId) {
 
 export default async function handler(req, res) {
   try {
-    const auth = getAuth();
-    const sheets = google.sheets({ version: 'v4', auth });
+    const sheets = null; // Sheets kullanılmıyor — imzalar korunsun diye duruyor
     const resource = req.method === 'GET' ? req.query.resource : (req.body || {}).resource;
 
     // ---- MALZEME HAVUZU ----
@@ -278,15 +280,16 @@ export default async function handler(req, res) {
 
         if (eskiAktif) {
           // Eski satırı pasif yap + bitiş tarihi ekle — satır index'ini bulup güncelle.
+          // Eskiden sadece E:G sütunları güncelleniyordu; artık satırın tamamı
+          // yazıldığı için mevcut satırı kopyalayıp sadece bu üç alanı değiştiriyoruz.
           const rowIdx = receteRows.findIndex((r) => r[0] === eskiAktif.id);
           if (rowIdx !== -1) {
-            const sheetRow = rowIdx + 2; // A2'den başladığı için +2
-            await sheets.spreadsheets.values.update({
-              spreadsheetId: SHEET_ID,
-              range: `${TABS.receteGecmisi.tab}!E${sheetRow}:G${sheetRow}`,
-              valueInputOption: 'USER_ENTERED',
-              requestBody: { values: [['FALSE', eskiAktif.baslangic, new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' })]] },
-            });
+            const receteSatiri = [...receteRows[rowIdx]];
+            while (receteSatiri.length < 7) receteSatiri.push('');
+            receteSatiri[4] = 'FALSE';
+            receteSatiri[5] = eskiAktif.baslangic;
+            receteSatiri[6] = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+            await satirGuncelle(TABS.receteGecmisi, receteSatiri);
           }
         }
 
