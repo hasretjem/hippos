@@ -1579,14 +1579,23 @@ export default async function handler(req, res) {
             return o;
           });
 
+          // Aynı anahtardan birden fazla satır olabiliyor (Gün Sonu Kasa'da aynı güne
+          // ait mükerrer kayıtlar var). Postgres tek işlemde aynı anahtarı iki kez
+          // yazamaz, o yüzden burada tekilleştiriyoruz: SON kayıt geçerli sayılıyor,
+          // çünkü aynı günün en güncel hali o.
+          const benzersiz = new Map();
+          nesneler.forEach((o) => benzersiz.set(o[anahtar], o));
+          const yazilacak = [...benzersiz.values()];
+          const mukerrer = nesneler.length - yazilacak.length;
+
           let yazilan = 0;
-          for (let i = 0; i < nesneler.length; i += 500) {
-            const dilim = nesneler.slice(i, i + 500);
+          for (let i = 0; i < yazilacak.length; i += 500) {
+            const dilim = yazilacak.slice(i, i + 500);
             const { error } = await db.from(t.tablo).upsert(dilim, { onConflict: anahtar });
             if (error) throw new Error(error.message);
             yazilan += dilim.length;
           }
-          sonuc.push({ tabAdi, okunan: satirlar.length, yazilan });
+          sonuc.push({ tabAdi, okunan: satirlar.length, yazilan, mukerrerAtlanan: mukerrer });
         } catch (e) {
           sonuc.push({ tabAdi, hata: e.message });
         }
