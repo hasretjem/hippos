@@ -1637,36 +1637,13 @@ export default function useHipposData(scope = 'full') {
     if (from.startsWith('Paket ')) removePackageRecord(from);
   }
 
-  // Bir satışı Google Sheets'e KALICI kayıt olarak yazar (Fişler + Fiş Detayları sekmeleri,
-  // yıl bazlı otomatik arşiv). Kullanıcıyı asla bekletmez — fiş numarası al, arka planda gönder.
-  function writeReceiptToSheets({ tur, masa, toplam, odemeTuru, urunler }) {
-    supabase
-      .from('receipt_seq')
-      .insert({})
-      .select('id')
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) {
-          console.error('fiş numarası alınamadı:', error?.message);
-          return;
-        }
-        const now = new Date();
-        fetch('/api/receipt', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fisNo: data.id,
-            tarih: now.toLocaleDateString('tr-TR'),
-            saat: now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-            tur,
-            masa,
-            toplam,
-            odemeTuru,
-            urunler,
-          }),
-        }).catch((e) => console.error('fiş Sheets\'e yazılamadı:', e.message));
-      });
-  }
+  // FİŞ KAYDI ARTIK AYRICA YAZILMIYOR (23 Eylül).
+  // Eskiden her satışta /api/receipt çağrılıp Sheets'teki Fişler + Fiş Detayları
+  // sekmelerine ikinci bir kopya yazılıyordu (satış başına ~6 Google isteği).
+  // Aynı bilgi zaten sales_history + sold_items tablolarında duruyor:
+  //   - fiş numarasını Postgres otomatik veriyor (sales_history.fis_no)
+  //   - hangi ürünün hangi fişe ait olduğunu sold_items.satis_id söylüyor
+  // Sheets'teki fiş arşivi bu iki tablodan gece arşiv işiyle üretiliyor.
 
   // ---- Masayı ödeme ile tamamen kapat (Masalar ekranından, 3 nokta > Masayı Kapat) ----
   function closeTableWithPayment(table, method) {
@@ -1674,26 +1651,22 @@ export default function useHipposData(scope = 'full') {
     const payable = items.filter((i) => !i.note);
     if (payable.length === 0) return;
     const totalPay = payable.reduce((s, i) => s + i.fiyat, 0);
-    logSoldItems(payable, table);
+    // Satış kimliği burada üretiliyor ve ürün kalemlerine de veriliyor — fişi
+    // oluşturan bağ bu. Ek bir sunucu isteği yok, bekleme yok.
+    const satisId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+    logSoldItems(payable, table, satisId);
     pushHistory(`${table} kapatıldı (${method})`);
     setSalesHistory((prev) => [
-      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table, amount: totalPay, method, itemsCount: payable.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+      { id: satisId, ts: Date.now(), table, amount: totalPay, method, itemsCount: payable.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
-    writeReceiptToSheets({
-      tur: table.startsWith('Paket ') ? 'Paket' : table === QUICK_SALE ? 'Hızlı Satış' : 'Masa',
-      masa: table,
-      toplam: totalPay,
-      odemeTuru: method,
-      urunler: payable.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
-    });
     setOrderItemsRemote(table, [], { note: '', discount: { type: null, value: 0 }, openedAt: null });
     if (table.startsWith('Paket ')) removePackageRecord(table);
   }
 
   // Ödemesi alınan ürünleri (Bugün paneli / en çok satanlar için hızlı önbellek — kalıcı
   // kayıt Sheets'tedir) kalıcı günlüğe yazar.
-  function logSoldItems(items, table) {
+  function logSoldItems(items, table, satisId = null) {
     if (!items || items.length === 0) return;
     const ts = Date.now();
     const rows = items
@@ -1706,12 +1679,13 @@ export default function useHipposData(scope = 'full') {
         altKategori: i.altKategori || '',
         table,
         ts,
+        satisId,
       }));
     if (rows.length === 0) return;
     setSoldItems((prev) => [...rows, ...prev]);
     supabase
       .from('sold_items')
-      .insert(rows.map((r) => ({ id: r.id, ts: r.ts, ad: r.ad, fiyat: r.fiyat, kategori: r.kategori, alt_kategori: r.altKategori, table_name: r.table })))
+      .insert(rows.map((r) => ({ id: r.id, ts: r.ts, ad: r.ad, fiyat: r.fiyat, kategori: r.kategori, alt_kategori: r.altKategori, table_name: r.table, satis_id: r.satisId })))
       .then(({ error }) => { if (error) console.error('satılan ürün kaydedilemedi:', error.message); });
 
     // ---- SATIŞ ANI MALİYET SNAPSHOT'I ----
@@ -2248,7 +2222,6 @@ export default function useHipposData(scope = 'full') {
     transferTable,
     mergeTable,
     closeTableWithPayment,
-    writeReceiptToSheets,
     announceViewingTable,
     clearViewingTable,
     isTableOccupiedElsewhere,

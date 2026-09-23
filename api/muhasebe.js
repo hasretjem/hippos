@@ -1374,7 +1374,99 @@ export default async function handler(req, res) {
 
       const ozet = paketler.map((p) => ({ sekme: p.hedef, satir: p.satirlar.length }));
 
-      // 5) TESLİMAT FOTOĞRAFI TEMİZLİĞİ — 7 günden eski fotoğraflar silinir.
+      // 5) FİŞ ARŞİVİ — sales_history + sold_items'tan üretilir.
+      // Fişler artık Sheets'e ayrıca YAZILMIYOR (23 Eylül); bu iki tablo tek kaynak.
+      // Tüm tabloyu her gece yeniden yazmak yerine SADECE YENİ fişler ekleniyor:
+      // 39 bin satırı her gece göndermek hem yavaş hem kırılgan olurdu.
+      // Nereye kadar yazıldığı mh_ayarlar'daki 'arsivSonFisNo' anahtarında tutuluyor.
+      let fisArsivi;
+      try {
+        const ayarlar = await getRowsAnahtarli(sheets, AYAR_TAB);
+        const sonSatir = ayarlar.find((r) => r[0] === 'arsivSonFisNo');
+        const sonFisNo = sonSatir ? Number(sonSatir[1]) || 0 : 0;
+
+        const { data: satislar, error: sHata } = await db
+          .from('sales_history')
+          .select('id, fis_no, ts, table_name, amount, method')
+          .gt('fis_no', sonFisNo)
+          .order('fis_no', { ascending: true });
+        if (sHata) throw new Error(sHata.message);
+
+        let eklenenFis = 0;
+        let eklenenKalem = 0;
+        if (satislar && satislar.length) {
+          const fisSatirlari = satislar.map((s) => {
+            const t = new Date(Number(s.ts));
+            const masa = s.table_name || '';
+            const tur = masa.startsWith('Paket ') ? 'Paket' : (masa === 'Hızlı Satış' ? 'Hızlı Satış' : 'Masa');
+            return [
+              s.fis_no,
+              t.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' }),
+              t.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' }),
+              tur, masa, s.amount, s.method || '',
+            ];
+          });
+
+          // Kalemler: satış kimliği üzerinden bağlanıyor (sold_items.satis_id).
+          const fisNoBySatis = {};
+          satislar.forEach((s) => { fisNoBySatis[String(s.id)] = s.fis_no; });
+          const kalemSatirlari = [];
+          const idListesi = satislar.map((s) => s.id);
+          for (let i = 0; i < idListesi.length; i += 200) {
+            const { data: kalemler, error: kHata } = await db
+              .from('sold_items')
+              .select('satis_id, ad, fiyat, kategori')
+              .in('satis_id', idListesi.slice(i, i + 200));
+            if (kHata) throw new Error(kHata.message);
+            (kalemler || []).forEach((k) => {
+              kalemSatirlari.push([fisNoBySatis[String(k.satis_id)] || '', k.ad, 1, k.fiyat, k.kategori || '']);
+            });
+          }
+
+          const hedefler = [
+            ['Arşiv - Fişler', ['Fiş No', 'Tarih', 'Saat', 'Tür', 'Masa', 'Toplam', 'Ödeme Türü'], fisSatirlari],
+            ['Arşiv - Fiş Detayları', ['Fiş No', 'Ürün', 'Adet', 'Fiyat', 'Kategori'], kalemSatirlari],
+          ];
+
+          const meta2 = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+          const varOlan = new Set(meta2.data.sheets.map((s) => s.properties.title));
+          const yeniSekmeler = hedefler.filter(([ad]) => !varOlan.has(ad));
+          if (yeniSekmeler.length) {
+            await sheets.spreadsheets.batchUpdate({
+              spreadsheetId: SHEET_ID,
+              requestBody: { requests: yeniSekmeler.map(([ad]) => ({ addSheet: { properties: { title: ad } } })) },
+            });
+            await sheets.spreadsheets.values.batchUpdate({
+              spreadsheetId: SHEET_ID,
+              requestBody: {
+                valueInputOption: 'USER_ENTERED',
+                data: yeniSekmeler.map(([ad, basliklar]) => ({ range: `${ad}!A1`, values: [basliklar] })),
+              },
+            });
+          }
+
+          for (const [ad, , satirlar] of hedefler) {
+            for (let i = 0; i < satirlar.length; i += 5000) {
+              await sheets.spreadsheets.values.append({
+                spreadsheetId: SHEET_ID, range: `${ad}!A2`,
+                valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS',
+                requestBody: { values: satirlar.slice(i, i + 5000) },
+              });
+            }
+          }
+
+          eklenenFis = fisSatirlari.length;
+          eklenenKalem = kalemSatirlari.length;
+          const enSonFisNo = satislar[satislar.length - 1].fis_no;
+          await satirGuncelle(AYAR_TAB, ['arsivSonFisNo', String(enSonFisNo), new Date().toISOString()]);
+        }
+
+        fisArsivi = { ok: true, eklenenFis, eklenenKalem, baslangicFisNo: sonFisNo };
+      } catch (e) {
+        fisArsivi = { ok: false, hata: e.message };
+      }
+
+      // 6) TESLİMAT FOTOĞRAFI TEMİZLİĞİ — 7 günden eski fotoğraflar silinir.
       // Arşivden bağımsız: burada bir hata olursa arşiv yine başarılı sayılır.
       // DİKKAT: storage.remove() izin yoksa HATA VERMEDEN hiçbir şey silmez
       // (bu yüzden eskiden 292 sahipsiz dosya birikmişti). O yüzden "silindi"
@@ -1434,6 +1526,7 @@ export default async function handler(req, res) {
         zaman: new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }),
         toplamSatir: ozet.reduce((a, b) => a + b.satir, 0),
         tablolar: ozet,
+        fisArsivi,
         fotoTemizlik,
       });
     }

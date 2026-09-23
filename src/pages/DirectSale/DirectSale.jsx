@@ -30,7 +30,6 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     setTableDiscounts,
     setSalesHistory,
     logSoldItems,
-    writeReceiptToSheets,
     getTableTotal,
     categories: rawCategories,
     subcategories,
@@ -510,18 +509,13 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const closedIds = new Set(toClose.map((i) => i.id));
     const totalPay = toClose.reduce((s, i) => s + i.fiyat, 0);
 
+    // Satış kimliği ürün kalemlerine de geçiyor — fiş bağı bu.
+    const satisId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
     setSalesHistory((prev) => [
-      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedTable, amount: totalPay, method, itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+      { id: satisId, ts: Date.now(), table: selectedTable, amount: totalPay, method, itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
-    logSoldItems(toClose, selectedTable);
-    writeReceiptToSheets({
-      tur: selectedTable.startsWith('Paket ') ? 'Paket' : selectedTable === QUICK_SALE ? 'Hızlı Satış' : 'Masa',
-      masa: selectedTable,
-      toplam: totalPay,
-      odemeTuru: method,
-      urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
-    });
+    logSoldItems(toClose, selectedTable, satisId);
 
     const remaining = currentOrder.filter((i) => !closedIds.has(i.id) && !i.note);
     setDraftItems(remaining);
@@ -549,15 +543,13 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     }
 
     // Şimdi siparişi kapat
+    // Satış kimliği ürün kalemlerine de geçiyor — fiş bağı bu.
+    const satisId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
     setSalesHistory((prev) => [
-      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedTable, amount: totalPayIskontoSonrasi, method: `CARİ + ${method}`, itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+      { id: satisId, ts: Date.now(), table: selectedTable, amount: totalPayIskontoSonrasi, method: `CARİ + ${method}`, itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
-    logSoldItems(toClose, selectedTable);
-    writeReceiptToSheets({
-      tur: 'Cari + Ön Ödeme', masa: cariAdi, toplam: totalPayIskontoSonrasi, odemeTuru: `CARİ + ${method}`,
-      urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
-    });
+    logSoldItems(toClose, selectedTable, satisId);
 
     const remaining = currentOrder.filter((i) => !closedIds.has(i.id) && !i.note);
     setDraftItems(remaining);
@@ -658,15 +650,13 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       showToast(`${cariAdi}'ya ${TL(cariPay)} yazıldı — ${TL(kalan)} kaldı`);
     } else {
       // Kalan yok — normal kapat
+      // Satış kimliği ürün kalemlerine de geçiyor — fiş bağı bu.
+      const satisId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
       setSalesHistory((prev) => [
-        { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedTable, amount: totalPayIskontoSonrasi, method: 'CARİ', itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+        { id: satisId, ts: Date.now(), table: selectedTable, amount: totalPayIskontoSonrasi, method: 'CARİ', itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
         ...prev,
       ]);
-      logSoldItems(toClose, selectedTable);
-      writeReceiptToSheets({
-        tur: 'Cari', masa: cariAdi, toplam: cariPay, odemeTuru: 'CARİ',
-        urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
-      });
+      logSoldItems(toClose, selectedTable, satisId);
       const remaining = currentOrder.filter((i) => !closedIds.has(i.id) && !i.note);
       setDraftItems(remaining);
       if (remaining.length === 0) {
