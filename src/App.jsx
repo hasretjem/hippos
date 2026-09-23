@@ -9,6 +9,7 @@ import Paketci from './pages/Paketci/Paketci';
 import MutfakPaneli from './pages/MutfakPaneli/MutfakPaneli';
 import Muhasebe from './pages/Muhasebe/Muhasebe';
 import StokSiparis from './pages/StokSiparis/StokSiparis';
+import Veri from './pages/Veri/Veri';
 import BottomNav from './components/BottomNav/BottomNav';
 import useHipposData, { QUICK_SALE } from './hooks/useHipposData';
 import useStokTakip from './hooks/useStokTakip';
@@ -56,7 +57,7 @@ export default function App() {
   }
 
   function handleNavigate(page, opts) {
-    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler' || page === 'endofday' || page === 'muhasebe' || page === 'stoksiparis') {
+    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler' || page === 'endofday' || page === 'muhasebe' || page === 'stoksiparis' || page === 'veri') {
       // Sadece alt menüden "Hızlı Satış"a bilerek tıklanınca seçili masa sıfırlanır.
       // Masalar sayfasından bir masaya girerken (opts.resetTable verilmez) buna dokunulmaz.
       if (page === 'pos' && opts?.resetTable) setSelectedTable(QUICK_SALE);
@@ -98,7 +99,10 @@ export default function App() {
       {activePage === 'stoksiparis' && (
         <StokSiparis data={data} onNavigate={handleNavigate} />
       )}
-      {activePage !== 'products' && activePage !== 'pos' && activePage !== 'endofday' && activePage !== 'muhasebe' && activePage !== 'stoksiparis' && <BottomNav activePage={activePage} onNavigate={handleNavigate} paketciBekleyenSayisi={(data.cariTeslimatBildirimleri || []).filter((b) => b.durum === 'bekliyor').length} stokOkunmadi={stok.toplamOkunmadi} />}
+      {activePage === 'veri' && (
+        <Veri onNavigate={handleNavigate} />
+      )}
+      {activePage !== 'products' && activePage !== 'pos' && activePage !== 'endofday' && activePage !== 'muhasebe' && activePage !== 'stoksiparis' && activePage !== 'veri' && <BottomNav activePage={activePage} onNavigate={handleNavigate} paketciBekleyenSayisi={(data.cariTeslimatBildirimleri || []).filter((b) => b.durum === 'bekliyor').length} stokOkunmadi={stok.toplamOkunmadi} />}
     </>
   );
 }

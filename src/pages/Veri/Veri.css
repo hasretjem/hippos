@@ -1,0 +1,264 @@
+/* ============================================================
+   VERİ SAYFASI — Hippos paleti (Muhasebe ile aynı kabuk)
+   kömür #393E41 · krem #F6F7EB · kum #E3DFCF · taş #83786B · kırmızı #E94F37
+   Eski kasa PC'leri için: gölge, bulanıklık, sürekli animasyon yok.
+   ============================================================ */
+.vr-shell {
+  position: fixed; inset: 0;
+  height: 100vh; width: 100%;
+  overflow-y: auto; overflow-x: hidden;
+  background: #393E41; color: #F6F7EB;
+  font-family: 'Inter', -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding: 20px 24px 40px;
+  box-sizing: border-box;
+}
+.vr-shell *, .vr-shell *::before, .vr-shell *::after { box-sizing: border-box; }
+.vr-shell button, .vr-shell input, .vr-shell textarea { font-family: inherit; font-size: inherit; }
+.vr-shell :focus-visible { outline: 2px solid #E94F37; outline-offset: 2px; }
+
+/* ---- Üst şerit ---- */
+.vr-shell .vr-ust { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.vr-shell .vr-geri {
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: 0; padding: 6px 0;
+  color: #F6F7EB; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.vr-shell .vr-sekmeler { display: flex; gap: 8px; }
+.vr-shell .vr-sekmeler button {
+  display: flex; align-items: center; gap: 7px;
+  height: 40px; padding: 0 16px; border-radius: 12px;
+  border: 1.5px solid rgba(246, 247, 235, 0.2);
+  background: rgba(246, 247, 235, 0.06);
+  color: #F6F7EB; font-size: 13.5px; font-weight: 700; cursor: pointer;
+}
+.vr-shell .vr-sekmeler button.active { background: #E94F37; border-color: #E94F37; }
+
+.vr-shell .vr-govde {
+  background: #F6F7EB; color: #393E41;
+  border-radius: 20px; padding: 22px;
+  min-height: 60vh;
+}
+
+/* ---- Ortak düğmeler ---- */
+.vr-shell .vr-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 36px; padding: 0 13px; border-radius: 10px;
+  border: 1.5px solid #E3DFCF; background: #FDFBF7;
+  color: #393E41; font-size: 13px; font-weight: 700; cursor: pointer;
+  white-space: nowrap;
+}
+.vr-shell .vr-btn:hover:not(:disabled) { border-color: #83786B; }
+.vr-shell .vr-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.vr-shell .vr-btn.vr-birincil { background: #393E41; border-color: #393E41; color: #F6F7EB; }
+.vr-shell .vr-btn.vr-tehlike { color: #C0392B; border-color: #EBC9C2; }
+.vr-shell .vr-btn.vr-tehlike:hover:not(:disabled) { background: #C0392B; border-color: #C0392B; color: #fff; }
+.vr-shell .vr-ikon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: 0; border-radius: 8px;
+  background: transparent; color: #83786B; cursor: pointer;
+}
+.vr-shell .vr-ikon-btn:hover { background: #E3DFCF; color: #393E41; }
+
+.vr-shell .vr-hata {
+  display: flex; align-items: center; gap: 8px;
+  background: #FBE9E5; color: #9E2B1B;
+  border-radius: 10px; padding: 10px 12px; margin-bottom: 14px;
+  font-size: 13px; font-weight: 600;
+}
+.vr-shell .vr-hata .vr-ikon-btn { margin-left: auto; color: #9E2B1B; }
+.vr-shell .vr-bos { color: #83786B; font-size: 14px; padding: 32px 0; text-align: center; }
+.vr-shell .vr-nokta { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.vr-shell .vr-canli {
+  display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 6px;
+  background: #E94F37; color: #fff; font-size: 10.5px; font-weight: 700;
+  vertical-align: 2px;
+}
+
+/* ---- Kapasite şeridi (sayfanın tek cesur öğesi) ---- */
+.vr-shell .vr-kapasite { margin-bottom: 26px; }
+.vr-shell .vr-kapasite-baslik { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.vr-shell .vr-kapasite-sayi { font-size: 44px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.vr-shell .vr-kapasite-limit { font-size: 15px; font-weight: 600; color: #83786B; }
+.vr-shell .vr-kapasite-ozet { margin-left: auto; font-size: 13px; color: #83786B; }
+.vr-shell .vr-serit {
+  display: flex; height: 16px; border-radius: 8px; overflow: hidden;
+  background: #E3DFCF;
+}
+.vr-shell .vr-serit-dilim { height: 100%; min-width: 2px; }
+.vr-shell .vr-serit-dilim + .vr-serit-dilim { border-left: 1px solid #F6F7EB; }
+.vr-shell .vr-lejant {
+  display: flex; flex-wrap: wrap; gap: 6px 16px;
+  list-style: none; margin: 12px 0 0; padding: 0;
+  font-size: 12.5px; color: #5B5650;
+}
+.vr-shell .vr-lejant li { display: flex; align-items: center; gap: 6px; }
+.vr-shell .vr-lejant b { color: #393E41; font-weight: 700; }
+
+/* ---- Tablo listesi ---- */
+.vr-shell .vr-arac { display: flex; gap: 10px; margin-bottom: 18px; }
+.vr-shell .vr-arama {
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  height: 40px; padding: 0 12px; border-radius: 10px;
+  border: 1.5px solid #E3DFCF; background: #FDFBF7; color: #83786B;
+}
+.vr-shell .vr-arama input { flex: 1; min-width: 0; border: 0; background: transparent; color: #393E41; font-size: 14px; outline: none; }
+
+.vr-shell .vr-grup { margin-bottom: 22px; }
+.vr-shell .vr-grup-ad {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 800; margin: 0 0 8px; color: #393E41;
+}
+.vr-shell .vr-grup-boyut { margin-left: auto; font-size: 12px; font-weight: 600; color: #83786B; }
+.vr-shell .vr-tablolar { list-style: none; margin: 0; padding: 0; border-top: 1px solid #E3DFCF; }
+.vr-shell .vr-tablolar li { border-bottom: 1px solid #E3DFCF; }
+.vr-shell .vr-tablo-satir {
+  width: 100%; display: grid;
+  grid-template-columns: 1fr 110px 80px 20px; align-items: center; gap: 12px;
+  padding: 10px 6px; border: 0; background: transparent; color: #393E41;
+  text-align: left; cursor: pointer;
+}
+.vr-shell .vr-tablo-satir:hover { background: #EDEEDF; }
+.vr-shell .vr-tablo-ad { font-size: 14px; font-weight: 700; min-width: 0; }
+.vr-shell .vr-tablo-ad small { display: block; font-size: 11.5px; font-weight: 500; color: #83786B; margin-top: 2px; overflow-wrap: anywhere; }
+.vr-shell .vr-tablo-sayi, .vr-shell .vr-tablo-boyut { font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+.vr-shell .vr-tablo-sayi small { color: #83786B; }
+.vr-shell .vr-tablo-boyut { color: #83786B; }
+.vr-shell .vr-ok { color: #B8B2A3; }
+
+/* ---- Tablo içi ---- */
+.vr-shell .vr-tg-baslik { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.vr-shell .vr-tg-baslik h1 { font-size: 24px; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.01em; }
+.vr-shell .vr-tg-baslik p { margin: 0; font-size: 13px; color: #83786B; }
+.vr-shell .vr-tg-baslik code { font-size: 12.5px; background: #E3DFCF; padding: 1px 6px; border-radius: 5px; color: #393E41; }
+.vr-shell .vr-tg-eylem { display: flex; gap: 8px; }
+.vr-shell .vr-canli-not {
+  display: flex; align-items: center; gap: 8px;
+  background: #FFF4E0; color: #7A4B00; border-radius: 10px;
+  padding: 9px 12px; margin: 0 0 14px; font-size: 13px;
+}
+
+.vr-shell .vr-filtre { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.vr-shell .vr-filtre .vr-arama { min-width: 240px; }
+.vr-shell .vr-tarih { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: #83786B; font-weight: 600; }
+.vr-shell .vr-tarih label { display: flex; align-items: center; gap: 6px; }
+.vr-shell .vr-tarih input {
+  height: 40px; padding: 0 8px; border-radius: 10px;
+  border: 1.5px solid #E3DFCF; background: #FDFBF7; color: #393E41;
+}
+
+.vr-shell .vr-secim-cubugu {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: #393E41; color: #F6F7EB; border-radius: 12px;
+  padding: 8px 10px 8px 14px; margin-bottom: 12px; font-size: 13px; font-weight: 700;
+}
+.vr-shell .vr-secim-cubugu span { margin-right: auto; }
+
+.vr-shell .vr-izgara-kap { overflow-x: auto; border: 1px solid #E3DFCF; border-radius: 12px; background: #FDFBF7; }
+.vr-shell .vr-izgara { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.vr-shell .vr-izgara th {
+  position: sticky; top: 0; background: #EDEEDF; text-align: left;
+  border-bottom: 1px solid #E3DFCF; white-space: nowrap; padding: 0;
+}
+.vr-shell .vr-th-btn {
+  width: 100%; padding: 9px 10px; border: 0; background: transparent;
+  color: #393E41; font-weight: 700; font-size: 12px; text-align: left; cursor: pointer;
+}
+.vr-shell .vr-pk { margin-left: 4px; font-size: 10px; }
+.vr-shell .vr-izgara td {
+  padding: 8px 10px; border-bottom: 1px solid #EDEAE0;
+  white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer; color: #393E41;
+}
+.vr-shell .vr-izgara td.sayi { text-align: right; font-variant-numeric: tabular-nums; }
+.vr-shell .vr-izgara tbody tr:hover td { background: #F5F0E8; }
+.vr-shell .vr-izgara tbody tr.secili td { background: #FBE9E5; }
+.vr-shell .vr-secim-hucre { width: 38px; text-align: center; cursor: default; }
+.vr-shell .vr-null { color: #C9C3B5; }
+
+.vr-shell .vr-kartlar { display: none; list-style: none; margin: 0; padding: 0; }
+
+.vr-shell .vr-sayfalama { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 16px; font-size: 13px; color: #83786B; font-weight: 600; }
+
+/* ---- Satır paneli ---- */
+.vr-panel-arka { position: fixed; inset: 0; background: rgba(57, 62, 65, 0.45); z-index: 50; display: flex; justify-content: flex-end; }
+.vr-shell .vr-panel {
+  width: min(460px, 100%); height: 100%;
+  background: #F6F7EB; color: #393E41;
+  display: flex; flex-direction: column;
+  border-left: 1px solid #E3DFCF;
+}
+.vr-shell .vr-panel-baslik { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid #E3DFCF; }
+.vr-shell .vr-panel-baslik h2 { margin: 0; font-size: 17px; font-weight: 800; }
+.vr-shell .vr-panel-govde { flex: 1; overflow-y: auto; padding: 16px 18px; }
+.vr-shell .vr-alan { margin-bottom: 14px; }
+.vr-shell .vr-alan > label { display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 5px; color: #393E41; }
+.vr-shell .vr-tip { font-weight: 500; color: #83786B; margin-left: 6px; font-size: 11.5px; }
+.vr-shell .vr-alan input[type="text"], .vr-shell .vr-alan textarea {
+  width: 100%; padding: 8px 10px; border-radius: 9px;
+  border: 1.5px solid #E3DFCF; background: #FDFBF7; color: #393E41; font-size: 13.5px;
+}
+.vr-shell .vr-alan textarea { resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; line-height: 1.45; }
+.vr-shell .vr-alan.anahtar input, .vr-shell .vr-alan.anahtar textarea { background: #EDEEDF; color: #83786B; }
+.vr-shell .vr-anahtar { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.vr-shell .vr-anahtar input { width: 18px; height: 18px; accent-color: #E94F37; }
+.vr-shell .vr-ipucu { display: block; margin-top: 4px; color: #83786B; font-size: 11.5px; }
+.vr-shell .vr-alan-hata { display: block; margin-top: 4px; color: #C0392B; font-size: 12px; font-weight: 600; }
+.vr-shell .vr-panel-alt { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-top: 1px solid #E3DFCF; flex-wrap: wrap; }
+.vr-shell .vr-panel-alt .vr-tehlike { margin-left: auto; }
+.vr-shell .vr-durum { font-size: 12.5px; font-weight: 600; color: #5B5650; margin: 8px 0 0; }
+.vr-shell .vr-panel-alt .vr-durum { margin: 0; flex-basis: 100%; }
+
+/* ---- Geri al şeridi ---- */
+.vr-shell .vr-geri-al {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 60;
+  display: flex; align-items: center; gap: 14px;
+  background: #393E41; color: #F6F7EB; border-radius: 12px;
+  padding: 8px 8px 8px 16px; font-size: 13.5px; font-weight: 700;
+}
+
+/* ---- Bakım ---- */
+.vr-shell .vr-bakim { display: grid; gap: 16px; }
+.vr-shell .vr-bakim-kart { border: 1px solid #E3DFCF; border-radius: 14px; background: #FDFBF7; padding: 18px; }
+.vr-shell .vr-bakim-kart h2 { margin: 0 0 6px; font-size: 16px; font-weight: 800; }
+.vr-shell .vr-bakim-kart p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.5; color: #5B5650; max-width: 68ch; }
+.vr-shell .vr-bakim-eylem { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; font-weight: 600; }
+.vr-shell .vr-bakim-eylem input {
+  width: 70px; height: 36px; margin: 0 6px; padding: 0 8px; border-radius: 9px;
+  border: 1.5px solid #E3DFCF; background: #fff; color: #393E41;
+}
+.vr-shell .vr-buyukler { list-style: none; margin: 0; padding: 0; }
+.vr-shell .vr-buyukler li { display: grid; grid-template-columns: minmax(0, 1.2fr) 1fr 70px; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px solid #EDEAE0; font-size: 13px; }
+.vr-shell .vr-buyuk-ad { font-weight: 700; min-width: 0; }
+.vr-shell .vr-buyuk-ad small { display: block; font-weight: 500; color: #83786B; font-size: 11.5px; }
+.vr-shell .vr-buyuk-cubuk { height: 8px; background: #EDEAE0; border-radius: 4px; overflow: hidden; }
+.vr-shell .vr-buyuk-cubuk span { display: block; height: 100%; }
+.vr-shell .vr-buyuk-boyut { text-align: right; color: #83786B; font-variant-numeric: tabular-nums; }
+
+/* ---- Dar ekran: telefon / küçük tablet ---- */
+@media (max-width: 760px) {
+  .vr-shell { padding: 14px 12px 32px; }
+  .vr-shell .vr-govde { padding: 16px 14px; border-radius: 16px; }
+  .vr-shell .vr-kapasite-sayi { font-size: 34px; }
+  .vr-shell .vr-kapasite-ozet { margin-left: 0; flex-basis: 100%; }
+  .vr-shell .vr-tablo-satir { grid-template-columns: 1fr auto 16px; }
+  .vr-shell .vr-tablo-boyut { display: none; }
+  .vr-shell .vr-filtre .vr-arama { min-width: 0; flex-basis: 100%; }
+
+  .vr-shell .vr-izgara-kap { display: none; }
+  .vr-shell .vr-kartlar { display: grid; gap: 8px; }
+  .vr-shell .vr-kartlar li { display: flex; align-items: flex-start; gap: 10px; background: #FDFBF7; border: 1px solid #E3DFCF; border-radius: 12px; padding: 10px; }
+  .vr-shell .vr-kartlar li.secili { border-color: #E94F37; background: #FBE9E5; }
+  .vr-shell .vr-kartlar input { margin-top: 4px; width: 18px; height: 18px; accent-color: #E94F37; }
+  .vr-shell .vr-kart { flex: 1; min-width: 0; display: grid; gap: 5px; border: 0; background: transparent; padding: 0; text-align: left; color: #393E41; cursor: pointer; }
+  .vr-shell .vr-kart-alan { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+  .vr-shell .vr-kart-alan small { color: #83786B; flex-shrink: 0; }
+  .vr-shell .vr-kart-alan span { text-align: right; overflow-wrap: anywhere; }
+
+  .vr-shell .vr-panel { width: 100%; border-left: 0; }
+  .vr-shell .vr-buyukler li { grid-template-columns: 1fr 64px; }
+  .vr-shell .vr-buyuk-cubuk { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vr-shell * { transition: none !important; animation: none !important; }
+}
