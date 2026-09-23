@@ -20,6 +20,52 @@ const KOLONLAR = [
   'monthly_limit', 'usage_percent',
 ];
 
+function kategoriEsle(tableAdi) {
+  if (tableAdi === 'table_state') return 'table_state';
+  if (tableAdi === 'sales_history') return 'sales_history';
+  if (tableAdi === 'cari_hareketler') return 'cari_hareketler';
+  if (tableAdi === 'cari_odemeler') return 'cari_odemeler';
+  if (tableAdi === 'cari_faturalar') return 'cari_faturalar';
+  if (tableAdi === 'packages') return 'packages';
+  if (tableAdi === 'paket_teslimatlari') return 'paket_teslimatlari';
+  if (tableAdi === 'mutfak_hazir_notlar') return 'mutfak_hazir_notlar';
+  if (tableAdi === 'presence (sync)') return 'presence_sync';
+  if (tableAdi === 'presence (join)') return 'presence_join';
+  if (tableAdi === 'presence (leave)') return 'presence_leave';
+  return 'other';
+}
+
+function agregatOlustur(rows) {
+  const sonuc = {
+    total_messages: 0, table_state: 0, sales_history: 0, cari_hareketler: 0,
+    cari_odemeler: 0, cari_faturalar: 0, packages: 0, paket_teslimatlari: 0,
+    mutfak_hazir_notlar: 0, presence_sync: 0, presence_join: 0, presence_leave: 0, other: 0,
+    full: 0, paketci: 0, mutfak: 0,
+  };
+  rows.forEach((row) => {
+    const scope = row.scope;
+    (row.events || []).forEach((ev) => {
+      const kategori = kategoriEsle(ev.table);
+      sonuc[kategori] += 1;
+      sonuc.total_messages += 1;
+      if (scope === 'full') sonuc.full += 1;
+      else if (scope === 'paketci') sonuc.paketci += 1;
+      else if (scope === 'mutfak') sonuc.mutfak += 1;
+    });
+  });
+  return sonuc;
+}
+
+async function veriCek(baslangic, bitis) {
+  const { data, error } = await supabase
+    .from('realtime_usage_log')
+    .select('events, scope, ts')
+    .gte('ts', baslangic.toISOString())
+    .lt('ts', bitis.toISOString());
+  if (error) throw error;
+  return data || [];
+}
+
 // aramaKolonSayisi: saatlik satırlarda 3 (tip+tarih+saat), günlük satırlarda 2 (tip+tarih).
 // Aynı anahtar tekrar yazılırsa üzerine yazılır — eski "satırı bul, varsa güncelle" mantığının
 // Postgres karşılığı, ama tek işlemde ve tüm tabloyu okumadan.
