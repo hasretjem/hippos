@@ -577,10 +577,6 @@ export default function useHipposData(scope = 'full') {
   const [bosvarBildirimleri, setBosvarBildirimleri] = useState([]);
   const [bosvarKayitlari, setBosvarKayitlari] = useState([]);
   const [mutfakHazirNotlar, setMutfakHazirNotlar] = useState([]);
-  // Ekmek Stok — Yönetim Paneli'nde elle eklenir (Ekmek Stok Ekleme), Masalar'daki
-  // Mutfağa Not > Ekmek Gönderme'de mutfağa fiilen giden miktar kadar düşülür. Supabase'de
-  // satır bazlı (her tür kendi satırında: key/urun_adi/adet/guncellenme_zamani),
-  // increment_ekmek_stok RPC'siyle atomik güncellenir.
   // Ekmek Stok — Google Sheets tek kaynak ("Ekmek Stok" sekmesi, api/ekmekstok.js).
   // Yönetim Paneli'nde elle eklenir (Ekmek Stok Ekleme), Masalar'daki Mutfağa Not >
   // Ekmek Gönderme'de mutfağa fiilen giden miktar kadar düşülür. Her hareket Sheets'e
@@ -706,68 +702,9 @@ export default function useHipposData(scope = 'full') {
     if (error) console.error('Harcama taslağı temizlenemedi:', error.message);
   }
 
-  // ---- Realtime Kullanım Sayacı — SADECE Yönetim Paneli'ndeki gösterge için, kendisi
-  // sıfır realtime mesajı tüketiyor (realtime_usage_log tablosuna hiçbir dinleyici abone
-  // değil, o yüzden buraya yazmak Supabase'in kendi tanımıyla "0 dinleyiciye giden mesaj").
-  // Bu client'ın ALDIĞI her postgres_changes olayında bumpUsageCounter(tablo) çağrılır ve
-  // {tablo, saat} olarak arabelleğe eklenir; bu tabloya yazma HİÇ bir dinleyiciyi tetiklemediği
-  // için (kotaya dokunmadığı için) sık sık (10sn'de bir) ve ayrıntılı yazabiliyoruz — "son 30
-  // mesaj hangi tablodandı" sorusuna cevap verebilmek için.
-  const usageBufferRef = useRef([]); // [{ table, ts, detail, dbTs }, ...]
-  function bumpUsageCounter(table, info) {
-    const detail = typeof info === 'object' && info ? info.summary : (info || '');
-    const dbTs = typeof info === 'object' && info ? info.dbTs : null;
-    usageBufferRef.current.push({ table, ts: Date.now(), detail, dbTs });
-  }
-  // Gelen payload'dan (zaten elimizde olan veriden, EK bir sorgu atmadan) "ne oldu" özetini
-  // çıkarır — hangi masa, kaç ürün, hangi işlem (INSERT/UPDATE/DELETE) gibi. Sayaç panelindeki
-  // "son mesajlar" listesinde bu özet görünüyor, tahmin etmek yerine gerçekten anlayabilelim diye.
-  function summarizeRealtimePayload(table, payload) {
-    const row = payload?.new && Object.keys(payload.new).length > 0 ? payload.new : payload?.old;
-    const ev = payload?.eventType || '?';
-    // Veritabanındaki GERÇEK değişme zamanı — bizim aldığımız an (Date.now()) ile karıştırılmasın.
-    // Eğer aynı anda gelen birden fazla mesajın dbTs'leri birbirinden FARKLIYSA, bu bir "aradaki
-    // kaçırılan değişiklikleri toparlama" (reconnect telafisi) demektir — gerçekten aynı anda
-    // olmuş bir şey değildir. dbTs'ler de aynıysa, gerçekten aynı anda bir toplu işlem olmuştur.
-    const dbTs = row?.updated_at || row?.ts || row?.created_at || null;
-    if (!row) return { summary: ev, dbTs };
-    if (table === 'table_state') {
-      const itemCount = Array.isArray(row.items) ? row.items.length : '?';
-      return { summary: `${row.table_name || '?'} — ${ev} — ${itemCount} ürün${row.note ? ' — not var' : ''}`, dbTs };
-    }
-    if (table === 'cariler') return { summary: `${row.ad || '?'} — ${ev}`, dbTs };
-    if (table === 'products') return { summary: `${row.ad || '?'} — ${ev}`, dbTs };
-    if (table === 'categories') return { summary: `${row.name || '?'} — ${ev}`, dbTs };
-    if (table === 'subcategories') return { summary: `${row.kategori || ''}/${row.name || '?'} — ${ev}`, dbTs };
-    if (table === 'cari_hareketler' || table === 'cari_odemeler' || table === 'cari_faturalar') {
-      return { summary: `${row.toplam ?? row.tutar ?? '?'} ₺ — ${ev}`, dbTs };
-    }
-    if (table === 'cari_gecmis') return { summary: `cari:${row.cari_id || '?'} — ${ev}`, dbTs };
-    if (table === 'paket_teslimatlari') return { summary: `${row.paket_adi || '?'} — ${ev}`, dbTs };
-    if (table === 'cari_teslimat_bildirimleri') return { summary: `${row.cari_adi || '?'} — ${ev}`, dbTs };
-    if (table === 'mutfak_hazir_notlar') return { summary: `"${(row.metin || '').slice(0, 24)}" — ${ev}`, dbTs };
-    if (table === 'sales_history') return { summary: `${row.table || '?'} — ${row.amount ?? '?'} ₺`, dbTs };
-    if (table === 'sold_items') return { summary: `${row.ad || '?'}`, dbTs };
-    if (table === 'action_history') return { summary: `${row.description || '?'}`, dbTs };
-    return { summary: ev, dbTs };
-  }
-  useEffect(() => {
-    const id = setInterval(() => {
-      const events = usageBufferRef.current;
-      usageBufferRef.current = [];
-      if (events.length === 0) return;
-      supabase.from('realtime_usage_log').insert({
-        id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
-        message_count: events.length,
-        events,
-        device_id: deviceIdRef.current,
-        scope,
-      }).then(({ error }) => {
-        if (error) console.error('kullanım sayacı yazılamadı:', error.message);
-      });
-    }, 10000);
-    return () => clearInterval(id);
-  }, []);
+  // Realtime kullanım sayacı 24 Eylül'de kaldırıldı: her cihaz, aldığı her canlı olayı
+  // 10 saniyede bir realtime_usage_log tablosuna yazıyordu (37 bin satır, 28 MB) ve bu veriyi
+  // hiçbir ekran okumuyordu. Ağustos'taki realtime krizinin teşhisi için kurulmuştu, işi bitti.
 
   useEffect(() => {
     // KOTA OPTİMİZASYONU: presence kanalı SADECE "başka cihazda açık mı" masa kilidini
@@ -784,7 +721,6 @@ export default function useHipposData(scope = 'full') {
     });
     channel
       .on('presence', { event: 'sync' }, () => {
-        bumpUsageCounter('presence (sync)', 'durum senkronu');
         const state = channel.presenceState();
         const map = {};
         Object.entries(state).forEach(([deviceId, metas]) => {
@@ -796,10 +732,8 @@ export default function useHipposData(scope = 'full') {
         setPresenceMap(map);
       })
       .on('presence', { event: 'join' }, ({ key }) => {
-        bumpUsageCounter('presence (join)', `cihaz katıldı: ${key}`);
       })
       .on('presence', { event: 'leave' }, ({ key }) => {
-        bumpUsageCounter('presence (leave)', `cihaz ayrıldı: ${key}`);
       })
       .subscribe();
     presenceChannelRef.current = channel;
@@ -972,23 +906,20 @@ export default function useHipposData(scope = 'full') {
     // sorguyla kendilerini tazeliyor. Sonuç: en büyük toplu işlem bile artık 1 mesaj.
     if (wants.products || wants.categories || wants.subcategories) {
       channel = channel.on('broadcast', { event: 'menu_changed' }, () => {
-        bumpUsageCounter('menu_changed (broadcast)', 'toplu/tekil ürün-kategori senkronu');
         refetchMenuData();
         refetchStoreSettings(); // buton görünüm ayarları da aynı broadcast ile yayılıyor
       });
     }
     if (wants.ekmek_stok) {
       channel = channel.on('broadcast', { event: 'ekmek_stok_changed' }, () => {
-        bumpUsageCounter('ekmek_stok_changed (broadcast)', 'ekmek stok güncellemesi');
         refetchEkmekStok();
       });
     }
     if (wants.table_state) {
       // KOTA OPTİMİZASYONU (Seçenek A, dar kapsamlı): event:'*' yerine sadece INSERT+UPDATE
-      // dinleniyor. DELETE dalı callback içinde zaten "bumpUsageCounter'dan sonra hemen return"
+      // dinleniyor. DELETE dalı callback içinde zaten "hemen return"
       // şeklinde no-op'tu — davranış DEĞİŞMİYOR, sadece işlevsiz mesajlar sunucudan hiç gelmiyor.
       const tableStateHandler = (payload) => {
-        bumpUsageCounter('table_state', summarizeRealtimePayload('table_state', payload));
         if (payload.eventType === 'DELETE') return;
         const row = payload.new;
         const t = row.table_name;
@@ -1018,37 +949,31 @@ export default function useHipposData(scope = 'full') {
     }
     if (wants.packages) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'packages' }, (payload) => {
-        bumpUsageCounter('packages', summarizeRealtimePayload('packages', payload));
         supabase.from('packages').select('*').then(({ data }) => setPackages((data || []).map((r) => ({ name: r.name, num: r.num }))));
       });
     }
     if (wants.package_meta) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'package_meta' }, (payload) => {
-        bumpUsageCounter('package_meta', summarizeRealtimePayload('package_meta', payload));
         if (payload.new) setPackageMeta({ date: payload.new.meta_date, next: payload.new.next_num });
       });
     }
     if (wants.sales_history) {
       channel = channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sales_history' }, (payload) => {
-        bumpUsageCounter('sales_history', summarizeRealtimePayload('sales_history', payload));
         setSalesHistory((prev) => (prev.some((s) => s.id === payload.new.id) ? prev : [rowToSale(payload.new), ...prev]));
       });
     }
     if (wants.sold_items) {
       channel = channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sold_items' }, (payload) => {
-        bumpUsageCounter('sold_items', summarizeRealtimePayload('sold_items', payload));
         setSoldItems((prev) => (prev.some((s) => s.id === payload.new.id) ? prev : [rowToSoldItem(payload.new), ...prev]));
       });
     }
     if (wants.action_history) {
       channel = channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'action_history' }, (payload) => {
-        bumpUsageCounter('action_history', summarizeRealtimePayload('action_history', payload));
         setActionHistory((prev) => (prev.some((a) => a.id === payload.new.id) ? prev : [rowToAction(payload.new), ...prev].slice(0, 5)));
       });
     }
     if (wants.cariler) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'cariler' }, (payload) => {
-        bumpUsageCounter('cariler', summarizeRealtimePayload('cariler', payload));
         if (payload.eventType === 'DELETE') {
           setCariler((prev) => prev.filter((c) => c.id !== payload.old.id));
           return;
@@ -1060,45 +985,37 @@ export default function useHipposData(scope = 'full') {
     if (wants.cari_hareketler) {
       channel = channel
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_hareketler' }, (payload) => {
-        bumpUsageCounter('cari_hareketler', summarizeRealtimePayload('cari_hareketler', payload));
           setCariHareketler((prev) => (prev.some((h) => h.id === payload.new.id) ? prev : [...prev, rowToHareket(payload.new)]));
         })
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_hareketler' }, (payload) => {
-        bumpUsageCounter('cari_hareketler', summarizeRealtimePayload('cari_hareketler', payload));
           setCariHareketler((prev) => prev.filter((h) => h.id !== payload.old.id));
         });
     }
     if (wants.cari_odemeler) {
       channel = channel
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_odemeler' }, (payload) => {
-        bumpUsageCounter('cari_odemeler', summarizeRealtimePayload('cari_odemeler', payload));
           setCariOdemeler((prev) => (prev.some((o) => o.id === payload.new.id) ? prev : [...prev, rowToOdeme(payload.new)]));
         })
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_odemeler' }, (payload) => {
-        bumpUsageCounter('cari_odemeler', summarizeRealtimePayload('cari_odemeler', payload));
           setCariOdemeler((prev) => prev.filter((o) => o.id !== payload.old.id));
         });
     }
     if (wants.cari_faturalar) {
       channel = channel
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_faturalar' }, (payload) => {
-        bumpUsageCounter('cari_faturalar', summarizeRealtimePayload('cari_faturalar', payload));
           setCariFaturalar((prev) => (prev.some((f) => f.id === payload.new.id) ? prev : [...prev, rowToFatura(payload.new)]));
         })
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_faturalar' }, (payload) => {
-        bumpUsageCounter('cari_faturalar', summarizeRealtimePayload('cari_faturalar', payload));
           setCariFaturalar((prev) => prev.filter((f) => f.id !== payload.old.id));
         });
     }
     if (wants.cari_gecmis) {
       channel = channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_gecmis' }, (payload) => {
-        bumpUsageCounter('cari_gecmis', summarizeRealtimePayload('cari_gecmis', payload));
         setCariGecmis((prev) => (prev.some((g) => g.id === payload.new.id) ? prev : [...prev, rowToGecmis(payload.new)]));
       });
     }
     if (wants.paket_teslimatlari) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'paket_teslimatlari' }, (payload) => {
-        bumpUsageCounter('paket_teslimatlari', summarizeRealtimePayload('paket_teslimatlari', payload));
         if (payload.eventType === 'DELETE') {
           setPaketTeslimatlari((prev) => prev.filter((p) => p.id !== payload.old.id));
           return;
@@ -1111,7 +1028,6 @@ export default function useHipposData(scope = 'full') {
     }
     if (wants.cari_teslimat_bildirimleri) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'cari_teslimat_bildirimleri' }, (payload) => {
-        bumpUsageCounter('cari_teslimat_bildirimleri', summarizeRealtimePayload('cari_teslimat_bildirimleri', payload));
         if (payload.eventType === 'DELETE') {
           setCariTeslimatBildirimleri((prev) => prev.filter((c) => c.id !== payload.old.id));
           return;
@@ -1124,7 +1040,6 @@ export default function useHipposData(scope = 'full') {
     }
     if (wants.bosvar_bildirimleri) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'bosvar_bildirimleri' }, (payload) => {
-        bumpUsageCounter('bosvar_bildirimleri', summarizeRealtimePayload('bosvar_bildirimleri', payload));
         if (payload.eventType === 'DELETE') {
           setBosvarBildirimleri((prev) => prev.filter((b) => b.id !== payload.old.id));
           return;
@@ -1137,7 +1052,6 @@ export default function useHipposData(scope = 'full') {
     }
     if (wants.bosvar_kayitlari) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'bosvar_kayitlari' }, (payload) => {
-        bumpUsageCounter('bosvar_kayitlari', summarizeRealtimePayload('bosvar_kayitlari', payload));
         if (payload.eventType === 'DELETE') {
           setBosvarKayitlari((prev) => prev.filter((b) => b.id !== payload.old.id));
           return;
@@ -1150,7 +1064,6 @@ export default function useHipposData(scope = 'full') {
     }
     if (wants.mutfak_hazir_notlar) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'mutfak_hazir_notlar' }, (payload) => {
-        bumpUsageCounter('mutfak_hazir_notlar', summarizeRealtimePayload('mutfak_hazir_notlar', payload));
         if (payload.eventType === 'DELETE') {
           setMutfakHazirNotlar((prev) => prev.filter((n) => n.id !== payload.old.id));
           return;

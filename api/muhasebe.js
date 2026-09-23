@@ -54,7 +54,6 @@ const TABLOLAR = {
   'Malzeme Maliyet Geçmişi': { tablo: 'rc_maliyet_gecmisi', kolonlar: ['id', 'malzeme_id', 'malzeme_adi', 'tarih', 'miktar', 'birim', 'toplam_fiyat', 'birim_maliyet', 'fatura_id'] },
   'Reçete Geçmişi': { tablo: 'rc_receteler', kolonlar: ['id', 'urun_id', 'urun_adi', 'versiyon', 'aktif', 'baslangic_tarihi', 'bitis_tarihi'] },
   'Reçete Kalemleri': { tablo: 'rc_recete_kalemleri', kolonlar: ['id', 'recete_id', 'malzeme_id', 'malzeme_adi', 'miktar', 'birim'] },
-  'Realtime Kullanım': { tablo: 'rt_kullanim', kolonlar: ['id', 'row_type', 'tarih', 'saat', 'total_messages', 'table_state', 'sales_history', 'cari_hareketler', 'cari_odemeler', 'cari_faturalar', 'packages', 'paket_teslimatlari', 'mutfak_hazir_notlar', 'presence_sync', 'presence_join', 'presence_leave', 'other', 'full_scope', 'paketci', 'mutfak', 'monthly_limit', 'usage_percent'] },
   'Toptancılar': { tablo: 'mh_toptancilar', kolonlar: ['id', 'firma_adi', 'kategori', 'telefon', 'yetkili_kisi', 'adres', 'notlar', 'bakiye', 'eklenme_tarihi', 'durum'] },
 };
 
@@ -1332,7 +1331,6 @@ export default async function handler(req, res) {
         'Malzeme Maliyet Geçmişi': MALIYET_TAB.headers,
         'Reçete Geçmişi': ['ID', 'ÜrünID', 'Ürün Adı', 'Versiyon', 'Aktif', 'Başlangıç Tarihi', 'Bitiş Tarihi'],
         'Reçete Kalemleri': ['ID', 'ReceteID', 'MalzemeID', 'Malzeme Adı', 'Miktar', 'Birim'],
-        'Realtime Kullanım': ['ID', 'row_type', 'date', 'hour', 'total_messages', 'table_state', 'sales_history', 'cari_hareketler', 'cari_odemeler', 'cari_faturalar', 'packages', 'paket_teslimatlari', 'mutfak_hazir_notlar', 'presence_sync', 'presence_join', 'presence_leave', 'other', 'full', 'paketci', 'mutfak', 'monthly_limit', 'usage_percent'],
       };
 
       // 1) Postgres'ten oku (Sheets'e hiç gitmeden)
@@ -1529,79 +1527,6 @@ export default async function handler(req, res) {
         fisArsivi,
         fotoTemizlik,
       });
-    }
-
-    // ============================================================
-    // TEK SEFERLİK VERİ TAŞIMA — Sheets'teki mevcut kayıtları Postgres'e kopyalar.
-    // 23 Eylül taşıması için: Gün Sonu Kasa, Malzeme Havuzu, Malzeme Maliyet Geçmişi,
-    // Reçete Geçmişi, Reçete Kalemleri, Realtime Kullanım.
-    // Güvenli: hedef tabloda AYNI anahtara sahip satır varsa üzerine yazar (upsert),
-    // yani iki kez çalıştırılsa da mükerrer kayıt OLUŞMAZ.
-    // İş bittikten ve doğrulandıktan sonra bu blok koddan kaldırılacak.
-    // ============================================================
-    if (resource === 'sheetsTasi') {
-      const gizli = process.env.REALTIME_SYNC_SECRET;
-      if (gizli && (req.query.secret || (req.body || {}).secret) !== gizli) {
-        return res.status(401).json({ error: 'yetkisiz' });
-      }
-
-      // [Sheets sekmesi, son sütun, anahtar kolonu] — anahtar Gün Sonu'nda tarih, diğerlerinde id.
-      const kaynaklar = [
-        ['Gün Sonu Kasa', 'Q', 'tarih'],
-        ['Malzeme Havuzu', 'E', 'id'],
-        ['Malzeme Maliyet Geçmişi', 'I', 'id'],
-        ['Reçete Geçmişi', 'G', 'id'],
-        ['Reçete Kalemleri', 'F', 'id'],
-        ['Realtime Kullanım', 'U', 'id'],
-      ];
-
-      const sonuc = [];
-      for (const [tabAdi, sonSutun, anahtar] of kaynaklar) {
-        const t = TABLOLAR[tabAdi];
-        try {
-          const r = await sheets.spreadsheets.values.get({
-            spreadsheetId: SHEET_ID, range: `${tabAdi}!A2:${sonSutun}`,
-          });
-          const satirlar = (r.data.values || []).filter((x) => x[0]);
-          if (!satirlar.length) { sonuc.push({ tabAdi, okunan: 0, yazilan: 0 }); continue; }
-
-          // Realtime Kullanım'da Sheets'te ID sütunu yok (anahtar row_type+date+hour),
-          // ID'yi burada üretiyoruz ki tablo anahtarı dolsun.
-          const nesneler = satirlar.map((satir) => {
-            const degerler = tabAdi === 'Realtime Kullanım'
-              ? [[satir[0], satir[1], satir[2]].map((v) => String(v ?? '')).join('|'), ...satir]
-              : satir;
-            const o = {};
-            t.kolonlar.forEach((k, i) => {
-              const v = degerler[i];
-              o[k] = v === null || v === undefined ? '' : String(v);
-            });
-            return o;
-          });
-
-          // Aynı anahtardan birden fazla satır olabiliyor (Gün Sonu Kasa'da aynı güne
-          // ait mükerrer kayıtlar var). Postgres tek işlemde aynı anahtarı iki kez
-          // yazamaz, o yüzden burada tekilleştiriyoruz: SON kayıt geçerli sayılıyor,
-          // çünkü aynı günün en güncel hali o.
-          const benzersiz = new Map();
-          nesneler.forEach((o) => benzersiz.set(o[anahtar], o));
-          const yazilacak = [...benzersiz.values()];
-          const mukerrer = nesneler.length - yazilacak.length;
-
-          let yazilan = 0;
-          for (let i = 0; i < yazilacak.length; i += 500) {
-            const dilim = yazilacak.slice(i, i + 500);
-            const { error } = await db.from(t.tablo).upsert(dilim, { onConflict: anahtar });
-            if (error) throw new Error(error.message);
-            yazilan += dilim.length;
-          }
-          sonuc.push({ tabAdi, okunan: satirlar.length, yazilan, mukerrerAtlanan: mukerrer });
-        } catch (e) {
-          sonuc.push({ tabAdi, hata: e.message });
-        }
-      }
-
-      return res.status(200).json({ ok: true, sonuc });
     }
 
     if (resource === 'kategoriler') {

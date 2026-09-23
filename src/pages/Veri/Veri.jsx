@@ -33,13 +33,9 @@ const TABLO_BILGI = {
   sales_history: ['Satış', 'Satışlar'],
   sold_items: ['Satış', 'Satılan ürünler'],
   table_state: ['Satış', 'Açık masalar'],
-  orders: ['Satış', 'Siparişler'],
-  order_items: ['Satış', 'Sipariş kalemleri'],
   tables: ['Satış', 'Masalar'],
-  customers: ['Satış', 'Müşteriler'],
   action_history: ['Satış', 'İşlem geçmişi'],
   store_settings: ['Satış', 'Mağaza ayarları'],
-  receipt_seq: ['Satış', 'Eski fiş sayacı'],
   products: ['Menü', 'Ürünler'],
   categories: ['Menü', 'Kategoriler'],
   subcategories: ['Menü', 'Alt kategoriler'],
@@ -55,7 +51,6 @@ const TABLO_BILGI = {
   cari_teslimat_bildirimleri: ['Paket ve teslimat', 'Cari teslimat bildirimleri'],
   mutfak_hazir_notlar: ['Paket ve teslimat', 'Mutfak hazır notları'],
   ds_kitchen_quick_notes: ['Paket ve teslimat', 'Mutfak hızlı notları'],
-  ekmek_stok: ['Stok ve ekmek', 'Ekmek stoğu'],
   stok_sayimlari: ['Stok ve ekmek', 'Stok sayımları'],
   stok_takip_urunleri: ['Stok ve ekmek', 'Stok takip ürünleri'],
   bosvar_bildirimleri: ['Stok ve ekmek', 'Boş/var bildirimleri'],
@@ -88,14 +83,12 @@ const TABLO_BILGI = {
   rc_maliyet_gecmisi: ['Reçete ve malzeme', 'Malzeme maliyet geçmişi'],
   rc_receteler: ['Reçete ve malzeme', 'Reçeteler'],
   rc_recete_kalemleri: ['Reçete ve malzeme', 'Reçete kalemleri'],
-  realtime_usage_log: ['Sistem', 'Realtime kullanım kaydı (ham)'],
-  rt_kullanim: ['Sistem', 'Realtime kullanım özeti'],
 };
-const GRUP_SIRASI = ['Satış', 'Menü', 'Cari', 'Paket ve teslimat', 'Stok ve ekmek', 'Gün sonu', 'Muhasebe', 'Reçete ve malzeme', 'Sistem', 'Diğer'];
+const GRUP_SIRASI = ['Satış', 'Menü', 'Cari', 'Paket ve teslimat', 'Stok ve ekmek', 'Gün sonu', 'Muhasebe', 'Reçete ve malzeme', 'Diğer'];
 const GRUP_RENK = {
   'Satış': '#E94F37', 'Menü': '#E8A33D', 'Cari': '#4CA47D', 'Paket ve teslimat': '#3E8EB5',
   'Stok ve ekmek': '#9A7B4F', 'Gün sonu': '#7A6FA8', 'Muhasebe': '#2E6E5E',
-  'Reçete ve malzeme': '#B5694F', 'Sistem': '#83786B', 'Diğer': '#B8B2A3',
+  'Reçete ve malzeme': '#B5694F', 'Diğer': '#B8B2A3',
 };
 
 function tabloGrup(ad) { return (TABLO_BILGI[ad] || ['Diğer'])[0]; }
@@ -788,27 +781,12 @@ function SatirPaneli({ tablo, kolonlar, satir, mesgul, onKapat, onKaydet, onSil,
 // BAKIM
 // ============================================================
 function BakimPaneli({ liste, dbBoyut, onListeYenile }) {
-  const logBilgi = liste.find((t) => t.tablo === 'realtime_usage_log');
-  const [logGun, setLogGun] = useState('30');
-  const [logDurum, setLogDurum] = useState('');
   const [fotoDurum, setFotoDurum] = useState('');
   const [fotoOzet, setFotoOzet] = useState(null);
   const [mesgul, setMesgul] = useState(false);
 
   const enBuyukler = useMemo(() => [...liste].sort((a, b) => b.boyut_bayt - a.boyut_bayt).slice(0, 10), [liste]);
   const enBuyukBoyut = enBuyukler[0]?.boyut_bayt || 1;
-
-  async function logTemizle() {
-    const gun = parseInt(logGun, 10);
-    if (!Number.isFinite(gun) || gun < 1) { setLogDurum('Gün sayısı en az 1 olmalı.'); return; }
-    if (!window.confirm(`Realtime kullanım kaydından ${gun} günden eski satırlar silinecek. Emin misin?`)) return;
-    setMesgul(true);
-    setLogDurum('Siliniyor…');
-    const { data, error } = await supabase.rpc('veri_realtime_log_temizle', { p_gun: gun });
-    setMesgul(false);
-    setLogDurum(error ? `Silinemedi: ${error.message}` : `${sayiYaz(data)} satır silindi.`);
-    onListeYenile();
-  }
 
   const fotoTara = useCallback(async () => {
     const sinir = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -847,22 +825,6 @@ function BakimPaneli({ liste, dbBoyut, onListeYenile }) {
 
   return (
     <div className="vr-bakim">
-      <section className="vr-bakim-kart">
-        <h2>Realtime kullanım kaydı</h2>
-        <p>
-          Canlı bağlantıların ham kaydı. Sadece sorun ararken işe yarıyor, zamanla büyüyor.
-          Şu an {logBilgi ? <b>{sayiYaz(logBilgi.satir)} satır, {boyutYaz(logBilgi.boyut_bayt)}</b> : '…'}.
-        </p>
-        <div className="vr-bakim-eylem">
-          <label>
-            Şundan eski olanları sil:
-            <input type="number" min="1" value={logGun} onChange={(e) => setLogGun(e.target.value)} aria-label="Gün" /> gün
-          </label>
-          <button className="vr-btn vr-tehlike" onClick={logTemizle} disabled={mesgul}><Trash2 size={15} /> Temizle</button>
-        </div>
-        {logDurum && <p className="vr-durum" role="status">{logDurum}</p>}
-      </section>
-
       <section className="vr-bakim-kart">
         <h2>Teslimat fotoğrafları</h2>
         <p>
