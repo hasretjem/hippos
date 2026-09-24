@@ -2621,41 +2621,50 @@ export default async function handler(req, res) {
     // Bugünün hızlı nakit giderlerini listele — Gün Sonu ve Yönetim Paneli'ndeki
     // harcama bölümlerinin TEK veri kaynağı. İki ekran da aynı listeyi gösterir.
     // ?tarih=GG.AA.YYYY verilmezse bugün (Europe/Istanbul) alınır.
+    // ?tarihler=GG.AA.YYYY,GG.AA.YYYY,... verilirse birden fazla günün toplamları TEK
+    // istekte, gunler: {tarih: {anaKasaToplam, gunlukKasaToplam}} olarak dönülür.
     if (resource === 'gunlukHarcamalar') {
       if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+      const tarihlerParam = req.query.tarihler
+        ? String(req.query.tarihler).split(',').map((s) => s.trim()).filter(Boolean)
+        : null;
       const hedefTarih = req.query.tarih
         || new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
       const [rows, tahRowsGH] = await Promise.all([
         getRows(sheets, FATURA_FIS_TAB),
         getRows(sheets, TAHSILAT_TAB),
       ]);
-      const kayitlar = rows
-        .map(rowToFaturaFis)
-        .filter((k) => k.gunlukHarcama && k.tarih === hedefTarih)
-        .map((k) => ({
-          id: k.id, firmaAdi: k.firmaAdi, giderKategorisi: k.giderKategorisi,
-          aciklama: k.aciklama, tutar: k.faturaTutari,
-          kaynak: k.anaKasaHarcama ? 'anaKasa' : 'gunlukKasa',
-          kayitZamani: k.kayitZamani, silinebilir: true,
-        }))
-        // Muhasebeden yapılan NAKİT ödemeler de kasadan çıkar (maaş, sabit gider, peşin fatura,
-        // tahsilat makbuzu); bu ekranlarda görünür ama buradan silinemez (kaynağı Tahsilat Makbuzları).
-        .concat(tahRowsGH.map(rowToTahsilat)
-          .filter((t) => t.kasaKaynak && t.tarih === hedefTarih)
-          .map((t) => ({
-            id: t.id, firmaAdi: t.firmaAdi, giderKategorisi: 'Muhasebe ödemesi',
-            aciklama: t.aciklama, tutar: t.tutar, kaynak: t.kasaKaynak,
-            kayitZamani: t.kayitZamani, silinebilir: false,
-          })));
-      const anaKasa = kayitlar.filter((k) => k.kaynak === 'anaKasa');
-      const gunlukKasa = kayitlar.filter((k) => k.kaynak === 'gunlukKasa');
-      return res.status(200).json({
-        tarih: hedefTarih,
-        anaKasa,
-        gunlukKasa,
-        anaKasaToplam: anaKasa.reduce((s, k) => s + k.tutar, 0),
-        gunlukKasaToplam: gunlukKasa.reduce((s, k) => s + k.tutar, 0),
-      });
+      function tariheGoreOzet(tarih) {
+        const kayitlar = rows
+          .map(rowToFaturaFis)
+          .filter((k) => k.gunlukHarcama && k.tarih === tarih)
+          .map((k) => ({
+            id: k.id, firmaAdi: k.firmaAdi, giderKategorisi: k.giderKategorisi,
+            aciklama: k.aciklama, tutar: k.faturaTutari,
+            kaynak: k.anaKasaHarcama ? 'anaKasa' : 'gunlukKasa',
+            kayitZamani: k.kayitZamani, silinebilir: true,
+          }))
+          .concat(tahRowsGH.map(rowToTahsilat)
+            .filter((t) => t.kasaKaynak && t.tarih === tarih)
+            .map((t) => ({
+              id: t.id, firmaAdi: t.firmaAdi, giderKategorisi: 'Muhasebe ödemesi',
+              aciklama: t.aciklama, tutar: t.tutar, kaynak: t.kasaKaynak,
+              kayitZamani: t.kayitZamani, silinebilir: false,
+            })));
+        const anaKasa = kayitlar.filter((k) => k.kaynak === 'anaKasa');
+        const gunlukKasa = kayitlar.filter((k) => k.kaynak === 'gunlukKasa');
+        return {
+          anaKasa, gunlukKasa,
+          anaKasaToplam: anaKasa.reduce((s, k) => s + k.tutar, 0),
+          gunlukKasaToplam: gunlukKasa.reduce((s, k) => s + k.tutar, 0),
+        };
+      }
+      if (tarihlerParam) {
+        const gunler = {};
+        tarihlerParam.forEach((t) => { gunler[t] = tariheGoreOzet(t); });
+        return res.status(200).json({ gunler });
+      }
+      return res.status(200).json({ tarih: hedefTarih, ...tariheGoreOzet(hedefTarih) });
     }
 
     // Hızlı nakit gider satırını sil. Sheets'te satır fiziksel olarak silinir

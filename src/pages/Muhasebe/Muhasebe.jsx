@@ -1343,17 +1343,34 @@ function GunSonuKayitlariTablosu() {
     }).sort((a, b) => (trTarihiCoz(b.tarih)?.getTime() || 0) - (trTarihiCoz(a.tarih)?.getTime() || 0));
   }, [kayitlar, yilFiltre, ayFiltre, gunFiltre]);
 
-  const toplam = useMemo(() => filtreli.reduce((acc, k) => {
+  const [harcamaToplamlari, setHarcamaToplamlari] = useState({});
+  useEffect(() => {
+    const tarihler = [...new Set(filtreli.map((k) => k.tarih).filter(Boolean))];
+    if (tarihler.length === 0) return;
+    fetch(`/api/muhasebe?resource=gunlukHarcamalar&tarihler=${tarihler.map(encodeURIComponent).join(',')}`)
+      .then((r) => r.json())
+      .then((j) => setHarcamaToplamlari(j.gunler || {}))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtreli.map((k) => k.tarih).join(',')]);
+
+  const filtreliZenginlestirilmis = useMemo(() => filtreli.map((k) => ({
+    ...k,
+    anaKasaHarcamaToplam: harcamaToplamlari[k.tarih]?.anaKasaToplam || 0,
+    gunlukKasaHarcamaToplam: harcamaToplamlari[k.tarih]?.gunlukKasaToplam || 0,
+  })), [filtreli, harcamaToplamlari]);
+
+  const toplam = useMemo(() => filtreliZenginlestirilmis.reduce((acc, k) => {
     acc.nakit += k.toplamNakitPara || 0;
     acc.pos += k.posToplam || 0;
     acc.anaKasa += k.anaKasaToplam || 0;
-    acc.anaKasaHarcama += (k.anaKasaHarcamalar || []).reduce((s, x) => s + (Number(x.tutar) || 0), 0);
-    acc.gunlukKasaHarcama += (k.gunlukKasaHarcamalar || []).reduce((s, x) => s + (Number(x.tutar) || 0), 0);
+    acc.anaKasaHarcama += k.anaKasaHarcamaToplam || 0;
+    acc.gunlukKasaHarcama += k.gunlukKasaHarcamaToplam || 0;
     acc.cari += k.cariToplam || 0;
     acc.yemek += k.genelYemekToplami || 0;
     acc.ciro += ciroToplam(k.ciro);
     return acc;
-  }, { nakit: 0, pos: 0, anaKasa: 0, anaKasaHarcama: 0, gunlukKasaHarcama: 0, cari: 0, yemek: 0, ciro: 0 }), [filtreli]);
+  }, { nakit: 0, pos: 0, anaKasa: 0, anaKasaHarcama: 0, gunlukKasaHarcama: 0, cari: 0, yemek: 0, ciro: 0 }), [filtreliZenginlestirilmis]);
 
   function detayAc(tip, kayit) { setDetay({ tip, kayit }); }
 
@@ -1394,10 +1411,10 @@ function GunSonuKayitlariTablosu() {
               </tr>
             </thead>
             <tbody>
-              {filtreli.map((k) => {
+              {filtreliZenginlestirilmis.map((k) => {
                 const d = trTarihiCoz(k.tarih);
-                const anaKasaHarcTop = (k.anaKasaHarcamalar || []).reduce((s, x) => s + (Number(x.tutar) || 0), 0);
-                const gunlukKasaHarcTop = (k.gunlukKasaHarcamalar || []).reduce((s, x) => s + (Number(x.tutar) || 0), 0);
+                const anaKasaHarcTop = k.anaKasaHarcamaToplam || 0;
+                const gunlukKasaHarcTop = k.gunlukKasaHarcamaToplam || 0;
                 return (
                   <tr key={k.tarih}>
                     <td>{d ? d.getFullYear() : '-'}</td>
@@ -1463,15 +1480,30 @@ function GunSonuDetayModal({ tip, kayit, onClose }) {
     anaKasaTakibi: 'Ana Kasa Takibi',
   };
 
+  const [harcamaVeri, setHarcamaVeri] = useState(null);
+  const [harcamaYukleniyor, setHarcamaYukleniyor] = useState(false);
+  useEffect(() => {
+    if (tip !== 'anaKasaHarcamalar' && tip !== 'gunlukKasaHarcamalar') return;
+    if (!kayit.tarih) return;
+    setHarcamaYukleniyor(true);
+    fetch(`/api/muhasebe?resource=gunlukHarcamalar&tarih=${encodeURIComponent(kayit.tarih)}`)
+      .then((r) => r.json())
+      .then((j) => setHarcamaVeri(j))
+      .catch(() => setHarcamaVeri({ anaKasa: [], gunlukKasa: [] }))
+      .finally(() => setHarcamaYukleniyor(false));
+  }, [tip, kayit.tarih]);
+
   function icerik() {
     if (tip === 'anaKasaHarcamalar' || tip === 'gunlukKasaHarcamalar') {
-      const liste = kayit[tip] || [];
+      if (harcamaYukleniyor || !harcamaVeri) return <p className="mh-empty">Yükleniyor...</p>;
+      const liste = tip === 'anaKasaHarcamalar' ? harcamaVeri.anaKasa : harcamaVeri.gunlukKasa;
+      if (!liste || liste.length === 0) return <p className="mh-empty">Bu güne ait harcama kaydı yok.</p>;
       return (
         <table className="mh-excel-table">
-          <thead><tr><th>Ad</th><th>Tutar</th></tr></thead>
+          <thead><tr><th>Ad</th><th>Açıklama</th><th>Tutar</th></tr></thead>
           <tbody>
-            {liste.filter((x) => x.ad).map((x, i) => (
-              <tr key={i}><td>{x.ad}</td><td className="mh-tutar-cell">{TL(Number(x.tutar) || 0)}</td></tr>
+            {liste.map((x) => (
+              <tr key={x.id}><td>{x.firmaAdi}</td><td>{x.aciklama || '—'}</td><td className="mh-tutar-cell">{TL(Number(x.tutar) || 0)}</td></tr>
             ))}
           </tbody>
         </table>
