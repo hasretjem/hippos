@@ -1797,13 +1797,21 @@ function ToptancilarCariSekmesi({ showToast }) {
 }
 
 function ToptanciEkstreModal({ firma, faturaKayitlari, tahsilatlar, onClose }) {
-  // Fatura ve tahsilat hareketlerini birleştir, en yeniden eskiye sırala
+  // Fatura ve tahsilat hareketlerini birleştir, en yeniden eskiye sırala.
+  // ÖNEMLİ: bir fatura kaydının borcu k.faturaTutari DEĞİL, k.faturaTutari - k.odemeTutari'dir.
+  // Gün Sonu'ndaki hızlı nakit gider girişi (Ana/Günlük Kasadan Harcamalar) faturaTutari ile
+  // AYNI odemeTutari'yi yazar (kasadan peşin ödendi, firmaya borç kalmaz) — bu satırlar burada
+  // borç gibi görünmemeli. firmaBakiyesi() (KPI kartlarındaki Toplam Borç) bu farkı zaten
+  // düşüyordu; bu modal ise faturaTutari'yi doğrudan borç sayıyordu (24 Eylül'de bulunan sorun).
   const hareketler = useMemo(() => {
-    const faturalar = faturaKayitlari.map(k => ({
-      id: k.id, tarih: k.tarih, tur: 'fatura',
-      aciklama: `${k.faturaNo ? k.faturaNo + ' — ' : ''}${k.aciklama || k.giderKategorisi || 'Fatura'}`,
-      tutar: k.faturaTutari,
-    }));
+    const faturalar = faturaKayitlari
+      .map(k => ({ ...k, kalanBorc: Math.round((k.faturaTutari - k.odemeTutari) * 100) / 100 }))
+      .filter(k => Math.abs(k.kalanBorc) > 0.01) // peşin ödenmiş (kalan borcu 0) satırlar ekstrede görünmez
+      .map(k => ({
+        id: k.id, tarih: k.tarih, tur: 'fatura',
+        aciklama: `${k.faturaNo ? k.faturaNo + ' — ' : ''}${k.aciklama || k.giderKategorisi || 'Fatura'}`,
+        tutar: k.kalanBorc,
+      }));
     const odemeler = tahsilatlar.map(t => ({
       id: t.id, tarih: t.tarih, tur: 'odeme',
       aciklama: `${t.faturaNo ? t.faturaNo + ' — ' : ''}${t.aciklama || t.odemeTuru || 'Ödeme'}`,
@@ -1818,7 +1826,7 @@ function ToptanciEkstreModal({ firma, faturaKayitlari, tahsilatlar, onClose }) {
 
   // Koşu bakiyesi: yukarıdan aşağıya (en yeni → en eski) koşu bakiyesi hesaplanır.
   // En son hareketlerden geriye doğru gidilir — önce son bakiyeden başla, geri hesapla.
-  const toplamBakiye = faturaKayitlari.reduce((s, k) => s + k.faturaTutari, 0)
+  const toplamBakiye = faturaKayitlari.reduce((s, k) => s + (k.faturaTutari - k.odemeTutari), 0)
     - tahsilatlar.reduce((s, t) => s + t.tutar, 0);
 
   let kosuBakiye = toplamBakiye;
