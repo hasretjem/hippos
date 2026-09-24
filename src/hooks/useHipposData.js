@@ -165,7 +165,7 @@ function rowToFatura(r) {
   };
 }
 function rowToGecmis(r) {
-  return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), toplamTutar: Number(r.toplam_tutar), aciklama: r.aciklama, sonTahsilatTutar: r.son_tahsilat_tutar != null ? Number(r.son_tahsilat_tutar) : null, odemelerDetay: Array.isArray(r.odemeler_detay) ? r.odemeler_detay : [] };
+  return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), toplamTutar: Number(r.toplam_tutar), aciklama: r.aciklama, sonTahsilatTutar: r.son_tahsilat_tutar != null ? Number(r.son_tahsilat_tutar) : null, odemelerDetay: Array.isArray(r.odemeler_detay) ? r.odemeler_detay : [], hareketlerDetay: Array.isArray(r.hareketler_detay) ? r.hareketler_detay : [] };
 }
 
 function rowToPaketTeslimat(r) {
@@ -1897,12 +1897,13 @@ export default function useHipposData(scope = 'full') {
     const toplam = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
     const ts = Date.now();
     const odemelerDetay = cariOdemeler.filter((o) => o.cariId === cariId).map((o) => ({ ts: o.ts, tutar: o.tutar, tur: o.tur }));
-    setCariGecmis((prev) => [...prev, { id: Date.now() + Math.floor(Math.random() * 1000), cariId, ts, toplamTutar: toplam, aciklama: 'Tamamlandı', sonTahsilatTutar, odemelerDetay }]);
+    const hareketlerDetay = cariHareketler.filter((h) => h.cariId === cariId).map((h) => ({ ts: h.ts, tutar: h.toplam }));
+    setCariGecmis((prev) => [...prev, { id: Date.now() + Math.floor(Math.random() * 1000), cariId, ts, toplamTutar: toplam, aciklama: 'Tamamlandı', sonTahsilatTutar, odemelerDetay, hareketlerDetay }]);
     setCariHareketler((prev) => prev.filter((h) => h.cariId !== cariId));
     setCariOdemeler((prev) => prev.filter((o) => o.cariId !== cariId));
     setCariFaturalar((prev) => prev.filter((f) => f.cariId !== cariId));
 
-    supabase.from('cari_gecmis').insert({ cari_id: cariId, ts, toplam_tutar: toplam, aciklama: 'Tamamlandı', son_tahsilat_tutar: sonTahsilatTutar, odemeler_detay: odemelerDetay }).then(({ error }) => {
+    supabase.from('cari_gecmis').insert({ cari_id: cariId, ts, toplam_tutar: toplam, aciklama: 'Tamamlandı', son_tahsilat_tutar: sonTahsilatTutar, odemeler_detay: odemelerDetay, hareketler_detay: hareketlerDetay }).then(({ error }) => {
       if (error) console.error('cari arşivlenemedi:', error.message);
     });
     supabase.from('cari_hareketler').delete().eq('cari_id', cariId).then(({ error }) => { if (error) console.error(error.message); });

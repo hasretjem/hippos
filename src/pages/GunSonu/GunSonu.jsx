@@ -219,7 +219,7 @@ export default function GunSonu({ data, onNavigate }) {
   const bugunBireyselCariler = useMemo(() => {
     const gunBaslangic = new Date(); gunBaslangic.setHours(0, 0, 0, 0);
     const ts0 = gunBaslangic.getTime();
-    return (cariler || [])
+    const acikOlanlar = (cariler || [])
       .filter((c) => c.tip === 'bireysel')
       .map((c) => {
         const bugunTutar = (cariHareketler || [])
@@ -228,7 +228,18 @@ export default function GunSonu({ data, onNavigate }) {
         return { ...c, bugunTutar };
       })
       .filter((c) => c.bugunTutar > 0);
-  }, [cariler, cariHareketler]);
+    const acikCariIdSet = new Set(acikOlanlar.map((c) => c.id));
+    const arsivlenenler = (cariGecmis || [])
+      .filter((g) => g.ts >= ts0 && !acikCariIdSet.has(g.cariId))
+      .map((g) => {
+        const bugunTutar = (g.hareketlerDetay || [])
+          .filter((h) => h.ts >= ts0)
+          .reduce((s, h) => s + h.tutar, 0);
+        return { id: g.cariId, ad: cariler.find((c) => c.id === g.cariId)?.ad || '', bugunTutar };
+      })
+      .filter((c) => c.bugunTutar > 0);
+    return [...acikOlanlar, ...arsivlenenler];
+  }, [cariler, cariHareketler, cariGecmis]);
   const bireyselCariToplam = bugunBireyselCariler.reduce((s, c) => s + c.bugunTutar, 0);
 
   // Bugün tahsil edilen cari ödemeleri (havale hariç) — bilgi amaçlı, cirodan düşülmez
