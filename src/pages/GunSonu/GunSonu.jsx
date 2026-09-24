@@ -283,13 +283,17 @@ export default function GunSonu({ data, onNavigate }) {
   // Ana Kasa harcaması AYRI bir satırda gösterilip SADECE Yarına Devir hesabında düşülür.
   // Böylece ekranda hangi rakamın nereden geldiği (sayılan nakit, ana kasa harcaması,
   // sonuç) karışmadan ayrı ayrı görülebiliyor.
-  // DÜZELTME (16 Eylül): burada eskiden "- anaKasaToplam" vardı ve bu YANLIŞTI.
-  // Kasiyer kasayı sayarken ana kasadan harcanan para fiziksel olarak zaten çekmeceden
-  // çıkmış olduğu için toplamNakitPara'ya girmiyor (zaten düşülmüş hâlde geliyor).
-  // Formülde bir de "-" yazmak aynı tutarı İKİ KEZ düşürmek anlamına gelirdi.
-  // Günlük kasa harcaması ciroya geri eklendiği gibi, ana kasa harcaması da
-  // yarına devir hesabına geri EKLENİR.
-  const yarinaDevirAnaKasa = dundenDevirAnaKasa + toplamNakitPara + anaKasaToplam;
+  // DÜZELTME (24 Eylül): ana kasa harcaması DÜŞÜLÜR.
+  // 16 Eylül'de burası "+ anaKasaToplam" yapılmıştı, gerekçe günlük kasadaki mantığın aynısıydı
+  // ("harcanan para sayıma girmiyor, geri ekle"). Ama o gerekçe sadece ÇEKMECE için doğru:
+  // kasiyerin saydığı toplamNakitPara çekmecedeki para. Ana kasa harcaması ise ÇELİK KASADAN
+  // çıkıyor (kullanıcı doğruladı: Çelik Kasa = Ana Kasa, harcama oradan ödeniyor) — yani
+  // çekmece sayımını hiç etkilemiyor, çelik kasadaki bakiyeyi azaltıyor. Ekleyince harcamanın
+  // iki katı kadar fazla devir çıkıyordu (10.000 + 5.000, 3.600 harcama → 18.600 yazıyordu,
+  // gerçekte 11.400) ve fark her gün "dünden devir" olarak birikerek taşınıyordu.
+  // Ekrandaki "Ana Kasa Harcama" satırı zaten eksi gösteriliyordu; formül artık onunla tutarlı.
+  // Kullanıcı kuralı (15-16 Eylül): "Ana kasa gideri yarına devir ana kasadan düşülür."
+  const yarinaDevirAnaKasa = dundenDevirAnaKasa + toplamNakitPara - anaKasaToplam;
 
   // Enter'a basınca fareyle sıradaki alana tıklamayı beklemeden, DOM sırasındaki bir sonraki
   // "gs-tabbable" alanına odaklanır — sayfadaki neredeyse her giriş kutusunda kullanılıyor.

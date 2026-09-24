@@ -2607,6 +2607,10 @@ function FaturaFisGirisiSekmesi({ showToast }) {
   const [odemeTuru, setOdemeTuru] = useState('');
   const [odemeDetay, setOdemeDetay] = useState('');
   const [faturaTutari, setFaturaTutari] = useState('');
+  // XML kartından doldurulduysa kartın kimliği — kaydedince kart listeden düşsün diye
+  // sunucuya gönderiliyor. Eskiden hiç saklanmıyordu: kart işlense de listede kalıyor,
+  // aynı fatura ikinci kez girilebiliyordu (mükerrer borç).
+  const [kaynakFaturaID, setKaynakFaturaID] = useState('');
   const [kaydediyor, setKaydediyor] = useState(false);
 
   const [firmalar, setFirmalar] = useState([]);
@@ -2665,6 +2669,7 @@ function FaturaFisGirisiSekmesi({ showToast }) {
     setAciklama('');
     setGiderKat(f.kategori || '');
     setFaturaTutari(String(f.tutar || ''));
+    setKaynakFaturaID(f.faturaID || '');
   }
 
   async function kaydet(e) {
@@ -2675,36 +2680,24 @@ function FaturaFisGirisiSekmesi({ showToast }) {
     if (!faturaTutari) { showToast('Fatura tutarı gerekli'); return; }
     setKaydediyor(true);
     try {
-      // 1) Fatura kaydı (Fatura ve Fişler sheet'ine)
+      // Fatura kaydı. Peşin ödemede (Cari/Devir dışı) tahsilatı da SUNUCU aynı istekte yazıyor;
+      // biri yazılamazsa diğeri de geri alınıyor. Eskiden ekran iki ayrı istek atıyordu ve
+      // ikincisi başarısız olursa fatura ödenmemiş borç olarak kalıyordu.
       const res = await fetch('/api/muhasebe?resource=faturaFis', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tarih, firmaAdi: seciliFirma.firmaAdi, faturaNo, aciklama,
           giderKategorisi: giderKat, odemeTuru, odemeDetay, faturaTutari,
+          kaynakFaturaID: kaynakFaturaID || undefined,
         }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'hata');
 
-      // 2) Cari HARİÇ peşin ödemelerde: otomatik tahsilat kaydı da oluştur
-      //    (Tahsilat Makbuzları sheet'ine aynı tutarda ödeme yazılır)
-      if (odemeTuru !== 'Cari' && odemeTuru !== 'Devir') {
-        const tRes = await fetch('/api/muhasebe?resource=tahsilat', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tarih, firmaAdi: seciliFirma.firmaAdi, faturaNo,
-            aciklama: `Peşin ödeme — ${odemeTuru}${odemeDetay ? ' / ' + odemeDetay : ''}`,
-            odemeTuru, odemeDetay, tutar: faturaTutari,
-          }),
-        });
-        const tJ = await tRes.json();
-        if (!tRes.ok) console.error('Tahsilat kaydı oluşturulamadı:', tJ.error);
-      }
-
       showToast(odemeTuru === 'Cari' ? 'Fatura kaydedildi (cariye atıldı)'
         : odemeTuru === 'Devir' ? 'Devir bakiyesi kaydedildi' : 'Fatura + ödeme kaydedildi');
       setFaturaNo(''); setAciklama(''); setGiderKat(''); setFaturaTutari('');
-      setOdemeTuru(''); setOdemeDetay('');
+      setOdemeTuru(''); setOdemeDetay(''); setKaynakFaturaID('');
       await yukle();
       await bekleyenYukle(seciliFirma);
     } catch(err) { showToast('Kaydedilemedi: ' + err.message); }
@@ -2828,6 +2821,9 @@ function TahsilatMakbuzuSekmesi({ showToast }) {
   const [odemeTuru, setOdemeTuru] = useState('');
   const [odemeDetay, setOdemeDetay] = useState('');
   const [tutar, setTutar] = useState('');
+  // Banka ekstresi kartından aktarıldıysa kartın kimliği — kaydedince kart listeden düşsün.
+  // Eskiden saklanmıyordu: aynı banka ödemesi ikinci kez tahsilata dönüştürülebiliyordu.
+  const [kaynakEkstreID, setKaynakEkstreID] = useState('');
   const [kaydediyor, setKaydediyor] = useState(false);
 
   const [firmalar, setFirmalar] = useState([]);
@@ -2865,6 +2861,7 @@ function TahsilatMakbuzuSekmesi({ showToast }) {
     setTutar(String(ekstre.tutar));
     setFaturaNo('');
     setAciklama(ekstre.aciklama || '');
+    setKaynakEkstreID(ekstre.id || '');
   }
 
   async function kaydet(e) {
@@ -2875,12 +2872,12 @@ function TahsilatMakbuzuSekmesi({ showToast }) {
     try {
       const res = await fetch('/api/muhasebe?resource=tahsilat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tarih, firmaAdi: seciliFirma.firmaAdi, faturaNo, aciklama, odemeTuru, odemeDetay, tutar }),
+        body: JSON.stringify({ tarih, firmaAdi: seciliFirma.firmaAdi, faturaNo, aciklama, odemeTuru, odemeDetay, tutar, kaynakEkstreID: kaynakEkstreID || undefined }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'hata');
       showToast('Tahsilat kaydedildi');
-      setFaturaNo(''); setAciklama(''); setTutar('');
+      setFaturaNo(''); setAciklama(''); setTutar(''); setKaynakEkstreID('');
       await yukle();
       setSeciliFirma(prev => prev ? firmalar.find(f=>f.firmaAdi===prev.firmaAdi) || prev : null);
     } catch(err) { showToast('Kaydedilemedi: ' + err.message); }

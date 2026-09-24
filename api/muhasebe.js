@@ -54,6 +54,7 @@ const TABLOLAR = {
   'Malzeme Maliyet Geçmişi': { tablo: 'rc_maliyet_gecmisi', kolonlar: ['id', 'malzeme_id', 'malzeme_adi', 'tarih', 'miktar', 'birim', 'toplam_fiyat', 'birim_maliyet', 'fatura_id'] },
   'Reçete Geçmişi': { tablo: 'rc_receteler', kolonlar: ['id', 'urun_id', 'urun_adi', 'versiyon', 'aktif', 'baslangic_tarihi', 'bitis_tarihi'] },
   'Reçete Kalemleri': { tablo: 'rc_recete_kalemleri', kolonlar: ['id', 'recete_id', 'malzeme_id', 'malzeme_adi', 'miktar', 'birim'] },
+  'Realtime Kullanım': { tablo: 'rt_kullanim', kolonlar: ['id', 'row_type', 'tarih', 'saat', 'total_messages', 'table_state', 'sales_history', 'cari_hareketler', 'cari_odemeler', 'cari_faturalar', 'packages', 'paket_teslimatlari', 'mutfak_hazir_notlar', 'presence_sync', 'presence_join', 'presence_leave', 'other', 'full_scope', 'paketci', 'mutfak', 'monthly_limit', 'usage_percent'] },
   'Toptancılar': { tablo: 'mh_toptancilar', kolonlar: ['id', 'firma_adi', 'kategori', 'telefon', 'yetkili_kisi', 'adres', 'notlar', 'bakiye', 'eklenme_tarihi', 'durum'] },
 };
 
@@ -175,7 +176,7 @@ const VARSAYILAN_KATEGORILER = [
   'Diğer Giderler',
   'Kira + Aidat + Otopark Gideri',
   'Vergi + Ssk + Diğer. Giderler',
-  'Yemek Kart-Banka Masf.',
+  'Yemek Kartı-Banka Masrafları',
 ];
 const KATEGORI_TAB = { tab: 'Kategori Sözlüğü', headers: ['ID', 'Kategori Adı', 'Tarih'] };
 
@@ -298,7 +299,7 @@ function rowToEkstre(r) {
 
 // Yemek kartı / fintek komisyon firmaları — bunlar tedarikçi değil, aracı kurum.
 // Kart ekstrelerinde GİDEN olarak görünseler de Toptancı Carisine ödeme olarak
-// değil, doğrudan "Yemek Kart-Banka Masf." kategorisinde Giderlere yazılırlar.
+// değil, doğrudan "Yemek Kartı-Banka Masrafları" kategorisinde Giderlere yazılırlar.
 // firmaEslesirMi ile bir toptancıya bağlanmaz; eslesmeDurumu = 'fintek_komisyon'.
 const YEMEK_KARTI_KOMISYON_FIRMALARI = new Set([
   'multinet', 'tokenflex', 'token', 'metropal', 'sodexo', 'pluxee',
@@ -546,6 +547,57 @@ function rowToBankaKartHareket(r) {
 }
 
 // Sadece kart/banka üzerinden yapılan ödemeler hesap hareketine düşer (nakit ve cari düşmez).
+// Nakit ödemenin alt seçeneği hangi kasadan çıktığını söyler. Gün Sonu'nun
+// kasa harcamaları listesi bu alana bakar (kasa_kaynak). Çelik Kasa = Ana Kasa.
+function nakitKasaKaynagi(odemeTuru, odemeDetay) {
+  if (odemeTuru !== 'Nakit') return '';
+  if (odemeDetay === 'Günlük Kasa') return 'gunlukKasa';
+  if (odemeDetay === 'Çelik Kasa' || odemeDetay === 'Ana Kasa') return 'anaKasa';
+  return '';
+}
+
+// Nakit ödeme kuralları — maaş/sabit gider ödemesiyle (tahakkukOdeme) AYNI kurallar:
+// kasa seçimi zorunlu, geçmiş tarihli ödeme günlük kasadan yapılamaz (o günün gün sonu
+// kapanmış olabilir, zincir bozulur). Hata varsa mesaj döner, yoksa null.
+function nakitKuralHatasi(odemeTuru, odemeDetay, trTarih) {
+  if (odemeTuru !== 'Nakit') return null;
+  const kasa = nakitKasaKaynagi(odemeTuru, odemeDetay);
+  if (!kasa) return 'Nakit ödemede kasa seçimi gerekli (Günlük Kasa ya da Çelik Kasa)';
+  const bugun = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+  if (kasa === 'gunlukKasa' && trTarih !== bugun) {
+    return 'Geçmiş tarihli nakit ödeme günlük kasadan yapılamaz — Çelik Kasa seçin';
+  }
+  return null;
+}
+
+// Tek tahsilat satırı + (kart/havale ise) banka-kart hareketi yazar.
+// Tahsilat Makbuzu ekranı ve peşin fatura AYNI fonksiyonu kullanır.
+async function tahsilatYaz(sheets, { trTarih, firmaAdi, faturaNo, aciklama, odemeTuru, odemeDetay, odenen, oncekiBakiye, kaynakEkstreID, now }) {
+  const p = trTarihiParcala(trTarih);
+  const yeniBakiye = Math.round((oncekiBakiye - odenen) * 100) / 100;
+  const id = benzersizId();
+  await appendRow(sheets, TAHSILAT_TAB, [
+    id, trTarih, p.gun, p.ay, p.yil, String(firmaAdi).trim(), faturaNo || '', aciklama || '',
+    odemeTuru || '', odemeDetay || '', odenen, oncekiBakiye, yeniBakiye,
+    kaynakEkstreID || '', now.toISOString(), nakitKasaKaynagi(odemeTuru, odemeDetay), '',
+  ]);
+  let bankaHareketId = null;
+  if (hesapHareketiGerekir(odemeTuru)) {
+    bankaHareketId = benzersizId();
+    try {
+      await appendRow(sheets, BANKA_KART_TAB, [
+        bankaHareketId, trTarih, odemeTuru, odemeDetay || '', 'GİDEN', odenen,
+        `Tahsilat — ${firmaAdi}`, id, now.toISOString(),
+      ]);
+    } catch (e) {
+      // Banka hareketi yazılamadıysa tahsilatı da geri al — ikisi birlikte var ya da hiç yok.
+      try { await satirSil(TAHSILAT_TAB, id); } catch { /* ana hata aşağıda fırlatılıyor */ }
+      throw e;
+    }
+  }
+  return { id, yeniBakiye, bankaHareketId };
+}
+
 function hesapHareketiGerekir(odemeTuru) {
   return odemeTuru === 'Kredi Kartı' || odemeTuru === 'Banka Havalesi';
 }
@@ -590,7 +642,7 @@ const YK_FATURA_TAB = {
     'Vade', 'KesintiOran', 'KesintiMatrah', 'KesintiKdv', 'KesintiToplam', 'BankayaYatacak',
     'GiderFaturaFisId', 'GelenTutar', 'GelisTarihi', 'GelenHesap', 'KayitZamani'],
 };
-const YEMEK_KARTI_KATEGORI = 'Yemek Kart-Banka Masf.';
+const YEMEK_KARTI_KATEGORI = 'Yemek Kartı-Banka Masrafları'; // sözlükteki adla BİREBİR aynı olmalı
 const GUNSONU_TAB = { tab: 'Gün Sonu Kasa', headers: [] };
 // Varsayılan kart tanımları (kullanıcının mevcut tablosundaki oran ve kesim günleri).
 const YK_VARSAYILAN = [
@@ -1331,6 +1383,7 @@ export default async function handler(req, res) {
         'Malzeme Maliyet Geçmişi': MALIYET_TAB.headers,
         'Reçete Geçmişi': ['ID', 'ÜrünID', 'Ürün Adı', 'Versiyon', 'Aktif', 'Başlangıç Tarihi', 'Bitiş Tarihi'],
         'Reçete Kalemleri': ['ID', 'ReceteID', 'MalzemeID', 'Malzeme Adı', 'Miktar', 'Birim'],
+        'Realtime Kullanım': ['ID', 'row_type', 'date', 'hour', 'total_messages', 'table_state', 'sales_history', 'cari_hareketler', 'cari_odemeler', 'cari_faturalar', 'packages', 'paket_teslimatlari', 'mutfak_hazir_notlar', 'presence_sync', 'presence_join', 'presence_leave', 'other', 'full', 'paketci', 'mutfak', 'monthly_limit', 'usage_percent'],
       };
 
       // 1) Postgres'ten oku (Sheets'e hiç gitmeden)
@@ -1527,6 +1580,79 @@ export default async function handler(req, res) {
         fisArsivi,
         fotoTemizlik,
       });
+    }
+
+    // ============================================================
+    // TEK SEFERLİK VERİ TAŞIMA — Sheets'teki mevcut kayıtları Postgres'e kopyalar.
+    // 23 Eylül taşıması için: Gün Sonu Kasa, Malzeme Havuzu, Malzeme Maliyet Geçmişi,
+    // Reçete Geçmişi, Reçete Kalemleri, Realtime Kullanım.
+    // Güvenli: hedef tabloda AYNI anahtara sahip satır varsa üzerine yazar (upsert),
+    // yani iki kez çalıştırılsa da mükerrer kayıt OLUŞMAZ.
+    // İş bittikten ve doğrulandıktan sonra bu blok koddan kaldırılacak.
+    // ============================================================
+    if (resource === 'sheetsTasi') {
+      const gizli = process.env.REALTIME_SYNC_SECRET;
+      if (gizli && (req.query.secret || (req.body || {}).secret) !== gizli) {
+        return res.status(401).json({ error: 'yetkisiz' });
+      }
+
+      // [Sheets sekmesi, son sütun, anahtar kolonu] — anahtar Gün Sonu'nda tarih, diğerlerinde id.
+      const kaynaklar = [
+        ['Gün Sonu Kasa', 'Q', 'tarih'],
+        ['Malzeme Havuzu', 'E', 'id'],
+        ['Malzeme Maliyet Geçmişi', 'I', 'id'],
+        ['Reçete Geçmişi', 'G', 'id'],
+        ['Reçete Kalemleri', 'F', 'id'],
+        ['Realtime Kullanım', 'U', 'id'],
+      ];
+
+      const sonuc = [];
+      for (const [tabAdi, sonSutun, anahtar] of kaynaklar) {
+        const t = TABLOLAR[tabAdi];
+        try {
+          const r = await sheets.spreadsheets.values.get({
+            spreadsheetId: SHEET_ID, range: `${tabAdi}!A2:${sonSutun}`,
+          });
+          const satirlar = (r.data.values || []).filter((x) => x[0]);
+          if (!satirlar.length) { sonuc.push({ tabAdi, okunan: 0, yazilan: 0 }); continue; }
+
+          // Realtime Kullanım'da Sheets'te ID sütunu yok (anahtar row_type+date+hour),
+          // ID'yi burada üretiyoruz ki tablo anahtarı dolsun.
+          const nesneler = satirlar.map((satir) => {
+            const degerler = tabAdi === 'Realtime Kullanım'
+              ? [[satir[0], satir[1], satir[2]].map((v) => String(v ?? '')).join('|'), ...satir]
+              : satir;
+            const o = {};
+            t.kolonlar.forEach((k, i) => {
+              const v = degerler[i];
+              o[k] = v === null || v === undefined ? '' : String(v);
+            });
+            return o;
+          });
+
+          // Aynı anahtardan birden fazla satır olabiliyor (Gün Sonu Kasa'da aynı güne
+          // ait mükerrer kayıtlar var). Postgres tek işlemde aynı anahtarı iki kez
+          // yazamaz, o yüzden burada tekilleştiriyoruz: SON kayıt geçerli sayılıyor,
+          // çünkü aynı günün en güncel hali o.
+          const benzersiz = new Map();
+          nesneler.forEach((o) => benzersiz.set(o[anahtar], o));
+          const yazilacak = [...benzersiz.values()];
+          const mukerrer = nesneler.length - yazilacak.length;
+
+          let yazilan = 0;
+          for (let i = 0; i < yazilacak.length; i += 500) {
+            const dilim = yazilacak.slice(i, i + 500);
+            const { error } = await db.from(t.tablo).upsert(dilim, { onConflict: anahtar });
+            if (error) throw new Error(error.message);
+            yazilan += dilim.length;
+          }
+          sonuc.push({ tabAdi, okunan: satirlar.length, yazilan, mukerrerAtlanan: mukerrer });
+        } catch (e) {
+          sonuc.push({ tabAdi, hata: e.message });
+        }
+      }
+
+      return res.status(200).json({ ok: true, sonuc });
     }
 
     if (resource === 'kategoriler') {
@@ -1962,7 +2088,7 @@ export default async function handler(req, res) {
           // tedarikçi değil, aracı kurum. Toptancı carisine DEĞİL, doğrudan Giderlere yazılır.
           if (fintekKomisyonMu(saticiAdi)) {
             eslesmeDurumu = 'fintek_komisyon';
-            kategori = 'Yemek Kart-Banka Masf.';
+            kategori = YEMEK_KARTI_KATEGORI;
             ozet.faturaBekliyor++;
           } else {
             const eslesen = toptancilarRows.find((r) => firmaEslesirMi(saticiAdi, r[1]));
@@ -2358,8 +2484,27 @@ export default async function handler(req, res) {
           getRows(sheets, FATURA_FIS_TAB),
           getRows(sheets, TAHSILAT_TAB),
         ]);
-        const oncekiBakiye = firmaBakiyesi(firmaAdi, ffRows.map(rowToFaturaFis), tahRows.map(rowToTahsilat));
-        const yeniBakiye = Math.round((oncekiBakiye + (fTutar - oTutar)) * 100) / 100;
+        const faturaKayitlari = ffRows.map(rowToFaturaFis);
+        const tahsilatlar = tahRows.map(rowToTahsilat);
+
+        // XML'den gelen bir fatura kartı ikinci kez işlenmesin (mükerrer borç).
+        if (kaynakFaturaID && faturaKayitlari.some((k) => k.kaynakFaturaID === kaynakFaturaID)) {
+          return res.status(409).json({ error: 'Bu fatura zaten işlenmiş' });
+        }
+
+        // PEŞİN ÖDEME (Cari ve Devir dışındaki her tür): fatura + tahsilat TEK istekte yazılır.
+        // Eskiden ekran iki ayrı istek atıyordu; ikincisi başarısız olursa fatura ödenmemiş
+        // borç olarak kalıyor, ekran yine "kaydedildi" diyordu.
+        const pesin = odemeTuru && odemeTuru !== 'Cari' && odemeTuru !== 'Devir';
+        if (pesin) {
+          const nakitHata = nakitKuralHatasi(odemeTuru, odemeDetay, trTarih);
+          if (nakitHata) return res.status(400).json({ error: nakitHata });
+        }
+
+        const oncekiBakiye = firmaBakiyesi(firmaAdi, faturaKayitlari, tahsilatlar);
+        const faturaSonrasi = Math.round((oncekiBakiye + (fTutar - oTutar)) * 100) / 100;
+        // Peşinde fatura satırına ödeme SONRASI bakiye yazılır (ödenmiş faturada "Borçlu" görünmesin).
+        const kayitBakiyesi = pesin ? Math.round((faturaSonrasi - fTutar) * 100) / 100 : faturaSonrasi;
 
         const id = benzersizId();
         const gunlukHarcama = req.body.gunlukHarcama === true || req.body.gunlukHarcama === 'true';
@@ -2368,19 +2513,28 @@ export default async function handler(req, res) {
           kategoriYaz, odemeTuru || '', odemeDetay || '', fTutar,
           ondalikParseServer(req.body.kdvTutari || 0),
           ondalikParseServer(req.body.iskontoTutari || 0),
-          oTutar, bakiyeDurumuEtiketi(yeniBakiye), yeniBakiye, kaynakFaturaID || '',
+          oTutar, bakiyeDurumuEtiketi(kayitBakiyesi), kayitBakiyesi, kaynakFaturaID || '',
           gunlukHarcama ? 'TRUE' : 'FALSE', now.toISOString(),
         ]);
 
-        // Peşin ödeme kredi kartı / banka havalesiyle yapıldıysa o hesabın hareketine de düşer.
-        if (oTutar > 0 && hesapHareketiGerekir(odemeTuru)) {
-          await appendRow(sheets, BANKA_KART_TAB, [
-            benzersizId(), trTarih, odemeTuru, odemeDetay || '', 'GİDEN', oTutar,
-            `${firmaAdi}${faturaNo ? ' — ' + faturaNo : ''}`, id, now.toISOString(),
-          ]);
+        if (!pesin) {
+          return res.status(200).json({ ok: true, id, oncekiBakiye, yeniBakiye: faturaSonrasi });
         }
 
-        return res.status(200).json({ ok: true, id, oncekiBakiye, yeniBakiye });
+        // Tahsilat yazılamazsa faturayı da geri al — yarım kayıt kalmasın.
+        try {
+          const t = await tahsilatYaz(sheets, {
+            trTarih, firmaAdi, faturaNo,
+            aciklama: `Peşin ödeme — ${odemeTuru}${odemeDetay ? ' / ' + odemeDetay : ''}`,
+            odemeTuru, odemeDetay, odenen: fTutar, oncekiBakiye: faturaSonrasi, kaynakEkstreID: '', now,
+          });
+          return res.status(200).json({ ok: true, id, tahsilatId: t.id, oncekiBakiye, yeniBakiye: t.yeniBakiye });
+        } catch (e) {
+          try { await satirSil(FATURA_FIS_TAB, id); } catch (geriAlHata) {
+            console.error('Peşin fatura geri alınamadı:', id, geriAlHata.message);
+          }
+          throw new Error(`Ödeme kaydedilemedi, fatura da geri alındı: ${e.message}`);
+        }
       }
       return res.status(405).json({ error: 'Method not allowed' });
     }
@@ -2441,6 +2595,9 @@ export default async function handler(req, res) {
           rowValues[7] = aciklama || '';
           rowValues[8] = giderKategorisi || '';
           rowValues[11] = fTutar;
+          rowValues[14] = fTutar; // kasadan peşin ödendi — firmaya borç yazılmaz
+          rowValues[15] = 'Hesap Yok';
+          rowValues[16] = 0;
           rowValues[18] = 'TRUE';
           rowValues[20] = anaKasaFlag;
           await satirGuncelle(FATURA_FIS_TAB, rowValues);
@@ -2452,7 +2609,10 @@ export default async function handler(req, res) {
       const id = giderId || benzersizId();
       await appendRow(sheets, FATURA_FIS_TAB, [
         id, trTarih, p.gun, p.ay, p.yil, String(firmaAdi).trim(), '', aciklama || '',
-        giderKategorisi || '', 'Nakit', '', fTutar, 0, 0, 0,
+        // Ödeme tutarı = fatura tutarı: bu gider kasadan PEŞİN nakit ödendi. Eskiden 0
+        // yazılıyordu ve bakiye formülü (fatura - ödeme - tahsilat) her hızlı gideri o
+        // firmaya ödenmemiş borç gibi sayıyordu (örn. İlaçlama 3.600 TL "Borçlu").
+        giderKategorisi || '', 'Nakit', anaKasaFlag === 'TRUE' ? 'Çelik Kasa' : 'Günlük Kasa', fTutar, 0, 0, fTutar,
         'Hesap Yok', 0, '', 'TRUE', now.toISOString(), anaKasaFlag,
       ]);
       return res.status(200).json({ ok: true, id });
@@ -2478,12 +2638,12 @@ export default async function handler(req, res) {
           kaynak: k.anaKasaHarcama ? 'anaKasa' : 'gunlukKasa',
           kayitZamani: k.kayitZamani, silinebilir: true,
         }))
-        // Personel / sabit gider NAKİT ödemeleri de kasadan çıkar; bu ekranlarda
-        // görünür ama buradan silinemez (kaynağı Tahsilat Makbuzları).
+        // Muhasebeden yapılan NAKİT ödemeler de kasadan çıkar (maaş, sabit gider, peşin fatura,
+        // tahsilat makbuzu); bu ekranlarda görünür ama buradan silinemez (kaynağı Tahsilat Makbuzları).
         .concat(tahRowsGH.map(rowToTahsilat)
           .filter((t) => t.kasaKaynak && t.tarih === hedefTarih)
           .map((t) => ({
-            id: t.id, firmaAdi: t.firmaAdi, giderKategorisi: 'Personel / Sabit Gider Ödemesi',
+            id: t.id, firmaAdi: t.firmaAdi, giderKategorisi: 'Muhasebe ödemesi',
             aciklama: t.aciklama, tutar: t.tutar, kaynak: t.kasaKaynak,
             kayitZamani: t.kayitZamani, silinebilir: false,
           })));
@@ -2558,22 +2718,18 @@ export default async function handler(req, res) {
           getRows(sheets, FATURA_FIS_TAB),
           getRows(sheets, TAHSILAT_TAB),
         ]);
-        const oncekiBakiye = firmaBakiyesi(firmaAdi, ffRows.map(rowToFaturaFis), tahRows.map(rowToTahsilat));
-        const yeniBakiye = Math.round((oncekiBakiye - odenen) * 100) / 100;
+        const nakitHata = nakitKuralHatasi(odemeTuru, odemeDetay, trTarih);
+        if (nakitHata) return res.status(400).json({ error: nakitHata });
 
-        const id = benzersizId();
-        await appendRow(sheets, TAHSILAT_TAB, [
-          id, trTarih, p.gun, p.ay, p.yil, String(firmaAdi).trim(), faturaNo || '', aciklama || '',
-          odemeTuru || '', odemeDetay || '', odenen, oncekiBakiye, yeniBakiye,
-          kaynakEkstreID || '', now.toISOString(),
-        ]);
-
-        if (hesapHareketiGerekir(odemeTuru)) {
-          await appendRow(sheets, BANKA_KART_TAB, [
-            benzersizId(), trTarih, odemeTuru, odemeDetay || '', 'GİDEN', odenen,
-            `Tahsilat — ${firmaAdi}`, id, now.toISOString(),
-          ]);
+        // Aynı banka ekstresi satırı ikinci kez tahsilata dönüştürülmesin (mükerrer ödeme).
+        if (kaynakEkstreID && tahRows.map(rowToTahsilat).some((t) => t.kaynakEkstreID === kaynakEkstreID)) {
+          return res.status(409).json({ error: 'Bu banka hareketi zaten işlenmiş' });
         }
+
+        const oncekiBakiye = firmaBakiyesi(firmaAdi, ffRows.map(rowToFaturaFis), tahRows.map(rowToTahsilat));
+        const { id, yeniBakiye } = await tahsilatYaz(sheets, {
+          trTarih, firmaAdi, faturaNo, aciklama, odemeTuru, odemeDetay, odenen, oncekiBakiye, kaynakEkstreID, now,
+        });
 
         return res.status(200).json({ ok: true, id, oncekiBakiye, yeniBakiye });
       }
