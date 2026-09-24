@@ -31,7 +31,7 @@ function parseNum(v) {
 }
 
 export default function GunSonu({ data, onNavigate }) {
-  const { salesHistory, cariler, cariHareketler, cariOdemeler } = data;
+  const { salesHistory, cariler, cariHareketler, cariOdemeler, cariGecmis } = data;
 
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -239,8 +239,15 @@ export default function GunSonu({ data, onNavigate }) {
     (cariOdemeler || [])
       .filter((o) => o.ts >= ts0 && o.tur !== 'HAVALE')
       .forEach((o) => { ozet[o.tur] = (ozet[o.tur] || 0) + o.tutar; });
+    (cariGecmis || [])
+      .filter((g) => g.ts >= ts0)
+      .forEach((g) => {
+        (g.odemelerDetay || [])
+          .filter((o) => o.ts >= ts0 && o.tur !== 'HAVALE')
+          .forEach((o) => { ozet[o.tur] = (ozet[o.tur] || 0) + o.tutar; });
+      });
     return ozet;
-  }, [cariOdemeler]);
+  }, [cariOdemeler, cariGecmis]);
   const bugunCariOdemeToplamı = Object.values(bugunCariOdemeOzeti).reduce((s, v) => s + v, 0);
 
   const [cariOverrides, setCariOverrides] = useState({});

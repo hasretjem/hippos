@@ -165,7 +165,7 @@ function rowToFatura(r) {
   };
 }
 function rowToGecmis(r) {
-  return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), toplamTutar: Number(r.toplam_tutar), aciklama: r.aciklama, sonTahsilatTutar: r.son_tahsilat_tutar != null ? Number(r.son_tahsilat_tutar) : null };
+  return { id: r.id, cariId: r.cari_id, ts: Number(r.ts), toplamTutar: Number(r.toplam_tutar), aciklama: r.aciklama, sonTahsilatTutar: r.son_tahsilat_tutar != null ? Number(r.son_tahsilat_tutar) : null, odemelerDetay: Array.isArray(r.odemeler_detay) ? r.odemeler_detay : [] };
 }
 
 function rowToPaketTeslimat(r) {
@@ -1896,12 +1896,13 @@ export default function useHipposData(scope = 'full') {
   function archiveCari(cariId, sonTahsilatTutar = null) {
     const toplam = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
     const ts = Date.now();
-    setCariGecmis((prev) => [...prev, { id: Date.now() + Math.floor(Math.random() * 1000), cariId, ts, toplamTutar: toplam, aciklama: 'Tamamlandı', sonTahsilatTutar }]);
+    const odemelerDetay = cariOdemeler.filter((o) => o.cariId === cariId).map((o) => ({ ts: o.ts, tutar: o.tutar, tur: o.tur }));
+    setCariGecmis((prev) => [...prev, { id: Date.now() + Math.floor(Math.random() * 1000), cariId, ts, toplamTutar: toplam, aciklama: 'Tamamlandı', sonTahsilatTutar, odemelerDetay }]);
     setCariHareketler((prev) => prev.filter((h) => h.cariId !== cariId));
     setCariOdemeler((prev) => prev.filter((o) => o.cariId !== cariId));
     setCariFaturalar((prev) => prev.filter((f) => f.cariId !== cariId));
 
-    supabase.from('cari_gecmis').insert({ cari_id: cariId, ts, toplam_tutar: toplam, aciklama: 'Tamamlandı', son_tahsilat_tutar: sonTahsilatTutar }).then(({ error }) => {
+    supabase.from('cari_gecmis').insert({ cari_id: cariId, ts, toplam_tutar: toplam, aciklama: 'Tamamlandı', son_tahsilat_tutar: sonTahsilatTutar, odemeler_detay: odemelerDetay }).then(({ error }) => {
       if (error) console.error('cari arşivlenemedi:', error.message);
     });
     supabase.from('cari_hareketler').delete().eq('cari_id', cariId).then(({ error }) => { if (error) console.error(error.message); });
@@ -2074,6 +2075,10 @@ export default function useHipposData(scope = 'full') {
     // Gerçek ödeme kaydı — bakiyeyi düşüren tek yer burası.
     const kalanBakiye = Math.max(0, getCariBakiye(bildirim.cariId) - bildirim.tutar);
     await addCariOdeme(bildirim.cariId, { tutar: bildirim.tutar, tur: odemeTur });
+    setSalesHistory((prev) => [
+      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: cariler.find((c) => c.id === bildirim.cariId)?.ad || '', amount: bildirim.tutar, method: `TAHSİLAT_${odemeTur}`, itemsCount: 0, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' }) },
+      ...prev,
+    ]);
     if (kalanBakiye === 0) {
       archiveCari(bildirim.cariId, bildirim.tutar);
     }
