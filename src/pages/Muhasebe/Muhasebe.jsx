@@ -1287,7 +1287,8 @@ function SatislarAltSekmesi({ showToast }) {
 // kırılımı var — toplam ciro bu dördünün toplamı olarak burada hesaplanıyor.
 function ciroToplam(ciro) {
   if (!ciro) return 0;
-  return (Number(ciro.nakit) || 0) + (Number(ciro.kart) || 0) + (Number(ciro.yemek) || 0) + (Number(ciro.cari) || 0);
+  if (ciro.toplam != null) return Number(ciro.toplam) || 0;
+  return (Number(ciro.nakit) || 0) + (Number(ciro.kart) || 0) + (Number(ciro.yemek) || 0) + (Number(ciro.cari) || 0) + (Number(ciro.cariTahsilat) || 0);
 }
 
 // Sadece görüntüleme — veri girişi mevcut "Gün Sonu Al" ekranından (api/gunsonu.js) devam
