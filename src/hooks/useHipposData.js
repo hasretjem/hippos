@@ -2064,17 +2064,16 @@ export default function useHipposData(scope = 'full') {
   }
   // Onaylama: SADECE burada gerçek bir cari ödemesi oluşur ve bakiye düşer. Paketçinin
   // bildirimi kendi başına ASLA cari verisini etkilemez — onay bu ayrımın tek geçidi.
-  async function onaylaCariTeslimatBildirim(id) {
+  async function onaylaCariTeslimatBildirim(id, odemeTur) {
     const bildirim = cariTeslimatBildirimleri.find((c) => c.id === id);
-    if (!bildirim) return;
-    const onayTs = Date.now();
-    setCariTeslimatBildirimleri((prev) => prev.map((c) => (c.id === id ? { ...c, durum: 'onaylandi', onayTs } : c)));
-    supabase.from('cari_teslimat_bildirimleri').update({ durum: 'onaylandi', onay_ts: onayTs }).eq('id', id).then(({ error }) => {
+    if (!bildirim || !odemeTur) return;
+    setCariTeslimatBildirimleri((prev) => prev.filter((c) => c.id !== id));
+    supabase.from('cari_teslimat_bildirimleri').delete().eq('id', id).then(({ error }) => {
       if (error) console.error(error.message);
     });
     // Gerçek ödeme kaydı — bakiyeyi düşüren tek yer burası.
     const kalanBakiye = Math.max(0, getCariBakiye(bildirim.cariId) - bildirim.tutar);
-    await addCariOdeme(bildirim.cariId, { tutar: bildirim.tutar, tur: bildirim.odemeYontemi });
+    await addCariOdeme(bildirim.cariId, { tutar: bildirim.tutar, tur: odemeTur });
     if (kalanBakiye === 0) {
       archiveCari(bildirim.cariId, bildirim.tutar);
     }

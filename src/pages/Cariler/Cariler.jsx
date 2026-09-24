@@ -719,7 +719,7 @@ export default function Cariler({ data, onNavigate }) {
               {bekleyenBildirim(selectedCari.id) && (
                 <CariBekleyenKart
                   bildirim={bekleyenBildirim(selectedCari.id)}
-                  onOnayla={() => onaylaCariTeslimatBildirim(bekleyenBildirim(selectedCari.id).id)}
+                  onOnayla={(odemeTur) => onaylaCariTeslimatBildirim(bekleyenBildirim(selectedCari.id).id, odemeTur)}
                   onReddet={(sebep) => reddetCariTeslimatBildirim(bekleyenBildirim(selectedCari.id).id, sebep)}
                 />
               )}
@@ -1327,6 +1327,8 @@ function CariBekleyenKart({ bildirim, onOnayla, onReddet }) {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectText, setRejectText] = useState('');
   const [photoOpen, setPhotoOpen] = useState(false);
+  const [odemeYontemModal, setOdemeYontemModal] = useState(false);
+  const [secilenYontem, setSecilenYontem] = useState(null);
 
   return (
     <div className="cr-pending-card">
@@ -1350,7 +1352,7 @@ function CariBekleyenKart({ bildirim, onOnayla, onReddet }) {
       {!rejectOpen ? (
         <div className="cr-pending-actions">
           <button className="cr-pending-reject" onClick={() => setRejectOpen(true)}><X size={14} /> Reddet</button>
-          <button className="cr-pending-approve" onClick={onOnayla}><Check size={14} /> Onayla</button>
+          <button className="cr-pending-approve" onClick={() => { setSecilenYontem(null); setOdemeYontemModal(true); }}><Check size={14} /> Onayla</button>
         </div>
       ) : (
         <div className="cr-pending-reject-form">
@@ -1374,6 +1376,43 @@ function CariBekleyenKart({ bildirim, onOnayla, onReddet }) {
           <div className="cr-photo-modal" onClick={(e) => e.stopPropagation()}>
             <button className="cr-photo-modal-x" onClick={() => setPhotoOpen(false)}><X size={18} /></button>
             <img src={bildirim.fotoUrl} alt="Paketçi fotoğrafı" />
+          </div>
+        </div>
+      )}
+
+      {odemeYontemModal && (
+        <div className="cr-photo-modal-overlay" onClick={() => setOdemeYontemModal(false)}>
+          <div className="cr-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="cr-modal-head">
+              <h3>Ödeme Yöntemi Seç</h3>
+              <button className="cr-modal-x" onClick={() => setOdemeYontemModal(false)}><X size={16} /></button>
+            </div>
+            <div className="cr-odeme-summary">
+              <div><span>Onaylanacak Tutar</span><strong>{TL(bildirim.tutar)}</strong></div>
+            </div>
+            <label className="cr-field-label">Paketçinin bildirdiği yöntem: {bildirim.odemeYontemi} (bilgi amaçlı)</label>
+            <div className="cr-odeme-tur-grid">
+              {[
+                { key: 'NAKİT', Icon: Banknote },
+                { key: 'KREDİ KARTI', Icon: CreditCard },
+                { key: 'YEMEK KARTI', Icon: UtensilsCrossed },
+                { key: 'HAVALE', Icon: Landmark },
+              ].map(({ key, Icon }) => (
+                <button key={key} className={secilenYontem === key ? 'active' : ''} onClick={() => setSecilenYontem(key)}>
+                  <Icon size={15} /> {key}
+                </button>
+              ))}
+            </div>
+            <div className="cr-modal-footer">
+              <button className="cr-secondary" onClick={() => setOdemeYontemModal(false)}>İptal</button>
+              <button
+                className="cr-primary"
+                disabled={!secilenYontem}
+                onClick={() => { onOnayla(secilenYontem); setOdemeYontemModal(false); }}
+              >
+                Onayla
+              </button>
+            </div>
           </div>
         </div>
       )}
