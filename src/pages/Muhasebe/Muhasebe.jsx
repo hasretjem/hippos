@@ -107,6 +107,11 @@ const ORTAK_ISLEM_TURLERI = ['Kasadan Nakit Çekim', 'Cepten Ödeme', 'Bağkur /
 
 export default function Muhasebe({ onNavigate }) {
   const [anaTab, setAnaTab] = useState('giderler'); // giderler | gelirler | toptancilar | ortaklar | receteler
+  const [ziyaretEdilenSekmeler, setZiyaretEdilenSekmeler] = useState(() => new Set(['giderler']));
+  function sekmeyeGec(tab) {
+    setAnaTab(tab);
+    setZiyaretEdilenSekmeler((prev) => (prev.has(tab) ? prev : new Set(prev).add(tab)));
+  }
   const [toast, setToast] = useState('');
   const [xmlModalAcikGlobal, setXmlModalAcikGlobal] = useState(false);
   const [ekstreYukleniyor, setEkstreYukleniyor] = useState(false);
@@ -164,41 +169,41 @@ export default function Muhasebe({ onNavigate }) {
       </div>
 
       <div className="mh-tabs">
-        <button className={anaTab === 'giderler' ? 'active' : ''} onClick={() => setAnaTab('giderler')}>
+        <button className={anaTab === 'giderler' ? 'active' : ''} onClick={() => sekmeyeGec('giderler')}>
           <TrendingDown size={15} /> Giderler/Alışlar
         </button>
-        <button className={anaTab === 'gelirler' ? 'active' : ''} onClick={() => setAnaTab('gelirler')}>
+        <button className={anaTab === 'gelirler' ? 'active' : ''} onClick={() => sekmeyeGec('gelirler')}>
           <TrendingUp size={15} /> Gelirler/Satışlar
         </button>
-        <button className={anaTab === 'toptancilar' ? 'active' : ''} onClick={() => setAnaTab('toptancilar')}>
+        <button className={anaTab === 'toptancilar' ? 'active' : ''} onClick={() => sekmeyeGec('toptancilar')}>
           <Truck size={15} /> Toptancılar ve Cari Takibi
         </button>
-        <button className={anaTab === 'ortaklar' ? 'active' : ''} onClick={() => setAnaTab('ortaklar')}>
+        <button className={anaTab === 'ortaklar' ? 'active' : ''} onClick={() => sekmeyeGec('ortaklar')}>
           <Users size={15} /> Ortaklar Cari Takip
         </button>
-        <button className={anaTab === 'personel' ? 'active' : ''} onClick={() => setAnaTab('personel')}>
+        <button className={anaTab === 'personel' ? 'active' : ''} onClick={() => sekmeyeGec('personel')}>
           <Users size={15} /> Personel
         </button>
-        <button className={anaTab === 'sabitGiderler' ? 'active' : ''} onClick={() => setAnaTab('sabitGiderler')}>
+        <button className={anaTab === 'sabitGiderler' ? 'active' : ''} onClick={() => sekmeyeGec('sabitGiderler')}>
           <FileSpreadsheet size={15} /> Sabit Giderler
         </button>
-        <button className={anaTab === 'yemekKarti' ? 'active' : ''} onClick={() => setAnaTab('yemekKarti')}>
+        <button className={anaTab === 'yemekKarti' ? 'active' : ''} onClick={() => sekmeyeGec('yemekKarti')}>
           <CreditCard size={15} /> Yemek Kartları
         </button>
-        <button className={anaTab === 'receteler' ? 'active' : ''} onClick={() => setAnaTab('receteler')}>
+        <button className={anaTab === 'receteler' ? 'active' : ''} onClick={() => sekmeyeGec('receteler')}>
           <ChefHat size={15} /> Reçeteler
         </button>
       </div>
 
       <div className="mh-body">
-        {anaTab === 'giderler' && <GiderlerSekmesi showToast={showToast} />}
-        {anaTab === 'gelirler' && <GelirlerSekmesi showToast={showToast} />}
-        {anaTab === 'toptancilar' && <ToptancilarCariSekmesi showToast={showToast} />}
-        {anaTab === 'ortaklar' && <OrtaklarCariSekmesi showToast={showToast} />}
-        {anaTab === 'personel' && <PersonelSekmesi showToast={showToast} />}
-        {anaTab === 'sabitGiderler' && <SabitGiderlerSekmesi showToast={showToast} />}
-        {anaTab === 'yemekKarti' && <YemekKartiSekmesi showToast={showToast} />}
-        {anaTab === 'receteler' && <ReceteSekmesi showToast={showToast} />}
+        {ziyaretEdilenSekmeler.has('giderler') && <div style={{ display: anaTab === 'giderler' ? 'block' : 'none' }}><GiderlerSekmesi showToast={showToast} /></div>}
+        {ziyaretEdilenSekmeler.has('gelirler') && <div style={{ display: anaTab === 'gelirler' ? 'block' : 'none' }}><GelirlerSekmesi showToast={showToast} /></div>}
+        {ziyaretEdilenSekmeler.has('toptancilar') && <div style={{ display: anaTab === 'toptancilar' ? 'block' : 'none' }}><ToptancilarCariSekmesi showToast={showToast} /></div>}
+        {ziyaretEdilenSekmeler.has('ortaklar') && <div style={{ display: anaTab === 'ortaklar' ? 'block' : 'none' }}><OrtaklarCariSekmesi showToast={showToast} /></div>}
+        {ziyaretEdilenSekmeler.has('personel') && <div style={{ display: anaTab === 'personel' ? 'block' : 'none' }}><PersonelSekmesi showToast={showToast} /></div>}
+        {ziyaretEdilenSekmeler.has('sabitGiderler') && <div style={{ display: anaTab === 'sabitGiderler' ? 'block' : 'none' }}><SabitGiderlerSekmesi showToast={showToast} /></div>}
+        {ziyaretEdilenSekmeler.has('yemekKarti') && <div style={{ display: anaTab === 'yemekKarti' ? 'block' : 'none' }}><YemekKartiSekmesi showToast={showToast} /></div>}
+        {ziyaretEdilenSekmeler.has('receteler') && <div style={{ display: anaTab === 'receteler' ? 'block' : 'none' }}><ReceteSekmesi showToast={showToast} /></div>}
       </div>
 
       {toast && <div className="mh-toast">{toast}</div>}
@@ -1797,27 +1802,31 @@ function ToptancilarCariSekmesi({ showToast }) {
 }
 
 function ToptanciEkstreModal({ firma, faturaKayitlari, tahsilatlar, onClose }) {
-  // Fatura ve tahsilat hareketlerini birleştir, en yeniden eskiye sırala.
-  // ÖNEMLİ: bir fatura kaydının borcu k.faturaTutari DEĞİL, k.faturaTutari - k.odemeTutari'dir.
+  // Bir fatura kaydının GERÇEK borcu k.faturaTutari DEĞİL, k.faturaTutari - k.odemeTutari'dir.
   // Gün Sonu'ndaki hızlı nakit gider girişi (Ana/Günlük Kasadan Harcamalar) faturaTutari ile
-  // AYNI odemeTutari'yi yazar (kasadan peşin ödendi, firmaya borç kalmaz) — bu satırlar burada
-  // borç gibi görünmemeli. firmaBakiyesi() (KPI kartlarındaki Toplam Borç) bu farkı zaten
-  // düşüyordu; bu modal ise faturaTutari'yi doğrudan borç sayıyordu (24 Eylül'de bulunan sorun).
+  // AYNI odemeTutari'yi TEK satırın içine yazar (ayrı bir Tahsilat Makbuzu kaydı OLUŞTURMAZ,
+  // kasadan peşin ödendi). Kullanıcı isteği (25 Eylül): bu k.odemeTutari kısmı görmezden
+  // gelinmesin, ekstrede fatura tam tutarıyla + ayrı bir "ödeme" satırı olarak görünsün —
+  // sadece toplam bakiye 0'da kalsın (bilgi Supabase'de zaten var, ekstra alan gerekmiyor).
   const hareketler = useMemo(() => {
-    const faturalar = faturaKayitlari
-      .map(k => ({ ...k, kalanBorc: Math.round((k.faturaTutari - k.odemeTutari) * 100) / 100 }))
-      .filter(k => Math.abs(k.kalanBorc) > 0.01) // peşin ödenmiş (kalan borcu 0) satırlar ekstrede görünmez
+    const faturalar = faturaKayitlari.map(k => ({
+      id: k.id, tarih: k.tarih, tur: 'fatura',
+      aciklama: `${k.faturaNo ? k.faturaNo + ' — ' : ''}${k.aciklama || k.giderKategorisi || 'Fatura'}`,
+      tutar: k.faturaTutari,
+    }));
+    const faturaIciOdemeler = faturaKayitlari
+      .filter(k => Math.abs(k.odemeTutari) > 0.01)
       .map(k => ({
-        id: k.id, tarih: k.tarih, tur: 'fatura',
-        aciklama: `${k.faturaNo ? k.faturaNo + ' — ' : ''}${k.aciklama || k.giderKategorisi || 'Fatura'}`,
-        tutar: k.kalanBorc,
+        id: k.id + '-odeme', tarih: k.tarih, tur: 'odeme',
+        aciklama: `${k.faturaNo ? k.faturaNo + ' — ' : ''}${k.aciklama || k.giderKategorisi || 'Ödeme'} (peşin)`,
+        tutar: k.odemeTutari,
       }));
     const odemeler = tahsilatlar.map(t => ({
       id: t.id, tarih: t.tarih, tur: 'odeme',
       aciklama: `${t.faturaNo ? t.faturaNo + ' — ' : ''}${t.aciklama || t.odemeTuru || 'Ödeme'}`,
       tutar: t.tutar,
     }));
-    return [...faturalar, ...odemeler].sort((a, b) => {
+    return [...faturalar, ...faturaIciOdemeler, ...odemeler].sort((a, b) => {
       // DD.MM.YYYY → karşılaştırılabilir
       const ts = s => { const m = String(s||'').match(/(\d{2})\.(\d{2})\.(\d{4})/); return m ? `${m[3]}${m[2]}${m[1]}` : ''; };
       return ts(b.tarih).localeCompare(ts(a.tarih));
