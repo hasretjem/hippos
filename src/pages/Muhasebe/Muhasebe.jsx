@@ -112,6 +112,11 @@ export default function Muhasebe({ onNavigate }) {
     setAnaTab(tab);
     setZiyaretEdilenSekmeler((prev) => (prev.has(tab) ? prev : new Set(prev).add(tab)));
   }
+  // Basit Mod / Düzenleme Modu — Gider Kayıtları alt sekmesinde (Giderler/Alışlar altında)
+  // etkili: Basit Mod'da o sekmede satır ekleme/düzenleme/silme kapalı, Düzenleme Modu'nda
+  // açık. Güvenlik amaçlı: her Muhasebe girişinde varsayılan Basit Mod'dan başlar, kalıcı
+  // hatırlanmaz.
+  const [duzenlemeModu, setDuzenlemeModu] = useState(false);
   const [toast, setToast] = useState('');
   const [xmlModalAcikGlobal, setXmlModalAcikGlobal] = useState(false);
   const [ekstreYukleniyor, setEkstreYukleniyor] = useState(false);
@@ -156,6 +161,15 @@ export default function Muhasebe({ onNavigate }) {
       <div className="mh-header-row">
         <button className="mh-back" onClick={() => onNavigate('settings')}><ArrowLeft size={16} /> Geri</button>
         <div className="mh-global-actions">
+          <button
+            className={`mh-mode-toggle ${duzenlemeModu ? 'is-edit' : ''}`}
+            onClick={() => setDuzenlemeModu((v) => !v)}
+            title="Gider Kayıtları sekmesinde düzenlemeye izin verir"
+          >
+            <span className="mh-mode-toggle-thumb" />
+            <span className="mh-mode-toggle-label mh-mode-toggle-label-basit">Basit Mod</span>
+            <span className="mh-mode-toggle-label mh-mode-toggle-label-duzenleme">Düzenleme Modu</span>
+          </button>
           <button className="mh-secondary-btn" onClick={() => setXmlModalAcikGlobal(true)}>
             <Upload size={14} /> XML Yükle
           </button>

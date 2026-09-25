@@ -798,6 +798,44 @@
 .mh-global-actions {
   display: flex; gap: 8px; align-items: center;
 }
+
+.mh-mode-toggle {
+  position: relative;
+  display: flex; align-items: center;
+  width: 170px; height: 34px;
+  border-radius: 17px;
+  border: 1.5px solid rgba(246, 247, 235, 0.25);
+  background: #393E41;
+  cursor: pointer;
+  padding: 0 4px;
+  margin-right: 8px;
+  overflow: hidden;
+}
+.mh-mode-toggle-thumb {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 81px; height: calc(100% - 6px);
+  border-radius: 14px;
+  background: #E94F37;
+  transition: transform .18s ease;
+}
+.mh-mode-toggle.is-edit .mh-mode-toggle-thumb {
+  transform: translateX(81px);
+}
+.mh-mode-toggle-label {
+  position: relative;
+  flex: 1;
+  text-align: center;
+  font-size: 11px; font-weight: 700;
+  color: rgba(246, 247, 235, 0.55);
+  white-space: nowrap;
+  transition: color .18s ease;
+}
+.mh-mode-toggle:not(.is-edit) .mh-mode-toggle-label-basit,
+.mh-mode-toggle.is-edit .mh-mode-toggle-label-duzenleme {
+  color: #F6F7EB;
+}
+
 .mh-global-actions .mh-secondary-btn {
   display: flex; align-items: center; gap: 6px; font-size: 13px;
   padding: 7px 14px; border-radius: 8px; border: 1.5px solid #E3DFCF;
