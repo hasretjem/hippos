@@ -1811,12 +1811,13 @@ export default function useHipposData(scope = 'full') {
   async function addCariOdeme(cariId, { tutar, tur }) {
     const id = Date.now() + Math.floor(Math.random() * 1000);
     const ts = Date.now();
-    setCariOdemeler((prev) => [...prev, { id, cariId, ts, tutar, tur }]);
+    const odeme = { id, cariId, ts, tutar, tur };
+    setCariOdemeler((prev) => [...prev, odeme]);
     const { error } = await supabase
       .from('cari_odemeler')
       .insert({ id, cari_id: cariId, ts, tutar, tur });
     if (error) console.error('cari ödemesi kaydedilemedi:', error.message);
-    return id;
+    return odeme;
   }
 
   // Firma carilerinde: o ana kadarki faturalanmamış bakiyeyi bir faturaya bağlar.
@@ -1851,16 +1852,17 @@ export default function useHipposData(scope = 'full') {
     setCariFaturalar((prev) => prev.filter((f) => f.id !== faturaId));
     await supabase.from('cari_faturalar').delete().eq('id', faturaId).then(({ error }) => { if (error) console.error(error.message); });
     // Ödeme kaydı: cari_odemeler'e yaz (panelde ve günsonu tahsilatlarında görünsün)
-    const odemeId = Date.now() + Math.floor(Math.random() * 1000);
+  const odemeId = Date.now() + Math.floor(Math.random() * 1000);
     const odemeTs = Date.now();
-    setCariOdemeler((prev) => [...prev, { id: odemeId, cariId: fatura.cariId, ts: odemeTs, tutar: fatura.tutar, tur: odemeTur, kaynak: 'fatura' }]);
+    const eklenenOdeme = { id: odemeId, cariId: fatura.cariId, ts: odemeTs, tutar: fatura.tutar, tur: odemeTur, kaynak: 'fatura' };
+    setCariOdemeler((prev) => [...prev, eklenenOdeme]);
     supabase.from('cari_odemeler').insert({ id: odemeId, cari_id: fatura.cariId, ts: odemeTs, tutar: fatura.tutar, tur: odemeTur, kaynak: 'fatura' })
       .then(({ error }) => { if (error) console.error('futura tam ödeme kaydı:', error.message); });
     // Fatura silindikten sonra bu carinin başka faturası ve hareketi kalmadıysa arşivle
     const kalanFatura = cariFaturalar.filter((f) => f.cariId === fatura.cariId && f.id !== faturaId);
     const kalanHareket = cariHareketler.filter((h) => h.cariId === fatura.cariId);
     if (kalanFatura.length === 0 && kalanHareket.length === 0) {
-      archiveCari(fatura.cariId, fatura.tutar);
+      archiveCari(fatura.cariId, fatura.tutar, eklenenOdeme);
     }
   }
 
@@ -1892,11 +1894,19 @@ export default function useHipposData(scope = 'full') {
     return Math.max(0, toplamHareket - faturalanan);
   }
 
-  // Bakiye sıfırlanınca geçmişi silmez — tek satırlık özet olarak arşivler, cariyi listeden gizler.
-  function archiveCari(cariId, sonTahsilatTutar = null) {
+ // Bakiye sıfırlanınca geçmişi silmez — tek satırlık özet olarak arşivler, cariyi listeden gizler.
+  // ekstraOdeme: archiveCari'den hemen önce addCariOdeme çağrılmışsa, o ödemeyi buradan da geçir —
+  // setCariOdemeler'in state'e işlenmesi React'te async olduğu için cariOdemeler closure'ı burada
+  // henüz güncellenmemiş olabilir (stale closure). Bu parametre olmadan o son ödeme odemelerDetay'a
+  // hiç yazılmıyordu ve günsonu paneli tahsilatı cirodan düşemiyordu.
+  function archiveCari(cariId, sonTahsilatTutar = null, ekstraOdeme = null) {
     const toplam = cariHareketler.filter((h) => h.cariId === cariId).reduce((s, h) => s + h.toplam, 0);
     const ts = Date.now();
-    const odemelerDetay = cariOdemeler.filter((o) => o.cariId === cariId).map((o) => ({ ts: o.ts, tutar: o.tutar, tur: o.tur }));
+    const mevcutOdemeler = cariOdemeler.filter((o) => o.cariId === cariId);
+    const odemelerKaynagi = (ekstraOdeme && !mevcutOdemeler.some((o) => o.id === ekstraOdeme.id))
+      ? [...mevcutOdemeler, ekstraOdeme]
+      : mevcutOdemeler;
+    const odemelerDetay = odemelerKaynagi.map((o) => ({ ts: o.ts, tutar: o.tutar, tur: o.tur }));
     const hareketlerDetay = cariHareketler.filter((h) => h.cariId === cariId).map((h) => ({ ts: h.ts, tutar: h.toplam }));
     setCariGecmis((prev) => [...prev, { id: Date.now() + Math.floor(Math.random() * 1000), cariId, ts, toplamTutar: toplam, aciklama: 'Tamamlandı', sonTahsilatTutar, odemelerDetay, hareketlerDetay }]);
     setCariHareketler((prev) => prev.filter((h) => h.cariId !== cariId));
@@ -2074,14 +2084,14 @@ export default function useHipposData(scope = 'full') {
       if (error) console.error(error.message);
     });
     // Gerçek ödeme kaydı — bakiyeyi düşüren tek yer burası.
-    const kalanBakiye = Math.max(0, getCariBakiye(bildirim.cariId) - bildirim.tutar);
-    await addCariOdeme(bildirim.cariId, { tutar: bildirim.tutar, tur: odemeTur });
+      const kalanBakiye = Math.max(0, getCariBakiye(bildirim.cariId) - bildirim.tutar);
+    const eklenenOdeme = await addCariOdeme(bildirim.cariId, { tutar: bildirim.tutar, tur: odemeTur });
     setSalesHistory((prev) => [
       { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: cariler.find((c) => c.id === bildirim.cariId)?.ad || '', amount: bildirim.tutar, method: `TAHSİLAT_${odemeTur}`, itemsCount: 0, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' }) },
       ...prev,
     ]);
     if (kalanBakiye === 0) {
-      archiveCari(bildirim.cariId, bildirim.tutar);
+      archiveCari(bildirim.cariId, bildirim.tutar, eklenenOdeme);
     }
   }
   function reddetCariTeslimatBildirim(id, onayNotu) {

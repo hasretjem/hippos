@@ -286,9 +286,8 @@ export default function Cariler({ data, onNavigate }) {
   async function submitOdeme() {
     const tutar = parseFloat(String(odemeTutar).replace(',', '.')) || 0;
     if (tutar <= 0 || !selectedCari) return;
-    const kalan = Math.max(0, getCariBakiye(selectedCari.id) - tutar);
-    await addCariOdeme(selectedCari.id, { tutar, tur: odemeTur });
-    data.setSalesHistory((prev) => [
+     const kalan = Math.max(0, getCariBakiye(selectedCari.id) - tutar);
+    const eklenenOdeme = await addCariOdeme(selectedCari.id, { tutar, tur: odemeTur });    data.setSalesHistory((prev) => [
       { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedCari.ad, amount: tutar, method: `TAHSİLAT_${odemeTur}`, itemsCount: 0, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
@@ -306,11 +305,10 @@ export default function Cariler({ data, onNavigate }) {
     );
     setBugunTahsilatYapildi((prev) => ({ ...prev, [selectedCari.id]: true }));
     setOdemeShareOpen(true);
-    if (kalan === 0) {
-      archiveCari(selectedCari.id, tutar);
+     if (kalan === 0) {
+      archiveCari(selectedCari.id, tutar, eklenenOdeme);
     }
   }
-
   // wa.me, numarayı ülke koduyla (90...) ve başında 0 OLMADAN ister — kayıtlı numaralar
   // genelde yerel formatta (0532...) tutulduğu için bu dönüşüm olmadan link geçersiz oluyordu.
   function normalizeTrPhone(phone) {
