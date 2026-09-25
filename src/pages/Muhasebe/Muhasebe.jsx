@@ -196,7 +196,7 @@ export default function Muhasebe({ onNavigate }) {
       </div>
 
       <div className="mh-body">
-        {ziyaretEdilenSekmeler.has('giderler') && <div style={{ display: anaTab === 'giderler' ? 'block' : 'none' }}><GiderlerSekmesi showToast={showToast} /></div>}
+        {ziyaretEdilenSekmeler.has('giderler') && <div style={{ display: anaTab === 'giderler' ? 'block' : 'none' }}><GiderlerSekmesi showToast={showToast} duzenlemeModu={duzenlemeModu} /></div>}
         {ziyaretEdilenSekmeler.has('gelirler') && <div style={{ display: anaTab === 'gelirler' ? 'block' : 'none' }}><GelirlerSekmesi showToast={showToast} /></div>}
         {ziyaretEdilenSekmeler.has('toptancilar') && <div style={{ display: anaTab === 'toptancilar' ? 'block' : 'none' }}><ToptancilarCariSekmesi showToast={showToast} /></div>}
         {ziyaretEdilenSekmeler.has('ortaklar') && <div style={{ display: anaTab === 'ortaklar' ? 'block' : 'none' }}><OrtaklarCariSekmesi showToast={showToast} /></div>}
@@ -229,7 +229,7 @@ export default function Muhasebe({ onNavigate }) {
 // ================== 1) GİDERLER / ALIŞLAR ==================
 // Üç alt sekme: resmi fatura/fiş kayıtları, ham banka-kart ekstresi ve ikisi
 // arasında henüz eşleşmemiş harcamaların bekleme havuzu.
-function GiderlerSekmesi({ showToast }) {
+function GiderlerSekmesi({ showToast, duzenlemeModu }) {
   const [altTab, setAltTab] = useState('faturaGiris');
   const [bekleyenSayisi, setBekleyenSayisi] = useState(null);
 
@@ -294,11 +294,15 @@ function GiderlerSekmesi({ showToast }) {
         <button className={altTab === 'bankaKart' ? 'active' : ''} onClick={() => setAltTab('bankaKart')}>
           🏦 Banka / Kart Takip
         </button>
+        <button className={altTab === 'giderKayitlari' ? 'active' : ''} onClick={() => setAltTab('giderKayitlari')}>
+          📒 Gider Kayıtları
+        </button>
       </div>
 
       {altTab === 'faturaGiris' && <FaturaFisGirisiSekmesi key={'ff-' + devirTarihi} showToast={showToast} />}
       {altTab === 'tahsilat' && <TahsilatMakbuzuSekmesi key={'th-' + devirTarihi} showToast={showToast} />}
       {altTab === 'bankaKart' && <BankaKartTakipSekmesi showToast={showToast} devirTarihi={devirTarihi} />}
+      {altTab === 'giderKayitlari' && <GiderKayitlariSekmesi showToast={showToast} duzenlemeModu={duzenlemeModu} />}
     </div>
   );
 }
@@ -3015,6 +3019,309 @@ function TahsilatMakbuzuSekmesi({ showToast }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ============================================================
+// 1.5 Gider Kayıtları alt sekmesi — Fatura/Fiş + Tahsilat + Tahakkuk'u TEK tarih sıralı
+// listede gösterir (Excel "Data" sekmesinin karşılığı). Basit Mod'da salt görünüm;
+// Düzenleme Modu'nda hücre bazlı düzenleme + silme + yeni satır ekleme — hepsi gerçek
+// kaynağı (api/muhasebe.js: giderKaydiGuncelle / giderKaydiSil) günceller, genel
+// muhasebeyi (cari bakiyeler dahil) etkiler. Salt görünüm/rapor DEĞİL. (25 Eylül tasarımı)
+// ============================================================
+const GK_KAYNAK_ETIKET = { FaturaFis: 'Fatura/Fiş', Tahsilat: 'Tahsilat', Tahakkuk: 'Tahakkuk' };
+const GK_KAYNAK_RENK = { FaturaFis: '#8B5E3C', Tahsilat: '#2E7D32', Tahakkuk: '#5B4B8A' };
+
+function GiderKayitlariSekmesi({ showToast, duzenlemeModu }) {
+  const simdi = bugunTR();
+  const buAyBas = simdi.slice(0, 2) === '01' ? simdi : `01.${simdi.slice(3)}`;
+  const [basTarih, setBasTarih] = useState(buAyBas);
+  const [bitTarih, setBitTarih] = useState(simdi);
+  const [kayitlar, setKayitlar] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [kaynakFiltre, setKaynakFiltre] = useState('tumu');
+  const [firmaFiltre, setFirmaFiltre] = useState('');
+  const [odemeFiltre, setOdemeFiltre] = useState('tumu');
+  const [giderTuruFiltre, setGiderTuruFiltre] = useState('tumu');
+
+  // Geri al / ileri al — sadece bu oturumda (Supabase'e ayrıca yazılmaz), son 3 işlem.
+  // Her giriş bir "önceki tam kayıt" snapshot'ı tutar; undo o snapshot'ı sunucuya geri yazar.
+  const [gecmis, setGecmis] = useState([]); // [{ kaynak, id, oncekiKayit, sonrakiKayit }]
+  const [gecmisIndex, setGecmisIndex] = useState(-1); // son uygulanan işlemin indexi
+
+  async function veriYukle() {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams();
+      if (basTarih) qs.set('bas', basTarih);
+      if (bitTarih) qs.set('bit', bitTarih);
+      const r = await fetch(`/api/muhasebe?resource=giderKayitlari&${qs}`);
+      const j = await r.json();
+      setKayitlar(j.kayitlar || []);
+    } catch (e) { showToast('Yüklenemedi: ' + e.message); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { veriYukle(); }, [basTarih, bitTarih]);
+
+  const filtreli = useMemo(() => kayitlar.filter((k) => {
+    if (kaynakFiltre !== 'tumu' && k.kaynak !== kaynakFiltre) return false;
+    if (firmaFiltre.trim() && !k.firmaAdi.toLowerCase().includes(firmaFiltre.trim().toLowerCase())) return false;
+    if (odemeFiltre !== 'tumu' && k.odemeTuru !== odemeFiltre) return false;
+    if (giderTuruFiltre !== 'tumu' && k.giderKategorisi !== giderTuruFiltre) return false;
+    return true;
+  }), [kayitlar, kaynakFiltre, firmaFiltre, odemeFiltre, giderTuruFiltre]);
+
+  const odemeTurleri = useMemo(() => [...new Set(kayitlar.map((k) => k.odemeTuru).filter(Boolean))], [kayitlar]);
+  const giderTurleri = useMemo(() => [...new Set(kayitlar.map((k) => k.giderKategorisi).filter(Boolean))], [kayitlar]);
+
+  // ---- Ctrl+Z / Ctrl+Shift+Z ----
+  async function kaydiSunucuyaYaz(kaynak, id, alanlar) {
+    const r = await fetch('/api/muhasebe?resource=giderKaydiGuncelle', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kaynak, id, alanlar }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'güncellenemedi');
+  }
+
+  async function hucreDegistir(kayit, alan, yeniDeger) {
+    if (!duzenlemeModu) return;
+    const eskiDeger = kayit[alan];
+    if (eskiDeger === yeniDeger) return;
+    // İyimser güncelleme — ekranda anında görünsün.
+    setKayitlar((prev) => prev.map((k) => (k.id === kayit.id && k.kaynak === kayit.kaynak ? { ...k, [alan]: yeniDeger } : k)));
+    try {
+      await kaydiSunucuyaYaz(kayit.kaynak, kayit.id, { [alan]: yeniDeger });
+      // Geri al geçmişine ekle (son 3 işlem) — ileri gidilen işlemler varsa onları at.
+      setGecmis((prev) => {
+        const kesilmis = prev.slice(0, gecmisIndex + 1);
+        const yeni = [...kesilmis, { kaynak: kayit.kaynak, id: kayit.id, alan, eskiDeger, yeniDeger }].slice(-3);
+        return yeni;
+      });
+      setGecmisIndex((i) => Math.min(i + 1, 2));
+      // Bakiye alanları (yeniden hesaplama) sunucuda değiştiği için listeyi tazele.
+      veriYukle();
+    } catch (e) {
+      showToast('Kaydedilemedi: ' + e.message);
+      setKayitlar((prev) => prev.map((k) => (k.id === kayit.id && k.kaynak === kayit.kaynak ? { ...k, [alan]: eskiDeger } : k)));
+    }
+  }
+
+  async function geriAl() {
+    if (gecmisIndex < 0) return;
+    const h = gecmis[gecmisIndex];
+    try {
+      await kaydiSunucuyaYaz(h.kaynak, h.id, { [h.alan]: h.eskiDeger });
+      setGecmisIndex((i) => i - 1);
+      veriYukle();
+      showToast('Geri alındı');
+    } catch (e) { showToast('Geri alınamadı: ' + e.message); }
+  }
+  async function ileriAl() {
+    if (gecmisIndex >= gecmis.length - 1) return;
+    const h = gecmis[gecmisIndex + 1];
+    try {
+      await kaydiSunucuyaYaz(h.kaynak, h.id, { [h.alan]: h.yeniDeger });
+      setGecmisIndex((i) => i + 1);
+      veriYukle();
+      showToast('İleri alındı');
+    } catch (e) { showToast('İleri alınamadı: ' + e.message); }
+  }
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (!duzenlemeModu) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) ileriAl(); else geriAl();
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duzenlemeModu, gecmis, gecmisIndex]);
+
+  async function satirSil(kayit) {
+    if (!duzenlemeModu) return;
+    if (!window.confirm(`${kayit.firmaAdi} — ${TL(kayit.tutar)} tutarındaki ${GK_KAYNAK_ETIKET[kayit.kaynak]} kaydını silmek istediğinize emin misiniz? Bu genel muhasebeyi etkiler.`)) return;
+    try {
+      const r = await fetch('/api/muhasebe?resource=giderKaydiSil', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kaynak: kayit.kaynak, id: kayit.id }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'silinemedi');
+      showToast('Kayıt silindi');
+      veriYukle();
+    } catch (e) { showToast('Silinemedi: ' + e.message); }
+  }
+
+  // ---- Yeni kayıt ekleme (mevcut formların satır-içi kısayolu) ----
+  const [yeniSatirAcik, setYeniSatirAcik] = useState(false);
+  const [yeniKaynak, setYeniKaynak] = useState('FaturaFis');
+  const [yeniForm, setYeniForm] = useState({});
+  function yeniFormAlan(alan, deger) { setYeniForm((f) => ({ ...f, [alan]: deger })); }
+
+  async function yeniSatirKaydet() {
+    try {
+      if (yeniKaynak === 'FaturaFis') {
+        if (!yeniForm.firmaAdi || !yeniForm.faturaTutari) return showToast('Firma ve tutar gerekli');
+        const r = await fetch('/api/muhasebe?resource=faturaFis', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tarih: yeniForm.tarih || simdi, firmaAdi: yeniForm.firmaAdi, faturaNo: yeniForm.faturaNo || '',
+            aciklama: yeniForm.aciklama || '', giderKategorisi: yeniForm.giderKategorisi || '',
+            odemeTuru: yeniForm.odemeTuru || 'Nakit', odemeDetay: yeniForm.odemeDetay || '',
+            faturaTutari: yeniForm.faturaTutari, odemeTutari: yeniForm.odemeTutari || yeniForm.faturaTutari,
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || 'kaydedilemedi');
+      } else if (yeniKaynak === 'Tahsilat') {
+        if (!yeniForm.firmaAdi || !yeniForm.tutar) return showToast('Firma ve tutar gerekli');
+        const r = await fetch('/api/muhasebe?resource=tahsilat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tarih: yeniForm.tarih || simdi, firmaAdi: yeniForm.firmaAdi, faturaNo: yeniForm.faturaNo || '',
+            aciklama: yeniForm.aciklama || '', odemeTuru: yeniForm.odemeTuru || 'Nakit',
+            odemeDetay: yeniForm.odemeDetay || '', tutar: yeniForm.tutar,
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || 'kaydedilemedi');
+      }
+      showToast('Kayıt eklendi');
+      setYeniSatirAcik(false);
+      setYeniForm({});
+      veriYukle();
+    } catch (e) { showToast('Kaydedilemedi: ' + e.message); }
+  }
+
+  return (
+    <div className="mh-yeni">
+      <div className="gk-filtre-cubugu">
+        <label>Başlangıç <input className="ff-input" style={{ width: 110 }} value={basTarih} onChange={(e) => setBasTarih(e.target.value)} placeholder="GG.AA.YYYY" /></label>
+        <label>Bitiş <input className="ff-input" style={{ width: 110 }} value={bitTarih} onChange={(e) => setBitTarih(e.target.value)} placeholder="GG.AA.YYYY" /></label>
+        <select className="ff-input" value={kaynakFiltre} onChange={(e) => setKaynakFiltre(e.target.value)}>
+          <option value="tumu">Tüm Kaynaklar</option>
+          <option value="FaturaFis">Fatura/Fiş</option>
+          <option value="Tahsilat">Tahsilat</option>
+          <option value="Tahakkuk">Tahakkuk</option>
+        </select>
+        <input className="ff-input" style={{ width: 160 }} placeholder="Firma ara…" value={firmaFiltre} onChange={(e) => setFirmaFiltre(e.target.value)} />
+        <select className="ff-input" value={odemeFiltre} onChange={(e) => setOdemeFiltre(e.target.value)}>
+          <option value="tumu">Tüm Ödeme Yöntemleri</option>
+          {odemeTurleri.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+        <select className="ff-input" value={giderTuruFiltre} onChange={(e) => setGiderTuruFiltre(e.target.value)}>
+          <option value="tumu">Tüm Gider Türleri</option>
+          {giderTurleri.map((g) => <option key={g} value={g}>{g}</option>)}
+        </select>
+        {duzenlemeModu && (
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            <button className="mh-secondary-btn small" disabled={gecmisIndex < 0} onClick={geriAl} title="Ctrl+Z">↶ Geri Al</button>
+            <button className="mh-secondary-btn small" disabled={gecmisIndex >= gecmis.length - 1} onClick={ileriAl} title="Ctrl+Shift+Z">↷ İleri Al</button>
+            <button className="mh-primary-btn small" onClick={() => setYeniSatirAcik((v) => !v)}>+ Yeni Kayıt</button>
+          </div>
+        )}
+      </div>
+
+      {!duzenlemeModu && (
+        <p className="mh-hint">Basit Mod açık — düzenleme/silme/yeni kayıt için üstteki "Basit Mod" anahtarını Düzenleme Modu'na alın.</p>
+      )}
+
+      {yeniSatirAcik && duzenlemeModu && (
+        <div className="gk-yeni-satir">
+          <select className="ff-input" value={yeniKaynak} onChange={(e) => { setYeniKaynak(e.target.value); setYeniForm({}); }}>
+            <option value="FaturaFis">Fatura/Fiş (Gider)</option>
+            <option value="Tahsilat">Tahsilat/Ödeme</option>
+          </select>
+          <input className="ff-input" placeholder="Tarih (GG.AA.YYYY)" value={yeniForm.tarih || ''} onChange={(e) => yeniFormAlan('tarih', e.target.value)} />
+          <input className="ff-input" placeholder="Firma/Kişi *" value={yeniForm.firmaAdi || ''} onChange={(e) => yeniFormAlan('firmaAdi', e.target.value)} />
+          {yeniKaynak === 'FaturaFis' && (
+            <>
+              <input className="ff-input" placeholder="Fatura No" value={yeniForm.faturaNo || ''} onChange={(e) => yeniFormAlan('faturaNo', e.target.value)} />
+              <input className="ff-input" placeholder="Gider Türü" value={yeniForm.giderKategorisi || ''} onChange={(e) => yeniFormAlan('giderKategorisi', e.target.value)} />
+            </>
+          )}
+          <input className="ff-input" placeholder="Açıklama" value={yeniForm.aciklama || ''} onChange={(e) => yeniFormAlan('aciklama', e.target.value)} />
+          <select className="ff-input" value={yeniForm.odemeTuru || ''} onChange={(e) => yeniFormAlan('odemeTuru', e.target.value)}>
+            <option value="">Ödeme Yöntemi</option>
+            <option value="Nakit">Nakit</option>
+            <option value="Kredi Kartı">Kredi Kartı</option>
+            <option value="Banka Havalesi">Banka Havalesi</option>
+            {yeniKaynak === 'FaturaFis' && <option value="Cari">Cari</option>}
+          </select>
+          <input className="ff-input" style={{ width: 110 }} placeholder="Tutar *" value={yeniKaynak === 'FaturaFis' ? (yeniForm.faturaTutari || '') : (yeniForm.tutar || '')}
+            onChange={(e) => yeniFormAlan(yeniKaynak === 'FaturaFis' ? 'faturaTutari' : 'tutar', e.target.value)} />
+          <button className="mh-primary-btn small" onClick={yeniSatirKaydet}>Kaydet</button>
+          <button className="mh-secondary-btn small" onClick={() => { setYeniSatirAcik(false); setYeniForm({}); }}>İptal</button>
+        </div>
+      )}
+
+      {loading ? <p className="mh-empty">Yükleniyor...</p> : filtreli.length === 0 ? (
+        <p className="mh-empty">Bu filtrelerle kayıt bulunamadı.</p>
+      ) : (
+        <div className="mh-table-card">
+          <table className="mh-excel-table gk-table">
+            <thead>
+              <tr>
+                <th>Tarih</th><th>Kaynak</th><th>Firma/Kişi</th><th>Fatura No</th><th>Açıklama</th>
+                <th>Gider Türü</th><th>Ödeme Yöntemi</th><th>Tutar</th><th>Bakiye Durumu</th><th>Bakiye Tutarı</th>
+                {duzenlemeModu && <th></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {filtreli.map((k) => (
+                <tr key={`${k.kaynak}-${k.id}`}>
+                  <GkHucre value={k.tarih} editable={duzenlemeModu} onCommit={(v) => hucreDegistir(k, 'tarih', v)} />
+                  <td><span className="gk-kaynak-rozet" style={{ background: GK_KAYNAK_RENK[k.kaynak] }}>{GK_KAYNAK_ETIKET[k.kaynak]}</span></td>
+                  <GkHucre value={k.firmaAdi} editable={duzenlemeModu} onCommit={(v) => hucreDegistir(k, 'firmaAdi', v)} />
+                  <GkHucre value={k.faturaNo} editable={duzenlemeModu} onCommit={(v) => hucreDegistir(k, 'faturaNo', v)} />
+                  <GkHucre value={k.aciklama} editable={duzenlemeModu} onCommit={(v) => hucreDegistir(k, 'aciklama', v)} />
+                  <GkHucre value={k.giderKategorisi} editable={duzenlemeModu} onCommit={(v) => hucreDegistir(k, 'giderKategorisi', v)} />
+                  <GkHucre value={k.odemeTuru} editable={duzenlemeModu} onCommit={(v) => hucreDegistir(k, 'odemeTuru', v)} />
+                  <GkHucre value={k.tutar} editable={duzenlemeModu} numeric onCommit={(v) => hucreDegistir(k, k.kaynak === 'Tahsilat' ? 'tutar' : 'faturaTutari', v)} />
+                  <td>{k.bakiyeDurumu}</td>
+                  <td className="mh-tutar-cell">{k.bakiyeTutari ? TL(k.bakiyeTutari) : '—'}</td>
+                  {duzenlemeModu && <td><button className="gk-sil-btn" onClick={() => satirSil(k)} title="Sil"><Trash2 size={14} /></button></td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Tek hücre — Düzenleme Modu'nda tıklanınca input'a döner, blur/Enter'da onCommit çağrılır.
+function GkHucre({ value, editable, numeric, onCommit }) {
+  const [duzenleniyor, setDuzenleniyor] = useState(false);
+  const [taslak, setTaslak] = useState(value ?? '');
+  useEffect(() => { setTaslak(value ?? ''); }, [value]);
+
+  if (!editable) return <td>{value || '—'}</td>;
+  if (!duzenleniyor) {
+    return (
+      <td className="gk-editable" onClick={() => setDuzenleniyor(true)}>
+        {numeric && value ? TL(Number(value) || 0) : (value || '—')}
+      </td>
+    );
+  }
+  return (
+    <td>
+      <input
+        className="ff-input gk-inline-input"
+        autoFocus
+        value={taslak}
+        onChange={(e) => setTaslak(e.target.value)}
+        onBlur={() => { setDuzenleniyor(false); onCommit(numeric ? ondalikParse(taslak) : taslak); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { setDuzenleniyor(false); onCommit(numeric ? ondalikParse(taslak) : taslak); }
+          if (e.key === 'Escape') { setTaslak(value ?? ''); setDuzenleniyor(false); }
+        }}
+      />
+    </td>
   );
 }
 

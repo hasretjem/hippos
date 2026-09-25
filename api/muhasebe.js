@@ -109,6 +109,70 @@ async function satirSil(tabConfig, id) {
   if (error) throw new Error(`${t.tablo} silinemedi: ${error.message}`);
 }
 
+// Gider Kayıtları sayfasından bir Fatura/Fiş veya Tahsilat kaydı düzenlenip/silindiğinde,
+// o firmanın/kişinin SONRAKİ tüm kayıtlarının üzerinde donmuş "o anki bakiye" (BakiyeTutari /
+// YeniBakiye) değerleri artık yanlış olur — bu fonksiyon firmanın TÜM fatura+tahsilat
+// kayıtlarını kayitZamani sırasına göre yeniden gezip her birinin bakiyesini baştan yazar.
+// Kullanıcı isteği (25 Eylül): doğruluk performanstan önce gelsin.
+async function firmaBakiyeleriniYenidenHesapla(sheets, firmaAdi) {
+  const hedef = metinNormalize(firmaAdi);
+  const [ffRows, tahRows] = await Promise.all([
+    getRows(sheets, FATURA_FIS_TAB),
+    getRows(sheets, TAHSILAT_TAB),
+  ]);
+  const faturalar = ffRows.map(rowToFaturaFis).filter((k) => metinNormalize(k.firmaAdi) === hedef);
+  const tahsilatlar = tahRows.map(rowToTahsilat).filter((t) => metinNormalize(t.firmaAdi) === hedef);
+  // Aynı gün birden fazla hareket olabildiği için kayitZamani (ISO, hassas) ile sırala.
+  const hareketler = [
+    ...faturalar.map((k) => ({ tur: 'fatura', kayit: k, ts: k.kayitZamani || '' })),
+    ...tahsilatlar.map((t) => ({ tur: 'tahsilat', kayit: t, ts: t.kayitZamani || '' })),
+  ].sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+
+  let bakiye = 0;
+  const guncellemeler = [];
+  for (const h of hareketler) {
+    if (h.tur === 'fatura') {
+      const k = h.kayit;
+      const pesin = k.odemeTuru && k.odemeTuru !== 'Cari' && k.odemeTuru !== 'Devir';
+      const bakiyeFaturaOncesi = bakiye;
+      bakiye = Math.round((bakiye + (k.faturaTutari - k.odemeTutari)) * 100) / 100;
+      // Peşin ödenen faturanın net etkisi bakiyeye 0'dır (faturaTutari === odemeTutari) —
+      // satırın kendi BakiyeTutari'ı bu yüzden faturadan ÖNCEKİ bakiyeyle aynı kalmalı,
+      // "bakiye - faturaTutari" DEĞİL (orijinal appendRow mantığıyla aynı, satır 2497-2499'un
+      // matematiksel eşdeğeri: oncekiBakiye + fTutar - oTutar - fTutar = oncekiBakiye - oTutar,
+      // oTutar===fTutar olduğu için = oncekiBakiye).
+      const kayitBakiyesi = pesin ? bakiyeFaturaOncesi : bakiye;
+      guncellemeler.push({
+        tab: FATURA_FIS_TAB, id: k.id,
+        rowValues: [
+          k.id, k.tarih, k.gun, k.ay, k.yil, k.firmaAdi, k.faturaNo, k.aciklama, k.giderKategorisi,
+          k.odemeTuru, k.odemeDetay, k.faturaTutari, k.kdvTutari, k.iskontoTutari, k.odemeTutari,
+          bakiyeDurumuEtiketi(kayitBakiyesi), kayitBakiyesi, k.kaynakFaturaID,
+          k.gunlukHarcama ? 'TRUE' : 'FALSE', k.kayitZamani,
+          k.anaKasaHarcama ? 'TRUE' : 'FALSE',
+        ],
+      });
+    } else {
+      const t = h.kayit;
+      const oncekiBakiye = bakiye;
+      bakiye = Math.round((bakiye - t.tutar) * 100) / 100;
+      guncellemeler.push({
+        tab: TAHSILAT_TAB, id: t.id,
+        rowValues: [
+          t.id, t.tarih, t.gun, t.ay, t.yil, t.firmaAdi, t.faturaNo, t.aciklama,
+          t.odemeTuru, t.odemeDetay, t.tutar, oncekiBakiye, bakiye, t.kaynakEkstreID, t.kayitZamani,
+          t.kasaKaynak, t.limitKaynak,
+        ],
+      });
+    }
+  }
+  // Sırayla yaz (paralel upsert aynı tabloya yarış durumu yaratabilir).
+  for (const g of guncellemeler) {
+    await satirGuncelle(g.tab, g.rowValues);
+  }
+  return bakiye;
+}
+
 async function tabloBos(t) {
   const { count, error } = await db.from(t.tablo).select('id', { count: 'exact', head: true });
   if (error) throw new Error(`${t.tablo} sayılamadı: ${error.message}`);
@@ -2678,6 +2742,155 @@ export default async function handler(req, res) {
       if (idx < 0) return res.status(404).json({ error: 'Kayıt bulunamadı' });
       await satirSil(FATURA_FIS_TAB, giderId);
       return res.status(200).json({ ok: true });
+    }
+
+    // ---- Gider Kayıtları sayfası (Giderler/Alışlar > Gider Kayıtları alt sekmesi) ----
+    // Fatura/Fiş + Tahsilat Makbuzları + Tahakkuklar'ı TEK tarih sıralı listede döner.
+    // Salt görünüm/rapor değil — bu ekrandan güncelleme/silme gerçek kaynağı değiştirir
+    // (bkz. giderKaydiGuncelle / giderKaydiSil), burada sadece okuma+birleştirme var.
+    if (resource === 'giderKayitlari') {
+      if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+      const bas = req.query.bas; // GG.AA.YYYY
+      const bit = req.query.bit; // GG.AA.YYYY
+      const [ffRows, tahRows, tkRows] = await Promise.all([
+        getRows(sheets, FATURA_FIS_TAB),
+        getRows(sheets, TAHSILAT_TAB),
+        getRows(sheets, TAHAKKUK_TAB),
+      ]);
+      const aralikta = (trTarih) => {
+        if (!bas && !bit) return true;
+        const d = trTarihiCozServer(trTarih);
+        if (!d) return false;
+        if (bas) { const b = trTarihiCozServer(bas); if (b && d < b) return false; }
+        if (bit) { const e = trTarihiCozServer(bit); if (e && d > e) return false; }
+        return true;
+      };
+      const faturalar = ffRows.map(rowToFaturaFis).filter((k) => aralikta(k.tarih)).map((k) => ({
+        kaynak: 'FaturaFis', id: k.id, tarih: k.tarih, kayitZamani: k.kayitZamani,
+        firmaAdi: k.firmaAdi, faturaNo: k.faturaNo, aciklama: k.aciklama,
+        giderKategorisi: k.giderKategorisi, odemeTuru: k.odemeTuru, odemeDetay: k.odemeDetay,
+        tutar: k.faturaTutari, odemeTutari: k.odemeTutari,
+        bakiyeDurumu: k.bakiyeDurumu, bakiyeTutari: k.bakiyeTutari,
+      }));
+      const tahsilatlar = tahRows.map(rowToTahsilat).filter((t) => aralikta(t.tarih)).map((t) => ({
+        kaynak: 'Tahsilat', id: t.id, tarih: t.tarih, kayitZamani: t.kayitZamani,
+        firmaAdi: t.firmaAdi, faturaNo: t.faturaNo, aciklama: t.aciklama,
+        giderKategorisi: '', odemeTuru: t.odemeTuru, odemeDetay: t.odemeDetay,
+        tutar: t.tutar, odemeTutari: t.tutar,
+        bakiyeDurumu: bakiyeDurumuEtiketi(t.yeniBakiye), bakiyeTutari: t.yeniBakiye,
+      }));
+      const tahakkuklar = tkRows.map(rowToTahakkuk).filter((k) => aralikta(k.tarih)).map((k) => ({
+        kaynak: 'Tahakkuk', id: k.id, tarih: k.tarih, kayitZamani: k.kayitZamani,
+        firmaAdi: k.ad, faturaNo: '', aciklama: `${k.tip === 'Personel' ? 'Personel' : 'Sabit gider'} — ${k.donem}`,
+        giderKategorisi: k.tip === 'Personel' ? PERSONEL_KATEGORI : '', odemeTuru: '', odemeDetay: '',
+        tutar: k.tutar, odemeTutari: 0,
+        bakiyeDurumu: '', bakiyeTutari: 0,
+        tip: k.tip, kayitId: k.kayitId, donem: k.donem,
+      }));
+      const kayitlar = [...faturalar, ...tahsilatlar, ...tahakkuklar]
+        .sort((a, b) => String(b.kayitZamani).localeCompare(String(a.kayitZamani)));
+      return res.status(200).json({ kayitlar });
+    }
+
+    // Gider Kayıtları sayfasından tek satır güncelleme. Kaynağa göre ilgili tabloyu
+    // günceller, sonra o firmanın/kişinin (Fatura/Fiş, Tahsilat) sonraki tüm kayıtlarının
+    // bakiyesini yeniden hesaplar (25 Eylül kararı — doğruluk önceliği).
+    if (resource === 'giderKaydiGuncelle') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { kaynak, id, alanlar } = req.body || {};
+      if (!kaynak || !id || !alanlar) return res.status(400).json({ error: 'kaynak, id, alanlar gerekli' });
+
+      if (kaynak === 'FaturaFis') {
+        const rows = await getRows(sheets, FATURA_FIS_TAB);
+        const mevcut = rows.map(rowToFaturaFis).find((k) => k.id === id);
+        if (!mevcut) return res.status(404).json({ error: 'Kayıt bulunamadı' });
+        const yeni = { ...mevcut, ...alanlar };
+        if (alanlar.tarih) Object.assign(yeni, trTarihiParcala(alanlar.tarih), { tarih: alanlar.tarih });
+        await satirGuncelle(FATURA_FIS_TAB, [
+          yeni.id, yeni.tarih, yeni.gun, yeni.ay, yeni.yil, yeni.firmaAdi, yeni.faturaNo, yeni.aciklama,
+          yeni.giderKategorisi, yeni.odemeTuru, yeni.odemeDetay,
+          ondalikParseServer(yeni.faturaTutari), ondalikParseServer(yeni.kdvTutari || 0),
+          ondalikParseServer(yeni.iskontoTutari || 0), ondalikParseServer(yeni.odemeTutari || 0),
+          yeni.bakiyeDurumu, yeni.bakiyeTutari, yeni.kaynakFaturaID,
+          yeni.gunlukHarcama ? 'TRUE' : 'FALSE', yeni.kayitZamani,
+          yeni.anaKasaHarcama ? 'TRUE' : 'FALSE',
+        ]);
+        // Firma adı değiştiyse HER İKİ firma için de yeniden hesapla.
+        await firmaBakiyeleriniYenidenHesapla(sheets, mevcut.firmaAdi);
+        if (metinNormalize(yeni.firmaAdi) !== metinNormalize(mevcut.firmaAdi)) {
+          await firmaBakiyeleriniYenidenHesapla(sheets, yeni.firmaAdi);
+        }
+        return res.status(200).json({ ok: true });
+      }
+
+      if (kaynak === 'Tahsilat') {
+        const rows = await getRows(sheets, TAHSILAT_TAB);
+        const mevcut = rows.map(rowToTahsilat).find((t) => t.id === id);
+        if (!mevcut) return res.status(404).json({ error: 'Kayıt bulunamadı' });
+        const yeni = { ...mevcut, ...alanlar };
+        if (alanlar.tarih) Object.assign(yeni, trTarihiParcala(alanlar.tarih), { tarih: alanlar.tarih });
+        await satirGuncelle(TAHSILAT_TAB, [
+          yeni.id, yeni.tarih, yeni.gun, yeni.ay, yeni.yil, yeni.firmaAdi, yeni.faturaNo, yeni.aciklama,
+          yeni.odemeTuru, yeni.odemeDetay, ondalikParseServer(yeni.tutar),
+          yeni.oncekiBakiye, yeni.yeniBakiye, yeni.kaynakEkstreID, yeni.kayitZamani,
+          yeni.kasaKaynak, yeni.limitKaynak,
+        ]);
+        await firmaBakiyeleriniYenidenHesapla(sheets, mevcut.firmaAdi);
+        if (metinNormalize(yeni.firmaAdi) !== metinNormalize(mevcut.firmaAdi)) {
+          await firmaBakiyeleriniYenidenHesapla(sheets, yeni.firmaAdi);
+        }
+        return res.status(200).json({ ok: true });
+      }
+
+      if (kaynak === 'Tahakkuk') {
+        const rows = await getRows(sheets, TAHAKKUK_TAB);
+        const mevcut = rows.map(rowToTahakkuk).find((k) => k.id === id);
+        if (!mevcut) return res.status(404).json({ error: 'Kayıt bulunamadı' });
+        const yeni = { ...mevcut, ...alanlar };
+        await satirGuncelle(TAHAKKUK_TAB, [
+          yeni.id, yeni.tip, yeni.kayitId, yeni.ad, yeni.donem, yeni.tarih,
+          ondalikParseServer(yeni.tutar), yeni.faturaFisId, yeni.kayitZamani,
+        ]);
+        return res.status(200).json({ ok: true });
+      }
+
+      return res.status(400).json({ error: 'Bilinmeyen kaynak' });
+    }
+
+    // Gider Kayıtları sayfasından tek satır silme. Kaynağa göre ilgili tablodan siler,
+    // sonra (Fatura/Fiş, Tahsilat için) firmanın kalan kayıtlarının bakiyesini yeniden hesaplar.
+    if (resource === 'giderKaydiSil') {
+      if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+      const { kaynak, id } = req.body || {};
+      if (!kaynak || !id) return res.status(400).json({ error: 'kaynak, id gerekli' });
+
+      if (kaynak === 'FaturaFis') {
+        const rows = await getRows(sheets, FATURA_FIS_TAB);
+        const mevcut = rows.map(rowToFaturaFis).find((k) => k.id === id);
+        if (!mevcut) return res.status(404).json({ error: 'Kayıt bulunamadı' });
+        await satirSil(FATURA_FIS_TAB, id);
+        await firmaBakiyeleriniYenidenHesapla(sheets, mevcut.firmaAdi);
+        return res.status(200).json({ ok: true });
+      }
+
+      if (kaynak === 'Tahsilat') {
+        const rows = await getRows(sheets, TAHSILAT_TAB);
+        const mevcut = rows.map(rowToTahsilat).find((t) => t.id === id);
+        if (!mevcut) return res.status(404).json({ error: 'Kayıt bulunamadı' });
+        await satirSil(TAHSILAT_TAB, id);
+        await firmaBakiyeleriniYenidenHesapla(sheets, mevcut.firmaAdi);
+        return res.status(200).json({ ok: true });
+      }
+
+      if (kaynak === 'Tahakkuk') {
+        const rows = await getRows(sheets, TAHAKKUK_TAB);
+        const mevcut = rows.map(rowToTahakkuk).find((k) => k.id === id);
+        if (!mevcut) return res.status(404).json({ error: 'Kayıt bulunamadı' });
+        await satirSil(TAHAKKUK_TAB, id);
+        return res.status(200).json({ ok: true });
+      }
+
+      return res.status(400).json({ error: 'Bilinmeyen kaynak' });
     }
 
     // Yeni ödeme yöntemi / kart / banka ekleme.
