@@ -423,6 +423,11 @@ export default function Settings({ data, onNavigate }) {
               <span className="st-action-title">Muhasebe</span>
               <span className="st-action-sub">Fatura, makbuz, toptancı ve personel yönetimi</span>
             </button>
+            <button className="st-action-card" onClick={() => onNavigate('muhasebe2')}>
+              <span className="st-action-ico"><Receipt size={22} /></span>
+              <span className="st-action-title">Muhasebe2 (test)</span>
+              <span className="st-action-sub">Yeni muhasebe — fişler/faturalar ve makbuzlar</span>
+            </button>
             <button className="st-action-card" onClick={() => onNavigate('veri')}>
               <span className="st-action-ico"><Database size={22} /></span>
               <span className="st-action-title">Veri</span>

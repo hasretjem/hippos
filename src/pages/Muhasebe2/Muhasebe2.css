@@ -1,0 +1,370 @@
+/* Muhasebe2 — tüm sınıflar m2- önekli; eski Muhasebe sayfasının stillerinden bağımsızdır. */
+.m2-shell {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #393e41;
+  color: #f6f7eb;
+  font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  padding: 20px 24px 48px;
+  box-sizing: border-box;
+}
+.m2-shell *,
+.m2-shell *::before,
+.m2-shell *::after {
+  box-sizing: border-box;
+}
+.m2-shell button,
+.m2-shell input,
+.m2-shell select,
+.m2-shell textarea {
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.m2-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #f6f7eb;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 0;
+  margin-bottom: 8px;
+}
+.m2-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 14px;
+  font-size: 22px;
+  font-weight: 800;
+}
+.m2-title small {
+  font-size: 12px;
+  font-weight: 700;
+  color: #e94f37;
+  background: rgba(233, 79, 55, 0.14);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+.m2-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.m2-tab {
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(246, 247, 235, 0.2);
+  background: rgba(246, 247, 235, 0.06);
+  color: #f6f7eb;
+  font-weight: 700;
+  cursor: pointer;
+}
+.m2-tab.on {
+  background: #e94f37;
+  border-color: #e94f37;
+}
+
+.m2-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .m2-grid {
+    grid-template-columns: 1fr;
+  }
+  .m2-shell {
+    padding: 14px 12px 40px;
+  }
+}
+
+.m2-card {
+  background: #f6f7eb;
+  color: #393e41;
+  border-radius: 18px;
+  padding: 20px;
+}
+.m2-card h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.m2-label {
+  display: block;
+  margin: 12px 0 5px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(57, 62, 65, 0.65);
+}
+.m2-label b {
+  color: #e94f37;
+}
+.m2-input,
+.m2-select {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(57, 62, 65, 0.2);
+  background: #fff;
+  color: #393e41;
+}
+.m2-input:focus,
+.m2-select:focus {
+  outline: none;
+  border-color: #e94f37;
+}
+.m2-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.m2-row > .m2-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.m2-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.m2-chips.alt {
+  margin-top: 8px;
+  padding-left: 10px;
+  border-left: 3px solid rgba(57, 62, 65, 0.15);
+}
+.m2-chip {
+  padding: 8px 13px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(57, 62, 65, 0.2);
+  background: #fff;
+  color: #393e41;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.m2-chip.on {
+  background: #393e41;
+  border-color: #393e41;
+  color: #f6f7eb;
+}
+.m2-chip.yeni {
+  border-style: dashed;
+  background: transparent;
+  opacity: 0.8;
+}
+
+.m2-btn {
+  height: 44px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 12px;
+  background: #e94f37;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+.m2-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.m2-btn.sec {
+  background: #fff;
+  color: #393e41;
+  border: 1.5px solid rgba(57, 62, 65, 0.25);
+}
+.m2-btn.mini {
+  height: 42px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+.m2-btn.full {
+  width: 100%;
+  margin-top: 16px;
+}
+
+/* Kaydırmalı iki konumlu anahtar: Tahsilat Makbuzu / Ödeme Makbuzu */
+.m2-toggle {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 46px;
+  margin: 8px 0 4px;
+  border-radius: 999px;
+  background: rgba(57, 62, 65, 0.1);
+  padding: 4px;
+}
+.m2-toggle-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: 999px;
+  background: #2e7d32;
+  transition: transform 0.22s ease, background 0.22s ease;
+}
+.m2-toggle.odeme .m2-toggle-thumb {
+  transform: translateX(100%);
+  background: #e94f37;
+}
+.m2-toggle button {
+  position: relative;
+  z-index: 1;
+  border: none;
+  background: none;
+  font-weight: 800;
+  font-size: 13px;
+  color: #393e41;
+  cursor: pointer;
+  border-radius: 999px;
+  transition: color 0.22s ease;
+}
+.m2-toggle button.on {
+  color: #fff;
+}
+
+.m2-dd-wrap {
+  position: relative;
+}
+.m2-dd {
+  position: absolute;
+  z-index: 20;
+  top: 46px;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1.5px solid rgba(57, 62, 65, 0.2);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  max-height: 280px;
+  overflow-y: auto;
+}
+.m2-dd-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(57, 62, 65, 0.08);
+  color: #393e41;
+  text-align: left;
+  cursor: pointer;
+}
+.m2-dd-item:hover {
+  background: rgba(233, 79, 55, 0.08);
+}
+.m2-dd-item small {
+  opacity: 0.65;
+  white-space: nowrap;
+}
+.m2-dd-empty {
+  padding: 12px;
+  opacity: 0.6;
+  font-size: 13px;
+}
+
+.m2-info {
+  margin-top: 8px;
+  font-size: 13px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(57, 62, 65, 0.07);
+}
+.m2-info.r {
+  background: rgba(233, 79, 55, 0.12);
+  color: #b53a26;
+}
+.m2-info.g {
+  background: rgba(46, 125, 50, 0.12);
+  color: #2e7d32;
+}
+.m2-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.m2-modal-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.m2-modal {
+  width: 100%;
+  max-width: 380px;
+  background: #f6f7eb;
+  color: #393e41;
+  border-radius: 18px;
+  padding: 20px;
+}
+.m2-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.m2-modal-head h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.m2-modal-head button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #393e41;
+}
+.m2-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.m2-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: 92vw;
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: #1f2325;
+  color: #f6f7eb;
+  font-weight: 600;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+.m2-toast.hata {
+  background: #b53a26;
+}
+.m2-err {
+  background: #f6f7eb;
+  color: #b53a26;
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
