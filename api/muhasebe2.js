@@ -1,16 +1,23 @@
-// Muhasebe2 API — Fişler/Faturalar ve Makbuzlar.
+// Muhasebe2 API — Fişler/Faturalar ve Makbuzlar + Datalar.
 // Veri Supabase'de (m2_* tabloları), eski mh_* tablolarından bağımsız.
 //
-// Bu aşamada sadece KAYIT yapılır: ödeme yöntemi bilgileri (kasa, banka, kart) ileride
-// açılacak sekmelerin kullanması için tabloda saklanır; kasa/banka hareketi üretilmez.
-// Firma bakiyesi (m2_firma_bakiye görünümü): cari faturalar - ödeme makbuzları + tahsilat makbuzları.
+// Defter kuralı:
+//  - Her fiş/fatura firmanın borcunu doğurur.
+//  - Cari DIŞI bir yöntemle (nakit/kart/havale) girilen fatura iki OTOMATİK makbuz üretir:
+//      1) firmaya "Ödeme (Tediye) Makbuzu"  -> firmanın borcu kapanır
+//      2) ödeme şekli carisine (kasa/banka/kart/cepten) "Tahsilat Makbuzu"
+//         -> ödeme şekli cari olarak borçlanır / bizden çıkan para yazılır
+//  - Elle girilen makbuzda da aynı mantık: ters yönde otomatik karşı makbuz ödeme şekli carisine yazılır.
+// Firma bakiyesi (m2_firma_bakiye): fatura - ödeme makbuzu + tahsilat makbuzu (pozitif = borcumuz).
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'node:crypto';
 
 export const FATURA_ODEME_TURLERI = ['Cari', 'Nakit', 'Kredi Kartı', 'Banka Havalesi'];
 export const MAKBUZ_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi'];
 export const MAKBUZ_TURLERI = ['Tahsilat', 'Ödeme'];
 export const KASALAR = ['Günlük Kasa', 'Çelik Kasa'];
 export const YONTEM_TURLERI = ['Kredi Kartı', 'Banka Havalesi'];
+const DATALAR_LIMIT = 1000;
 
 class HataMesaji extends Error {
   constructor(durum, mesaj) {
@@ -43,6 +50,16 @@ export function tutarCoz(v) {
   return Math.round(n * 100) / 100;
 }
 
+// KDV opsiyoneldir: boşsa null. Tutara dahil KDV tutarıdır, 0 ile fatura tutarı arasında olmalı.
+export function kdvCoz(v, faturaTutari) {
+  if (v === undefined || v === null || String(v).trim() === '') return null;
+  const n = Number(String(v).trim().replace(',', '.'));
+  if (!Number.isFinite(n) || n < 0) throw new HataMesaji(400, 'KDV tutarı geçersiz');
+  const kdv = Math.round(n * 100) / 100;
+  if (kdv > faturaTutari) throw new HataMesaji(400, 'KDV tutarı fatura tutarından büyük olamaz');
+  return kdv;
+}
+
 export function bugunIstanbul() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' }); // YYYY-MM-DD
 }
@@ -56,6 +73,7 @@ const metin = (v) => {
   const s = String(v ?? '').trim();
   return s || null;
 };
+const sayiOrNull = (v) => (v === null || v === undefined ? null : Number(v));
 
 async function bakiyeGetir(db, firmaId) {
   const { data, error } = await db.from('m2_firma_bakiye').select('bakiye').eq('firma_id', firmaId).maybeSingle();
@@ -69,6 +87,23 @@ async function firmaGetir(db, firmaId) {
   kontrol(error);
   if (!data) throw new HataMesaji(400, 'Firma bulunamadı');
   return data;
+}
+
+// Ödeme şekli (kasa/banka/kart/cepten) de bir cari firmadır; yoksa oluşturulur.
+async function yontemFirmasi(db, ad) {
+  const { data, error } = await db.from('m2_firmalar').select('id,ad').eq('ad', ad).maybeSingle();
+  kontrol(error);
+  if (data) return data;
+  const ekle = await db.from('m2_firmalar').insert({ ad, firma_turu: 'Ödeme Şekli' }).select('id,ad').single();
+  if (ekle.error?.code === '23505') {
+    // Aynı isim farklı büyük/küçük harfle zaten var.
+    const { data: hepsi, error: hata2 } = await db.from('m2_firmalar').select('id,ad');
+    kontrol(hata2);
+    const bulunan = (hepsi || []).find((f) => f.ad.trim().toLowerCase() === ad.trim().toLowerCase());
+    if (bulunan) return bulunan;
+  }
+  kontrol(ekle.error);
+  return ekle.data;
 }
 
 // Ödeme türüne göre deftere yazılacak odeme_hesabi / kasa alanlarını doğrular.
@@ -102,7 +137,7 @@ export default async function handler(req, res) {
     // ---------- Okuma ----------
     if (req.method === 'GET' && resource === 'baslangic') {
       const [fi, ba, ka, yo] = await Promise.all([
-        db.from('m2_firmalar').select('id,ad,varsayilan_kategori'),
+        db.from('m2_firmalar').select('id,ad,varsayilan_kategori,firma_turu'),
         db.from('m2_firma_bakiye').select('firma_id,bakiye'),
         db.from('m2_kategoriler').select('ad').order('sira').order('ad'),
         db.from('m2_odeme_yontemleri').select('id,odeme_turu,ad').order('ad'),
@@ -120,12 +155,44 @@ export default async function handler(req, res) {
       });
     }
 
+    // Datalar: bütün fatura/fiş ve makbuz kayıtları Excel düzeninde (en yeni üstte).
+    if (req.method === 'GET' && resource === 'datalar') {
+      const { data, error } = await db
+        .from('m2_datalar')
+        .select(
+          'id,tarih,evrak_turu,firma_adi,fatura_no,aciklama,gider_kategorisi,odeme_turu,odeme_sekli,tutar,kdv,tahsilat,odeme_tediye,otomatik,kayit_zamani,sira',
+        )
+        .order('tarih', { ascending: false })
+        .order('kayit_zamani', { ascending: false })
+        .order('sira', { ascending: true })
+        .limit(DATALAR_LIMIT);
+      kontrol(error);
+      const kayitlar = (data || []).map((r) => ({
+        id: r.id,
+        tarih: r.tarih,
+        evrakTuru: r.evrak_turu,
+        firmaAdi: r.firma_adi,
+        faturaNo: r.fatura_no || '',
+        aciklama: r.aciklama || '',
+        giderKategorisi: r.gider_kategorisi || '',
+        odemeTuru: r.odeme_turu || '',
+        odemeSekli: r.odeme_sekli || '',
+        tutar: sayiOrNull(r.tutar),
+        kdv: sayiOrNull(r.kdv),
+        tahsilat: sayiOrNull(r.tahsilat),
+        odemeTediye: sayiOrNull(r.odeme_tediye),
+        otomatik: !!r.otomatik,
+      }));
+      return res.status(200).json({ kayitlar, sinirli: kayitlar.length >= DATALAR_LIMIT });
+    }
+
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
     // ---------- Fiş / Fatura girişi ----------
     if (resource === 'fisFaturaKaydet') {
       const tutar = tutarCoz(body.faturaTutari);
       if (tutar <= 0) throw new HataMesaji(400, 'Tutar sıfırdan büyük olmalı');
+      const kdv = kdvCoz(body.kdv, tutar);
       const tarih = tarihKontrol(body.tarih);
       const firma = await firmaGetir(db, body.firmaId);
 
@@ -139,19 +206,67 @@ export default async function handler(req, res) {
       if (!FATURA_ODEME_TURLERI.includes(odemeTuru)) throw new HataMesaji(400, 'Ödeme türünü seçin');
       const alan = await yontemAlanlari(db, odemeTuru, body.odemeHesabi, body.kasa);
 
-      const { error } = await db.from('m2_fis_faturalar').insert({
+      const grupId = randomUUID();
+      const faturaNo = metin(body.faturaNo);
+      const aciklama = metin(body.aciklama);
+      const fatura = {
+        id: randomUUID(),
         tarih,
         firma_id: firma.id,
         firma_adi: firma.ad,
-        fatura_no: metin(body.faturaNo),
-        aciklama: metin(body.aciklama),
+        fatura_no: faturaNo,
+        aciklama,
         gider_kategorisi: kategori,
         odeme_turu: odemeTuru,
+        odeme_hesabi: alan.odeme_hesabi,
+        kasa: alan.kasa,
         fatura_tutari: tutar,
-        ...alan,
-      });
+        kdv,
+        grup_id: grupId,
+      };
+
+      // Cari dışı ödemede iki otomatik makbuz: firmaya ödeme + ödeme şekline tahsilat.
+      const makbuzlar = [];
+      if (odemeTuru !== 'Cari') {
+        const yontemAdi = alan.kasa || alan.odeme_hesabi;
+        const yf = await yontemFirmasi(db, yontemAdi);
+        if (yf.id === firma.id) throw new HataMesaji(400, 'Firma ile ödeme şekli aynı olamaz');
+        makbuzlar.push({
+          id: randomUUID(),
+          tarih,
+          makbuz_turu: 'Ödeme',
+          firma_id: firma.id,
+          firma_adi: firma.ad,
+          fatura_no: faturaNo,
+          aciklama: `Otomatik: fatura ödemesi${aciklama ? ` — ${aciklama}` : ''}`,
+          odeme_turu: odemeTuru,
+          odeme_hesabi: alan.odeme_hesabi,
+          kasa: alan.kasa,
+          tutar,
+          otomatik: true,
+          grup_id: grupId,
+        });
+        makbuzlar.push({
+          id: randomUUID(),
+          tarih,
+          makbuz_turu: 'Tahsilat',
+          firma_id: yf.id,
+          firma_adi: yf.ad,
+          fatura_no: faturaNo,
+          aciklama: `Otomatik: ${firma.ad} faturası ödemesi`,
+          odeme_turu: null,
+          odeme_hesabi: null,
+          kasa: null,
+          tutar,
+          otomatik: true,
+          grup_id: grupId,
+        });
+      }
+
+      // Fonksiyon fatura ve makbuzlarını TEK işlemde yazar: ya hepsi yazılır ya hiçbiri.
+      const { error } = await db.rpc('m2_fatura_yaz', { p_fatura: fatura, p_makbuzlar: makbuzlar });
       kontrol(error);
-      return res.status(200).json({ ok: true, bakiye: await bakiyeGetir(db, firma.id) });
+      return res.status(200).json({ ok: true, bakiye: await bakiyeGetir(db, firma.id), otomatikMakbuz: makbuzlar.length });
     }
 
     // ---------- Tahsilat / Ödeme makbuzu ----------
@@ -165,17 +280,43 @@ export default async function handler(req, res) {
       if (!MAKBUZ_ODEME_TURLERI.includes(odemeTuru)) throw new HataMesaji(400, 'Ödeme türünü seçin');
       const alan = await yontemAlanlari(db, odemeTuru, body.odemeHesabi, body.kasa);
 
-      const { error } = await db.from('m2_makbuzlar').insert({
-        tarih,
-        makbuz_turu: body.makbuzTuru,
-        firma_id: firma.id,
-        firma_adi: firma.ad,
-        fatura_no: metin(body.faturaNo),
-        aciklama: metin(body.aciklama),
-        odeme_turu: odemeTuru,
-        tutar,
-        ...alan,
-      });
+      const yontemAdi = alan.kasa || alan.odeme_hesabi;
+      const yf = await yontemFirmasi(db, yontemAdi);
+      if (yf.id === firma.id) throw new HataMesaji(400, 'Firma ile ödeme şekli aynı olamaz');
+
+      const grupId = randomUUID();
+      const tahsilatMi = body.makbuzTuru === 'Tahsilat';
+      const faturaNo = metin(body.faturaNo);
+      // Tek insert = tek işlem: makbuz ve karşı makbuzu birlikte yazılır.
+      const { error } = await db.from('m2_makbuzlar').insert([
+        {
+          tarih,
+          makbuz_turu: body.makbuzTuru,
+          firma_id: firma.id,
+          firma_adi: firma.ad,
+          fatura_no: faturaNo,
+          aciklama: metin(body.aciklama),
+          odeme_turu: odemeTuru,
+          tutar,
+          otomatik: false,
+          grup_id: grupId,
+          ...alan,
+        },
+        {
+          tarih,
+          makbuz_turu: tahsilatMi ? 'Ödeme' : 'Tahsilat',
+          firma_id: yf.id,
+          firma_adi: yf.ad,
+          fatura_no: faturaNo,
+          aciklama: `Otomatik: ${firma.ad} ${tahsilatMi ? 'tahsilatı' : 'ödemesi'}`,
+          odeme_turu: null,
+          odeme_hesabi: null,
+          kasa: null,
+          tutar,
+          otomatik: true,
+          grup_id: grupId,
+        },
+      ]);
       kontrol(error);
       return res.status(200).json({ ok: true, bakiye: await bakiyeGetir(db, firma.id) });
     }
@@ -186,8 +327,8 @@ export default async function handler(req, res) {
       if (!ad) throw new HataMesaji(400, 'Firma adı gerekli');
       const { data, error } = await db
         .from('m2_firmalar')
-        .insert({ ad, varsayilan_kategori: metin(body.varsayilanKategori) })
-        .select('id,ad,varsayilan_kategori')
+        .insert({ ad, varsayilan_kategori: metin(body.varsayilanKategori), firma_turu: 'Firma' })
+        .select('id,ad,varsayilan_kategori,firma_turu')
         .single();
       if (error?.code === '23505') throw new HataMesaji(409, 'Bu isimde bir firma zaten var');
       kontrol(error);
@@ -203,6 +344,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, kategori: data.ad });
     }
 
+    // Yeni ödeme yöntemi: aynı isimde bir cari firma da otomatik açılır.
     if (resource === 'yontemEkle') {
       const ad = String(body.ad || '').trim();
       if (!ad) throw new HataMesaji(400, 'Ad gerekli');
@@ -214,6 +356,7 @@ export default async function handler(req, res) {
         .single();
       if (error?.code === '23505') throw new HataMesaji(409, 'Bu yöntem zaten var');
       kontrol(error);
+      await yontemFirmasi(db, ad);
       return res.status(200).json({ ok: true, yontem: data });
     }
 

@@ -368,3 +368,74 @@
   margin-bottom: 16px;
   font-weight: 600;
 }
+
+/* Datalar tablosu */
+.m2-table-wrap {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1.5px solid rgba(57, 62, 65, 0.12);
+}
+.m2-table {
+  width: 100%;
+  min-width: 1180px;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: #fff;
+}
+.m2-table th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #f6f7eb;
+  background: #393e41;
+  white-space: nowrap;
+}
+.m2-table th.sayi,
+.m2-table td.sayi {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.m2-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(57, 62, 65, 0.08);
+  vertical-align: top;
+}
+.m2-table td.nowrap {
+  white-space: nowrap;
+}
+.m2-table td.m2-empty {
+  text-align: center;
+}
+.m2-table tr.oto td {
+  color: rgba(57, 62, 65, 0.6);
+  font-style: italic;
+  background: rgba(57, 62, 65, 0.03);
+}
+.m2-badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  font-style: normal;
+  background: rgba(57, 62, 65, 0.12);
+  color: #393e41;
+}
+.m2-badge.tahsilat {
+  background: rgba(46, 125, 50, 0.15);
+  color: #2e7d32;
+}
+.m2-badge.tediye {
+  background: rgba(233, 79, 55, 0.15);
+  color: #b53a26;
+}
+.m2-empty {
+  padding: 24px 0;
+  opacity: 0.6;
+}
