@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './Cariler.css';
-import { TL } from '../../hooks/useHipposData';
+import { TL, bakiyeYazi } from '../../hooks/useHipposData';
 import {
   Search, Plus, User, Building2, Phone, MapPin, Clock, Wallet,
   Copy, MessageCircle, X, ChevronUp, ChevronDown, FileText, History, Check,
@@ -227,8 +227,8 @@ export default function Cariler({ data, onNavigate }) {
       .filter((c) => c.tip === activeTab)
       .filter((c) => {
         if (showAllCariler) return true;
-        if (getCariBakiye(c.id) > 0) return true;
-        // Bugün tahsilat yapıldıysa veya bugün arşivlendiyse borç sıfır olsa bile göster
+        if (getCariBakiye(c.id) !== 0) return true;
+                // Bugün tahsilat yapıldıysa veya bugün arşivlendiyse borç sıfır olsa bile göster
         const bugunBaslangic = new Date().setHours(0, 0, 0, 0);
         return cariOdemeler.some((o) => o.cariId === c.id && o.ts >= bugunBaslangic)
           || cariGecmis.some((g) => g.cariId === c.id && g.ts >= bugunBaslangic);
@@ -286,8 +286,9 @@ export default function Cariler({ data, onNavigate }) {
   async function submitOdeme() {
     const tutar = parseFloat(String(odemeTutar).replace(',', '.')) || 0;
     if (tutar <= 0 || !selectedCari) return;
-     const kalan = Math.max(0, getCariBakiye(selectedCari.id) - tutar);
-    const eklenenOdeme = await addCariOdeme(selectedCari.id, { tutar, tur: odemeTur });    data.setSalesHistory((prev) => [
+         // Eksi kalan = fazla ödeme (avans). Cari kapanmaz, bakiye alacak olarak durur.
+    const kalan = Math.round((getCariBakiye(selectedCari.id) - tutar) * 100) / 100;
+        const eklenenOdeme = await addCariOdeme(selectedCari.id, { tutar, tur: odemeTur });    data.setSalesHistory((prev) => [
       { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: selectedCari.ad, amount: tutar, method: `TAHSİLAT_${odemeTur}`, itemsCount: 0, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
@@ -298,10 +299,11 @@ export default function Cariler({ data, onNavigate }) {
         `💚 Merhaba ${selectedCari.ad},`,
         '',
         `✅ ${TL(tutar)} tutarındaki tahsilatınız alınmıştır.`,
-        `📊 Güncel bakiyeniz: ${TL(kalan)}`,
+          `📊 Güncel bakiyeniz: ${bakiyeYazi(kalan)}`,
+        ...(kalan < 0 ? ['(Bir sonraki siparişlerinizden düşülecektir)'] : []),
         '',
         'Teşekkürler, iyi günler! 🙏✨',
-      ].join('\n')
+            ].join('\n')
     );
     setBugunTahsilatYapildi((prev) => ({ ...prev, [selectedCari.id]: true }));
     setOdemeShareOpen(true);
@@ -502,8 +504,11 @@ export default function Cariler({ data, onNavigate }) {
     const bugunToplam = bugunkuHareketler.reduce((s, h) => s + h.toplam, 0);
     // Ham tutar = iskontolu tutardan geri hesaplanır (sadece şablon gösterimi için)
     const bugunToplamHam = iskonto > 0 ? Math.round(bugunToplam / (1 - iskonto / 100)) : bugunToplam;
-    const oncekiCari = getCariBakiye(selectedCari.id) - bugunToplam + bugunkuOdemeler.reduce((s, o) => s + o.tutar, 0);
-
+       const oncekiCari = Math.round((getCariBakiye(selectedCari.id) - bugunToplam + bugunkuOdemeler.reduce((s, o) => s + o.tutar, 0)) * 100) / 100;
+    // Önceki bakiye eksi (müşterinin avansı) ise bugünkü sipariş önce avanstan düşer
+    const avansDusulen = oncekiCari < 0 && bugunToplam > 0 ? Math.min(bugunToplam, -oncekiCari) : 0;
+    // Sadece ödeme alınmış (sipariş yok) gün: sipariş bölümünü gösterme
+    const sadeceOdemeGunu = bugunkuHareketler.length === 0 && bugunkuOdemeler.length > 0;
     const urunSatirlari = [];
     bugunkuHareketler.forEach((h) => h.urunler.forEach((u) => urunSatirlari.push(padLine(u.ad, u.fiyat))));
 
@@ -514,10 +519,9 @@ export default function Cariler({ data, onNavigate }) {
       `📅 ${tarihSaat}`,
       '',
       '📋 Önceki Cari Bakiye',
-      TL(Math.max(0, oncekiCari)),
-      '',
-      '\uD83D\uDED2 Bug\u00FCnk\u00FC Sipari\u015fler',
-      '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501',
+      bakiyeYazi(oncekiCari),      '',
+     ...(sadeceOdemeGunu ? [] : [
+      '\uD83D\uDED2 Bug\u00FCnk\u00FC Sipari\u015fler',      '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501',
       ...(() => {
         if (bugunkuHareketler.length === 0) return ['(bug\u00FCn sipari\u015f yok)'];
         const firmaPersonelVar = selectedCari.tip === 'firma' && bugunkuHareketler.some((h) => h.personelAd);
@@ -537,11 +541,19 @@ export default function Cariler({ data, onNavigate }) {
       '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501',
       ...(iskonto > 0 ? [`🏷️ %${iskonto} İskonto: -${TL(Math.round(bugunToplamHam * (iskonto / 100)))}`, ''] : []),
       `💰 Bugünkü Toplam: ${TL(bugunToplam)}`,
+      ...(avansDusulen > 0 ? [`➖ Avanstan Düşülen: ${TL(avansDusulen)}`] : []),
+      ]),
+      ...(bugunkuOdemeler.length > 0
+        ? [...(sadeceOdemeGunu ? [] : ['']), ...bugunkuOdemeler.map((o) => `💳 Bugünkü Ödeme: ${TL(o.tutar)} (${o.tur})`)]
+        : []),
       '',
       ...(() => {
         if (selectedCari.tip !== 'firma') {
-          return [`\uD83D\uDCCA G\u00FCncel Cari Bakiye: ${TL(getCariBakiye(selectedCari.id))}`];
-        }
+         const gb = getCariBakiye(selectedCari.id);
+          return [
+            `\uD83D\uDCCA G\u00FCncel Cari Bakiye: ${bakiyeYazi(gb)}`,
+            ...(gb < 0 ? ['(Bir sonraki siparişlerinizden düşülecektir)'] : []),
+          ];        }
         const faturaEdilmis = cariFaturalar
           .filter((f) => f.cariId === selectedCari.id)
           .reduce((s, f) => s + (f.tutar - (f.tahsilatTutar || 0)), 0);
@@ -553,8 +565,8 @@ export default function Cariler({ data, onNavigate }) {
         const satirlar = [];
         if (faturaEdilmis > 0) satirlar.push(`\uD83D\uDCCB Fatura Edilmi\u015f Bakiye: ${TL(faturaEdilmis)}`);
         if (faturaEdilmemis > 0) satirlar.push(`\uD83D\uDCDD Hen\u00FCz Fatura Edilmemi\u015f Bakiye: ${TL(faturaEdilmemis)}`);
-        satirlar.push(`\uD83D\uDCCA Toplam G\u00FCncel Bakiye: ${TL(toplam)}`);
-        return satirlar;
+        satirlar.push(`\uD83D\uDCCA Toplam G\u00FCncel Bakiye: ${bakiyeYazi(toplam)}`);
+        if (toplam < 0) satirlar.push('(Bir sonraki siparişlerinizden düşülecektir)');        return satirlar;
       })(),
       '',
       'Afiyet olsun, iyi günler! 😇🍽️✨',
@@ -611,7 +623,7 @@ export default function Cariler({ data, onNavigate }) {
           {activeTab === 'bireysel' && (() => {
             const toplam = cariler
               .filter((c) => c.tip === 'bireysel')
-              .reduce((s, c) => s + getCariBakiye(c.id), 0);
+              .reduce((s, c) => s + Math.max(0, getCariBakiye(c.id)), 0);
             return (
               <div className="cr-sekme-toplam">
                 <span>Toplam Bakiye</span>
@@ -675,8 +687,7 @@ export default function Cariler({ data, onNavigate }) {
                             : <span className="cr-wa-durum gri" title="Telefon numarası yok">—</span>
                         )}
                       </span>
-                      <span className="cr-item-balance">{TL(b)}</span>
-                    </div>
+                      <span className="cr-item-balance">{bakiyeYazi(b)}</span>                    </div>
                     {c.telefon
                       ? <div className="cr-item-phone">{c.telefon}</div>
                       : c.tip === 'bireysel' && <div className="cr-item-phone missing">📵 Numara yok</div>}
@@ -778,8 +789,8 @@ export default function Cariler({ data, onNavigate }) {
                               `\uD83D\uDC9A Merhaba ${selectedCari.ad},`,
                               '',
                               `\u2705 ${TL(tutar)} tutarındaki tahsilatınız alınmıştır.`,
-                              `\uD83D\uDCCA Güncel bakiyeniz: ${TL(kalan)}`,
-                              '',
+                              `\uD83D\uDCCA Güncel bakiyeniz: ${bakiyeYazi(kalan)}`,
+                              ...(kalan < 0 ? ['(Bir sonraki siparişlerinizden düşülecektir)'] : []),                              '',
                               'Teşekkürler, iyi günler! \uD83D\uDE4F\u2728',
                             ].join('\n'));
                             setOdemeShareOpen(true);
@@ -808,8 +819,7 @@ export default function Cariler({ data, onNavigate }) {
                 </div>
                 <div className="cr-balance-row">
                   <span>Güncel Cari Bakiye</span>
-                  <strong>{TL(bakiye)}</strong>
-                </div>
+                  <strong>{bakiyeYazi(bakiye)}</strong>                </div>
               </div>
 
               <div className="cr-detail-tabs">
@@ -1021,8 +1031,7 @@ export default function Cariler({ data, onNavigate }) {
               <button className="cr-modal-x" onClick={() => setOdemeModalOpen(false)}><X size={16} /></button>
             </div>
             <div className="cr-odeme-summary">
-              <div><span>Güncel Cari Bakiyesi</span><strong>{TL(bakiye)}</strong></div>
-            </div>
+               <div><span>Güncel Cari Bakiyesi</span><strong>{bakiyeYazi(bakiye)}</strong></div>            </div>
             <label className="cr-field-label">Tahsil Edilen Tutar</label>
             <input
               autoFocus
@@ -1046,8 +1055,10 @@ export default function Cariler({ data, onNavigate }) {
               ))}
             </div>
             <div className="cr-odeme-summary">
-              <div><span>Tahsilattan Sonra Kalan Bakiye</span><strong>{TL(Math.max(0, bakiye - (parseFloat(String(odemeTutar).replace(',', '.')) || 0)))}</strong></div>
-            </div>
+             <div><span>Tahsilattan Sonra Kalan Bakiye</span><strong>{bakiyeYazi(Math.round((bakiye - (parseFloat(String(odemeTutar).replace(',', '.')) || 0)) * 100) / 100)}</strong></div>
+              {(parseFloat(String(odemeTutar).replace(',', '.')) || 0) > Math.max(0, bakiye) && (
+                <div><span>⚠ Fazla tutar cariye avans (alacak) olarak yazılacak</span><strong>{TL((parseFloat(String(odemeTutar).replace(',', '.')) || 0) - Math.max(0, bakiye))}</strong></div>
+              )}            </div>
             <div className="cr-modal-footer">
               <button className="cr-secondary" onClick={() => setOdemeModalOpen(false)}>İptal</button>
               <button className="cr-primary" onClick={submitOdeme}>Tahsil Et</button>
@@ -1197,8 +1208,11 @@ export default function Cariler({ data, onNavigate }) {
               <h3><Trash2 size={15} /> Cariyi Sil</h3>
               <button className="cr-modal-x" onClick={() => setDeleteCariConfirm(null)}><X size={16} /></button>
             </div>
-            {deleteCariConfirm.bakiye > 0 ? (
-              <>
+            {deleteCariConfirm.bakiye < 0 ? (
+              <p className="cr-delete-warning">
+                <strong>{deleteCariConfirm.cari.ad}</strong> adlı carinin <strong>{TL(-deleteCariConfirm.bakiye)}</strong> avans (alacak) bakiyesi var. Silerseniz bu kayıt da kaybolur — yine de silmek istiyorsanız onaylayabilirsiniz.
+              </p>
+            ) : deleteCariConfirm.bakiye > 0 ? (              <>
                 <p className="cr-delete-warning">
                   <strong>{deleteCariConfirm.cari.ad}</strong> adlı carinin ödenmemiş <strong>{TL(deleteCariConfirm.bakiye)}</strong> bakiyesi var.
                   Önce bu bakiyeyi kapatmadan (ödeme alarak) silmeni önermiyoruz — yine de silmek istiyorsan onaylayabilirsin.

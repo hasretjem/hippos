@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import './DirectSale.css';
-import { TL, QUICK_SALE } from '../../hooks/useHipposData';
+import { TL, QUICK_SALE, bakiyeYazi } from '../../hooks/useHipposData';
 import { supabase } from '../../services/supabase';
 import {
   Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote, PackageOpen,
@@ -696,7 +696,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     handlePayToCari(cari.id);
     const simdi = new Date();
     const tarihSaat = `${simdi.toLocaleDateString('tr-TR')} · ${simdi.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
-    const yeniBakiye = getCariBakiye(cari.id) + totalPay2;
+     const oncekiBakiye = getCariBakiye(cari.id);
+    const yeniBakiye = oncekiBakiye + totalPay2;
+    // Önceki bakiye eksi (avans) ise sipariş önce avanstan düşer
+    const avansDusulen = oncekiBakiye < 0 ? Math.min(totalPay2, -oncekiBakiye) : 0;
     const mesaj = [
       `\u2B50 ${cari.ad}`,
       `\uD83D\uDCC5 ${tarihSaat}`,
@@ -707,9 +710,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501',
       ...(iskontoSatir ? [`\uD83C\uDFF7\uFE0F %${cariIskonto2} \u0130skonto: -${TL(Math.round(totalPayHam2 * cariIskonto2 / 100))}`] : []),
       `\uD83D\uDCB0 Bug\u00FCnk\u00FC Toplam: ${TL(totalPay2)}`,
+      ...(avansDusulen > 0 ? [`\u2796 Avanstan D\u00FC\u015F\u00FClen: ${TL(avansDusulen)}`] : []),
       '',
-      `\uD83D\uDCCA G\u00FCncel Cari Bakiye: ${TL(yeniBakiye)}`,
-      '',
+      `\uD83D\uDCCA G\u00FCncel Cari Bakiye: ${bakiyeYazi(yeniBakiye)}`,
+      ...(yeniBakiye < 0 ? ['(Bir sonraki sipari\u015flerinizden d\u00FC\u015F\u00FClecektir)'] : []),      '',
       'Afiyet olsun, iyi g\u00FCnler! \uD83D\uDE07\uD83C\uDF7D\uFE0F\u2728',
     ].join('\n');
     waShare(mesaj, cari.telefon);
@@ -729,8 +733,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     handlePayToCari(cari.id);
     const simdi2 = new Date();
     const tarihSaat2 = `${simdi2.toLocaleDateString('tr-TR')} · ${simdi2.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
-    const yeniBakiye2 = getCariBakiye(cari.id) + totalPay3;
-    const mesaj = [
+    const oncekiBakiye2 = getCariBakiye(cari.id);
+    const yeniBakiye2 = oncekiBakiye2 + totalPay3;
+    const avansDusulen2 = oncekiBakiye2 < 0 ? Math.min(totalPay3, -oncekiBakiye2) : 0;    const mesaj = [
       `\u2B50 ${cari.ad}`,
       `\uD83D\uDCC5 ${tarihSaat2}`,
       '',
@@ -740,9 +745,10 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501',
       ...(cariIskonto3 > 0 ? [`\uD83C\uDFF7\uFE0F %${cariIskonto3} \u0130skonto: -${TL(Math.round(totalPayHam3 * cariIskonto3 / 100))}`] : []),
       `\uD83D\uDCB0 Bug\u00FCnk\u00FC Toplam: ${TL(totalPay3)}`,
+      ...(avansDusulen2 > 0 ? [`\u2796 Avanstan D\u00FC\u015F\u00FClen: ${TL(avansDusulen2)}`] : []),
       '',
-      `\uD83D\uDCCA G\u00FCncel Cari Bakiye: ${TL(yeniBakiye2)}`,
-      '',
+      `\uD83D\uDCCA G\u00FCncel Cari Bakiye: ${bakiyeYazi(yeniBakiye2)}`,
+      ...(yeniBakiye2 < 0 ? ['(Bir sonraki sipari\u015flerinizden d\u00FC\u015F\u00FClecektir)'] : []),      '',
       'Afiyet olsun, iyi g\u00FCnler! \uD83D\uDE07\uD83C\uDF7D\uFE0F\u2728',
     ].join('\n');
     waShare(mesaj, cariWaPhoneDraft.trim());

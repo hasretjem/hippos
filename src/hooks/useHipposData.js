@@ -44,6 +44,8 @@ export const TABLE_PAIRS = [['Masa 3', 'Masa 4'], ['Masa 10', 'Masa 11']];
 const FIXED_TABLES = [QUICK_SALE, ...SALON_TABLES, ...ALT_TABLES];
 
 export const TL = (n) => (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2 }) + ' ₺';
+// Eksi bakiye = müşterinin avansı (bizim ona borcumuz). Ekran ve mesajlarda "ALACAK" olarak yazılır.
+export const bakiyeYazi = (n) => ((n || 0) < 0 ? `${TL(-n)} ALACAK` : TL(n));
 
 function loadLS(key, fallback) {
   try {
@@ -1686,7 +1688,8 @@ export default function useHipposData(scope = 'full') {
     // Sadece hareket kaynaklı ödemeler hareket borcundan düşülür; fatura ödemeleri karışmaz
     const odenen = cariOdemeler.filter((o) => o.cariId === cariId && (o.kaynak || 'hareket') !== 'fatura').reduce((s, o) => s + o.tutar, 0);
     const faturaKalan = cariFaturalar.filter((f) => f.cariId === cariId).reduce((s, f) => s + (f.tutar - (f.tahsilatTutar || 0)), 0);
-    return Math.max(0, borc + faturaKalan - odenen);
+    // Eksi değer = müşteri avans bırakmış (alacaklı). Artık sıfıra sabitlenmiyor.
+    return Math.round((borc + faturaKalan - odenen) * 100) / 100;
   }
 
   function getCariSonHareket(cariId) {
@@ -2084,8 +2087,7 @@ export default function useHipposData(scope = 'full') {
       if (error) console.error(error.message);
     });
     // Gerçek ödeme kaydı — bakiyeyi düşüren tek yer burası.
-      const kalanBakiye = Math.max(0, getCariBakiye(bildirim.cariId) - bildirim.tutar);
-    const eklenenOdeme = await addCariOdeme(bildirim.cariId, { tutar: bildirim.tutar, tur: odemeTur });
+      const kalanBakiye = Math.round((getCariBakiye(bildirim.cariId) - bildirim.tutar) * 100) / 100;    const eklenenOdeme = await addCariOdeme(bildirim.cariId, { tutar: bildirim.tutar, tur: odemeTur });
     setSalesHistory((prev) => [
       { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: cariler.find((c) => c.id === bildirim.cariId)?.ad || '', amount: bildirim.tutar, method: `TAHSİLAT_${odemeTur}`, itemsCount: 0, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' }) },
       ...prev,
