@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Plus, X } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, Share2, X } from 'lucide-react';
+import { dosyaAdi, durumBul, ekstreGorunum, ekstrePdfTanimi, ekstrePdfUret, paraFmt, pdfPaylasVeyaIndir } from './ekstrePdf';
 import './Muhasebe2.css';
 
 // ---------------------------------------------------------------------------
-// Muhasebe2 — Sekmeler: "Fişler/Faturalar ve Makbuzlar" (giriş) ve "Datalar" (Excel düzeninde döküm).
+// Muhasebe2 — Sekmeler: "Fişler/Faturalar ve Makbuzlar" (giriş), "Datalar" (Excel düzeninde döküm)
+// ve "Hesap Özetleri" (cari kartları, düzenleme, ekstre ve PDF).
 // Giriş: sol Fiş/Fatura formu, sağ Tahsilat / Ödeme makbuzu (kaydırmalı anahtar).
 // Cari dışı yöntemle girilen her fatura için ödeme şekli carisine otomatik makbuz yazılır (sunucu yapar).
 // ---------------------------------------------------------------------------
 
-const KASALAR = ['Günlük Kasa', 'Çelik Kasa'];
 const FATURA_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi', 'Cari'];
 const MAKBUZ_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi'];
 
@@ -44,8 +45,9 @@ function bakiyeEtiketi(b) {
   return v > 0 ? { metin: `Borcumuz ${TL(v)}`, ton: 'r' } : { metin: `Bize borçlu ${TL(-v)}`, ton: 'g' };
 }
 
-async function api(resource, { method = 'GET', body } = {}) {
-  const res = await fetch(`/api/muhasebe2?resource=${resource}`, {
+async function api(resource, { method = 'GET', body, query } = {}) {
+  const qs = new URLSearchParams({ resource, ...(query || {}) }).toString();
+  const res = await fetch(`/api/muhasebe2?${qs}`, {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
@@ -144,6 +146,9 @@ export default function Muhasebe2({ onNavigate }) {
         <button className={`m2-tab ${sekme === 'datalar' ? 'on' : ''}`} onClick={() => setSekme('datalar')}>
           Datalar
         </button>
+        <button className={`m2-tab ${sekme === 'ozetler' ? 'on' : ''}`} onClick={() => setSekme('ozetler')}>
+          Hesap Özetleri
+        </button>
       </div>
 
       {/* Formlar sekme değişince silinmesin diye gizlenir, kaldırılmaz. */}
@@ -157,6 +162,9 @@ export default function Muhasebe2({ onNavigate }) {
       </div>
       <div style={{ display: sekme === 'datalar' ? undefined : 'none' }}>
         <DatalarSekmesi aktif={sekme === 'datalar'} />
+      </div>
+      <div style={{ display: sekme === 'ozetler' ? undefined : 'none' }}>
+        <HesapOzetleriSekmesi aktif={sekme === 'ozetler'} bildir={bildir} onDegisti={yukle} />
       </div>
 
       {modal?.tur === 'firma' && (
@@ -259,6 +267,7 @@ function FirmaSecici({ firmalar, valueId, onChange, onYeni }) {
 // Ödeme türü seçimi (iki formda ortak): tür -> kasa / kart / banka.
 // ---------------------------------------------------------------------------
 function OdemeSecimi({ turler, tur, detay, onChange, yontemler, onYeni, cariNotu }) {
+  const kasalar = yontemler.filter((y) => y.odeme_turu === 'Nakit');
   const kartlar = yontemler.filter((y) => y.odeme_turu === 'Kredi Kartı');
   const bankalar = yontemler.filter((y) => y.odeme_turu === 'Banka Havalesi');
 
@@ -286,7 +295,7 @@ function OdemeSecimi({ turler, tur, detay, onChange, yontemler, onYeni, cariNotu
         </button>
       </div>
 
-      {tur === 'Nakit' && <div className="m2-chips alt">{KASALAR.map(altChip)}</div>}
+      {tur === 'Nakit' && <div className="m2-chips alt">{kasalar.map((k) => altChip(k.ad))}</div>}
       {tur === 'Kredi Kartı' && (
         <div className="m2-chips alt">
           {kartlar.map((k) => altChip(k.ad))}
@@ -725,12 +734,420 @@ function DatalarSekmesi({ aktif }) {
 }
 
 // ---------------------------------------------------------------------------
+// Hesap Özetleri: cari kartları, filtreler, düzenleme, ekstre penceresi ve PDF
+// Bakiye = Borç - Alacak. Alacak = fatura/fiş + tahsilat, Borç = ödeme (tediye).
+// Eksi bakiye = firma ALACAKLI (borcumuz var), artı bakiye = firma BORÇLU (bize borçlu).
+// ---------------------------------------------------------------------------
+const DURUM_ETIKET = { alacakli: 'Alacaklı', borclu: 'Borçlu', yok: 'Bakiye yok' };
+
+function kartYardim(bolum, durum) {
+  if (durum === 'yok') return '';
+  if (bolum === 'kasaBanka') return durum === 'alacakli' ? 'net para çıkışı' : 'net para girişi';
+  return durum === 'alacakli' ? 'borcumuz var' : 'bize borçlu';
+}
+function bugunTRMetin() {
+  return tarihTR(bugunISO());
+}
+
+function HesapOzetleriSekmesi({ aktif, bildir, onDegisti }) {
+  const [firmalar, setFirmalar] = useState(null);
+  const [kategoriler, setKategoriler] = useState([]);
+  const [hata, setHata] = useState('');
+  const [yukleniyor, setYukleniyor] = useState(false);
+  const [ara, setAra] = useState('');
+  const [durum, setDurum] = useState('tumu'); // tumu | alacakli | borclu | yok
+  const [bolum, setBolum] = useState('tumu'); // tumu | cariler | kasaBanka
+  const [bakiyesizGizle, setBakiyesizGizle] = useState(false);
+  const [sirala, setSirala] = useState('bakiye'); // bakiye | ad | son
+  const [ekstreFirma, setEkstreFirma] = useState(null);
+  const [duzenle, setDuzenle] = useState(null);
+
+  const yukle = useCallback(async () => {
+    setYukleniyor(true);
+    try {
+      const j = await api('hesapOzetleri');
+      setFirmalar(j.firmalar || []);
+      setKategoriler(j.kategoriler || []);
+      setHata('');
+    } catch (e) {
+      setHata(e.message);
+    } finally {
+      setYukleniyor(false);
+    }
+  }, []);
+
+  // Sekme her açıldığında güncel bakiyeler çekilir.
+  useEffect(() => {
+    if (aktif) yukle();
+  }, [aktif, yukle]);
+
+  const ozet = useMemo(() => {
+    const liste = firmalar || [];
+    const cariler = liste.filter((f) => f.bolum === 'cariler');
+    const alacakli = cariler.filter((f) => durumBul(f.bakiye) === 'alacakli');
+    const borclu = cariler.filter((f) => durumBul(f.bakiye) === 'borclu');
+    const topla = (l) => Math.round(l.reduce((a, f) => a + Math.abs(f.bakiye) * 100, 0)) / 100;
+    const kasaNet = Math.round(liste.filter((f) => f.bolum === 'kasaBanka').reduce((a, f) => a + f.bakiye * 100, 0)) / 100;
+    return { alacakliToplam: topla(alacakli), alacakliSayi: alacakli.length, borcluToplam: topla(borclu), borcluSayi: borclu.length, kasaNet };
+  }, [firmalar]);
+
+  const gorunen = useMemo(() => {
+    let l = firmalar || [];
+    const q = trNorm(ara);
+    if (q) l = l.filter((f) => trNorm(f.ad).includes(q));
+    if (bolum !== 'tumu') l = l.filter((f) => f.bolum === bolum);
+    if (durum !== 'tumu') l = l.filter((f) => durumBul(f.bakiye) === durum);
+    if (bakiyesizGizle) l = l.filter((f) => durumBul(f.bakiye) !== 'yok');
+    const ad = (a, b) => a.ad.localeCompare(b.ad, 'tr');
+    return [...l].sort((a, b) => {
+      if (sirala === 'ad') return ad(a, b);
+      if (sirala === 'son') {
+        if (a.sonIslem === b.sonIslem) return ad(a, b);
+        if (!a.sonIslem) return 1;
+        if (!b.sonIslem) return -1;
+        return a.sonIslem < b.sonIslem ? 1 : -1;
+      }
+      const fark = Math.abs(b.bakiye) - Math.abs(a.bakiye);
+      return fark !== 0 ? fark : ad(a, b);
+    });
+  }, [firmalar, ara, durum, bolum, bakiyesizGizle, sirala]);
+
+  async function firmaGuncelle(payload) {
+    await api('firmaGuncelle', { method: 'POST', body: payload });
+    bildir('Cari bilgileri güncellendi');
+    await yukle();
+    await onDegisti?.();
+  }
+
+  const chip = (deger, secili, set, etiket) => (
+    <button type="button" key={deger} className={`m2-chip ${secili === deger ? 'on' : ''}`} onClick={() => set(deger)}>
+      {etiket}
+    </button>
+  );
+  const kasaNetEtiket = ozet.kasaNet === 0 ? TL(0) : `${ozet.kasaNet > 0 ? '+' : '−'}${TL(Math.abs(ozet.kasaNet))}`;
+
+  return (
+    <div className="m2-card">
+      <div className="m2-row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+        <h2 style={{ margin: 0 }}>Hesap Özetleri</h2>
+        <button className="m2-btn sec mini" onClick={yukle} disabled={yukleniyor}>
+          {yukleniyor ? 'Yükleniyor…' : 'Yenile'}
+        </button>
+      </div>
+
+      {hata && <div className="m2-info r">{hata}</div>}
+
+      <div className="m2-stats">
+        <div className="m2-stat r">
+          <span>Borcumuz olan cariler</span>
+          <b>{TL(ozet.alacakliToplam)}</b>
+          <small>{ozet.alacakliSayi} cari alacaklı</small>
+        </div>
+        <div className="m2-stat g">
+          <span>Bize borçlu cariler</span>
+          <b>{TL(ozet.borcluToplam)}</b>
+          <small>{ozet.borcluSayi} cari borçlu</small>
+        </div>
+        <div className="m2-stat">
+          <span>Kasa ve banka net hareketi</span>
+          <b>{kasaNetEtiket}</b>
+          <small>giren − çıkan para</small>
+        </div>
+      </div>
+
+      <input
+        className="m2-input"
+        style={{ marginTop: 14 }}
+        placeholder="Cari ara…"
+        value={ara}
+        onChange={(e) => setAra(e.target.value)}
+      />
+
+      <div className="m2-filtre">
+        <div className="m2-chips">
+          {chip('tumu', durum, setDurum, 'Tümü')}
+          {chip('alacakli', durum, setDurum, 'Alacaklı')}
+          {chip('borclu', durum, setDurum, 'Borçlu')}
+          {chip('yok', durum, setDurum, 'Bakiyesiz')}
+        </div>
+        <div className="m2-chips">
+          {chip('tumu', bolum, setBolum, 'Tüm gruplar')}
+          {chip('cariler', bolum, setBolum, 'Cariler')}
+          {chip('kasaBanka', bolum, setBolum, 'Kasa ve Banka')}
+        </div>
+        <div className="m2-row">
+          <select className="m2-select" style={{ width: 'auto' }} value={sirala} onChange={(e) => setSirala(e.target.value)} aria-label="Sıralama">
+            <option value="bakiye">Bakiye (büyükten küçüğe)</option>
+            <option value="ad">A-Z</option>
+            <option value="son">Son işlem tarihi</option>
+          </select>
+          <label className="m2-onay">
+            <input type="checkbox" checked={bakiyesizGizle} onChange={(e) => setBakiyesizGizle(e.target.checked)} /> Bakiyesizleri gizle
+          </label>
+        </div>
+      </div>
+
+      <div className="m2-hint" style={{ margin: '12px 0 8px' }}>
+        {firmalar ? `${gorunen.length} / ${firmalar.length} cari` : ''} — Alacaklı: firmanın bizden alacağı var (borcumuz var). Borçlu: firma bize borçlu.
+      </div>
+
+      {firmalar && gorunen.length === 0 && <div className="m2-empty">Bu filtreye uyan cari yok.</div>}
+
+      <div className="m2-hc-grid">
+        {gorunen.map((f) => {
+          const d = durumBul(f.bakiye);
+          return (
+            <div
+              key={f.id}
+              className={`m2-hc-kart ${d}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => setEkstreFirma(f)}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setEkstreFirma(f)}
+            >
+              <button
+                type="button"
+                className="m2-hc-duzenle"
+                title="Cariyi düzenle"
+                aria-label={`${f.ad} düzenle`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDuzenle(f);
+                }}
+              >
+                <Pencil size={14} />
+              </button>
+              <div>
+                <div className="m2-hc-ad">{f.ad}</div>
+                <div className="m2-hc-tag">{f.grup}</div>
+              </div>
+              <div>
+                <div className="m2-hc-tutar">{d === 'yok' ? '—' : TL(Math.abs(f.bakiye))}</div>
+                <div className="m2-hc-durum">{DURUM_ETIKET[d]}</div>
+                <div className="m2-hc-yardim">{kartYardim(f.bolum, d) || '\u00A0'}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {ekstreFirma && <EkstreModal firma={ekstreFirma} bildir={bildir} onKapat={() => setEkstreFirma(null)} />}
+      {duzenle && (
+        <FirmaDuzenleModal
+          firma={duzenle}
+          kategoriler={kategoriler}
+          onKaydet={firmaGuncelle}
+          onBitti={() => setDuzenle(null)}
+          onKapat={() => setDuzenle(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function FirmaDuzenleModal({ firma, kategoriler, onKaydet, onBitti, onKapat }) {
+  const [ad, setAd] = useState(firma.ad);
+  const [kategori, setKategori] = useState(firma.varsayilanKategori || '');
+  const { hata, bekliyor, calistir } = useModalKaydet(onKaydet, onBitti);
+  const odemeSekli = firma.firmaTuru === 'Ödeme Şekli';
+  return (
+    <ModalKabuk baslik="Cariyi Düzenle" onKapat={onKapat}>
+      <label className="m2-label">Cari Adı</label>
+      <input className="m2-input" autoFocus value={ad} onChange={(e) => setAd(e.target.value)} />
+      <p className="m2-hint">
+        Ad değişince tüm eski kayıtlarda (faturalar, makbuzlar, Datalar) yeni ad görünür.
+        {odemeSekli ? ' Bu bir ödeme şekli: ödeme yöntemi listesindeki adı da değişir.' : ''}
+      </p>
+      <label className="m2-label">Varsayılan Gider Kategorisi</label>
+      <select className="m2-select" value={kategori} onChange={(e) => setKategori(e.target.value)}>
+        <option value="">— Yok —</option>
+        {kategoriler.map((k) => (
+          <option key={k} value={k}>
+            {k}
+          </option>
+        ))}
+      </select>
+      <p className="m2-hint">Sadece fatura formunda otomatik seçilen kategoridir; eski faturaların kategorisini değiştirmez.</p>
+      {hata && <div className="m2-info r">{hata}</div>}
+      <ModalAksiyon
+        onKapat={onKapat}
+        devreDisi={!ad.trim()}
+        bekliyor={bekliyor}
+        onKaydet={() => calistir({ firmaId: firma.id, ad, varsayilanKategori: kategori })}
+      />
+    </ModalKabuk>
+  );
+}
+
+// Ekstre penceresi: en yeni işlem üstte; PDF'te sıralama eskiden yeniye.
+function EkstreModal({ firma, bildir, onKapat }) {
+  const [veri, setVeri] = useState(null);
+  const [hata, setHata] = useState('');
+  const [aralik, setAralik] = useState('tumu'); // tumu | buyil | ozel
+  const [bas, setBas] = useState('');
+  const [bit, setBit] = useState('');
+  const [kapaliGizle, setKapaliGizle] = useState(false);
+  const [pdfBekliyor, setPdfBekliyor] = useState(false);
+  const bugun = bugunISO();
+
+  useEffect(() => {
+    let iptal = false;
+    api('ekstre', { query: { firmaId: firma.id } })
+      .then((j) => !iptal && setVeri(j))
+      .catch((e) => !iptal && setHata(e.message));
+    return () => {
+      iptal = true;
+    };
+  }, [firma.id]);
+
+  const baslangic = aralik === 'buyil' ? `${bugun.slice(0, 4)}-01-01` : aralik === 'ozel' ? bas : '';
+  const bitis = aralik === 'ozel' ? bit : '';
+  const gorunum = useMemo(
+    () => (veri ? ekstreGorunum(veri.satirlar, { baslangic, bitis, kapaliGizle }) : null),
+    [veri, baslangic, bitis, kapaliGizle],
+  );
+  const d = gorunum ? durumBul(gorunum.bakiye) : 'yok';
+  const kasaBanka = veri?.firma?.bolum === 'kasaBanka';
+
+  async function pdfPaylas() {
+    setPdfBekliyor(true);
+    try {
+      const aralikMetni = aralik === 'tumu' ? 'Tüm işlemler' : `${tarihTR(baslangic)} - ${tarihTR(bitis || bugun)}`;
+      const tanim = ekstrePdfTanimi({ firmaAdi: firma.ad, aralikMetni, gorunum, olusturma: bugunTRMetin() });
+      const blob = await ekstrePdfUret(tanim);
+      const sonuc = await pdfPaylasVeyaIndir(blob, dosyaAdi(firma.ad, bugun));
+      if (sonuc === 'indirildi') bildir('PDF indirildi');
+      else if (sonuc === 'paylasildi') bildir('PDF paylaşıldı');
+    } catch (e) {
+      bildir(e.message || 'PDF oluşturulamadı', true);
+    } finally {
+      setPdfBekliyor(false);
+    }
+  }
+
+  return (
+    <ModalKabuk baslik={`${firma.ad} — Hesap Özeti`} onKapat={onKapat} genis>
+      {hata && <div className="m2-info r">{hata}</div>}
+      {!veri && !hata && <div className="m2-empty">Yükleniyor…</div>}
+      {gorunum && (
+        <>
+          <div className={`m2-ekstre-ozet ${d}`}>
+            <div>
+              <div className="m2-hc-durum">{DURUM_ETIKET[d]}</div>
+              <div className="m2-hc-tutar">{d === 'yok' ? '—' : TL(Math.abs(gorunum.bakiye))}</div>
+            </div>
+            <div className="m2-hc-yardim" style={{ maxWidth: 360 }}>
+              {kasaBanka
+                ? 'Bakiye = Borç − Alacak. Eksi (−): toplamda çıkan para, artı (+): toplamda giren para.'
+                : 'Bakiye = Borç − Alacak. Eksi (−) bakiye: firma alacaklı, borcumuz var. Artı (+) bakiye: firma borçlu, bize borçlu.'}
+            </div>
+          </div>
+
+          <div className="m2-filtre">
+            <div className="m2-chips">
+              <button type="button" className={`m2-chip ${aralik === 'tumu' ? 'on' : ''}`} onClick={() => setAralik('tumu')}>
+                Tüm işlemler
+              </button>
+              <button type="button" className={`m2-chip ${aralik === 'buyil' ? 'on' : ''}`} onClick={() => setAralik('buyil')}>
+                Bu yıl
+              </button>
+              <button type="button" className={`m2-chip ${aralik === 'ozel' ? 'on' : ''}`} onClick={() => setAralik('ozel')}>
+                Özel tarih
+              </button>
+            </div>
+            {aralik === 'ozel' && (
+              <div className="m2-row">
+                <input className="m2-input" style={{ width: 160 }} type="date" aria-label="Başlangıç" value={bas} onChange={(e) => setBas(e.target.value)} />
+                <span>–</span>
+                <input className="m2-input" style={{ width: 160 }} type="date" aria-label="Bitiş" value={bit} onChange={(e) => setBit(e.target.value)} />
+              </div>
+            )}
+            <label className="m2-onay">
+              <input type="checkbox" checked={kapaliGizle} onChange={(e) => setKapaliGizle(e.target.checked)} /> Peşin ödenen (kendiliğinden kapanan) işlemleri gizle
+            </label>
+          </div>
+
+          <div className="m2-table-wrap m2-ekstre-wrap">
+            <table className="m2-table m2-ekstre">
+              <thead>
+                <tr>
+                  <th>Tarih</th>
+                  <th>Evrak Türü</th>
+                  <th>Fatura/Makbuz No</th>
+                  <th>Açıklama</th>
+                  <th>Ödeme Şekli</th>
+                  <th className="sayi">Borç</th>
+                  <th className="sayi">Alacak</th>
+                  <th className="sayi">Bakiye</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gorunum.satirlar.length === 0 && !gorunum.devir && (
+                  <tr>
+                    <td colSpan={8} className="m2-empty">
+                      Bu cari için işlem yok.
+                    </td>
+                  </tr>
+                )}
+                {[...gorunum.satirlar].reverse().map((r) => (
+                  <tr key={r.id} className={r.otomatik ? 'oto' : ''}>
+                    <td className="nowrap">{tarihTR(r.tarih)}</td>
+                    <td className="nowrap">{r.evrakTuru}</td>
+                    <td>{r.belgeNo}</td>
+                    <td>{r.aciklama}</td>
+                    <td className="nowrap">{r.odemeSekli}</td>
+                    <td className="sayi">{r.borc ? paraFmt(r.borc) : ''}</td>
+                    <td className="sayi">{r.alacak ? paraFmt(r.alacak) : ''}</td>
+                    <td className={`sayi bakiye ${durumBul(r.bakiye)}`}>{paraFmt(r.bakiye)}</td>
+                  </tr>
+                ))}
+                {gorunum.devir && (
+                  <tr className="oto">
+                    <td className="nowrap">{tarihTR(gorunum.devir.tarih)}</td>
+                    <td>Devir bakiye</td>
+                    <td />
+                    <td>Önceki işlemlerden devir</td>
+                    <td />
+                    <td className="sayi" />
+                    <td className="sayi" />
+                    <td className={`sayi bakiye ${durumBul(gorunum.devir.bakiye)}`}>{paraFmt(gorunum.devir.bakiye)}</td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={5}>Toplam</td>
+                  <td className="sayi">{paraFmt(gorunum.toplamBorc)}</td>
+                  <td className="sayi">{paraFmt(gorunum.toplamAlacak)}</td>
+                  <td className={`sayi bakiye ${d}`}>{paraFmt(gorunum.bakiye)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div className="m2-modal-actions">
+            <button className="m2-btn sec" onClick={onKapat}>
+              Kapat
+            </button>
+            <button className="m2-btn" disabled={pdfBekliyor} onClick={pdfPaylas}>
+              <Share2 size={15} style={{ verticalAlign: '-2px', marginRight: 6 }} />
+              {pdfBekliyor ? 'Hazırlanıyor…' : 'Paylaş (PDF)'}
+            </button>
+          </div>
+          <p className="m2-hint">PDF'te işlemler eskiden yeniye sıralanır (ilk işlem en üstte).</p>
+        </>
+      )}
+    </ModalKabuk>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Modallar: yeni firma / kategori / ödeme yöntemi
 // ---------------------------------------------------------------------------
-function ModalKabuk({ baslik, onKapat, children }) {
+function ModalKabuk({ baslik, onKapat, genis, children }) {
   return (
     <div className="m2-modal-bg" onClick={onKapat}>
-      <div className="m2-modal" onClick={(e) => e.stopPropagation()}>
+      <div className={`m2-modal ${genis ? 'genis' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="m2-modal-head">
           <h3>{baslik}</h3>
           <button onClick={onKapat} aria-label="Kapat">
