@@ -17,12 +17,25 @@ const kesimAdi = (k) => (String(k) === '20' ? "20'si" : `${k}'u`);
 const kesimdeAdi = (k) => (String(k) === '20' ? "20'sinde" : `${k}'unda`);
 const donemBugun = () => bugunISO().slice(0, 7);
 const yuzde = (oran) => `%${Math.round((oran || 0) * 10000) / 100}`.replace('.', ',');
+const gunEkleUI = (iso, n) => new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) + n * 86400000).toISOString().slice(0, 10);
+const kisaTarih = (iso) => (iso ? tarihTR(iso).slice(0, 5) : '');
+const kisaAralik = (g) => `${kisaTarih(g.bas)} – ${kisaTarih(g.bit)}`;
+function aralikUyariMetni(onceki, uyari) {
+  if (!uyari || !onceki) return '';
+  const ilk = gunEkleUI(onceki.bit, 1);
+  if (uyari.tur === 'bosluk') {
+    const son = gunEkleUI(ilk, uyari.gun - 1);
+    return `${uyari.gun} gün boşluk var: ${ilk === son ? tarihTR(ilk) : `${tarihTR(ilk)} – ${tarihTR(son)}`} hiçbir faturada yok.`;
+  }
+  const son = onceki.bit;
+  const bas = gunEkleUI(son, -(uyari.gun - 1));
+  return `${uyari.gun} gün çakışma var: ${bas === son ? tarihTR(bas) : `${tarihTR(bas)} – ${tarihTR(son)}`} önceki faturada da var.`;
+}
 
 export default function YemekKartlariSekmesi({ aktif, bildir, yontemler, onDegisti }) {
   const [donem, setDonem] = useState(donemBugun());
   const [kesim, setKesim] = useState('10');
   const [satirlar, setSatirlar] = useState(null);
-  const [aralik, setAralik] = useState(null);
   const [hata, setHata] = useState('');
   const [yukleniyor, setYukleniyor] = useState(false);
   const [faturaModal, setFaturaModal] = useState(null);
@@ -34,7 +47,6 @@ export default function YemekKartlariSekmesi({ aktif, bildir, yontemler, onDegis
     try {
       const j = await api('yemekKarti', { query: { donem, kesim } });
       setSatirlar(j.satirlar || []);
-      setAralik(j.aralik || null);
       setHata('');
     } catch (e) {
       setHata(e.message);
@@ -101,11 +113,6 @@ export default function YemekKartlariSekmesi({ aktif, bildir, yontemler, onDegis
             </button>
           ))}
         </div>
-        {aralik && (
-          <span className="m2-hint" style={{ margin: 0 }}>
-            Günsonu aralığı: {aralik.bas} – {aralik.bit}
-          </span>
-        )}
         <button className="m2-btn sec mini" style={{ marginLeft: 'auto' }} onClick={() => setTanimModal(true)}>
           Kart Tanımları
         </button>
@@ -164,7 +171,15 @@ export default function YemekKartlariSekmesi({ aktif, bildir, yontemler, onDegis
                   <td className="sayi">
                     <strong>{k ? TL(k.bankayaYatacak) : '—'}</strong>
                   </td>
-                  <td className="sayi">{TL(s.gunsonuToplam)}</td>
+                  <td className="sayi">
+                    {TL(s.gunsonuToplam)}
+                    <span className={`m2-sub ${s.gunsonu.uyari ? 'm2-txt-r' : ''}`}>
+                      {kisaAralik(s.gunsonu)}
+                      {s.gunsonu.oneri ? ' (öneri)' : ''}
+                      {s.gunsonu.uyari ? ` • ${s.gunsonu.uyari.gun} gün ${s.gunsonu.uyari.tur === 'bosluk' ? 'boşluk' : 'çakışma'}` : ''}
+                      {!s.gunsonu.oneri && s.gunsonu.eksikGunSayisi > 0 ? ` • ${s.gunsonu.eksikGunSayisi} gün kayıt yok` : ''}
+                    </span>
+                  </td>
                   <td>
                     {k ? (
                       <span className={`m2-durum ${gunsonuUyumsuz ? 'r' : 'g'}`}>
@@ -256,15 +271,52 @@ function FaturaModal({ satir, donem, kesim, onKaydet, onSil, onBitti, onKapat })
   const [faturaTarihi, setFaturaTarihi] = useState(k ? k.faturaTarihi : bugunISO());
   const [matrah, setMatrah] = useState(k ? String(k.matrah) : '');
   const [vade, setVade] = useState(k ? k.vade : '');
+  // Günsonu aralığı (başlangıç ve bitiş DAHİL): elle değiştirilene kadar öneriyi izler.
+  // Bitiş = fatura tarihi, başlangıç = aynı kartın önceki kesiminin bitişi + 1 gün.
+  const [bas, setBas] = useState(k ? k.gunsonuBas : '');
+  const [bit, setBit] = useState(k ? k.gunsonuBit : '');
+  const [basEl, setBasEl] = useState(!!k);
+  const [bitEl, setBitEl] = useState(!!k);
+  const [on, setOn] = useState(null);
+  const [onHata, setOnHata] = useState('');
   const [silBekliyor, setSilBekliyor] = useState(false);
   const [silHata, setSilHata] = useState('');
   const { hata, bekliyor, calistir } = useModalKaydet(onKaydet, onBitti);
   const kilitli = !!k && satir.odemeler.length > 0;
 
+  useEffect(() => {
+    let iptal = false;
+    const zamanlayici = setTimeout(async () => {
+      try {
+        const query = { kartId: kart.id, donem, kesim, faturaTarihi };
+        if (basEl && bas) query.bas = bas;
+        if (bitEl && bit) query.bit = bit;
+        const j = await api('yemekKartiOnizleme', { query });
+        if (iptal) return;
+        setOn(j);
+        setOnHata('');
+        if (!basEl) setBas(j.bas);
+        if (!bitEl) setBit(j.bit);
+      } catch (e) {
+        if (!iptal) {
+          setOn(null);
+          setOnHata(e.message);
+        }
+      }
+    }, 150);
+    return () => {
+      iptal = true;
+      clearTimeout(zamanlayici);
+    };
+    // bas/bit yalnızca elle değiştirildiyse sorguyu tetikler (öneriyi izlerken döngü olmasın)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [faturaTarihi, basEl ? bas : '', bitEl ? bit : '', basEl, bitEl]);
+
   // Canlı önizleme — sunucudaki hesapla birebir aynı formül.
   const m = sayi(matrah);
   const h = yemekKartiHesapla(m, kart);
-  const gunsonuFark = Math.round((h.faturaToplami - satir.gunsonuToplam) * 100) / 100;
+  const gunsonuToplam = on ? on.toplam : satir.gunsonuToplam;
+  const gunsonuFark = Math.round((h.faturaToplami - gunsonuToplam) * 100) / 100;
 
   async function sil() {
     if (!window.confirm('Bu kesim silinsin mi? Otomatik yazılan ödeme (tediye) makbuzu ve kesinti faturası da silinir.')) return;
@@ -297,6 +349,44 @@ function FaturaModal({ satir, donem, kesim, onKaydet, onSil, onBitti, onKapat })
       <input className="m2-input" type="number" step="any" value={matrah} disabled={kilitli} onChange={(e) => setMatrah(e.target.value)} />
       <label className="m2-label">Vade (paranın geleceği tarih)</label>
       <input className="m2-input" type="date" value={vade || ''} disabled={kilitli} onChange={(e) => setVade(e.target.value)} />
+      <label className="m2-label">Günsonu aralığı (başlangıç ve bitiş günü dahil)</label>
+      <div className="m2-row">
+        <input
+          className="m2-input"
+          type="date"
+          aria-label="Günsonu başlangıç"
+          value={bas}
+          disabled={kilitli}
+          onChange={(e) => {
+            setBas(e.target.value);
+            setBasEl(true);
+          }}
+        />
+        <span>–</span>
+        <input
+          className="m2-input"
+          type="date"
+          aria-label="Günsonu bitiş"
+          value={bit}
+          disabled={kilitli}
+          onChange={(e) => {
+            setBit(e.target.value);
+            setBitEl(true);
+          }}
+        />
+      </div>
+      {on && on.onceki && (
+        <p className="m2-not">
+          Önceki kesim ({kart.ad}, {on.onceki.donem} / {on.onceki.kesim}) {tarihTR(on.onceki.bit)} günü bitti; bu aralık {tarihTR(on.oneriBas)} gününden başlamalı.
+        </p>
+      )}
+      {on && on.onceKesimYok && <p className="m2-not">Bu kart için önceki kesim girilmemiş: standart başlangıç kullanıldı.</p>}
+      {on && on.uyari && <p className="m2-txt-r m2-not">{aralikUyariMetni(on.onceki, on.uyari)}</p>}
+      {((basEl && on && bas !== on.oneriBas) || (bitEl && on && bit !== on.oneriBit && bit !== faturaTarihi)) && on && (
+        <button type="button" className="m2-link" onClick={() => { setBasEl(false); setBitEl(false); }}>
+          Önerilen aralığa dön
+        </button>
+      )}
 
       <div className="m2-kutu">
         <table className="m2-table m2-onizleme">
@@ -334,15 +424,34 @@ function FaturaModal({ satir, donem, kesim, onKaydet, onSil, onBitti, onKapat })
       </div>
 
       <div className="m2-kutu">
-        <p style={{ margin: 0 }}>
-          Bu dönemin günsonu toplamı: <strong>{TL(satir.gunsonuToplam)}</strong>
-        </p>
-        {m > 0 &&
-          (Math.abs(gunsonuFark) > 1 ? (
-            <p className="m2-txt-r" style={{ margin: '6px 0 0' }}>Fatura toplamı ile günsonu arasında {TL(gunsonuFark)} fark var.</p>
-          ) : (
-            <p className="m2-txt-g" style={{ margin: '6px 0 0' }}>Günsonu toplamıyla uyumlu.</p>
-          ))}
+        {onHata && <p className="m2-txt-r" style={{ margin: 0 }}>{onHata}</p>}
+        {on && (
+          <>
+            <div className="m2-gun-liste">
+              {on.gunler.map((g) => (
+                <div key={g.tarih} className={`m2-gun ${g.kayit ? '' : 'yok'}`}>
+                  <span>{tarihTR(g.tarih)}</span>
+                  <span>{g.kayit ? TL(g.toplam) : 'günsonu kaydı yok'}</span>
+                </div>
+              ))}
+            </div>
+            <p style={{ margin: 0 }}>
+              Günsonu toplamı ({on.gunler.length} gün): <strong>{TL(on.toplam)}</strong>
+            </p>
+            {on.eksikGunler.length > 0 && (
+              <p className="m2-txt-r" style={{ margin: '6px 0 0' }}>
+                {on.eksikGunler.length} gün için günsonu kaydı yok
+                {on.eksikGunler.length <= 4 ? `: ${on.eksikGunler.map((g) => kisaTarih(g)).join(', ')}` : ''}.
+              </p>
+            )}
+            {m > 0 &&
+              (Math.abs(gunsonuFark) > 1 ? (
+                <p className="m2-txt-r" style={{ margin: '6px 0 0' }}>Fatura toplamı ile günsonu arasında {TL(gunsonuFark)} fark var.</p>
+              ) : (
+                <p className="m2-txt-g" style={{ margin: '6px 0 0' }}>Günsonu toplamıyla uyumlu.</p>
+              ))}
+          </>
+        )}
       </div>
 
       {m > 0 && (
@@ -368,8 +477,8 @@ function FaturaModal({ satir, donem, kesim, onKaydet, onSil, onBitti, onKapat })
           </button>
           <button
             className="m2-btn"
-            disabled={bekliyor || kilitli || !(m > 0)}
-            onClick={() => calistir({ kartId: kart.id, donem, kesim, faturaTarihi, matrah, vade })}
+            disabled={bekliyor || kilitli || !(m > 0) || !!onHata || !bas || !bit}
+            onClick={() => calistir({ kartId: kart.id, donem, kesim, faturaTarihi, matrah, vade, gunsonuBas: bas, gunsonuBit: bit })}
           >
             {bekliyor ? '…' : 'Kaydet'}
           </button>

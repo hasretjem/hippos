@@ -253,13 +253,84 @@ export function yemekKartiHesapla(matrah, kart) {
   };
 }
 
-// Kesim aralığı: 10 -> ayın 1-10'u, 20 -> 11-20'si, 30 -> 21'den ay sonuna.
-export function kesimGunleri(donem, kesim) {
+// ---------------------------------------------------------------------------
+// Günsonu aralığı (her kesimin kendi başlangıç ve bitişi, İKİSİ DE DAHİL)
+//  - Bitiş varsayılan olarak fatura tarihidir: 11'inde kesilen fatura 11'inin günsonunu da kapsar.
+//  - Başlangıç, aynı kartın önceki kesiminin bitişinden bir gün sonrasıdır.
+//  - Önceki kesim yoksa kartın kendi takvimine göre standart başlangıç kullanılır
+//    (örn. yalnızca ayın 30'unda kesilen kart için ayın 1'i).
+// ---------------------------------------------------------------------------
+const pad2 = (n) => String(n).padStart(2, '0');
+const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+const gunMs = (iso) => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)));
+export const gunEkle = (iso, n) => new Date(gunMs(iso) + n * 86400000).toISOString().slice(0, 10);
+export const gunFarki = (a, b) => Math.round((gunMs(b) - gunMs(a)) / 86400000); // b - a (gün)
+const isoToTR = (iso) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
+const trToIso = (tr) => {
+  const [g, a, y] = String(tr).split('.');
+  return y && a && g ? `${y}-${pad2(a)}-${pad2(g)}` : '';
+};
+function gunListesi(bas, bit) {
+  const l = [];
+  for (let g = bas; g <= bit; g = gunEkle(g, 1)) l.push(g);
+  return l;
+}
+const MAKS_ARALIK_GUN = 92;
+
+// Kartın kendi kesim takvimine göre standart aralık.
+export function standartAralik(donem, kesim, kart) {
   const [y, a] = String(donem).split('-').map(Number);
-  const sonGun = new Date(y, a, 0).getDate();
-  if (Number(kesim) === 10) return [1, 10];
-  if (Number(kesim) === 20) return [11, 20];
-  return [21, sonGun];
+  const sonGun = new Date(Date.UTC(y, a, 0)).getUTCDate();
+  const oncekiler = [10, 20, 30].filter((g) => kart[`kesim${g}`] && g < Number(kesim));
+  const onceki = oncekiler.length ? oncekiler[oncekiler.length - 1] : 0;
+  return {
+    bas: `${donem}-${pad2(onceki + 1)}`,
+    bit: Number(kesim) === 30 ? `${donem}-${pad2(sonGun)}` : `${donem}-${pad2(kesim)}`,
+  };
+}
+
+// Aynı kartın, verilen kesimden ÖNCEKİ en son kesimi (yoksa null).
+function oncekiKesimBul(kesimlerKart, donem, kesim) {
+  const anahtar = `${donem}-${pad2(kesim)}`;
+  return (
+    kesimlerKart
+      .map((k) => ({ ...k, anahtar: `${k.donem}-${pad2(k.kesim)}` }))
+      .filter((k) => k.anahtar < anahtar)
+      .sort((x, y) => (x.anahtar < y.anahtar ? 1 : -1))[0] || null
+  );
+}
+
+// Önerilen aralık: başlangıç = önceki kesimin bitişi + 1 gün, bitiş = fatura tarihi.
+export function aralikOneri({ kart, kesimlerKart, donem, kesim, faturaTarihi }) {
+  const std = standartAralik(donem, kesim, kart);
+  let bas = std.bas;
+  let onceki = null;
+  const aday = oncekiKesimBul(kesimlerKart, donem, kesim);
+  if (aday) {
+    const sonrasi = gunEkle(aday.gunsonu_bit, 1);
+    // Çok eski bir kesimi (aylar önce) önceki saymayız; standart başlangıca döneriz.
+    if (gunFarki(sonrasi, std.bas) <= 31) {
+      bas = sonrasi;
+      onceki = { donem: aday.donem, kesim: aday.kesim, bit: aday.gunsonu_bit };
+    }
+  }
+  const bit = faturaTarihi && ISO_RE.test(faturaTarihi) ? faturaTarihi : std.bit;
+  if (gunFarki(bas, bit) < 0) bas = gunFarki(std.bas, bit) >= 0 ? std.bas : bit;
+  return { bas, bit, onceki, onceKesimYok: !onceki };
+}
+
+// Seçilen başlangıcın önceki kesime göre durumu: boşluk (bugün hiçbir faturada olmayan gün) veya çakışma.
+function aralikUyarisi(onceki, bas) {
+  if (!onceki) return null;
+  const fark = gunFarki(gunEkle(onceki.bit, 1), bas); // >0 boşluk, <0 çakışma
+  if (fark === 0) return null;
+  return { tur: fark > 0 ? 'bosluk' : 'cakisma', gun: Math.abs(fark) };
+}
+
+function aralikDogrula(bas, bit) {
+  if (!ISO_RE.test(String(bas || '')) || !ISO_RE.test(String(bit || ''))) throw new HataMesaji(400, 'Günsonu aralığı tarihleri geçersiz');
+  if (gunFarki(bas, bit) < 0) throw new HataMesaji(400, 'Günsonu bitişi başlangıçtan önce olamaz');
+  if (gunFarki(bas, bit) + 1 > MAKS_ARALIK_GUN) throw new HataMesaji(400, `Günsonu aralığı en fazla ${MAKS_ARALIK_GUN} gün olabilir`);
 }
 
 function sayiCozTR(v) {
@@ -270,31 +341,42 @@ function sayiCozTR(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-// Günsonu kayıtlarındaki yemek kartı tutarları (marka bazında), kesim aralığı için.
-async function gunsonuYemekToplamlari(db, donem, kesim) {
-  const [y, a] = String(donem).split('-');
-  const [bas, bit] = kesimGunleri(donem, kesim);
-  const { data, error } = await db.from('gs_kayitlar').select('tarih,yemek_detay').like('tarih', `%.${a}.${y}`);
+// Günsonu kayıtlarını (gün başına tek satır) verilen tarih aralığı için okur.
+// Dönen: Map(ISO tarih -> { marka: { markaAdi(norm) -> o günün toplamı } })
+async function gunsonuGunluk(db, bas, bit) {
+  const gunler = gunListesi(bas, bit);
+  const { data, error } = await db.from('gs_kayitlar').select('tarih,yemek_detay').in('tarih', gunler.map(isoToTR));
   kontrol(error);
-  const toplam = {};
+  const harita = new Map();
   (data || []).forEach((r) => {
-    const gun = parseInt(String(r.tarih).split('.')[0], 10);
-    if (!(gun >= bas && gun <= bit)) return;
+    const iso = trToIso(r.tarih);
+    if (!iso) return;
     let detay = {};
     try {
       detay = JSON.parse(r.yemek_detay || '{}') || {};
     } catch {
       detay = {};
     }
+    const marka = {};
     const tutarlar = detay.tutarlar || {};
-    Object.keys(tutarlar).forEach((marka) => {
-      const satir = tutarlar[marka] || {};
-      const t = Object.keys(satir).reduce((x, k) => x + sayiCozTR(satir[k]), 0);
-      const anahtar = norm(marka);
-      toplam[anahtar] = Math.round(((toplam[anahtar] || 0) + t) * 100) / 100;
+    Object.keys(tutarlar).forEach((m) => {
+      const satir = tutarlar[m] || {};
+      marka[norm(m)] = Math.round(Object.keys(satir).reduce((x, k) => x + sayiCozTR(satir[k]), 0) * 100) / 100;
     });
+    harita.set(iso, { marka });
   });
-  return toplam;
+  return harita;
+}
+
+// Bir kartın aralıktaki gün gün günsonu tutarları. kayit=false: o gün için günsonu kaydı hiç yok.
+function kartGunleri(kartAd, harita, bas, bit) {
+  const anahtar = norm(kartAd);
+  const gunler = gunListesi(bas, bit).map((g) => {
+    const k = harita.get(g);
+    return { tarih: g, kayit: !!k, toplam: k ? k.marka[anahtar] || 0 : 0 };
+  });
+  const toplam = Math.round(gunler.reduce((x, g) => x + g.toplam, 0) * 100) / 100;
+  return { gunler, toplam, eksikGunler: gunler.filter((g) => !g.kayit).map((g) => g.tarih) };
 }
 
 const sayiN = (v) => (v === null || v === undefined ? 0 : Number(v));
@@ -322,6 +404,8 @@ const kesimCamel = (k) => ({
   kesintiKdv: sayiN(k.kesinti_kdv),
   kesintiToplami: sayiN(k.kesinti_toplami),
   bankayaYatacak: sayiN(k.bankaya_yatacak),
+  gunsonuBas: k.gunsonu_bas || '',
+  gunsonuBit: k.gunsonu_bit || '',
 });
 
 // SQL fonksiyonlarının özel hata mesajlarını kullanıcı diline çevirir.
@@ -504,6 +588,7 @@ export default async function handler(req, res) {
     }
 
     // Yemek Kartları: seçili dönem ve kesim için her kartın durumu.
+    // Günsonu aralığı KARTA ve KESİME özeldir (kesilmişse kayıtlı aralık, kesilmemişse öneri).
     if (req.method === 'GET' && resource === 'yemekKarti') {
       const donem = String(req.query?.donem || bugunIstanbul().slice(0, 7));
       const kesim = Number(req.query?.kesim || 10);
@@ -511,16 +596,34 @@ export default async function handler(req, res) {
       if (![10, 20, 30].includes(kesim)) throw new HataMesaji(400, 'Kesim geçersiz');
       const [kr, ks] = await Promise.all([
         db.from('m2_yk_kartlar').select('*').order('sira'),
-        db.from('m2_yk_kesimler').select('*').eq('donem', donem).eq('kesim', kesim),
+        db.from('m2_yk_kesimler').select('*'),
       ]);
       [kr, ks].forEach((r) => kontrol(r.error));
       const kartlar = kr.data || [];
-      const kesimler = ks.data || [];
+      const tumKesimler = ks.data || [];
+      const buKesimler = tumKesimler.filter((x) => x.donem === donem && x.kesim === kesim);
+
+      // Her kartın günsonu aralığı
+      const aralik = new Map();
+      kartlar.forEach((k) => {
+        const kesimlerKart = tumKesimler.filter((x) => x.kart_id === k.id);
+        const kes = buKesimler.find((x) => x.kart_id === k.id) || null;
+        const oneri = aralikOneri({ kart: kartCamel(k), kesimlerKart, donem, kesim });
+        if (kes) {
+          const uyari = aralikUyarisi(oneri.onceki, kes.gunsonu_bas);
+          aralik.set(k.id, { bas: kes.gunsonu_bas, bit: kes.gunsonu_bit, oneri: false, uyari, onceKesimYok: oneri.onceKesimYok });
+        } else {
+          aralik.set(k.id, { bas: oneri.bas, bit: oneri.bit, oneri: true, uyari: null, onceKesimYok: oneri.onceKesimYok });
+        }
+      });
+      const hepsiBas = [...aralik.values()].map((x) => x.bas).sort()[0];
+      const hepsiBit = [...aralik.values()].map((x) => x.bit).sort().slice(-1)[0];
+
       const firmaIdleri = kartlar.map((k) => k[`firma${kesim}_id`]).filter(Boolean);
-      const [fr, od, gunsonu] = await Promise.all([
+      const [fr, od, harita] = await Promise.all([
         firmaIdleri.length ? db.from('m2_firmalar').select('id,ad').in('id', firmaIdleri) : { data: [], error: null },
-        kesimler.length ? db.from('m2_yk_odemeler').select('*').in('kesim_id', kesimler.map((k) => k.id)) : { data: [], error: null },
-        gunsonuYemekToplamlari(db, donem, kesim).catch(() => ({})),
+        buKesimler.length ? db.from('m2_yk_odemeler').select('*').in('kesim_id', buKesimler.map((k) => k.id)) : { data: [], error: null },
+        hepsiBas && hepsiBit ? gunsonuGunluk(db, hepsiBas, hepsiBit).catch(() => new Map()) : new Map(),
       ]);
       [fr, od].forEach((r) => kontrol(r.error));
       const firmaHaritasi = new Map((fr.data || []).map((f) => [f.id, f]));
@@ -529,7 +632,7 @@ export default async function handler(req, res) {
       const satirlar = kartlar
         .filter((k) => !k.pasif)
         .map((k) => {
-          const kes = kesimler.find((x) => x.kart_id === k.id) || null;
+          const kes = buKesimler.find((x) => x.kart_id === k.id) || null;
           const cari = firmaHaritasi.get(k[`firma${kesim}_id`]) || null;
           const odemeler = kes
             ? (od.data || [])
@@ -538,7 +641,8 @@ export default async function handler(req, res) {
                 .map((o) => ({ id: o.id, tutar: sayiN(o.tutar), gelisTarihi: o.gelis_tarihi, hesapAdi: o.hesap_adi }))
             : [];
           const gelenToplam = r2(odemeler.reduce((x, o) => x + o.tutar, 0));
-          const gunsonuToplam = gunsonu[norm(k.ad)] || 0;
+          const ar = aralik.get(k.id);
+          const gg = kartGunleri(k.ad, harita, ar.bas, ar.bit);
           const kesimObj = kes ? kesimCamel(kes) : null;
           const kalan = kesimObj ? r2(kesimObj.bankayaYatacak - gelenToplam) : 0;
           const sonGelis = odemeler.length ? odemeler[odemeler.length - 1].gelisTarihi : '';
@@ -550,19 +654,43 @@ export default async function handler(req, res) {
             odemeler,
             gelenToplam,
             kalan,
-            gunsonuToplam,
-            gunsonuFark: kesimObj ? r2(kesimObj.faturaToplami - gunsonuToplam) : 0,
+            gunsonu: { bas: ar.bas, bit: ar.bit, oneri: ar.oneri, uyari: ar.uyari, onceKesimYok: ar.onceKesimYok, eksikGunSayisi: gg.eksikGunler.length },
+            gunsonuToplam: gg.toplam,
+            gunsonuFark: kesimObj ? r2(kesimObj.faturaToplami - gg.toplam) : 0,
             vadeFarkliMi: !!(kesimObj && sonGelis && kesimObj.vade && sonGelis !== kesimObj.vade),
             vadeGecti: !!(kesimObj && kesimObj.vade && kesimObj.vade < bugun && kalan > 0.005),
           };
         });
-      const [basGun, bitGun] = kesimGunleri(donem, kesim);
-      const [y, a] = donem.split('-');
+      return res.status(200).json({ satirlar, donem, kesim });
+    }
+
+    // Fatura Kes penceresi için: önerilen/seçilen günsonu aralığı, gün gün döküm, boşluk/çakışma uyarısı.
+    if (req.method === 'GET' && resource === 'yemekKartiOnizleme') {
+      const donem = String(req.query?.donem || '');
+      const kesim = Number(req.query?.kesim);
+      if (!/^\d{4}-\d{2}$/.test(donem)) throw new HataMesaji(400, 'Dönem geçersiz');
+      if (![10, 20, 30].includes(kesim)) throw new HataMesaji(400, 'Kesim geçersiz');
+      const kart = await ykKartGetir(db, req.query?.kartId);
+      const { data: kesimlerKart, error: kkHata } = await db.from('m2_yk_kesimler').select('*').eq('kart_id', kart.id);
+      kontrol(kkHata);
+      const faturaTarihi = ISO_RE.test(String(req.query?.faturaTarihi || '')) ? req.query.faturaTarihi : '';
+      const oneri = aralikOneri({ kart: kartCamel(kart), kesimlerKart: kesimlerKart || [], donem, kesim, faturaTarihi });
+      const bas = req.query?.bas ? String(req.query.bas) : oneri.bas;
+      const bit = req.query?.bit ? String(req.query.bit) : oneri.bit;
+      aralikDogrula(bas, bit);
+      const harita = await gunsonuGunluk(db, bas, bit);
+      const gg = kartGunleri(kart.ad, harita, bas, bit);
       return res.status(200).json({
-        satirlar,
-        donem,
-        kesim,
-        aralik: { bas: `${String(basGun).padStart(2, '0')}.${a}.${y}`, bit: `${String(bitGun).padStart(2, '0')}.${a}.${y}` },
+        bas,
+        bit,
+        oneriBas: oneri.bas,
+        oneriBit: oneri.bit,
+        onceki: oneri.onceki,
+        onceKesimYok: oneri.onceKesimYok,
+        uyari: aralikUyarisi(oneri.onceki, bas),
+        gunler: gg.gunler,
+        toplam: gg.toplam,
+        eksikGunler: gg.eksikGunler,
       });
     }
 
@@ -777,6 +905,13 @@ export default async function handler(req, res) {
       const faturaTarihi = tarihKontrol(body.faturaTarihi);
       const vade = body.vade ? tarihKontrol(body.vade) : null;
       const kart = await ykKartGetir(db, body.kartId);
+      const { data: kesimlerKart, error: kkHata } = await db.from('m2_yk_kesimler').select('*').eq('kart_id', kart.id);
+      kontrol(kkHata);
+      // Günsonu aralığı gönderilmezse öneri kullanılır: başlangıç = önceki kesim + 1 gün, bitiş = fatura tarihi.
+      const oneri = aralikOneri({ kart: kartCamel(kart), kesimlerKart: kesimlerKart || [], donem, kesim, faturaTarihi });
+      const gunsonuBas = body.gunsonuBas ? String(body.gunsonuBas) : oneri.bas;
+      const gunsonuBit = body.gunsonuBit ? String(body.gunsonuBit) : oneri.bit;
+      aralikDogrula(gunsonuBas, gunsonuBit);
 
       const { data: mevcut, error: mevcutHata } = await db
         .from('m2_yk_kesimler')
@@ -816,6 +951,8 @@ export default async function handler(req, res) {
         kesinti_toplami: h.kesintiToplami,
         bankaya_yatacak: h.bankayaYatacak,
         grup_id: grupId,
+        gunsonu_bas: gunsonuBas,
+        gunsonu_bit: gunsonuBit,
       };
       const fatura =
         h.kesintiToplami > 0
@@ -857,7 +994,13 @@ export default async function handler(req, res) {
         p_eski_kesim_id: mevcut ? mevcut.id : null,
       });
       ykKontrol(error);
-      return res.status(200).json({ ok: true, hesap: h, duzenlendi: !!mevcut, cari: cari.ad });
+      return res.status(200).json({
+        ok: true,
+        hesap: h,
+        duzenlendi: !!mevcut,
+        cari: cari.ad,
+        gunsonu: { bas: gunsonuBas, bit: gunsonuBit, uyari: aralikUyarisi(oneri.onceki, gunsonuBas) },
+      });
     }
 
     if (resource === 'yemekKartiSil') {
