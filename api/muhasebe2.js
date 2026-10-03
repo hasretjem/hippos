@@ -1,4 +1,4 @@
-// Muhasebe2 API — Fişler/Faturalar ve Makbuzlar + Datalar + Hesap Özetleri.
+// Muhasebe2 API — Fişler/Faturalar ve Makbuzlar + Datalar + Hesap Özetleri + Yemek Kartları.
 // Veri Supabase'de (m2_* tabloları), eski mh_* tablolarından bağımsız.
 //
 // Defter kuralı:
@@ -15,8 +15,11 @@ import { randomUUID } from 'node:crypto';
 export const FATURA_ODEME_TURLERI = ['Cari', 'Nakit', 'Kredi Kartı', 'Banka Havalesi'];
 export const MAKBUZ_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi'];
 export const MAKBUZ_TURLERI = ['Tahsilat', 'Ödeme'];
-export const YONTEM_TURLERI = ['Kredi Kartı', 'Banka Havalesi'];
-const DATALAR_LIMIT = 1000;
+export const YONTEM_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi'];
+// Datalar tüm kayıtları sayfa sayfa (1000'er) yükler; üst sınır 20.000 satır.
+const DATALAR_SAYFA = 1000;
+const DATALAR_MAKS_SAYFA = 20;
+const YK_KATEGORI = 'Yemek Kart-Banka Masrafı';
 
 class HataMesaji extends Error {
   constructor(durum, mesaj) {
@@ -140,6 +143,7 @@ const norm = (s) => String(s || '').trim().toLowerCase();
 
 // Cari hangi gruba giriyor? Cariler = firmalar + kredi kartları + cepten; Kasa ve Banka ayrı.
 export function grupBul(firma, yontemler) {
+  if (firma.firma_turu === 'Yemek Kartı') return { grup: 'Yemek Kartı', bolum: 'cariler' };
   if (firma.firma_turu !== 'Ödeme Şekli') return { grup: 'Firma', bolum: 'cariler' };
   const turler = (yontemler || []).filter((y) => norm(y.ad) === norm(firma.ad)).map((y) => y.odeme_turu);
   if (turler.includes('Nakit')) return { grup: 'Kasa', bolum: 'kasaBanka' };
@@ -215,6 +219,162 @@ export function ekstreHesapla(faturalar, makbuzlar) {
     };
   });
   return { satirlar, toplamBorc: toplamBorcK / 100, toplamAlacak: toplamAlacakK / 100, bakiye: bakiyeK / 100 };
+}
+
+// ---------------------------------------------------------------------------
+// Yemek kartları
+// ---------------------------------------------------------------------------
+// Hesap, kuruş (tam sayı) üzerinden ve yuvarlama EN SONDA yapılır; Excel ile aynı sonucu verir.
+//   Fatura toplamı  = matrah x (1 + fatura KDV)
+//   Kesinti toplamı = matrah x oran x (1 + kesinti KDV)
+//   Bankaya yatacak = fatura toplamı - kesinti toplamı (ekrandaki iki rakamın farkı; defterde artık kuruş kalmaz)
+const yariYukari = (pay, payda) => (pay + payda / 2n) / payda; // BigInt, negatif olmayan sayılar
+export function yemekKartiHesapla(matrah, kart) {
+  const orani = (x, varsayilan) => BigInt(Math.round(Number(x ?? varsayilan) * 10000));
+  const M = BigInt(Math.round((Number(matrah) || 0) * 100));
+  const fk = orani(kart.faturaKdv, 0.1);
+  const ko = orani(kart.komisyonOrani, 0);
+  const kk = orani(kart.kesintiKdv, 0.2);
+  const B = 10000n;
+  const faturaKdvK = yariYukari(M * fk, B);
+  const faturaToplamiK = yariYukari(M * (B + fk), B);
+  const kesintiMatrahK = yariYukari(M * ko, B);
+  const kesintiKdvK = yariYukari(M * ko * kk, B * B);
+  const kesintiToplamiK = yariYukari(M * ko * (B + kk), B * B);
+  const n = (k) => Number(k) / 100;
+  return {
+    matrah: n(M),
+    kdv: n(faturaKdvK),
+    faturaToplami: n(faturaToplamiK),
+    kesintiMatrah: n(kesintiMatrahK),
+    kesintiKdv: n(kesintiKdvK),
+    kesintiToplami: n(kesintiToplamiK),
+    bankayaYatacak: n(faturaToplamiK - kesintiToplamiK),
+  };
+}
+
+// Kesim aralığı: 10 -> ayın 1-10'u, 20 -> 11-20'si, 30 -> 21'den ay sonuna.
+export function kesimGunleri(donem, kesim) {
+  const [y, a] = String(donem).split('-').map(Number);
+  const sonGun = new Date(y, a, 0).getDate();
+  if (Number(kesim) === 10) return [1, 10];
+  if (Number(kesim) === 20) return [11, 20];
+  return [21, sonGun];
+}
+
+function sayiCozTR(v) {
+  let t = String(v ?? '').trim();
+  if (!t) return 0;
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+  const n = Number(t);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Günsonu kayıtlarındaki yemek kartı tutarları (marka bazında), kesim aralığı için.
+async function gunsonuYemekToplamlari(db, donem, kesim) {
+  const [y, a] = String(donem).split('-');
+  const [bas, bit] = kesimGunleri(donem, kesim);
+  const { data, error } = await db.from('gs_kayitlar').select('tarih,yemek_detay').like('tarih', `%.${a}.${y}`);
+  kontrol(error);
+  const toplam = {};
+  (data || []).forEach((r) => {
+    const gun = parseInt(String(r.tarih).split('.')[0], 10);
+    if (!(gun >= bas && gun <= bit)) return;
+    let detay = {};
+    try {
+      detay = JSON.parse(r.yemek_detay || '{}') || {};
+    } catch {
+      detay = {};
+    }
+    const tutarlar = detay.tutarlar || {};
+    Object.keys(tutarlar).forEach((marka) => {
+      const satir = tutarlar[marka] || {};
+      const t = Object.keys(satir).reduce((x, k) => x + sayiCozTR(satir[k]), 0);
+      const anahtar = norm(marka);
+      toplam[anahtar] = Math.round(((toplam[anahtar] || 0) + t) * 100) / 100;
+    });
+  });
+  return toplam;
+}
+
+const sayiN = (v) => (v === null || v === undefined ? 0 : Number(v));
+const kartCamel = (k) => ({
+  id: k.id,
+  ad: k.ad,
+  sira: k.sira,
+  komisyonOrani: sayiN(k.komisyon_orani),
+  faturaKdv: sayiN(k.fatura_kdv),
+  kesintiKdv: sayiN(k.kesinti_kdv),
+  kesim10: !!k.kesim10,
+  kesim20: !!k.kesim20,
+  kesim30: !!k.kesim30,
+  pasif: !!k.pasif,
+});
+const kesimCamel = (k) => ({
+  id: k.id,
+  faturaTarihi: k.fatura_tarihi,
+  vade: k.vade || '',
+  matrah: sayiN(k.matrah),
+  kdv: sayiN(k.fatura_kdv),
+  faturaToplami: sayiN(k.fatura_toplami),
+  kesintiOran: sayiN(k.kesinti_oran),
+  kesintiMatrah: sayiN(k.kesinti_matrah),
+  kesintiKdv: sayiN(k.kesinti_kdv),
+  kesintiToplami: sayiN(k.kesinti_toplami),
+  bankayaYatacak: sayiN(k.bankaya_yatacak),
+});
+
+// SQL fonksiyonlarının özel hata mesajlarını kullanıcı diline çevirir.
+function ykKontrol(error) {
+  if (!error) return;
+  const m = String(error.message || '');
+  if (m.includes('PARA_GELDI_VAR')) {
+    throw new HataMesaji(409, 'Bu kesim için para geldi kaydı var. Önce para geldi kayıtlarını geri alın.');
+  }
+  if (m.includes('KESIM_YOK')) throw new HataMesaji(404, 'Kesim bulunamadı');
+  if (m.includes('ODEME_YOK')) throw new HataMesaji(404, 'Para geldi kaydı bulunamadı');
+  kontrol(error);
+}
+
+async function ykKartGetir(db, kartId) {
+  if (!kartId) throw new HataMesaji(400, 'Kart seçin');
+  const { data, error } = await db.from('m2_yk_kartlar').select('*').eq('id', kartId).maybeSingle();
+  kontrol(error);
+  if (!data) throw new HataMesaji(404, 'Yemek kartı bulunamadı');
+  return data;
+}
+
+// Kartın o kesimdeki carisi (Edenred10 gibi). Yoksa açılır ve karta bağlanır.
+async function ykCarisi(db, kart, kesim) {
+  const kolon = `firma${kesim}_id`;
+  if (kart[kolon]) {
+    const { data, error } = await db.from('m2_firmalar').select('id,ad').eq('id', kart[kolon]).maybeSingle();
+    kontrol(error);
+    if (data) return data;
+  }
+  const ad = `${kart.ad}${kesim}`;
+  const ekle = await db.from('m2_firmalar').insert({ ad, firma_turu: 'Yemek Kartı' }).select('id,ad').single();
+  let cari = ekle.data;
+  if (ekle.error?.code === '23505') {
+    const { data: hepsi, error: hata2 } = await db.from('m2_firmalar').select('id,ad');
+    kontrol(hata2);
+    cari = (hepsi || []).find((f) => norm(f.ad) === norm(ad));
+  } else {
+    kontrol(ekle.error);
+  }
+  if (!cari) throw new HataMesaji(500, 'Yemek kartı carisi açılamadı');
+  const { error } = await db.from('m2_yk_kartlar').update({ [kolon]: cari.id }).eq('id', kart.id);
+  kontrol(error);
+  return cari;
+}
+
+async function kategoriBulVeyaAc(db, ad) {
+  const { data, error } = await db.from('m2_kategoriler').select('ad').eq('ad', ad).maybeSingle();
+  kontrol(error);
+  if (data) return data.ad;
+  const ekle = await db.from('m2_kategoriler').insert({ ad, sira: 50 });
+  if (ekle.error && ekle.error.code !== '23505') kontrol(ekle.error);
+  return ad;
 }
 
 export default async function handler(req, res) {
@@ -307,17 +467,24 @@ export default async function handler(req, res) {
 
     // Datalar: bütün fatura/fiş ve makbuz kayıtları Excel düzeninde (en yeni üstte).
     if (req.method === 'GET' && resource === 'datalar') {
-      const { data, error } = await db
-        .from('m2_datalar')
-        .select(
-          'id,tarih,evrak_turu,firma_adi,fatura_no,aciklama,gider_kategorisi,odeme_turu,odeme_sekli,tutar,kdv,tahsilat,odeme_tediye,otomatik,kayit_zamani,sira',
-        )
-        .order('tarih', { ascending: false })
-        .order('kayit_zamani', { ascending: false })
-        .order('sira', { ascending: true })
-        .limit(DATALAR_LIMIT);
-      kontrol(error);
-      const kayitlar = (data || []).map((r) => ({
+      // Tüm kayıtlar 1000'erlik sayfalarla çekilir (filtreler yüklenen satırlar üzerinde çalışır).
+      let tum = [];
+      for (let sayfa = 0; sayfa < DATALAR_MAKS_SAYFA; sayfa++) {
+        const { data, error } = await db
+          .from('m2_datalar')
+          .select(
+            'id,tarih,evrak_turu,firma_adi,fatura_no,aciklama,gider_kategorisi,odeme_turu,odeme_sekli,tutar,kdv,tahsilat,odeme_tediye,otomatik,kayit_zamani,sira',
+          )
+          .order('tarih', { ascending: false })
+          .order('kayit_zamani', { ascending: false })
+          .order('sira', { ascending: true })
+          .order('id', { ascending: true })
+          .range(sayfa * DATALAR_SAYFA, sayfa * DATALAR_SAYFA + DATALAR_SAYFA - 1);
+        kontrol(error);
+        tum = tum.concat(data || []);
+        if (!data || data.length < DATALAR_SAYFA) break;
+      }
+      const kayitlar = tum.map((r) => ({
         id: r.id,
         tarih: r.tarih,
         evrakTuru: r.evrak_turu,
@@ -333,7 +500,70 @@ export default async function handler(req, res) {
         odemeTediye: sayiOrNull(r.odeme_tediye),
         otomatik: !!r.otomatik,
       }));
-      return res.status(200).json({ kayitlar, sinirli: kayitlar.length >= DATALAR_LIMIT });
+      return res.status(200).json({ kayitlar, sinirli: kayitlar.length >= DATALAR_SAYFA * DATALAR_MAKS_SAYFA });
+    }
+
+    // Yemek Kartları: seçili dönem ve kesim için her kartın durumu.
+    if (req.method === 'GET' && resource === 'yemekKarti') {
+      const donem = String(req.query?.donem || bugunIstanbul().slice(0, 7));
+      const kesim = Number(req.query?.kesim || 10);
+      if (!/^\d{4}-\d{2}$/.test(donem)) throw new HataMesaji(400, 'Dönem geçersiz');
+      if (![10, 20, 30].includes(kesim)) throw new HataMesaji(400, 'Kesim geçersiz');
+      const [kr, ks] = await Promise.all([
+        db.from('m2_yk_kartlar').select('*').order('sira'),
+        db.from('m2_yk_kesimler').select('*').eq('donem', donem).eq('kesim', kesim),
+      ]);
+      [kr, ks].forEach((r) => kontrol(r.error));
+      const kartlar = kr.data || [];
+      const kesimler = ks.data || [];
+      const firmaIdleri = kartlar.map((k) => k[`firma${kesim}_id`]).filter(Boolean);
+      const [fr, od, gunsonu] = await Promise.all([
+        firmaIdleri.length ? db.from('m2_firmalar').select('id,ad').in('id', firmaIdleri) : { data: [], error: null },
+        kesimler.length ? db.from('m2_yk_odemeler').select('*').in('kesim_id', kesimler.map((k) => k.id)) : { data: [], error: null },
+        gunsonuYemekToplamlari(db, donem, kesim).catch(() => ({})),
+      ]);
+      [fr, od].forEach((r) => kontrol(r.error));
+      const firmaHaritasi = new Map((fr.data || []).map((f) => [f.id, f]));
+      const bugun = bugunIstanbul();
+      const r2 = (x) => Math.round(x * 100) / 100;
+      const satirlar = kartlar
+        .filter((k) => !k.pasif)
+        .map((k) => {
+          const kes = kesimler.find((x) => x.kart_id === k.id) || null;
+          const cari = firmaHaritasi.get(k[`firma${kesim}_id`]) || null;
+          const odemeler = kes
+            ? (od.data || [])
+                .filter((o) => o.kesim_id === kes.id)
+                .sort((a, b) => (a.gelis_tarihi < b.gelis_tarihi ? -1 : 1))
+                .map((o) => ({ id: o.id, tutar: sayiN(o.tutar), gelisTarihi: o.gelis_tarihi, hesapAdi: o.hesap_adi }))
+            : [];
+          const gelenToplam = r2(odemeler.reduce((x, o) => x + o.tutar, 0));
+          const gunsonuToplam = gunsonu[norm(k.ad)] || 0;
+          const kesimObj = kes ? kesimCamel(kes) : null;
+          const kalan = kesimObj ? r2(kesimObj.bankayaYatacak - gelenToplam) : 0;
+          const sonGelis = odemeler.length ? odemeler[odemeler.length - 1].gelisTarihi : '';
+          return {
+            kart: kartCamel(k),
+            kesilirMi: !!k[`kesim${kesim}`],
+            cari: cari ? { id: cari.id, ad: cari.ad } : null,
+            kesim: kesimObj,
+            odemeler,
+            gelenToplam,
+            kalan,
+            gunsonuToplam,
+            gunsonuFark: kesimObj ? r2(kesimObj.faturaToplami - gunsonuToplam) : 0,
+            vadeFarkliMi: !!(kesimObj && sonGelis && kesimObj.vade && sonGelis !== kesimObj.vade),
+            vadeGecti: !!(kesimObj && kesimObj.vade && kesimObj.vade < bugun && kalan > 0.005),
+          };
+        });
+      const [basGun, bitGun] = kesimGunleri(donem, kesim);
+      const [y, a] = donem.split('-');
+      return res.status(200).json({
+        satirlar,
+        donem,
+        kesim,
+        aralik: { bas: `${String(basGun).padStart(2, '0')}.${a}.${y}`, bit: `${String(bitGun).padStart(2, '0')}.${a}.${y}` },
+      });
     }
 
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -531,6 +761,185 @@ export default async function handler(req, res) {
       kontrol(error);
       await yontemFirmasi(db, ad);
       return res.status(200).json({ ok: true, yontem: data });
+    }
+
+    // ---------- Yemek kartı: fatura kes / düzenle ----------
+    // Kesim kaydı + (varsa) kesinti faturası + tediye makbuzu TEK işlemde yazılır.
+    //   Ödeme (Tediye) Makbuzu = fatura toplamı  -> kart carisi bize borçlu olur
+    //   Fatura/Fiş            = kesinti toplamı (KDV'si ayrı) -> gider, cariden düşer
+    if (resource === 'yemekKartiKaydet') {
+      const donem = String(body.donem || '');
+      const kesim = Number(body.kesim);
+      if (!/^\d{4}-\d{2}$/.test(donem)) throw new HataMesaji(400, 'Dönem geçersiz');
+      if (![10, 20, 30].includes(kesim)) throw new HataMesaji(400, 'Kesim geçersiz');
+      const matrah = tutarCoz(body.matrah);
+      if (matrah <= 0) throw new HataMesaji(400, 'Matrah sıfırdan büyük olmalı');
+      const faturaTarihi = tarihKontrol(body.faturaTarihi);
+      const vade = body.vade ? tarihKontrol(body.vade) : null;
+      const kart = await ykKartGetir(db, body.kartId);
+
+      const { data: mevcut, error: mevcutHata } = await db
+        .from('m2_yk_kesimler')
+        .select('id')
+        .eq('kart_id', kart.id)
+        .eq('donem', donem)
+        .eq('kesim', kesim)
+        .maybeSingle();
+      kontrol(mevcutHata);
+      if (mevcut) {
+        const { data: od, error: odHata } = await db.from('m2_yk_odemeler').select('id').eq('kesim_id', mevcut.id);
+        kontrol(odHata);
+        if ((od || []).length) ykKontrol({ message: 'PARA_GELDI_VAR' });
+      }
+
+      const cari = await ykCarisi(db, kart, kesim);
+      const kategori = await kategoriBulVeyaAc(db, YK_KATEGORI);
+      const h = yemekKartiHesapla(matrah, kartCamel(kart));
+      const grupId = randomUUID();
+      const kesimId = mevcut ? mevcut.id : randomUUID();
+      const donemYazi = `${donem} / ${kesim} kesimi`;
+
+      const kesimKaydi = {
+        id: kesimId,
+        kart_id: kart.id,
+        donem,
+        kesim,
+        firma_id: cari.id,
+        fatura_tarihi: faturaTarihi,
+        vade,
+        matrah: h.matrah,
+        fatura_kdv: h.kdv,
+        fatura_toplami: h.faturaToplami,
+        kesinti_oran: sayiN(kart.komisyon_orani),
+        kesinti_matrah: h.kesintiMatrah,
+        kesinti_kdv: h.kesintiKdv,
+        kesinti_toplami: h.kesintiToplami,
+        bankaya_yatacak: h.bankayaYatacak,
+        grup_id: grupId,
+      };
+      const fatura =
+        h.kesintiToplami > 0
+          ? {
+              id: randomUUID(),
+              tarih: faturaTarihi,
+              firma_id: cari.id,
+              firma_adi: cari.ad,
+              fatura_no: null,
+              aciklama: `Otomatik: yemek kartı komisyonu (${donemYazi})`,
+              gider_kategorisi: kategori,
+              odeme_turu: 'Cari',
+              odeme_hesabi: null,
+              kasa: null,
+              fatura_tutari: h.kesintiToplami,
+              kdv: h.kesintiKdv,
+              grup_id: grupId,
+            }
+          : null;
+      const tediye = {
+        id: randomUUID(),
+        tarih: faturaTarihi,
+        makbuz_turu: 'Ödeme',
+        firma_id: cari.id,
+        firma_adi: cari.ad,
+        fatura_no: null,
+        aciklama: `Otomatik: yemek kartı faturası (${donemYazi})`,
+        odeme_turu: null,
+        odeme_hesabi: null,
+        kasa: null,
+        tutar: h.faturaToplami,
+        otomatik: true,
+        grup_id: grupId,
+      };
+      const { error } = await db.rpc('m2_yk_kesim_yaz', {
+        p_kesim: kesimKaydi,
+        p_fatura: fatura,
+        p_tediye: tediye,
+        p_eski_kesim_id: mevcut ? mevcut.id : null,
+      });
+      ykKontrol(error);
+      return res.status(200).json({ ok: true, hesap: h, duzenlendi: !!mevcut, cari: cari.ad });
+    }
+
+    if (resource === 'yemekKartiSil') {
+      if (!body.kesimId) throw new HataMesaji(400, 'kesimId gerekli');
+      const { error } = await db.rpc('m2_yk_kesim_sil', { p_kesim_id: body.kesimId });
+      ykKontrol(error);
+      return res.status(200).json({ ok: true });
+    }
+
+    // Para geldi: tahsilat makbuzu (kart carisine) + banka carisine karşı makbuz, tek işlemde.
+    if (resource === 'yemekKartiParaGeldi') {
+      const tutar = tutarCoz(body.gelenTutar);
+      if (tutar <= 0) throw new HataMesaji(400, 'Gelen tutar sıfırdan büyük olmalı');
+      const tarih = body.gelisTarihi ? tarihKontrol(body.gelisTarihi) : bugunIstanbul();
+      if (!body.kesimId) throw new HataMesaji(400, 'kesimId gerekli');
+      const { data: ks, error: ksHata } = await db.from('m2_yk_kesimler').select('*').eq('id', body.kesimId).maybeSingle();
+      kontrol(ksHata);
+      if (!ks) throw new HataMesaji(404, 'Kesim bulunamadı');
+      const alan = await yontemAlanlari(db, 'Banka Havalesi', body.hesapAdi, null);
+      const banka = await yontemFirmasi(db, alan.odeme_hesabi);
+      const cari = await firmaGetir(db, ks.firma_id);
+      if (banka.id === cari.id) throw new HataMesaji(400, 'Firma ile ödeme şekli aynı olamaz');
+      const grupId = randomUUID();
+      const { error } = await db.rpc('m2_yk_odeme_yaz', {
+        p_odeme: { id: randomUUID(), kesim_id: ks.id, tutar, gelis_tarihi: tarih, hesap_adi: banka.ad, grup_id: grupId },
+        p_makbuzlar: [
+          {
+            id: randomUUID(),
+            tarih,
+            makbuz_turu: 'Tahsilat',
+            firma_id: cari.id,
+            firma_adi: cari.ad,
+            fatura_no: null,
+            aciklama: `Yemek kartı ödemesi (${ks.donem} / ${ks.kesim} kesimi)`,
+            odeme_turu: 'Banka Havalesi',
+            odeme_hesabi: banka.ad,
+            kasa: null,
+            tutar,
+            otomatik: false,
+            grup_id: grupId,
+          },
+          {
+            id: randomUUID(),
+            tarih,
+            makbuz_turu: 'Ödeme',
+            firma_id: banka.id,
+            firma_adi: banka.ad,
+            fatura_no: null,
+            aciklama: `Otomatik: ${cari.ad} tahsilatı`,
+            odeme_turu: null,
+            odeme_hesabi: null,
+            kasa: null,
+            tutar,
+            otomatik: true,
+            grup_id: grupId,
+          },
+        ],
+      });
+      ykKontrol(error);
+      return res.status(200).json({ ok: true });
+    }
+
+    if (resource === 'yemekKartiParaGeriAl') {
+      if (!body.odemeId) throw new HataMesaji(400, 'odemeId gerekli');
+      const { error } = await db.rpc('m2_yk_odeme_sil', { p_odeme_id: body.odemeId });
+      ykKontrol(error);
+      return res.status(200).json({ ok: true });
+    }
+
+    // Kart tanımı: komisyon oranı ve hangi kesimlerde fatura kesildiği.
+    if (resource === 'yemekKartiTanim') {
+      const kart = await ykKartGetir(db, body.id);
+      const oran = Number(String(body.komisyonOrani ?? '').replace(',', '.'));
+      if (!Number.isFinite(oran) || oran < 0 || oran >= 1) {
+        throw new HataMesaji(400, 'Komisyon oranı 0 ile 1 arasında olmalı (örn. %6 için 0,06)');
+      }
+      const { error } = await db
+        .from('m2_yk_kartlar')
+        .update({ komisyon_orani: oran, kesim10: !!body.kesim10, kesim20: !!body.kesim20, kesim30: !!body.kesim30 })
+        .eq('id', kart.id);
+      kontrol(error);
+      return res.status(200).json({ ok: true });
     }
 
     return res.status(400).json({ error: 'Bilinmeyen işlem' });

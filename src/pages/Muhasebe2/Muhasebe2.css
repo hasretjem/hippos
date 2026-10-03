@@ -5,7 +5,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   background: #393e41;
-  color: #f6f7eb;
+  color: #f6f7eb !important;
   font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
   padding: 20px 24px 48px;
   box-sizing: border-box;
@@ -29,7 +29,7 @@
   gap: 6px;
   background: none;
   border: none;
-  color: #f6f7eb;
+  color: #f6f7eb !important;
   font-weight: 700;
   font-size: 13px;
   cursor: pointer;
@@ -47,7 +47,7 @@
 .m2-title small {
   font-size: 12px;
   font-weight: 700;
-  color: #e94f37;
+  color: #e94f37 !important;
   background: rgba(233, 79, 55, 0.14);
   padding: 3px 9px;
   border-radius: 999px;
@@ -65,7 +65,7 @@
   border-radius: 12px;
   border: 1.5px solid rgba(246, 247, 235, 0.2);
   background: rgba(246, 247, 235, 0.06);
-  color: #f6f7eb;
+  color: #f6f7eb !important;
   font-weight: 700;
   cursor: pointer;
 }
@@ -91,7 +91,7 @@
 
 .m2-card {
   background: #f6f7eb;
-  color: #393e41;
+  color: #393e41 !important;
   border-radius: 18px;
   padding: 20px;
 }
@@ -108,10 +108,10 @@
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: rgba(57, 62, 65, 0.65);
+  color: rgba(57, 62, 65, 0.65) !important;
 }
 .m2-label b {
-  color: #e94f37;
+  color: #e94f37 !important;
 }
 .m2-input,
 .m2-select {
@@ -121,7 +121,7 @@
   border-radius: 10px;
   border: 1.5px solid rgba(57, 62, 65, 0.2);
   background: #fff;
-  color: #393e41;
+  color: #393e41 !important;
 }
 .m2-input:focus,
 .m2-select:focus {
@@ -153,7 +153,7 @@
   border-radius: 10px;
   border: 1.5px solid rgba(57, 62, 65, 0.2);
   background: #fff;
-  color: #393e41;
+  color: #393e41 !important;
   font-weight: 700;
   font-size: 13px;
   cursor: pointer;
@@ -161,7 +161,7 @@
 .m2-chip.on {
   background: #393e41;
   border-color: #393e41;
-  color: #f6f7eb;
+  color: #f6f7eb !important;
 }
 .m2-chip.yeni {
   border-style: dashed;
@@ -175,7 +175,7 @@
   border: none;
   border-radius: 12px;
   background: #e94f37;
-  color: #fff;
+  color: #fff !important;
   font-weight: 800;
   cursor: pointer;
 }
@@ -185,7 +185,7 @@
 }
 .m2-btn.sec {
   background: #fff;
-  color: #393e41;
+  color: #393e41 !important;
   border: 1.5px solid rgba(57, 62, 65, 0.25);
 }
 .m2-btn.mini {
@@ -230,13 +230,13 @@
   background: none;
   font-weight: 800;
   font-size: 13px;
-  color: #393e41;
+  color: #393e41 !important;
   cursor: pointer;
   border-radius: 999px;
   transition: color 0.22s ease;
 }
 .m2-toggle button.on {
-  color: #fff;
+  color: #fff !important;
 }
 
 .m2-dd-wrap {
@@ -264,7 +264,7 @@
   background: none;
   border: none;
   border-bottom: 1px solid rgba(57, 62, 65, 0.08);
-  color: #393e41;
+  color: #393e41 !important;
   text-align: left;
   cursor: pointer;
 }
@@ -290,11 +290,11 @@
 }
 .m2-info.r {
   background: rgba(233, 79, 55, 0.12);
-  color: #b53a26;
+  color: #b53a26 !important;
 }
 .m2-info.g {
   background: rgba(46, 125, 50, 0.12);
-  color: #2e7d32;
+  color: #2e7d32 !important;
 }
 .m2-hint {
   margin: 6px 0 0;
@@ -316,7 +316,7 @@
   width: 100%;
   max-width: 380px;
   background: #f6f7eb;
-  color: #393e41;
+  color: #393e41 !important;
   border-radius: 18px;
   padding: 20px;
 }
@@ -334,7 +334,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #393e41;
+  color: #393e41 !important;
 }
 .m2-modal-actions {
   display: flex;
@@ -353,7 +353,7 @@
   padding: 12px 18px;
   border-radius: 12px;
   background: #1f2325;
-  color: #f6f7eb;
+  color: #f6f7eb !important;
   font-weight: 600;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
 }
@@ -362,7 +362,7 @@
 }
 .m2-err {
   background: #f6f7eb;
-  color: #b53a26;
+  color: #b53a26 !important;
   border-radius: 14px;
   padding: 16px;
   margin-bottom: 16px;
@@ -391,7 +391,7 @@
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #f6f7eb;
+  color: #f6f7eb !important;
   background: #393e41;
   white-space: nowrap;
 }
@@ -413,7 +413,7 @@
   text-align: center;
 }
 .m2-table tr.oto td {
-  color: rgba(57, 62, 65, 0.6);
+  color: rgba(57, 62, 65, 0.6) !important;
   font-style: italic;
   background: rgba(57, 62, 65, 0.03);
 }
@@ -425,15 +425,15 @@
   font-weight: 800;
   font-style: normal;
   background: rgba(57, 62, 65, 0.12);
-  color: #393e41;
+  color: #393e41 !important;
 }
 .m2-badge.tahsilat {
   background: rgba(46, 125, 50, 0.15);
-  color: #2e7d32;
+  color: #2e7d32 !important;
 }
 .m2-badge.tediye {
   background: rgba(233, 79, 55, 0.15);
-  color: #b53a26;
+  color: #b53a26 !important;
 }
 .m2-empty {
   padding: 24px 0;
@@ -554,11 +554,11 @@
 }
 .m2-hc-kart.alacakli .m2-hc-durum,
 .m2-ekstre-ozet.alacakli .m2-hc-durum {
-  color: #b53a26;
+  color: #b53a26 !important;
 }
 .m2-hc-kart.borclu .m2-hc-durum,
 .m2-ekstre-ozet.borclu .m2-hc-durum {
-  color: #2e7d32;
+  color: #2e7d32 !important;
 }
 .m2-hc-yardim {
   font-size: 11.5px;
@@ -573,7 +573,7 @@
   border-radius: 8px;
   border: none;
   background: rgba(57, 62, 65, 0.08);
-  color: #393e41;
+  color: #393e41 !important;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -623,8 +623,221 @@
   font-weight: 700;
 }
 .m2-table td.bakiye.alacakli {
-  color: #b53a26;
+  color: #b53a26 !important;
 }
 .m2-table td.bakiye.borclu {
-  color: #2e7d32;
+  color: #2e7d32 !important;
+}
+/* ===== Yazı renkleri: genel stiller yazıyı beyaz yapıp okunmaz kılıyordu; hepsi !important ===== */
+.m2-card,
+.m2-modal {
+  color: #393e41 !important;
+}
+.m2-card h2,
+.m2-modal h3,
+.m2-modal-head h3 {
+  color: #e94f37 !important; /* Hippos kırmızısı */
+}
+.m2-title {
+  color: #f6f7eb !important;
+}
+
+/* ===== Hesap Özetleri: tek satırlık araç çubuğu ===== */
+.m2-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 14px;
+}
+.m2-toolbar .m2-ara {
+  width: 190px;
+  height: 36px;
+}
+.m2-chips.tight {
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+.m2-chips.tight .m2-chip {
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.m2-toolbar .m2-sirala {
+  width: auto;
+  height: 36px;
+  margin-left: auto;
+}
+
+/* ===== Datalar: Excel tarzı filtre ===== */
+.m2-th {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.m2-fb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: rgba(246, 247, 235, 0.15);
+  color: #f6f7eb !important;
+  cursor: pointer;
+}
+.m2-fb:hover {
+  background: rgba(246, 247, 235, 0.3);
+}
+.m2-fb.on {
+  background: #e94f37;
+}
+.m2-fmenu {
+  position: fixed;
+  z-index: 70;
+  width: 280px;
+  max-height: 62vh;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(57, 62, 65, 0.2);
+  background: #fff;
+  color: #393e41 !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+}
+.m2-fbaslik {
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #e94f37 !important;
+}
+.m2-fara {
+  height: 34px;
+  margin-bottom: 8px;
+}
+.m2-fbtn {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.m2-fbtn button {
+  padding: 4px 9px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(57, 62, 65, 0.2);
+  background: #fff;
+  color: #393e41 !important;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.m2-fbtn button:hover {
+  background: rgba(233, 79, 55, 0.1);
+}
+.m2-fliste {
+  overflow-y: auto;
+  min-height: 60px;
+  padding-right: 4px;
+}
+.m2-fsatir {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 2px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #393e41 !important;
+}
+.m2-fdal {
+  display: flex;
+  align-items: center;
+}
+.m2-facik {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #393e41 !important;
+  cursor: pointer;
+}
+
+/* ===== Yemek Kartları ===== */
+.m2-yk-ust {
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.m2-yk-ust > strong {
+  color: #393e41 !important;
+}
+.m2-table.m2-yk {
+  min-width: 1320px;
+}
+.m2-table tr.yk-kirmizi td {
+  background: rgba(233, 79, 55, 0.12);
+}
+.m2-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  opacity: 0.6;
+}
+.m2-yk-islem {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.m2-durum {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.m2-durum.g {
+  background: rgba(46, 125, 50, 0.14);
+  color: #2e7d32 !important;
+}
+.m2-durum.r {
+  background: rgba(233, 79, 55, 0.14);
+  color: #b53a26 !important;
+}
+.m2-kutu {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(57, 62, 65, 0.06);
+  color: #393e41 !important;
+  font-size: 13px;
+}
+.m2-table.m2-onizleme {
+  min-width: 0;
+  background: transparent;
+}
+.m2-table.m2-onizleme td {
+  border-bottom: 1px solid rgba(57, 62, 65, 0.08);
+}
+.m2-table tfoot td {
+  font-weight: 800;
+  background: rgba(57, 62, 65, 0.08);
+}
+
+/* Satır içi renk yerine sınıflar (hepsi !important) */
+.m2-txt-r {
+  color: #c62828 !important;
+}
+.m2-txt-g {
+  color: #2e7d32 !important;
 }

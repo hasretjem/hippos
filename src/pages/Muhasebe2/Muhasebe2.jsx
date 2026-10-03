@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Pencil, Plus, Share2, X } from 'lucide-react';
+import { ArrowLeft, Filter, Pencil, Plus, Share2 } from 'lucide-react';
 import { dosyaAdi, durumBul, ekstreGorunum, ekstrePdfTanimi, ekstrePdfUret, paraFmt, pdfPaylasVeyaIndir } from './ekstrePdf';
+import { ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, sayiFmt, tarihTR, trNorm, useModalKaydet } from './m2Ortak';
+import YemekKartlariSekmesi from './YemekKartlari';
+import { FILTRE_KOLONLARI, FiltreMenu, bosSecimler, filtreUygula, varsayilanTarihSecimi } from './DatalarFiltre';
 import './Muhasebe2.css';
 
 // ---------------------------------------------------------------------------
-// Muhasebe2 — Sekmeler: "Fişler/Faturalar ve Makbuzlar" (giriş), "Datalar" (Excel düzeninde döküm)
-// ve "Hesap Özetleri" (cari kartları, düzenleme, ekstre ve PDF).
+// Muhasebe2 — Sekmeler: "Fişler/Faturalar ve Makbuzlar" (giriş), "Datalar" (Excel düzeninde döküm,
+// Excel tarzı filtreler), "Hesap Özetleri" (cari kartları, düzenleme, ekstre ve PDF) ve "Yemek Kartları".
 // Giriş: sol Fiş/Fatura formu, sağ Tahsilat / Ödeme makbuzu (kaydırmalı anahtar).
 // Cari dışı yöntemle girilen her fatura için ödeme şekli carisine otomatik makbuz yazılır (sunucu yapar).
 // ---------------------------------------------------------------------------
@@ -13,53 +16,11 @@ import './Muhasebe2.css';
 const FATURA_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi', 'Cari'];
 const MAKBUZ_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi'];
 
-const para = new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' });
-const TL = (n) => para.format(Number(n) || 0);
-const sayiFmt = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-function tarihTR(iso) {
-  if (!iso) return '';
-  const [y, m, d] = String(iso).split('-');
-  return `${d}.${m}.${y}`;
-}
-
-function bugunISO() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
-}
-// Arama için: büyük/küçük harf, ı/i ve Türkçe karakter farklarını yok sayar.
-function trNorm(s) {
-  return String(s || '')
-    .toLocaleLowerCase('tr')
-    .replace(/ı/g, 'i')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-}
-function sayi(v) {
-  const n = Number(String(v ?? '').replace(',', '.'));
-  return Number.isFinite(n) ? n : 0;
-}
-
 // Bakiye: pozitif = bizim borcumuz, negatif = firma bize borçlu.
 function bakiyeEtiketi(b) {
   const v = Math.round((Number(b) || 0) * 100) / 100;
   if (v === 0) return { metin: 'Bakiye yok', ton: '' };
   return v > 0 ? { metin: `Borcumuz ${TL(v)}`, ton: 'r' } : { metin: `Bize borçlu ${TL(-v)}`, ton: 'g' };
-}
-
-async function api(resource, { method = 'GET', body, query } = {}) {
-  const qs = new URLSearchParams({ resource, ...(query || {}) }).toString();
-  const res = await fetch(`/api/muhasebe2?${qs}`, {
-    method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  let j = {};
-  try {
-    j = await res.json();
-  } catch {
-    j = {};
-  }
-  if (!res.ok) throw new Error(j.error || `Sunucu hatası (${res.status})`);
-  return j;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,6 +110,9 @@ export default function Muhasebe2({ onNavigate }) {
         <button className={`m2-tab ${sekme === 'ozetler' ? 'on' : ''}`} onClick={() => setSekme('ozetler')}>
           Hesap Özetleri
         </button>
+        <button className={`m2-tab ${sekme === 'yemek' ? 'on' : ''}`} onClick={() => setSekme('yemek')}>
+          Yemek Kartları
+        </button>
       </div>
 
       {/* Formlar sekme değişince silinmesin diye gizlenir, kaldırılmaz. */}
@@ -165,6 +129,9 @@ export default function Muhasebe2({ onNavigate }) {
       </div>
       <div style={{ display: sekme === 'ozetler' ? undefined : 'none' }}>
         <HesapOzetleriSekmesi aktif={sekme === 'ozetler'} bildir={bildir} onDegisti={yukle} />
+      </div>
+      <div style={{ display: sekme === 'yemek' ? undefined : 'none' }}>
+        <YemekKartlariSekmesi aktif={sekme === 'yemek'} bildir={bildir} yontemler={veri.odemeYontemleri} onDegisti={yukle} />
       </div>
 
       {modal?.tur === 'firma' && (
@@ -286,7 +253,12 @@ function OdemeSecimi({ turler, tur, detay, onChange, yontemler, onYeni, cariNotu
     <div>
       <div className="m2-chips">
         {turler.map((t) => (
-          <button type="button" key={t} className={`m2-chip ${tur === t ? 'on' : ''}`} onClick={() => onChange(t, '')}>
+          <button
+            type="button"
+            key={t}
+            className={`m2-chip ${tur === t ? 'on' : ''}`}
+            onClick={() => onChange(t, t === 'Nakit' && kasalar.length === 1 ? kasalar[0].ad : '')}
+          >
             {t}
           </button>
         ))}
@@ -295,7 +267,14 @@ function OdemeSecimi({ turler, tur, detay, onChange, yontemler, onYeni, cariNotu
         </button>
       </div>
 
-      {tur === 'Nakit' && <div className="m2-chips alt">{kasalar.map((k) => altChip(k.ad))}</div>}
+      {tur === 'Nakit' && (
+        <div className="m2-chips alt">
+          {kasalar.map((k) => altChip(k.ad))}
+          <button type="button" className="m2-chip yeni" onClick={() => onYeni('Nakit')}>
+            + Yeni Kasa
+          </button>
+        </div>
+      )}
       {tur === 'Kredi Kartı' && (
         <div className="m2-chips alt">
           {kartlar.map((k) => altChip(k.ad))}
@@ -623,16 +602,18 @@ function MakbuzFormu({ veri, bildir, onKaydet, onModal }) {
 
 // ---------------------------------------------------------------------------
 // Datalar: bütün fatura/fiş ve makbuz kayıtları, Excel düzeninde (sadece görüntüleme)
+// Excel tarzı filtreler: Tarih (yıl > ay > gün, çoklu seçim) ve diğer sütunlar.
+// Varsayılan: içinde bulunulan ay. Tüm kayıtlar yüklenir, filtre bunların üzerinde çalışır.
 // ---------------------------------------------------------------------------
 const DATALAR_SUTUNLAR = [
-  { baslik: 'Tarih' },
-  { baslik: 'Evrak Türü' },
-  { baslik: 'Firma Adı' },
+  { baslik: 'Tarih', filtre: 'tarih' },
+  { baslik: 'Evrak Türü', filtre: 'evrakTuru' },
+  { baslik: 'Firma Adı', filtre: 'firmaAdi' },
   { baslik: 'Fatura No' },
   { baslik: 'Açıklama' },
-  { baslik: 'Gider Kategorisi' },
-  { baslik: 'Ödeme Türü' },
-  { baslik: 'Ödeme Şekli' },
+  { baslik: 'Gider Kategorisi', filtre: 'giderKategorisi' },
+  { baslik: 'Ödeme Türü', filtre: 'odemeTuru' },
+  { baslik: 'Ödeme Şekli', filtre: 'odemeSekli' },
   { baslik: 'Tutar', sayi: true },
   { baslik: 'KDV', sayi: true },
   { baslik: 'Tahsilat', sayi: true },
@@ -645,17 +626,23 @@ const EVRAK_SINIFI = {
 };
 
 function DatalarSekmesi({ aktif }) {
-  const [satirlar, setSatirlar] = useState(null);
+  const [kayitlar, setKayitlar] = useState(null);
   const [sinirli, setSinirli] = useState(false);
   const [yukleniyor, setYukleniyor] = useState(false);
   const [hata, setHata] = useState('');
+  const [secim, setSecim] = useState(bosSecimler());
+  const [menu, setMenu] = useState(null); // { anahtar, top, left }
+  const tarihDokunuldu = useRef(false);
 
   const yukle = useCallback(async () => {
     setYukleniyor(true);
     try {
       const j = await api('datalar');
-      setSatirlar(j.kayitlar || []);
+      const liste = j.kayitlar || [];
+      setKayitlar(liste);
       setSinirli(!!j.sinirli);
+      // Kullanıcı tarih filtresine dokunmadıysa varsayılan (bu ay) her yüklemede güncellenir.
+      if (!tarihDokunuldu.current) setSecim((s) => ({ ...s, tarih: varsayilanTarihSecimi(liste, bugunISO()) }));
       setHata('');
     } catch (e) {
       setHata(e.message);
@@ -669,18 +656,60 @@ function DatalarSekmesi({ aktif }) {
     if (aktif) yukle();
   }, [aktif, yukle]);
 
+  const degerler = useMemo(() => {
+    const o = {};
+    const liste = kayitlar || [];
+    FILTRE_KOLONLARI.forEach(({ anahtar }) => {
+      if (anahtar === 'tarih') {
+        o.tarih = [...new Set(liste.map((r) => r.tarih).filter(Boolean))].sort();
+      } else {
+        o[anahtar] = [...new Set(liste.map((r) => r[anahtar] ?? ''))].sort((a, b) => a.localeCompare(b, 'tr'));
+      }
+    });
+    return o;
+  }, [kayitlar]);
+  const gorunen = useMemo(() => filtreUygula(kayitlar || [], secim), [kayitlar, secim]);
+  const filtreAktif = Object.values(secim).some(Boolean);
+
+  function secimDegistir(anahtar, yeni) {
+    if (anahtar === 'tarih') tarihDokunuldu.current = true;
+    setSecim((s) => ({ ...s, [anahtar]: yeni }));
+  }
+  // "Bu ay" yalnızca TARİH filtresini varsayılana (içinde bulunulan ay) döndürür; diğer sütun filtreleri korunur.
+  function buAy() {
+    tarihDokunuldu.current = false;
+    setSecim((s) => ({ ...s, tarih: varsayilanTarihSecimi(kayitlar || [], bugunISO()) }));
+  }
+  function filtreleriTemizle() {
+    tarihDokunuldu.current = true;
+    setSecim(bosSecimler());
+  }
+  function menuAc(e, anahtar) {
+    const r = e.currentTarget.getBoundingClientRect();
+    setMenu((m) =>
+      m && m.anahtar === anahtar ? null : { anahtar, top: r.bottom + 4, left: Math.max(8, Math.min(r.left, window.innerWidth - 300)) },
+    );
+  }
+  const menuKolon = menu ? FILTRE_KOLONLARI.find((k) => k.anahtar === menu.anahtar) : null;
+
   const para = (n) => (n === null || n === undefined ? '' : sayiFmt.format(n));
 
   return (
     <div className="m2-card">
-      <div className="m2-row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
+      <div className="m2-row" style={{ justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap' }}>
         <h2 style={{ margin: 0 }}>Datalar</h2>
-        <div className="m2-row">
-          {satirlar && (
+        <div className="m2-row" style={{ flexWrap: 'wrap' }}>
+          {kayitlar && (
             <span className="m2-hint" style={{ margin: 0 }}>
-              {satirlar.length} kayıt{sinirli ? ' (en yeni 1000 gösteriliyor)' : ''}
+              {gorunen.length} / {kayitlar.length} kayıt{sinirli ? ' (en yeni 20.000 yüklendi)' : ''}
             </span>
           )}
+          <button className="m2-btn sec mini" onClick={buAy}>
+            Bu ay
+          </button>
+          <button className="m2-btn sec mini" onClick={filtreleriTemizle} disabled={!filtreAktif}>
+            Filtreleri temizle
+          </button>
           <button className="m2-btn sec mini" onClick={yukle} disabled={yukleniyor}>
             {yukleniyor ? 'Yükleniyor…' : 'Yenile'}
           </button>
@@ -690,25 +719,45 @@ function DatalarSekmesi({ aktif }) {
       {hata && <div className="m2-info r">{hata}</div>}
 
       <div className="m2-table-wrap">
-        <table className="m2-table">
+        <table className="m2-table m2-datalar">
           <thead>
             <tr>
               {DATALAR_SUTUNLAR.map((s) => (
                 <th key={s.baslik} className={s.sayi ? 'sayi' : ''}>
-                  {s.baslik}
+                  <div className="m2-th">
+                    <span>{s.baslik}</span>
+                    {s.filtre && (
+                      <button
+                        type="button"
+                        data-filtre-dugme
+                        className={`m2-fb ${secim[s.filtre] ? 'on' : ''}`}
+                        aria-label={`${s.baslik} filtresi`}
+                        onClick={(e) => menuAc(e, s.filtre)}
+                      >
+                        <Filter size={12} />
+                      </button>
+                    )}
+                  </div>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {satirlar && satirlar.length === 0 && (
+            {kayitlar && kayitlar.length === 0 && (
               <tr>
                 <td colSpan={DATALAR_SUTUNLAR.length} className="m2-empty">
                   Henüz kayıt yok.
                 </td>
               </tr>
             )}
-            {(satirlar || []).map((r) => (
+            {kayitlar && kayitlar.length > 0 && gorunen.length === 0 && (
+              <tr>
+                <td colSpan={DATALAR_SUTUNLAR.length} className="m2-empty">
+                  Seçili filtrelere uyan kayıt yok. Tarih filtresinden başka bir ay seçebilir veya "Filtreleri temizle"ye basabilirsiniz.
+                </td>
+              </tr>
+            )}
+            {gorunen.map((r) => (
               <tr key={r.id} className={r.otomatik ? 'oto' : ''}>
                 <td className="nowrap">{tarihTR(r.tarih)}</td>
                 <td className="nowrap">
@@ -729,6 +778,18 @@ function DatalarSekmesi({ aktif }) {
           </tbody>
         </table>
       </div>
+
+      {menu && menuKolon && (
+        <FiltreMenu
+          kolon={menuKolon}
+          konum={menu}
+          degerler={degerler[menu.anahtar] || []}
+          secili={secim[menu.anahtar]}
+          onChange={(yeni) => secimDegistir(menu.anahtar, yeni)}
+          onKapat={() => setMenu(null)}
+          bugun={bugunISO()}
+        />
+      )}
     </div>
   );
 }
@@ -855,36 +916,27 @@ function HesapOzetleriSekmesi({ aktif, bildir, onDegisti }) {
         </div>
       </div>
 
-      <input
-        className="m2-input"
-        style={{ marginTop: 14 }}
-        placeholder="Cari ara…"
-        value={ara}
-        onChange={(e) => setAra(e.target.value)}
-      />
-
-      <div className="m2-filtre">
-        <div className="m2-chips">
+      <div className="m2-toolbar">
+        <input className="m2-input m2-ara" placeholder="Cari ara…" value={ara} onChange={(e) => setAra(e.target.value)} />
+        <div className="m2-chips tight">
           {chip('tumu', durum, setDurum, 'Tümü')}
           {chip('alacakli', durum, setDurum, 'Alacaklı')}
           {chip('borclu', durum, setDurum, 'Borçlu')}
           {chip('yok', durum, setDurum, 'Bakiyesiz')}
         </div>
-        <div className="m2-chips">
+        <div className="m2-chips tight">
           {chip('tumu', bolum, setBolum, 'Tüm gruplar')}
           {chip('cariler', bolum, setBolum, 'Cariler')}
           {chip('kasaBanka', bolum, setBolum, 'Kasa ve Banka')}
         </div>
-        <div className="m2-row">
-          <select className="m2-select" style={{ width: 'auto' }} value={sirala} onChange={(e) => setSirala(e.target.value)} aria-label="Sıralama">
-            <option value="bakiye">Bakiye (büyükten küçüğe)</option>
-            <option value="ad">A-Z</option>
-            <option value="son">Son işlem tarihi</option>
-          </select>
-          <label className="m2-onay">
-            <input type="checkbox" checked={bakiyesizGizle} onChange={(e) => setBakiyesizGizle(e.target.checked)} /> Bakiyesizleri gizle
-          </label>
-        </div>
+        <label className="m2-onay">
+          <input type="checkbox" checked={bakiyesizGizle} onChange={(e) => setBakiyesizGizle(e.target.checked)} /> Bakiyesizleri gizle
+        </label>
+        <select className="m2-select m2-sirala" value={sirala} onChange={(e) => setSirala(e.target.value)} aria-label="Sıralama">
+          <option value="bakiye">Bakiye (büyükten küçüğe)</option>
+          <option value="ad">A-Z</option>
+          <option value="son">Son işlem tarihi</option>
+        </select>
       </div>
 
       <div className="m2-hint" style={{ margin: '12px 0 8px' }}>
@@ -989,6 +1041,7 @@ function EkstreModal({ firma, bildir, onKapat }) {
   const [kapaliGizle, setKapaliGizle] = useState(false);
   const [pdfBekliyor, setPdfBekliyor] = useState(false);
   const bugun = bugunISO();
+  const wrapRef = useRef(null);
 
   useEffect(() => {
     let iptal = false;
@@ -1008,6 +1061,12 @@ function EkstreModal({ firma, bildir, onKapat }) {
   );
   const d = gorunum ? durumBul(gorunum.bakiye) : 'yok';
   const kasaBanka = veri?.firma?.bolum === 'kasaBanka';
+
+  // Eskiden yeniye sıralı olduğu için pencere en alta kaydırılmış açılır: son bakiye ve toplam görünür.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [gorunum]);
 
   async function pdfPaylas() {
     setPdfBekliyor(true);
@@ -1067,7 +1126,7 @@ function EkstreModal({ firma, bildir, onKapat }) {
             </label>
           </div>
 
-          <div className="m2-table-wrap m2-ekstre-wrap">
+          <div className="m2-table-wrap m2-ekstre-wrap" ref={wrapRef}>
             <table className="m2-table m2-ekstre">
               <thead>
                 <tr>
@@ -1089,18 +1148,6 @@ function EkstreModal({ firma, bildir, onKapat }) {
                     </td>
                   </tr>
                 )}
-                {[...gorunum.satirlar].reverse().map((r) => (
-                  <tr key={r.id} className={r.otomatik ? 'oto' : ''}>
-                    <td className="nowrap">{tarihTR(r.tarih)}</td>
-                    <td className="nowrap">{r.evrakTuru}</td>
-                    <td>{r.belgeNo}</td>
-                    <td>{r.aciklama}</td>
-                    <td className="nowrap">{r.odemeSekli}</td>
-                    <td className="sayi">{r.borc ? paraFmt(r.borc) : ''}</td>
-                    <td className="sayi">{r.alacak ? paraFmt(r.alacak) : ''}</td>
-                    <td className={`sayi bakiye ${durumBul(r.bakiye)}`}>{paraFmt(r.bakiye)}</td>
-                  </tr>
-                ))}
                 {gorunum.devir && (
                   <tr className="oto">
                     <td className="nowrap">{tarihTR(gorunum.devir.tarih)}</td>
@@ -1113,6 +1160,18 @@ function EkstreModal({ firma, bildir, onKapat }) {
                     <td className={`sayi bakiye ${durumBul(gorunum.devir.bakiye)}`}>{paraFmt(gorunum.devir.bakiye)}</td>
                   </tr>
                 )}
+                {gorunum.satirlar.map((r) => (
+                  <tr key={r.id} className={r.otomatik ? 'oto' : ''}>
+                    <td className="nowrap">{tarihTR(r.tarih)}</td>
+                    <td className="nowrap">{r.evrakTuru}</td>
+                    <td>{r.belgeNo}</td>
+                    <td>{r.aciklama}</td>
+                    <td className="nowrap">{r.odemeSekli}</td>
+                    <td className="sayi">{r.borc ? paraFmt(r.borc) : ''}</td>
+                    <td className="sayi">{r.alacak ? paraFmt(r.alacak) : ''}</td>
+                    <td className={`sayi bakiye ${durumBul(r.bakiye)}`}>{paraFmt(r.bakiye)}</td>
+                  </tr>
+                ))}
               </tbody>
               <tfoot>
                 <tr>
@@ -1134,7 +1193,7 @@ function EkstreModal({ firma, bildir, onKapat }) {
               {pdfBekliyor ? 'Hazırlanıyor…' : 'Paylaş (PDF)'}
             </button>
           </div>
-          <p className="m2-hint">PDF'te işlemler eskiden yeniye sıralanır (ilk işlem en üstte).</p>
+          <p className="m2-hint">İşlemler eskiden yeniye sıralıdır, PDF ile aynı: ilk işlem en üstte, son bakiye en altta.</p>
         </>
       )}
     </ModalKabuk>
@@ -1144,52 +1203,6 @@ function EkstreModal({ firma, bildir, onKapat }) {
 // ---------------------------------------------------------------------------
 // Modallar: yeni firma / kategori / ödeme yöntemi
 // ---------------------------------------------------------------------------
-function ModalKabuk({ baslik, onKapat, genis, children }) {
-  return (
-    <div className="m2-modal-bg" onClick={onKapat}>
-      <div className={`m2-modal ${genis ? 'genis' : ''}`} onClick={(e) => e.stopPropagation()}>
-        <div className="m2-modal-head">
-          <h3>{baslik}</h3>
-          <button onClick={onKapat} aria-label="Kapat">
-            <X size={18} />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function useModalKaydet(onKaydet, onBitti) {
-  const [hata, setHata] = useState('');
-  const [bekliyor, setBekliyor] = useState(false);
-  async function calistir(payload) {
-    setBekliyor(true);
-    setHata('');
-    try {
-      const sonuc = await onKaydet(payload);
-      onBitti(sonuc);
-    } catch (e) {
-      setHata(e.message);
-      setBekliyor(false);
-    }
-  }
-  return { hata, bekliyor, calistir };
-}
-
-function ModalAksiyon({ onKapat, onKaydet, devreDisi, bekliyor }) {
-  return (
-    <div className="m2-modal-actions">
-      <button className="m2-btn sec" onClick={onKapat}>
-        Vazgeç
-      </button>
-      <button className="m2-btn" disabled={devreDisi || bekliyor} onClick={onKaydet}>
-        {bekliyor ? '…' : 'Kaydet'}
-      </button>
-    </div>
-  );
-}
-
 function FirmaModal({ baslangicAd, kategoriler, onKaydet, onBitti, onKapat }) {
   const [ad, setAd] = useState(baslangicAd || '');
   const [varsayilanKategori, setVarsayilanKategori] = useState('');
@@ -1240,6 +1253,7 @@ function YontemModal({ varsayilanTur, onKaydet, onBitti, onKapat }) {
     <ModalKabuk baslik="Yeni Ödeme Yöntemi" onKapat={onKapat}>
       <label className="m2-label">Tür</label>
       <select className="m2-select" value={odemeTuru} onChange={(e) => setOdemeTuru(e.target.value)}>
+        <option value="Nakit">Nakit (kasa)</option>
         <option value="Kredi Kartı">Kredi Kartı</option>
         <option value="Banka Havalesi">Banka Havalesi</option>
       </select>
@@ -1247,7 +1261,7 @@ function YontemModal({ varsayilanTur, onKaydet, onBitti, onKapat }) {
       <input
         className="m2-input"
         autoFocus
-        placeholder={odemeTuru === 'Kredi Kartı' ? 'Örn. Garanti Kredi Kartı' : 'Örn. Garanti Bankası'}
+        placeholder={odemeTuru === 'Nakit' ? 'Örn. Ofis Kasası' : odemeTuru === 'Kredi Kartı' ? 'Örn. Garanti Kredi Kartı' : 'Örn. Garanti Bankası'}
         value={ad}
         onChange={(e) => setAd(e.target.value)}
       />
