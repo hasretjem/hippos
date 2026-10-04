@@ -9,6 +9,7 @@ import Paketci from './pages/Paketci/Paketci';
 import MutfakPaneli from './pages/MutfakPaneli/MutfakPaneli';
 import Muhasebe from './pages/Muhasebe/Muhasebe';
 import Muhasebe2 from './pages/Muhasebe2/Muhasebe2';
+import PersonelKlasoru from './pages/PersonelKlasoru/PersonelKlasoru';
 import StokSiparis from './pages/StokSiparis/StokSiparis';
 import Veri from './pages/Veri/Veri';
 import BottomNav from './components/BottomNav/BottomNav';
@@ -58,7 +59,7 @@ export default function App() {
   }
 
   function handleNavigate(page, opts) {
-    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler' || page === 'endofday' || page === 'muhasebe' || page === 'muhasebe2' || page === 'stoksiparis' || page === 'veri') {
+    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler' || page === 'endofday' || page === 'muhasebe' || page === 'muhasebe2' || page === 'personelklasoru' || page === 'stoksiparis' || page === 'veri') {
       // Sadece alt menüden "Hızlı Satış"a bilerek tıklanınca seçili masa sıfırlanır.
       // Masalar sayfasından bir masaya girerken (opts.resetTable verilmez) buna dokunulmaz.
       if (page === 'pos' && opts?.resetTable) setSelectedTable(QUICK_SALE);
@@ -100,13 +101,16 @@ export default function App() {
       {activePage === 'muhasebe2' && (
         <Muhasebe2 onNavigate={handleNavigate} />
       )}
+      {activePage === 'personelklasoru' && (
+        <PersonelKlasoru onNavigate={handleNavigate} />
+      )}
       {activePage === 'stoksiparis' && (
         <StokSiparis data={data} onNavigate={handleNavigate} />
       )}
       {activePage === 'veri' && (
         <Veri onNavigate={handleNavigate} />
       )}
-      {activePage !== 'products' && activePage !== 'pos' && activePage !== 'endofday' && activePage !== 'muhasebe' && activePage !== 'muhasebe2' && activePage !== 'stoksiparis' && activePage !== 'veri' && <BottomNav activePage={activePage} onNavigate={handleNavigate} paketciBekleyenSayisi={(data.cariTeslimatBildirimleri || []).filter((b) => b.durum === 'bekliyor').length} stokOkunmadi={stok.toplamOkunmadi} />}
+      {activePage !== 'products' && activePage !== 'pos' && activePage !== 'endofday' && activePage !== 'muhasebe' && activePage !== 'muhasebe2' && activePage !== 'personelklasoru' && activePage !== 'stoksiparis' && activePage !== 'veri' && <BottomNav activePage={activePage} onNavigate={handleNavigate} paketciBekleyenSayisi={(data.cariTeslimatBildirimleri || []).filter((b) => b.durum === 'bekliyor').length} stokOkunmadi={stok.toplamOkunmadi} />}
     </>
   );
 }

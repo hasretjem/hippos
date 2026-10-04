@@ -9,7 +9,7 @@ import {
   ListChecks, Calculator, Eye, EyeOff, Share2, Search, X,
   Banknote, CreditCard, UtensilsCrossed, BookOpen, ExternalLink, ChevronRight, ChevronDown,
   Undo2, Wifi, WifiOff, Printer, Database, FileSpreadsheet, Triangle, Image as ImageIcon, RefreshCw,
-  Wheat, Copy, Check, Receipt, AlertTriangle, ClipboardList, ArrowUpDown,
+  Wheat, Copy, Check, Receipt, AlertTriangle, ClipboardList, ArrowUpDown, Users,
 } from 'lucide-react';
 
 // Türkçe karakter duyarsız arama (İ/I/ı/i, ş/s, ğ/g, ü/u, ö/o, ç/c)
@@ -427,6 +427,11 @@ export default function Settings({ data, onNavigate }) {
               <span className="st-action-ico"><Receipt size={22} /></span>
               <span className="st-action-title">Muhasebe2 (test)</span>
               <span className="st-action-sub">Yeni muhasebe — fişler/faturalar ve makbuzlar</span>
+            </button>
+            <button className="st-action-card" onClick={() => onNavigate('personelklasoru')}>
+              <span className="st-action-ico"><Users size={22} /></span>
+              <span className="st-action-title">Personel Klasörü</span>
+              <span className="st-action-sub">Personel bilgileri, puantaj, izin ve avans</span>
             </button>
             <button className="st-action-card" onClick={() => onNavigate('veri')}>
               <span className="st-action-ico"><Database size={22} /></span>
