@@ -1,4 +1,5 @@
-// Muhasebe2 API — Fişler/Faturalar ve Makbuzlar + Datalar + Hesap Özetleri + Yemek Kartları.
+// Muhasebe2 API — Fişler/Faturalar ve Makbuzlar + Datalar (düzenle/sil/geri al) + Hesap Özetleri + Yemek Kartları
+// + Personel Klasörü (puantaj, izin, avans) + Tahakkuklar (personel maaşı ve sabit giderler).
 // Veri Supabase'de (m2_* tabloları), eski mh_* tablolarından bağımsız.
 //
 // Defter kuralı:
@@ -20,6 +21,7 @@ export const YONTEM_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi'];
 const DATALAR_SAYFA = 1000;
 const DATALAR_MAKS_SAYFA = 20;
 const YK_KATEGORI = 'Yemek Kart-Banka Masrafı';
+const PERSONEL_KATEGORI = 'Personel Gideri';
 
 class HataMesaji extends Error {
   constructor(durum, mesaj) {
@@ -144,6 +146,8 @@ const norm = (s) => String(s || '').trim().toLowerCase();
 // Cari hangi gruba giriyor? Cariler = firmalar + kredi kartları + cepten; Kasa ve Banka ayrı.
 export function grupBul(firma, yontemler) {
   if (firma.firma_turu === 'Yemek Kartı') return { grup: 'Yemek Kartı', bolum: 'cariler' };
+  if (firma.firma_turu === 'Personel') return { grup: 'Personel', bolum: 'cariler' };
+  if (firma.firma_turu === 'Sabit Gider') return { grup: 'Sabit Gider', bolum: 'cariler' };
   if (firma.firma_turu !== 'Ödeme Şekli') return { grup: 'Firma', bolum: 'cariler' };
   const turler = (yontemler || []).filter((y) => norm(y.ad) === norm(firma.ad)).map((y) => y.odeme_turu);
   if (turler.includes('Nakit')) return { grup: 'Kasa', bolum: 'kasaBanka' };
@@ -461,6 +465,377 @@ async function kategoriBulVeyaAc(db, ad) {
   return ad;
 }
 
+// ---------------------------------------------------------------------------
+// Fatura ve makbuz grupları: kayıt VE düzenleme aynı satır üretimini kullanır.
+// ---------------------------------------------------------------------------
+async function faturaGrubuUret(db, body, grupId, zaman) {
+  const tutar = tutarCoz(body.faturaTutari);
+  if (tutar <= 0) throw new HataMesaji(400, 'Tutar sıfırdan büyük olmalı');
+  const kdv = kdvCoz(body.kdv, tutar);
+  const tarih = tarihKontrol(body.tarih);
+  const firma = await firmaGetir(db, body.firmaId);
+
+  const kategori = String(body.giderKategorisi || '').trim();
+  if (!kategori) throw new HataMesaji(400, 'Gider kategorisini seçin');
+  const { data: kat, error: katHata } = await db.from('m2_kategoriler').select('id').eq('ad', kategori).maybeSingle();
+  kontrol(katHata);
+  if (!kat) throw new HataMesaji(400, 'Kategori bulunamadı');
+
+  const odemeTuru = body.odemeTuru;
+  if (!FATURA_ODEME_TURLERI.includes(odemeTuru)) throw new HataMesaji(400, 'Ödeme türünü seçin');
+  const alan = await yontemAlanlari(db, odemeTuru, body.odemeHesabi, body.kasa);
+
+  const faturaNo = metin(body.faturaNo);
+  const aciklama = metin(body.aciklama);
+  const z = zaman ? { kayit_zamani: zaman } : {};
+  const fatura = {
+    id: randomUUID(),
+    tarih,
+    firma_id: firma.id,
+    firma_adi: firma.ad,
+    fatura_no: faturaNo,
+    aciklama,
+    gider_kategorisi: kategori,
+    odeme_turu: odemeTuru,
+    odeme_hesabi: alan.odeme_hesabi,
+    kasa: alan.kasa,
+    fatura_tutari: tutar,
+    kdv,
+    grup_id: grupId,
+    ...z,
+  };
+
+  // Cari dışı ödemede iki otomatik makbuz: firmaya ödeme + ödeme şekline tahsilat.
+  const makbuzlar = [];
+  if (odemeTuru !== 'Cari') {
+    const yontemAdi = alan.kasa || alan.odeme_hesabi;
+    const yf = await yontemFirmasi(db, yontemAdi);
+    if (yf.id === firma.id) throw new HataMesaji(400, 'Firma ile ödeme şekli aynı olamaz');
+    makbuzlar.push({
+      id: randomUUID(),
+      tarih,
+      makbuz_turu: 'Ödeme',
+      firma_id: firma.id,
+      firma_adi: firma.ad,
+      fatura_no: faturaNo,
+      aciklama: `Otomatik: fatura ödemesi${aciklama ? ` — ${aciklama}` : ''}`,
+      odeme_turu: odemeTuru,
+      odeme_hesabi: alan.odeme_hesabi,
+      kasa: alan.kasa,
+      tutar,
+      otomatik: true,
+      grup_id: grupId,
+      ...z,
+    });
+    makbuzlar.push({
+      id: randomUUID(),
+      tarih,
+      makbuz_turu: 'Tahsilat',
+      firma_id: yf.id,
+      firma_adi: yf.ad,
+      fatura_no: faturaNo,
+      aciklama: `Otomatik: ${firma.ad} faturası ödemesi`,
+      odeme_turu: null,
+      odeme_hesabi: null,
+      kasa: null,
+      tutar,
+      otomatik: true,
+      grup_id: grupId,
+      ...z,
+    });
+  }
+  return { fatura, makbuzlar, firma };
+}
+
+async function makbuzGrubuUret(db, body, grupId, zaman) {
+  const tutar = tutarCoz(body.tutar);
+  if (tutar <= 0) throw new HataMesaji(400, 'Tutar sıfırdan büyük olmalı');
+  const tarih = tarihKontrol(body.tarih);
+  const firma = await firmaGetir(db, body.firmaId);
+  if (!MAKBUZ_TURLERI.includes(body.makbuzTuru)) throw new HataMesaji(400, 'Makbuz türü geçersiz');
+  const odemeTuru = body.odemeTuru;
+  if (!MAKBUZ_ODEME_TURLERI.includes(odemeTuru)) throw new HataMesaji(400, 'Ödeme türünü seçin');
+  const alan = await yontemAlanlari(db, odemeTuru, body.odemeHesabi, body.kasa);
+
+  const yontemAdi = alan.kasa || alan.odeme_hesabi;
+  const yf = await yontemFirmasi(db, yontemAdi);
+  if (yf.id === firma.id) throw new HataMesaji(400, 'Firma ile ödeme şekli aynı olamaz');
+
+  const tahsilatMi = body.makbuzTuru === 'Tahsilat';
+  const faturaNo = metin(body.faturaNo);
+  const z = zaman ? { kayit_zamani: zaman } : {};
+  const makbuzlar = [
+    {
+      id: randomUUID(),
+      tarih,
+      makbuz_turu: body.makbuzTuru,
+      firma_id: firma.id,
+      firma_adi: firma.ad,
+      fatura_no: faturaNo,
+      aciklama: metin(body.aciklama),
+      odeme_turu: odemeTuru,
+      tutar,
+      otomatik: false,
+      grup_id: grupId,
+      ...alan,
+      ...z,
+    },
+    {
+      id: randomUUID(),
+      tarih,
+      makbuz_turu: tahsilatMi ? 'Ödeme' : 'Tahsilat',
+      firma_id: yf.id,
+      firma_adi: yf.ad,
+      fatura_no: faturaNo,
+      aciklama: `Otomatik: ${firma.ad} ${tahsilatMi ? 'tahsilatı' : 'ödemesi'}`,
+      odeme_turu: null,
+      odeme_hesabi: null,
+      kasa: null,
+      tutar,
+      otomatik: true,
+      grup_id: grupId,
+      ...z,
+    },
+  ];
+  return { makbuzlar, firma };
+}
+
+// ---------------------------------------------------------------------------
+// Kayıt grubu (fatura + makbuzlar): anlık görüntü, düzenleme, silme, geri alma
+// ---------------------------------------------------------------------------
+const FF_KOLON = ['id', 'tarih', 'firma_id', 'firma_adi', 'fatura_no', 'aciklama', 'gider_kategorisi', 'odeme_turu', 'odeme_hesabi', 'kasa', 'fatura_tutari', 'kdv', 'grup_id', 'kaynak', 'kayit_zamani'];
+const MK_KOLON = ['id', 'tarih', 'makbuz_turu', 'firma_id', 'firma_adi', 'fatura_no', 'aciklama', 'odeme_turu', 'odeme_hesabi', 'kasa', 'tutar', 'otomatik', 'grup_id', 'kaynak', 'kayit_zamani'];
+const sec = (r, kolonlar) => Object.fromEntries(kolonlar.map((k) => [k, r[k] === undefined ? null : r[k]]));
+const idSirala = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+const KAYNAK_YER = { yemek_karti: 'Yemek Kartları sekmesinden', tahakkuk: 'Tahakkuklar sekmesinden', avans: "Personel Klasörü'nden" };
+
+async function grupOku(db, grupId) {
+  if (!grupId) throw new HataMesaji(400, 'grupId gerekli');
+  const [f, m] = await Promise.all([
+    db.from('m2_fis_faturalar').select('*').eq('grup_id', grupId),
+    db.from('m2_makbuzlar').select('*').eq('grup_id', grupId),
+  ]);
+  kontrol(f.error);
+  kontrol(m.error);
+  return {
+    faturalar: (f.data || []).map((r) => sec(r, FF_KOLON)).sort(idSirala),
+    makbuzlar: (m.data || []).map((r) => sec(r, MK_KOLON)).sort(idSirala),
+  };
+}
+const grupBosMu = (g) => g.faturalar.length === 0 && g.makbuzlar.length === 0;
+const grupKaynagi = (g) => [...g.faturalar, ...g.makbuzlar].map((r) => r.kaynak).find(Boolean) || null;
+const grupEsitMi = (a, b) =>
+  JSON.stringify({ f: (a.faturalar || []).map((r) => sec(r, FF_KOLON)).sort(idSirala), m: (a.makbuzlar || []).map((r) => sec(r, MK_KOLON)).sort(idSirala) }) ===
+  JSON.stringify({ f: (b.faturalar || []).map((r) => sec(r, FF_KOLON)).sort(idSirala), m: (b.makbuzlar || []).map((r) => sec(r, MK_KOLON)).sort(idSirala) });
+
+function kilitKontrol(grup) {
+  const kaynak = grupKaynagi(grup);
+  if (kaynak) throw new HataMesaji(409, `Bu kayıt ${KAYNAK_YER[kaynak] || 'başka bir sekmeden'} yönetiliyor, buradan değiştirilemez.`);
+}
+
+// Özel SQL hata kodlarını kullanıcı diline çevirir.
+function ozelKontrol(error) {
+  if (!error) return;
+  const m = String(error.message || '');
+  if (m.includes('DONEM_KILITLI')) throw new HataMesaji(409, 'Bu dönem veya sonrası için tahakkuk edilmiş; maaş değişikliği bu dönemden itibaren yapılamaz.');
+  if (m.includes('KILITLI')) throw new HataMesaji(409, 'Bu kayıt başka bir sekmeden yönetiliyor, buradan değiştirilemez.');
+  if (m.includes('PERSONEL_YOK')) throw new HataMesaji(404, 'Personel bulunamadı');
+  if (m.includes('AVANS_YOK')) throw new HataMesaji(404, 'Avans kaydı bulunamadı');
+  if (m.includes('GIDER_YOK')) throw new HataMesaji(404, 'Sabit gider bulunamadı');
+  if (m.includes('TAHAKKUK_YOK')) throw new HataMesaji(404, 'Bu dönem için tahakkuk yok');
+  kontrol(error);
+}
+
+async function grupDegistir(db, grupId, yeni) {
+  const { error } = await db.rpc('m2_grup_degistir', { p_grup: grupId, p_faturalar: yeni.faturalar || [], p_makbuzlar: yeni.makbuzlar || [] });
+  ozelKontrol(error);
+}
+
+// ---------------------------------------------------------------------------
+// Maaş ve puantaj hesabı
+//  - Günlük maaş HER ZAMAN maaş / 30'dur (ay kaç çekerse çeksin).
+//  - Tam ay (ayın 1'inden son gününe kadar çalışan): 30 gün sayılır.
+//  - Kısmi ay (ay ortasında girdi veya çıktı): çalışılan takvim günü kadar (giriş ve çıkış günü dahil).
+//  - İzin kesintisi: izin günü x maaş/30 (yarım gün 0,5), netten düşer. Yuvarlama EN SONDA.
+// ---------------------------------------------------------------------------
+const AYLAR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+const donemYazi = (d) => `${AYLAR[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
+const DONEM_RE = /^\d{4}-\d{2}$/;
+const r2 = (x) => Math.round(x * 100) / 100;
+const kurusYari = (pay, payda) => Math.floor((pay + Math.floor(payda / 2)) / payda); // negatif olmayan tam sayılar
+
+export function donemGunleri(donem) {
+  const [y, a] = donem.split('-').map(Number);
+  const son = new Date(Date.UTC(y, a, 0)).getUTCDate();
+  return { ilk: `${donem}-01`, son: `${donem}-${pad2(son)}`, gunSayisi: son };
+}
+
+// Maaş geçmişi: dönemin maaşı = geçerli_dönemi o dönemden küçük/eşit EN SON kayıt (yoksa en eski kayıt).
+export function maasBul(gecmis, donem) {
+  const sirali = [...gecmis].sort((a, b) => (a.gecerli_donem < b.gecerli_donem ? -1 : 1));
+  let m = sirali.length ? Number(sirali[0].maas) : 0;
+  sirali.forEach((g) => {
+    if (g.gecerli_donem <= donem) m = Number(g.maas);
+  });
+  return m;
+}
+
+export function puantajHesapla({ maas, donem, iseGiris, cikisTarihi, izinler }) {
+  const { ilk, son, gunSayisi } = donemGunleri(donem);
+  const bas = iseGiris > ilk ? iseGiris : ilk;
+  const bit = cikisTarihi && cikisTarihi < son ? cikisTarihi : son;
+  const calisiyor = bas <= bit;
+  const calisilanGun = calisiyor ? gunFarki(bas, bit) + 1 : 0;
+  const tamAy = calisiyor && bas === ilk && bit === son;
+  const ucretliGun = !calisiyor ? 0 : tamAy ? 30 : calisilanGun;
+  const c = Math.round(Number(maas) * 100);
+  const brutK = kurusYari(c * ucretliGun, 30);
+  const izinMap = new Map((izinler || []).filter((i) => i.tarih >= ilk && i.tarih <= son).map((i) => [i.tarih, i]));
+  let izinGun = 0;
+  let kesintiK = 0;
+  let toplamGun = 0;
+  const gunler = [];
+  for (let d = 1; d <= gunSayisi; d++) {
+    const t = `${donem}-${pad2(d)}`;
+    const calisma = calisiyor && t >= bas && t <= bit;
+    const iz = izinMap.get(t);
+    if (!calisma) {
+      gunler.push({ tarih: t, deger: null, izin: null });
+    } else if (iz) {
+      const yarim = iz.tur === 'Yarım';
+      izinGun += yarim ? 0.5 : 1;
+      kesintiK += Math.round(Number(iz.kesinti) * 100);
+      toplamGun += yarim ? 0.5 : 0;
+      gunler.push({ tarih: t, deger: yarim ? 0.5 : 0, izin: iz.tur });
+    } else {
+      toplamGun += 1;
+      gunler.push({ tarih: t, deger: 1, izin: null });
+    }
+  }
+  return {
+    gunler,
+    calisilanGun,
+    tamAy,
+    ucretliGun,
+    izinGun,
+    toplamGun,
+    gunlukMaas: r2(Number(maas) / 30),
+    brut: brutK / 100,
+    kesinti: kesintiK / 100,
+    net: Math.max(0, brutK - kesintiK) / 100,
+  };
+}
+
+// Otomatik izin kesintisi (kuruş): her gün için o günün dönemindeki maaş / 30 (yarım gün için / 60); yuvarlama toplamda.
+export function izinKesintisiK(gecmis, gunler, tur) {
+  const pay = gunler.reduce((x, g) => x + Math.round(maasBul(gecmis, g.slice(0, 7)) * 100) * (tur === 'Yarım' ? 1 : 2), 0);
+  return kurusYari(pay, 60);
+}
+function kurusDagit(toplamK, n) {
+  const taban = Math.floor(toplamK / n);
+  const liste = Array(n).fill(taban);
+  liste[n - 1] += toplamK - taban * n;
+  return liste;
+}
+
+const personelCamel = (p, bugun) => ({
+  id: p.id,
+  adSoyad: p.ad_soyad,
+  gorev: p.gorev || '',
+  iseGiris: p.ise_giris,
+  sgkBaslama: p.sgk_baslama || '',
+  sgkYok: !!p.sgk_yok,
+  cikisTarihi: p.cikis_tarihi || '',
+  cikisSebebi: p.cikis_sebebi || '',
+  telefon: p.telefon || '',
+  adres: p.adres || '',
+  aktif: !p.cikis_tarihi || p.cikis_tarihi >= bugun,
+  firmaId: p.firma_id,
+});
+
+async function personelGetir(db, id) {
+  if (!id) throw new HataMesaji(400, 'Personel seçin');
+  const { data, error } = await db.from('m2_personel').select('*').eq('id', id).maybeSingle();
+  kontrol(error);
+  if (!data) throw new HataMesaji(404, 'Personel bulunamadı');
+  return data;
+}
+async function maasGecmisiGetir(db, personelId) {
+  const { data, error } = await db.from('m2_personel_maas').select('*').eq('personel_id', personelId);
+  kontrol(error);
+  return data || [];
+}
+async function tahakkukluDonemler(db, donemler) {
+  const { data, error } = await db.from('m2_tahakkuklar').select('donem,tarih').in('donem', donemler);
+  kontrol(error);
+  return data || [];
+}
+async function donemKilidiKontrol(db, donemler, ne) {
+  const liste = await tahakkukluDonemler(db, [...new Set(donemler)]);
+  if (liste.length) {
+    throw new HataMesaji(409, `${donemYazi(liste[0].donem)} dönemi tahakkuk edilmiş; ${ne} yapılamaz. Önce Tahakkuklar sekmesinden tahakkuku geri alın.`);
+  }
+}
+
+// Tahakkuk ekranının verisi: o dönem için personel ve sabit gider satırları (tahakkuk edilmişse kayıtlı değerler).
+async function tahakkukVeri(db, donem) {
+  const [pr, mr, ir, ar, sr, tr, br] = await Promise.all([
+    db.from('m2_personel').select('*'),
+    db.from('m2_personel_maas').select('*'),
+    db.from('m2_personel_izin').select('*'),
+    db.from('m2_personel_avans').select('*'),
+    db.from('m2_sabit_giderler').select('*'),
+    db.from('m2_tahakkuklar').select('*'),
+    db.from('m2_firma_bakiye').select('firma_id,bakiye'),
+  ]);
+  [pr, mr, ir, ar, sr, tr, br].forEach((x) => kontrol(x.error));
+  const tahakkuk = (tr.data || []).find((t) => t.donem === donem) || null;
+  let kalemler = [];
+  if (tahakkuk) {
+    const k = await db.from('m2_tahakkuk_kalemleri').select('*').eq('tahakkuk_id', tahakkuk.id);
+    kontrol(k.error);
+    kalemler = k.data || [];
+  }
+  const bakiye = new Map((br.data || []).map((x) => [x.firma_id, Number(x.bakiye)]));
+
+  const personeller = [];
+  (pr.data || []).forEach((p) => {
+    const izinler = (ir.data || []).filter((i) => i.personel_id === p.id);
+    const maas = maasBul((mr.data || []).filter((m) => m.personel_id === p.id), donem);
+    const pt = puantajHesapla({ maas, donem, iseGiris: p.ise_giris, cikisTarihi: p.cikis_tarihi, izinler });
+    const kalem = kalemler.find((k) => k.tur === 'Personel' && k.kaynak_id === p.id);
+    if (tahakkuk ? !kalem : pt.calisilanGun === 0) return;
+    const snap = kalem
+      ? { maas: sayiN(kalem.maas), calisilanGun: sayiN(kalem.calisilan_gun), ucretliGun: sayiN(kalem.ucretli_gun), izinGun: sayiN(kalem.izin_gun), brut: sayiN(kalem.brut), kesinti: sayiN(kalem.kesinti), net: sayiN(kalem.net) }
+      : { maas, calisilanGun: pt.calisilanGun, ucretliGun: pt.ucretliGun, izinGun: pt.izinGun, brut: pt.brut, kesinti: pt.kesinti, net: pt.net };
+    const avans = r2((ar.data || []).filter((a) => a.personel_id === p.id && String(a.tarih).startsWith(donem)).reduce((x, a) => x + Number(a.tutar), 0));
+    const b = bakiye.get(p.firma_id) || 0;
+    personeller.push({ id: p.id, adSoyad: p.ad_soyad, gorev: p.gorev || '', firmaId: p.firma_id, ...snap, avans, bakiye: r2(b), odenecek: r2(b + (tahakkuk ? 0 : snap.net)), fisYazilir: snap.net > 0 });
+  });
+  personeller.sort((a, b) => a.adSoyad.localeCompare(b.adSoyad, 'tr'));
+
+  const giderler = (sr.data || []).map((g) => ({
+    id: g.id, ad: g.ad, tutar: sayiN(g.tutar), kdv: g.kdv === null || g.kdv === undefined ? null : Number(g.kdv), kategori: g.kategori,
+    baslangicDonem: g.baslangic_donem, pasifDonem: g.pasif_donem || '', firmaId: g.firma_id,
+  }));
+  const gecerli = (g) => g.baslangicDonem <= donem && (!g.pasifDonem || donem < g.pasifDonem);
+  let sabitGiderler;
+  if (tahakkuk) {
+    sabitGiderler = kalemler
+      .filter((k) => k.tur === 'Sabit Gider')
+      .map((k) => {
+        const g = giderler.find((x) => x.id === k.kaynak_id);
+        return { id: k.kaynak_id, ad: k.ad, tutar: sayiN(k.net), kdv: g ? g.kdv : null, kategori: g ? g.kategori : '', baslangicDonem: g ? g.baslangicDonem : '', pasifDonem: g ? g.pasifDonem : '', firmaId: k.firma_id };
+      });
+  } else {
+    sabitGiderler = giderler.filter(gecerli);
+  }
+  sabitGiderler.sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
+  const pasifGiderler = giderler.filter((g) => g.pasifDonem && donem >= g.pasifDonem).sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
+  const donemler = (tr.data || []).map((t) => ({ donem: t.donem, tarih: t.tarih })).sort((a, b) => (a.donem < b.donem ? 1 : -1));
+  return { tahakkuk, personeller, sabitGiderler, pasifGiderler, donemler };
+}
+
 export default async function handler(req, res) {
   try {
     const db = dbAl();
@@ -557,7 +932,7 @@ export default async function handler(req, res) {
         const { data, error } = await db
           .from('m2_datalar')
           .select(
-            'id,tarih,evrak_turu,firma_adi,fatura_no,aciklama,gider_kategorisi,odeme_turu,odeme_sekli,tutar,kdv,tahsilat,odeme_tediye,otomatik,kayit_zamani,sira',
+            'id,tarih,evrak_turu,firma_adi,fatura_no,aciklama,gider_kategorisi,odeme_turu,odeme_sekli,tutar,kdv,tahsilat,odeme_tediye,otomatik,kayit_zamani,sira,grup_id,kaynak',
           )
           .order('tarih', { ascending: false })
           .order('kayit_zamani', { ascending: false })
@@ -583,6 +958,8 @@ export default async function handler(req, res) {
         tahsilat: sayiOrNull(r.tahsilat),
         odemeTediye: sayiOrNull(r.odeme_tediye),
         otomatik: !!r.otomatik,
+        grupId: r.grup_id || null,
+        kaynak: r.kaynak || null,
       }));
       return res.status(200).json({ kayitlar, sinirli: kayitlar.length >= DATALAR_SAYFA * DATALAR_MAKS_SAYFA });
     }
@@ -694,137 +1071,123 @@ export default async function handler(req, res) {
       });
     }
 
+    // ---------- Kayıt grubu ----------
+    if (req.method === 'GET' && resource === 'kayitGrubu') {
+      const g = await grupOku(db, req.query?.grupId);
+      if (grupBosMu(g)) throw new HataMesaji(404, 'Kayıt bulunamadı');
+      return res.status(200).json({ ...g, kaynak: grupKaynagi(g) });
+    }
+
+    // ---------- Personel Klasörü ----------
+    if (req.method === 'GET' && resource === 'personelListe') {
+      const { data, error } = await db.from('m2_personel').select('*');
+      kontrol(error);
+      const bugun = bugunIstanbul();
+      const liste = (data || []).map((p) => personelCamel(p, bugun)).sort((a, b) => a.adSoyad.localeCompare(b.adSoyad, 'tr'));
+      return res.status(200).json({ personeller: liste.map((p) => ({ id: p.id, adSoyad: p.adSoyad, gorev: p.gorev, aktif: p.aktif })) });
+    }
+
+    // Maaş, notlar ve parasal puantaj değerleri YALNIZCA goster=1 ise döner (göz butonu açıkken ayrı istekle çekilir).
+    if (req.method === 'GET' && resource === 'personelDetay') {
+      const per = await personelGetir(db, req.query?.id);
+      const donem = DONEM_RE.test(String(req.query?.donem || '')) ? req.query.donem : bugunIstanbul().slice(0, 7);
+      const goster = String(req.query?.goster || '') === '1';
+      const bugun = bugunIstanbul();
+      const [gecmis, iz, av, nt, tk] = await Promise.all([
+        maasGecmisiGetir(db, per.id),
+        db.from('m2_personel_izin').select('*').eq('personel_id', per.id),
+        db.from('m2_personel_avans').select('*').eq('personel_id', per.id),
+        goster ? db.from('m2_personel_notlar').select('*').eq('personel_id', per.id) : { data: null, error: null },
+        db.from('m2_tahakkuklar').select('donem,tarih').eq('donem', donem).maybeSingle(),
+      ]);
+      [iz, av, nt, tk].forEach((x) => kontrol(x.error));
+      const izinler = (iz.data || []).sort((a, b) => (a.tarih < b.tarih ? -1 : 1));
+      const maas = maasBul(gecmis, donem);
+      const pt = puantajHesapla({ maas, donem, iseGiris: per.ise_giris, cikisTarihi: per.cikis_tarihi, izinler });
+      const puantaj = { gunler: pt.gunler, toplamGun: pt.toplamGun, calisilanGun: pt.calisilanGun, ucretliGun: pt.ucretliGun, tamAy: pt.tamAy, izinGun: pt.izinGun };
+      if (goster) Object.assign(puantaj, { gunlukMaas: pt.gunlukMaas, brut: pt.brut, kesinti: pt.kesinti, net: pt.net });
+      const personel = personelCamel(per, bugun);
+      if (goster) Object.assign(personel, { maas, maasGecmisi: gecmis.map((g) => ({ gecerliDonem: g.gecerli_donem, maas: Number(g.maas) })).sort((a, b) => (a.gecerliDonem < b.gecerliDonem ? -1 : 1)) });
+      return res.status(200).json({
+        personel,
+        donem,
+        kilitli: !!tk.data,
+        tahakkukTarihi: tk.data ? tk.data.tarih : null,
+        puantaj,
+        izinler: izinler
+          .filter((i) => String(i.tarih).startsWith(donem))
+          .map((i) => ({ id: i.id, tarih: i.tarih, tur: i.tur, sebep: i.sebep || '', grupId: i.grup_id || null, ...(goster ? { kesinti: Number(i.kesinti) } : {}) })),
+        avanslar: (av.data || [])
+          .filter((a) => String(a.tarih).startsWith(donem))
+          .sort((a, b) => (a.tarih < b.tarih ? -1 : 1))
+          .map((a) => ({ id: a.id, tarih: a.tarih, tutar: Number(a.tutar), odemeTuru: a.odeme_turu, odemeSekli: a.kasa || a.odeme_hesabi || '', aciklama: a.aciklama || '' })),
+        notlar: goster ? (nt.data || []).sort((a, b) => (a.kayit_zamani < b.kayit_zamani ? 1 : -1)).map((n) => ({ id: n.id, tarih: n.kayit_zamani, metin: n.metin })) : null,
+      });
+    }
+
+    // İzin formu: otomatik kesinti önerisi
+    if (req.method === 'GET' && resource === 'izinOnizleme') {
+      const per = await personelGetir(db, req.query?.personelId);
+      const bas = tarihKontrol(req.query?.bas);
+      const bit = req.query?.bit ? tarihKontrol(req.query.bit) : bas;
+      if (gunFarki(bas, bit) < 0 || gunFarki(bas, bit) + 1 > 31) throw new HataMesaji(400, 'Tarih aralığı geçersiz (en fazla 31 gün)');
+      const tur = req.query?.tur === 'Yarım' ? 'Yarım' : 'Tam';
+      const gunler = gunListesi(bas, bit);
+      const gecmis = await maasGecmisiGetir(db, per.id);
+      return res.status(200).json({ gun: tur === 'Yarım' ? 0.5 : gunler.length, kesinti: izinKesintisiK(gecmis, gunler, tur) / 100 });
+    }
+
+    // ---------- Tahakkuklar ----------
+    if (req.method === 'GET' && resource === 'tahakkukOnizleme') {
+      const donem = String(req.query?.donem || '');
+      if (!DONEM_RE.test(donem)) throw new HataMesaji(400, 'Dönem geçersiz');
+      const v = await tahakkukVeri(db, donem);
+      const toplam = r2(v.personeller.reduce((x, p) => x + (p.fisYazilir ? p.net : 0), 0) + v.sabitGiderler.reduce((x, g) => x + g.tutar, 0));
+      return res.status(200).json({
+        donem,
+        guncelDonem: bugunIstanbul().slice(0, 7),
+        tahakkuk: v.tahakkuk ? { id: v.tahakkuk.id, tarih: v.tahakkuk.tarih, yapildiZaman: v.tahakkuk.yapildi_zaman, toplam: sayiN(v.tahakkuk.toplam) } : null,
+        personeller: v.personeller,
+        sabitGiderler: v.sabitGiderler,
+        pasifGiderler: v.pasifGiderler,
+        toplam,
+        donemler: v.donemler,
+      });
+    }
+    if (req.method === 'GET' && resource === 'tahakkukDetay') {
+      const donem = String(req.query?.donem || '');
+      if (!DONEM_RE.test(donem)) throw new HataMesaji(400, 'Dönem geçersiz');
+      const per = await personelGetir(db, req.query?.personelId);
+      const [iz, av] = await Promise.all([
+        db.from('m2_personel_izin').select('*').eq('personel_id', per.id),
+        db.from('m2_personel_avans').select('*').eq('personel_id', per.id),
+      ]);
+      [iz, av].forEach((x) => kontrol(x.error));
+      return res.status(200).json({
+        adSoyad: per.ad_soyad,
+        donem,
+        izinler: (iz.data || []).filter((i) => String(i.tarih).startsWith(donem)).sort((a, b) => (a.tarih < b.tarih ? -1 : 1))
+          .map((i) => ({ id: i.id, tarih: i.tarih, tur: i.tur, kesinti: Number(i.kesinti), sebep: i.sebep || '' })),
+        avanslar: (av.data || []).filter((a) => String(a.tarih).startsWith(donem)).sort((a, b) => (a.tarih < b.tarih ? -1 : 1))
+          .map((a) => ({ id: a.id, tarih: a.tarih, tutar: Number(a.tutar), odemeSekli: a.kasa || a.odeme_hesabi || '', aciklama: a.aciklama || '' })),
+      });
+    }
+
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
     // ---------- Fiş / Fatura girişi ----------
     if (resource === 'fisFaturaKaydet') {
-      const tutar = tutarCoz(body.faturaTutari);
-      if (tutar <= 0) throw new HataMesaji(400, 'Tutar sıfırdan büyük olmalı');
-      const kdv = kdvCoz(body.kdv, tutar);
-      const tarih = tarihKontrol(body.tarih);
-      const firma = await firmaGetir(db, body.firmaId);
-
-      const kategori = String(body.giderKategorisi || '').trim();
-      if (!kategori) throw new HataMesaji(400, 'Gider kategorisini seçin');
-      const { data: kat, error: katHata } = await db.from('m2_kategoriler').select('id').eq('ad', kategori).maybeSingle();
-      kontrol(katHata);
-      if (!kat) throw new HataMesaji(400, 'Kategori bulunamadı');
-
-      const odemeTuru = body.odemeTuru;
-      if (!FATURA_ODEME_TURLERI.includes(odemeTuru)) throw new HataMesaji(400, 'Ödeme türünü seçin');
-      const alan = await yontemAlanlari(db, odemeTuru, body.odemeHesabi, body.kasa);
-
-      const grupId = randomUUID();
-      const faturaNo = metin(body.faturaNo);
-      const aciklama = metin(body.aciklama);
-      const fatura = {
-        id: randomUUID(),
-        tarih,
-        firma_id: firma.id,
-        firma_adi: firma.ad,
-        fatura_no: faturaNo,
-        aciklama,
-        gider_kategorisi: kategori,
-        odeme_turu: odemeTuru,
-        odeme_hesabi: alan.odeme_hesabi,
-        kasa: alan.kasa,
-        fatura_tutari: tutar,
-        kdv,
-        grup_id: grupId,
-      };
-
-      // Cari dışı ödemede iki otomatik makbuz: firmaya ödeme + ödeme şekline tahsilat.
-      const makbuzlar = [];
-      if (odemeTuru !== 'Cari') {
-        const yontemAdi = alan.kasa || alan.odeme_hesabi;
-        const yf = await yontemFirmasi(db, yontemAdi);
-        if (yf.id === firma.id) throw new HataMesaji(400, 'Firma ile ödeme şekli aynı olamaz');
-        makbuzlar.push({
-          id: randomUUID(),
-          tarih,
-          makbuz_turu: 'Ödeme',
-          firma_id: firma.id,
-          firma_adi: firma.ad,
-          fatura_no: faturaNo,
-          aciklama: `Otomatik: fatura ödemesi${aciklama ? ` — ${aciklama}` : ''}`,
-          odeme_turu: odemeTuru,
-          odeme_hesabi: alan.odeme_hesabi,
-          kasa: alan.kasa,
-          tutar,
-          otomatik: true,
-          grup_id: grupId,
-        });
-        makbuzlar.push({
-          id: randomUUID(),
-          tarih,
-          makbuz_turu: 'Tahsilat',
-          firma_id: yf.id,
-          firma_adi: yf.ad,
-          fatura_no: faturaNo,
-          aciklama: `Otomatik: ${firma.ad} faturası ödemesi`,
-          odeme_turu: null,
-          odeme_hesabi: null,
-          kasa: null,
-          tutar,
-          otomatik: true,
-          grup_id: grupId,
-        });
-      }
-
+      const { fatura, makbuzlar, firma } = await faturaGrubuUret(db, body, randomUUID());
       // Fonksiyon fatura ve makbuzlarını TEK işlemde yazar: ya hepsi yazılır ya hiçbiri.
       const { error } = await db.rpc('m2_fatura_yaz', { p_fatura: fatura, p_makbuzlar: makbuzlar });
       kontrol(error);
       return res.status(200).json({ ok: true, bakiye: await bakiyeGetir(db, firma.id), otomatikMakbuz: makbuzlar.length });
     }
 
-    // ---------- Tahsilat / Ödeme makbuzu ----------
     if (resource === 'makbuzKaydet') {
-      const tutar = tutarCoz(body.tutar);
-      if (tutar <= 0) throw new HataMesaji(400, 'Tutar sıfırdan büyük olmalı');
-      const tarih = tarihKontrol(body.tarih);
-      const firma = await firmaGetir(db, body.firmaId);
-      if (!MAKBUZ_TURLERI.includes(body.makbuzTuru)) throw new HataMesaji(400, 'Makbuz türü geçersiz');
-      const odemeTuru = body.odemeTuru;
-      if (!MAKBUZ_ODEME_TURLERI.includes(odemeTuru)) throw new HataMesaji(400, 'Ödeme türünü seçin');
-      const alan = await yontemAlanlari(db, odemeTuru, body.odemeHesabi, body.kasa);
-
-      const yontemAdi = alan.kasa || alan.odeme_hesabi;
-      const yf = await yontemFirmasi(db, yontemAdi);
-      if (yf.id === firma.id) throw new HataMesaji(400, 'Firma ile ödeme şekli aynı olamaz');
-
-      const grupId = randomUUID();
-      const tahsilatMi = body.makbuzTuru === 'Tahsilat';
-      const faturaNo = metin(body.faturaNo);
+      const { makbuzlar, firma } = await makbuzGrubuUret(db, body, randomUUID());
       // Tek insert = tek işlem: makbuz ve karşı makbuzu birlikte yazılır.
-      const { error } = await db.from('m2_makbuzlar').insert([
-        {
-          tarih,
-          makbuz_turu: body.makbuzTuru,
-          firma_id: firma.id,
-          firma_adi: firma.ad,
-          fatura_no: faturaNo,
-          aciklama: metin(body.aciklama),
-          odeme_turu: odemeTuru,
-          tutar,
-          otomatik: false,
-          grup_id: grupId,
-          ...alan,
-        },
-        {
-          tarih,
-          makbuz_turu: tahsilatMi ? 'Ödeme' : 'Tahsilat',
-          firma_id: yf.id,
-          firma_adi: yf.ad,
-          fatura_no: faturaNo,
-          aciklama: `Otomatik: ${firma.ad} ${tahsilatMi ? 'tahsilatı' : 'ödemesi'}`,
-          odeme_turu: null,
-          odeme_hesabi: null,
-          kasa: null,
-          tutar,
-          otomatik: true,
-          grup_id: grupId,
-        },
-      ]);
+      const { error } = await db.from('m2_makbuzlar').insert(makbuzlar);
       kontrol(error);
       return res.status(200).json({ ok: true, bakiye: await bakiyeGetir(db, firma.id) });
     }
@@ -1082,6 +1445,302 @@ export default async function handler(req, res) {
         .update({ komisyon_orani: oran, kesim10: !!body.kesim10, kesim20: !!body.kesim20, kesim30: !!body.kesim30 })
         .eq('id', kart.id);
       kontrol(error);
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- Kayıt düzenle / sil / geri al (Datalar, Düzenleme Modu) ----------
+    // Her işlem {oncesi, sonrasi} anlık görüntüsü döner; arayüz bunlarla 3 adım geri/ileri alır.
+    if (resource === 'kayitDuzenle') {
+      const grupId = body.grupId;
+      const eski = await grupOku(db, grupId);
+      if (grupBosMu(eski)) throw new HataMesaji(404, 'Kayıt bulunamadı');
+      kilitKontrol(eski);
+      const zaman = [...eski.faturalar, ...eski.makbuzlar].map((r) => r.kayit_zamani).filter(Boolean).sort()[0];
+      let yeni;
+      if (eski.faturalar.length) {
+        const u = await faturaGrubuUret(db, body, grupId, zaman);
+        yeni = { faturalar: [u.fatura], makbuzlar: u.makbuzlar };
+      } else {
+        const u = await makbuzGrubuUret(db, body, grupId, zaman);
+        yeni = { faturalar: [], makbuzlar: u.makbuzlar };
+      }
+      await grupDegistir(db, grupId, yeni);
+      return res.status(200).json({ ok: true, grupId, oncesi: eski, sonrasi: await grupOku(db, grupId) });
+    }
+
+    // Tek alan düzeltme: tarih ve fatura no TÜM gruba, açıklama yalnızca o satıra, kategori fatura satırına uygulanır.
+    if (resource === 'kayitAlan') {
+      const grupId = body.grupId;
+      const eski = await grupOku(db, grupId);
+      if (grupBosMu(eski)) throw new HataMesaji(404, 'Kayıt bulunamadı');
+      kilitKontrol(eski);
+      const yeni = JSON.parse(JSON.stringify(eski));
+      const tumu = [...yeni.faturalar, ...yeni.makbuzlar];
+      const satir = tumu.find((r) => r.id === body.satirId);
+      if (body.alan === 'tarih') {
+        const t = tarihKontrol(body.deger);
+        tumu.forEach((r) => (r.tarih = t));
+      } else if (body.alan === 'faturaNo') {
+        const no = metin(body.deger);
+        tumu.forEach((r) => (r.fatura_no = no));
+      } else if (body.alan === 'aciklama') {
+        if (!satir) throw new HataMesaji(404, 'Satır bulunamadı');
+        if (satir.otomatik) throw new HataMesaji(400, 'Otomatik satırın açıklaması değiştirilemez');
+        satir.aciklama = metin(body.deger);
+      } else if (body.alan === 'giderKategorisi') {
+        if (!satir || !yeni.faturalar.includes(satir)) throw new HataMesaji(400, 'Kategori yalnızca fatura/fiş satırında değişir');
+        const kat = String(body.deger || '').trim();
+        const { data, error } = await db.from('m2_kategoriler').select('id').eq('ad', kat).maybeSingle();
+        kontrol(error);
+        if (!data) throw new HataMesaji(400, 'Kategori bulunamadı');
+        satir.gider_kategorisi = kat;
+      } else {
+        throw new HataMesaji(400, 'Bu alan buradan değiştirilemez');
+      }
+      await grupDegistir(db, grupId, yeni);
+      return res.status(200).json({ ok: true, grupId, oncesi: eski, sonrasi: await grupOku(db, grupId) });
+    }
+
+    if (resource === 'kayitSil') {
+      const grupId = body.grupId;
+      const eski = await grupOku(db, grupId);
+      if (grupBosMu(eski)) throw new HataMesaji(404, 'Kayıt bulunamadı');
+      kilitKontrol(eski);
+      await grupDegistir(db, grupId, { faturalar: [], makbuzlar: [] });
+      return res.status(200).json({ ok: true, grupId, oncesi: eski, sonrasi: { faturalar: [], makbuzlar: [] } });
+    }
+
+    // Geri al / ileri al: grup, işlemden SONRAKİ haliyle birebir aynıysa istenen hale yazılır.
+    // Başka biri bu arada değiştirmişse reddedilir (üzerine yazılmaz).
+    if (resource === 'kayitGeriYaz') {
+      const { grupId, beklenen, yazilacak } = body;
+      if (!beklenen || !yazilacak) throw new HataMesaji(400, 'beklenen ve yazilacak gerekli');
+      const simdi = await grupOku(db, grupId);
+      if (!grupEsitMi(simdi, beklenen)) throw new HataMesaji(409, 'Bu kayıt bu arada değiştirilmiş; geri alınamadı.');
+      await grupDegistir(db, grupId, yazilacak);
+      return res.status(200).json({ ok: true, grupId, sonrasi: await grupOku(db, grupId) });
+    }
+
+    // ---------- Personel ----------
+    if (resource === 'personelKaydet') {
+      const adSoyad = String(body.adSoyad || '').trim();
+      if (!adSoyad) throw new HataMesaji(400, 'Ad soyad gerekli');
+      const iseGiris = tarihKontrol(body.iseGiris);
+      const cikis = body.cikisTarihi ? tarihKontrol(body.cikisTarihi) : null;
+      if (cikis && cikis < iseGiris) throw new HataMesaji(400, 'Çıkış tarihi işe girişten önce olamaz');
+      const sgkYok = !!body.sgkYok;
+      const payload = {
+        ad_soyad: adSoyad,
+        gorev: body.gorev || '',
+        ise_giris: iseGiris,
+        sgk_baslama: sgkYok || !body.sgkBaslama ? null : tarihKontrol(body.sgkBaslama),
+        sgk_yok: sgkYok,
+        cikis_tarihi: cikis,
+        cikis_sebebi: cikis ? body.cikisSebebi || '' : '',
+        telefon: body.telefon || '',
+        adres: body.adres || '',
+      };
+      if (!body.id) {
+        const maas = tutarCoz(body.maas);
+        if (!(maas > 0)) throw new HataMesaji(400, 'Maaş girin');
+        const { data, error } = await db.rpc('m2_personel_ekle', { p: { ...payload, maas } });
+        ozelKontrol(error);
+        return res.status(200).json({ ok: true, id: data });
+      }
+      const per = await personelGetir(db, body.id);
+      const p = { ...payload, id: per.id };
+      if (String(body.maas ?? '').trim() !== '') {
+        const maas = tutarCoz(body.maas);
+        if (maas < 0) throw new HataMesaji(400, 'Maaş geçersiz');
+        const maasDonem = DONEM_RE.test(String(body.maasDonem || '')) ? body.maasDonem : bugunIstanbul().slice(0, 7);
+        const gecmis = await maasGecmisiGetir(db, per.id);
+        if (maasBul(gecmis, maasDonem) !== maas) Object.assign(p, { yeni_maas: maas, maas_donem: maasDonem });
+      }
+      const { error } = await db.rpc('m2_personel_guncelle', { p });
+      ozelKontrol(error);
+      return res.status(200).json({ ok: true, id: per.id });
+    }
+
+    if (resource === 'notEkle') {
+      const per = await personelGetir(db, body.personelId);
+      const metinS = String(body.metin || '').trim();
+      if (!metinS) throw new HataMesaji(400, 'Not boş olamaz');
+      const { error } = await db.from('m2_personel_notlar').insert({ personel_id: per.id, metin: metinS });
+      kontrol(error);
+      return res.status(200).json({ ok: true });
+    }
+    if (resource === 'notSil') {
+      if (!body.id) throw new HataMesaji(400, 'id gerekli');
+      const { error } = await db.from('m2_personel_notlar').delete().eq('id', body.id);
+      kontrol(error);
+      return res.status(200).json({ ok: true });
+    }
+
+    // İzin: tek gün veya aralık (her gün ayrı kayıt). Kesinti toplamı elle değiştirilebilir; günlere paylaştırılır.
+    if (resource === 'izinKaydet') {
+      const per = await personelGetir(db, body.personelId);
+      if (body.tur && !['Tam', 'Yarım'].includes(body.tur)) throw new HataMesaji(400, 'İzin türü geçersiz');
+      const tur = body.tur === 'Yarım' ? 'Yarım' : 'Tam';
+      const id = body.id || null;
+      const bas = tarihKontrol(body.bas || body.tarih);
+      const bit = id ? bas : tarihKontrol(body.bit || bas);
+      if (gunFarki(bas, bit) < 0) throw new HataMesaji(400, 'Bitiş tarihi başlangıçtan önce olamaz');
+      if (gunFarki(bas, bit) + 1 > 31) throw new HataMesaji(400, 'İzin aralığı en fazla 31 gün olabilir');
+      if (tur === 'Yarım' && bas !== bit) throw new HataMesaji(400, 'Yarım gün izin tek bir güne yazılır');
+      const gunler = gunListesi(bas, bit);
+      gunler.forEach((g) => {
+        if (g < per.ise_giris || (per.cikis_tarihi && g > per.cikis_tarihi)) {
+          throw new HataMesaji(400, `${isoToTR(g)} tarihinde personel çalışmıyor (işe giriş / çıkış tarihi dışında)`);
+        }
+      });
+      const { data: mevcut, error: mevcutHata } = await db.from('m2_personel_izin').select('*').eq('personel_id', per.id);
+      kontrol(mevcutHata);
+      const eskiKayit = id ? (mevcut || []).find((x) => x.id === id) : null;
+      if (id && !eskiKayit) throw new HataMesaji(404, 'İzin kaydı bulunamadı');
+      const donemler = gunler.map((g) => g.slice(0, 7));
+      if (eskiKayit) donemler.push(String(eskiKayit.tarih).slice(0, 7));
+      await donemKilidiKontrol(db, donemler, 'izin kaydı eklenemez veya değiştirilemez');
+      const cakisan = gunler.find((g) => (mevcut || []).some((x) => x.tarih === g && x.id !== id));
+      if (cakisan) throw new HataMesaji(409, `${isoToTR(cakisan)} tarihine zaten izin kaydı var`);
+      const gecmis = await maasGecmisiGetir(db, per.id);
+      const otomatikK = izinKesintisiK(gecmis, gunler, tur);
+      const girilen = body.kesinti !== undefined && body.kesinti !== null && String(body.kesinti).trim() !== '';
+      const toplamK = girilen ? Math.round(tutarCoz(body.kesinti) * 100) : otomatikK;
+      if (toplamK < 0) throw new HataMesaji(400, 'Kesinti eksi olamaz');
+      const paylar = kurusDagit(toplamK, gunler.length);
+      const sebep = metin(body.sebep);
+      if (id) {
+        const { error } = await db.from('m2_personel_izin').update({ tarih: bas, tur, kesinti: paylar[0] / 100, sebep }).eq('id', id);
+        kontrol(error);
+      } else {
+        const grupId = randomUUID();
+        const { error } = await db.from('m2_personel_izin').insert(gunler.map((g, i) => ({ personel_id: per.id, tarih: g, tur, kesinti: paylar[i] / 100, sebep, grup_id: grupId })));
+        kontrol(error);
+      }
+      return res.status(200).json({ ok: true, gun: gunler.length, kesinti: toplamK / 100 });
+    }
+    if (resource === 'izinSil') {
+      if (!body.id) throw new HataMesaji(400, 'id gerekli');
+      const { data, error } = await db.from('m2_personel_izin').select('*').eq('id', body.id).maybeSingle();
+      kontrol(error);
+      if (!data) throw new HataMesaji(404, 'İzin kaydı bulunamadı');
+      await donemKilidiKontrol(db, [String(data.tarih).slice(0, 7)], 'izin kaydı silinemez');
+      const sil = await db.from('m2_personel_izin').delete().eq('id', body.id);
+      kontrol(sil.error);
+      return res.status(200).json({ ok: true });
+    }
+
+    // Avans: personel carisine otomatik ÖDEME makbuzu + ödeme şekline karşı makbuz (mini makbuz girişi)
+    if (resource === 'avansKaydet') {
+      const per = await personelGetir(db, body.personelId);
+      const tarih = tarihKontrol(body.tarih);
+      const tutar = tutarCoz(body.tutar);
+      if (tutar <= 0) throw new HataMesaji(400, 'Avans tutarı sıfırdan büyük olmalı');
+      if (!MAKBUZ_ODEME_TURLERI.includes(body.odemeTuru)) throw new HataMesaji(400, 'Ödeme türünü seçin');
+      const alan = await yontemAlanlari(db, body.odemeTuru, body.odemeHesabi, body.kasa);
+      const yf = await yontemFirmasi(db, alan.kasa || alan.odeme_hesabi);
+      if (yf.id === per.firma_id) throw new HataMesaji(400, 'Personel ile ödeme şekli aynı olamaz');
+      const firma = await firmaGetir(db, per.firma_id);
+      if (body.id) {
+        const { data: v, error: vh } = await db.from('m2_personel_avans').select('id').eq('id', body.id).maybeSingle();
+        kontrol(vh);
+        if (!v) throw new HataMesaji(404, 'Avans kaydı bulunamadı');
+      }
+      const grupId = randomUUID();
+      const aciklama = metin(body.aciklama);
+      const { error } = await db.rpc('m2_avans_yaz', {
+        p_avans: { id: body.id || randomUUID(), personel_id: per.id, tarih, tutar, odeme_turu: body.odemeTuru, odeme_hesabi: alan.odeme_hesabi, kasa: alan.kasa, aciklama, grup_id: grupId },
+        p_makbuzlar: [
+          { id: randomUUID(), tarih, makbuz_turu: 'Ödeme', firma_id: firma.id, firma_adi: firma.ad, fatura_no: null, aciklama: `Avans${aciklama ? ` — ${aciklama}` : ''}`, odeme_turu: body.odemeTuru, odeme_hesabi: alan.odeme_hesabi, kasa: alan.kasa, tutar, otomatik: false, grup_id: grupId },
+          { id: randomUUID(), tarih, makbuz_turu: 'Tahsilat', firma_id: yf.id, firma_adi: yf.ad, fatura_no: null, aciklama: `Otomatik: ${firma.ad} avansı`, odeme_turu: null, odeme_hesabi: null, kasa: null, tutar, otomatik: true, grup_id: grupId },
+        ],
+        p_eski: body.id || null,
+      });
+      ozelKontrol(error);
+      return res.status(200).json({ ok: true });
+    }
+    if (resource === 'avansSil') {
+      if (!body.id) throw new HataMesaji(400, 'id gerekli');
+      const { error } = await db.rpc('m2_avans_sil', { p_id: body.id });
+      ozelKontrol(error);
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- Sabit giderler ----------
+    if (resource === 'sabitGiderKaydet') {
+      const ad = String(body.ad || '').trim();
+      if (!ad) throw new HataMesaji(400, 'Gider ismi gerekli');
+      const tutar = tutarCoz(body.tutar);
+      if (tutar <= 0) throw new HataMesaji(400, 'Gider tutarı sıfırdan büyük olmalı');
+      if (!DONEM_RE.test(String(body.baslangicDonem || ''))) throw new HataMesaji(400, 'Başlangıç dönemi geçersiz');
+      const kategori = String(body.kategori || '').trim();
+      if (!kategori) throw new HataMesaji(400, 'Gider kategorisini seçin');
+      const { data: kat, error: katHata } = await db.from('m2_kategoriler').select('id').eq('ad', kategori).maybeSingle();
+      kontrol(katHata);
+      if (!kat) throw new HataMesaji(400, 'Kategori bulunamadı');
+      const kdv = kdvCoz(body.kdv, tutar);
+      const p = { ad, tutar, baslangic_donem: body.baslangicDonem, kategori, kdv };
+      if (!body.id) {
+        const { data, error } = await db.rpc('m2_sabit_gider_ekle', { p });
+        ozelKontrol(error);
+        return res.status(200).json({ ok: true, id: data });
+      }
+      const { error } = await db.rpc('m2_sabit_gider_guncelle', { p: { ...p, id: body.id } });
+      ozelKontrol(error);
+      return res.status(200).json({ ok: true, id: body.id });
+    }
+    // "Sil" = pasife al: belirtilen dönemden itibaren tahakkuk edilmez, eski fişler kalır. Boş dönem = yeniden etkinleştir.
+    if (resource === 'sabitGiderPasif') {
+      if (!body.id) throw new HataMesaji(400, 'id gerekli');
+      const d = String(body.pasifDonem || '').trim();
+      if (d && !DONEM_RE.test(d)) throw new HataMesaji(400, 'Dönem geçersiz');
+      const { data, error } = await db.from('m2_sabit_giderler').select('id').eq('id', body.id).maybeSingle();
+      kontrol(error);
+      if (!data) throw new HataMesaji(404, 'Sabit gider bulunamadı');
+      const g = await db.from('m2_sabit_giderler').update({ pasif_donem: d || null }).eq('id', body.id);
+      kontrol(g.error);
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- Tahakkuk et / geri al ----------
+    // Dönem başına YALNIZCA 1 kez. Fiş tarihi = tahakkuk edilen gün. Personel: net (brüt - kesinti), avans tahakkuka girmez.
+    if (resource === 'tahakkukEt') {
+      const donem = String(body.donem || '');
+      if (!DONEM_RE.test(donem)) throw new HataMesaji(400, 'Dönem geçersiz');
+      const bugun = bugunIstanbul();
+      if (donem >= bugun.slice(0, 7)) throw new HataMesaji(400, 'İçinde bulunulan veya gelecek ay tahakkuk edilemez');
+      const v = await tahakkukVeri(db, donem);
+      if (v.tahakkuk) throw new HataMesaji(409, `${donemYazi(donem)} dönemi ${isoToTR(v.tahakkuk.tarih)} tarihinde zaten tahakkuk edilmiş`);
+      if (!v.personeller.length && !v.sabitGiderler.length) throw new HataMesaji(400, 'Bu dönem için tahakkuk edilecek kayıt yok');
+      const tid = randomUUID();
+      const yaziAy = donemYazi(donem);
+      const personelKat = await kategoriBulVeyaAc(db, PERSONEL_KATEGORI);
+      const kalemler = [];
+      const faturalar = [];
+      v.personeller.forEach((p) => {
+        kalemler.push({ tur: 'Personel', kaynak_id: p.id, firma_id: p.firmaId, ad: p.adSoyad, maas: p.maas, calisilan_gun: p.calisilanGun, ucretli_gun: p.ucretliGun, izin_gun: p.izinGun, brut: p.brut, kesinti: p.kesinti, net: p.net });
+        if (p.fisYazilir) {
+          faturalar.push({ id: randomUUID(), tarih: bugun, firma_id: p.firmaId, firma_adi: p.adSoyad, gider_kategorisi: personelKat, fatura_tutari: p.net, kdv: null, aciklama: `Maaş tahakkuku — ${yaziAy}` });
+        }
+      });
+      v.sabitGiderler.forEach((g) => {
+        kalemler.push({ tur: 'Sabit Gider', kaynak_id: g.id, firma_id: g.firmaId, ad: g.ad, brut: g.tutar, kesinti: 0, net: g.tutar });
+        faturalar.push({ id: randomUUID(), tarih: bugun, firma_id: g.firmaId, firma_adi: g.ad, gider_kategorisi: g.kategori, fatura_tutari: g.tutar, kdv: g.kdv, aciklama: `Sabit gider tahakkuku — ${yaziAy}` });
+      });
+      const toplam = r2(faturalar.reduce((x, f) => x + f.fatura_tutari, 0));
+      const { error } = await db.rpc('m2_tahakkuk_yaz', { p_tahakkuk: { id: tid, donem, tarih: bugun, toplam }, p_kalemler: kalemler, p_faturalar: faturalar });
+      if (error && error.code === '23505') throw new HataMesaji(409, `${yaziAy} dönemi zaten tahakkuk edilmiş`);
+      ozelKontrol(error);
+      return res.status(200).json({ ok: true, tarih: bugun, toplam, fisSayisi: faturalar.length, personel: v.personeller.length, sabitGider: v.sabitGiderler.length });
+    }
+    if (resource === 'tahakkukGeriAl') {
+      const donem = String(body.donem || '');
+      if (!DONEM_RE.test(donem)) throw new HataMesaji(400, 'Dönem geçersiz');
+      const { data, error } = await db.from('m2_tahakkuklar').select('id').eq('donem', donem).maybeSingle();
+      kontrol(error);
+      if (!data) throw new HataMesaji(404, 'Bu dönem için tahakkuk yok');
+      const sil = await db.rpc('m2_tahakkuk_sil', { p_id: data.id });
+      ozelKontrol(sil.error);
       return res.status(200).json({ ok: true });
     }
 

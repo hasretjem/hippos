@@ -3,18 +3,22 @@ import { ArrowLeft, Filter, Pencil, Plus, Share2 } from 'lucide-react';
 import { dosyaAdi, durumBul, ekstreGorunum, ekstrePdfTanimi, ekstrePdfUret, paraFmt, pdfPaylasVeyaIndir } from './ekstrePdf';
 import { ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, sayiFmt, tarihTR, trNorm, useModalKaydet } from './m2Ortak';
 import YemekKartlariSekmesi from './YemekKartlari';
+import TahakkuklarSekmesi from './Tahakkuklar';
 import { FILTRE_KOLONLARI, FiltreMenu, bosSecimler, filtreUygula, varsayilanTarihSecimi } from './DatalarFiltre';
 import './Muhasebe2.css';
 
 // ---------------------------------------------------------------------------
 // Muhasebe2 — Sekmeler: "Fişler/Faturalar ve Makbuzlar" (giriş), "Datalar" (Excel düzeninde döküm,
-// Excel tarzı filtreler), "Hesap Özetleri" (cari kartları, düzenleme, ekstre ve PDF) ve "Yemek Kartları".
+// Excel tarzı filtreler, Düzenleme Modu), "Hesap Özetleri" (cari kartları, düzenleme, ekstre ve PDF),
+// "Yemek Kartları" ve "Tahakkuklar" (personel maaşı + sabit giderler).
 // Giriş: sol Fiş/Fatura formu, sağ Tahsilat / Ödeme makbuzu (kaydırmalı anahtar).
 // Cari dışı yöntemle girilen her fatura için ödeme şekli carisine otomatik makbuz yazılır (sunucu yapar).
 // ---------------------------------------------------------------------------
 
 const FATURA_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi', 'Cari'];
 const MAKBUZ_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi'];
+const MAKS_GECMIS = 3;
+const KAYNAK_ETIKET = { yemek_karti: 'Yemek Kartları', tahakkuk: 'Tahakkuklar', avans: 'Personel Klasörü' };
 
 // Bakiye: pozitif = bizim borcumuz, negatif = firma bize borçlu.
 function bakiyeEtiketi(b) {
@@ -51,6 +55,72 @@ export default function Muhasebe2({ onNavigate }) {
   useEffect(() => {
     yukle();
   }, [yukle]);
+
+  // ---- Düzenleme Modu ve geri/ileri alma (Ctrl+Z / Ctrl+Shift+Z, son 3 işlem; yalnızca bu oturumda) ----
+  const [duzenlemeModu, setDuzenlemeModu] = useState(false);
+  const [gecmis, setGecmis] = useState({ liste: [], index: -1 });
+  const [yenileSayac, setYenileSayac] = useState(0);
+  const gecmisRef = useRef(gecmis);
+  gecmisRef.current = gecmis;
+  const islemKilidi = useRef(false);
+
+  // Her işlem sunucudan {grupId, oncesi, sonrasi} anlık görüntüsüyle döner; geri alma bunları kullanır.
+  const gecmiseEkle = useCallback((sonuc, etiket) => {
+    setGecmis((g) => {
+      const liste = [...g.liste.slice(0, g.index + 1), { grupId: sonuc.grupId, oncesi: sonuc.oncesi, sonrasi: sonuc.sonrasi, etiket }].slice(-MAKS_GECMIS);
+      return { liste, index: liste.length - 1 };
+    });
+  }, []);
+
+  const geriIleri = useCallback(
+    async (yon) => {
+      if (islemKilidi.current) return;
+      const { liste, index } = gecmisRef.current;
+      const hedef = yon === 'geri' ? liste[index] : liste[index + 1];
+      if (!hedef) return;
+      islemKilidi.current = true;
+      try {
+        await api('kayitGeriYaz', {
+          method: 'POST',
+          body: {
+            grupId: hedef.grupId,
+            beklenen: yon === 'geri' ? hedef.sonrasi : hedef.oncesi,
+            yazilacak: yon === 'geri' ? hedef.oncesi : hedef.sonrasi,
+          },
+        });
+        setGecmis((g) => ({ ...g, index: g.index + (yon === 'geri' ? -1 : 1) }));
+        bildir(`${yon === 'geri' ? 'Geri alındı' : 'İleri alındı'}: ${hedef.etiket}`);
+        setYenileSayac((n) => n + 1);
+        await yukle();
+      } catch (e) {
+        bildir(e.message, true);
+      } finally {
+        islemKilidi.current = false;
+      }
+    },
+    [bildir, yukle],
+  );
+
+  useEffect(() => {
+    if (!duzenlemeModu) return undefined;
+    function tusa(e) {
+      const hedef = e.target;
+      const etiket = String(hedef?.tagName || '').toLowerCase();
+      // Yazı alanındayken Ctrl+Z tarayıcının kendi metin geri almasına bırakılır.
+      if (['input', 'textarea', 'select'].includes(etiket) || hedef?.isContentEditable) return;
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = String(e.key).toLowerCase();
+      if (k === 'z') {
+        e.preventDefault();
+        geriIleri(e.shiftKey ? 'ileri' : 'geri');
+      } else if (k === 'y') {
+        e.preventDefault();
+        geriIleri('ileri');
+      }
+    }
+    window.addEventListener('keydown', tusa);
+    return () => window.removeEventListener('keydown', tusa);
+  }, [duzenlemeModu, geriIleri]);
 
   async function fisFaturaKaydet(payload) {
     await api('fisFaturaKaydet', { method: 'POST', body: payload });
@@ -91,9 +161,34 @@ export default function Muhasebe2({ onNavigate }) {
 
   return (
     <div className="m2-shell">
-      <button className="m2-back" onClick={() => (onNavigate ? onNavigate('settings') : (window.location.href = '/'))}>
-        <ArrowLeft size={16} /> Geri
-      </button>
+      <div className="m2-ust">
+        <button className="m2-back" onClick={() => (onNavigate ? onNavigate('settings') : (window.location.href = '/'))}>
+          <ArrowLeft size={16} /> Geri
+        </button>
+        <div className="m2-ust-aksiyon">
+          {duzenlemeModu && (
+            <>
+              <button className="m2-btn sec mini" disabled={gecmis.index < 0} onClick={() => geriIleri('geri')} title="Ctrl+Z">
+                ↶ Geri Al
+              </button>
+              <button className="m2-btn sec mini" disabled={gecmis.index >= gecmis.liste.length - 1} onClick={() => geriIleri('ileri')} title="Ctrl+Shift+Z">
+                ↷ İleri Al
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className={`m2-mod-toggle ${duzenlemeModu ? 'edit' : ''}`}
+            aria-pressed={duzenlemeModu}
+            onClick={() => setDuzenlemeModu((v) => !v)}
+            title="Datalar sekmesinde düzenleme ve silmeye izin verir"
+          >
+            <span className="thumb" />
+            <span className="etiket e1">Basit Mod</span>
+            <span className="etiket e2">Düzenleme Modu</span>
+          </button>
+        </div>
+      </div>
       <h1 className="m2-title">
         Muhasebe2 <small>test</small>
       </h1>
@@ -113,6 +208,9 @@ export default function Muhasebe2({ onNavigate }) {
         <button className={`m2-tab ${sekme === 'yemek' ? 'on' : ''}`} onClick={() => setSekme('yemek')}>
           Yemek Kartları
         </button>
+        <button className={`m2-tab ${sekme === 'tahakkuk' ? 'on' : ''}`} onClick={() => setSekme('tahakkuk')}>
+          Tahakkuklar
+        </button>
       </div>
 
       {/* Formlar sekme değişince silinmesin diye gizlenir, kaldırılmaz. */}
@@ -125,13 +223,24 @@ export default function Muhasebe2({ onNavigate }) {
         </div>
       </div>
       <div style={{ display: sekme === 'datalar' ? undefined : 'none' }}>
-        <DatalarSekmesi aktif={sekme === 'datalar'} />
+        <DatalarSekmesi
+          aktif={sekme === 'datalar'}
+          duzenlemeModu={duzenlemeModu}
+          veri={veri}
+          bildir={bildir}
+          yenile={yenileSayac}
+          onIslem={gecmiseEkle}
+          onDegisti={yukle}
+        />
       </div>
       <div style={{ display: sekme === 'ozetler' ? undefined : 'none' }}>
         <HesapOzetleriSekmesi aktif={sekme === 'ozetler'} bildir={bildir} onDegisti={yukle} />
       </div>
       <div style={{ display: sekme === 'yemek' ? undefined : 'none' }}>
         <YemekKartlariSekmesi aktif={sekme === 'yemek'} bildir={bildir} yontemler={veri.odemeYontemleri} onDegisti={yukle} />
+      </div>
+      <div style={{ display: sekme === 'tahakkuk' ? undefined : 'none' }}>
+        <TahakkuklarSekmesi aktif={sekme === 'tahakkuk'} bildir={bildir} kategoriler={veri.kategoriler} onDegisti={yukle} />
       </div>
 
       {modal?.tur === 'firma' && (
@@ -625,7 +734,7 @@ const EVRAK_SINIFI = {
   'Ödeme (Tediye) Makbuzu': 'tediye',
 };
 
-function DatalarSekmesi({ aktif }) {
+function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, onDegisti }) {
   const [kayitlar, setKayitlar] = useState(null);
   const [sinirli, setSinirli] = useState(false);
   const [yukleniyor, setYukleniyor] = useState(false);
@@ -651,10 +760,10 @@ function DatalarSekmesi({ aktif }) {
     }
   }, []);
 
-  // Sekme her açıldığında güncel kayıtlar çekilir.
+  // Sekme her açıldığında (ve geri/ileri alınca) güncel kayıtlar çekilir.
   useEffect(() => {
     if (aktif) yukle();
-  }, [aktif, yukle]);
+  }, [aktif, yukle, yenile]);
 
   const degerler = useMemo(() => {
     const o = {};
@@ -691,6 +800,32 @@ function DatalarSekmesi({ aktif }) {
     );
   }
   const menuKolon = menu ? FILTRE_KOLONLARI.find((k) => k.anahtar === menu.anahtar) : null;
+
+  // ---- Düzenleme Modu: hücre düzeltme, satır düzenle/sil (grubun TAMAMI birlikte değişir) ----
+  const [duzenleGrup, setDuzenleGrup] = useState(null);
+  async function islemYap(govde, kaynak, etiket, ekle) {
+    try {
+      const j = await api(kaynak, { method: 'POST', body: govde });
+      onIslem(j, etiket);
+      if (ekle) bildir(ekle);
+      await yukle();
+      await onDegisti?.();
+      return j;
+    } catch (e) {
+      bildir(e.message, true);
+      return null;
+    }
+  }
+  const alanDegistir = (r, alan, deger, etiket) => islemYap({ grupId: r.grupId, satirId: r.id, alan, deger }, 'kayitAlan', etiket);
+  function grupSil(r) {
+    const grup = (kayitlar || []).filter((x) => x.grupId === r.grupId);
+    const mesaj =
+      grup.length > 1
+        ? `Bu kayıt ${grup.length} satırdan oluşuyor:\n• ${grup.map((x) => x.evrakTuru).join('\n• ')}\n\nHepsi silinecek. Emin misiniz?`
+        : `${r.firmaAdi} — ${r.evrakTuru} kaydı silinecek. Emin misiniz?`;
+    if (window.confirm(mesaj)) islemYap({ grupId: r.grupId }, 'kayitSil', `${r.firmaAdi} kaydı silindi`, 'Kayıt silindi (Ctrl+Z ile geri alabilirsiniz)');
+  }
+  const kategoriler = veri?.kategoriler || [];
 
   const para = (n) => (n === null || n === undefined ? '' : sayiFmt.format(n));
 
@@ -740,45 +875,94 @@ function DatalarSekmesi({ aktif }) {
                   </div>
                 </th>
               ))}
+              {duzenlemeModu && <th>İşlem</th>}
             </tr>
           </thead>
           <tbody>
             {kayitlar && kayitlar.length === 0 && (
               <tr>
-                <td colSpan={DATALAR_SUTUNLAR.length} className="m2-empty">
+                <td colSpan={DATALAR_SUTUNLAR.length + (duzenlemeModu ? 1 : 0)} className="m2-empty">
                   Henüz kayıt yok.
                 </td>
               </tr>
             )}
             {kayitlar && kayitlar.length > 0 && gorunen.length === 0 && (
               <tr>
-                <td colSpan={DATALAR_SUTUNLAR.length} className="m2-empty">
+                <td colSpan={DATALAR_SUTUNLAR.length + (duzenlemeModu ? 1 : 0)} className="m2-empty">
                   Seçili filtrelere uyan kayıt yok. Tarih filtresinden başka bir ay seçebilir veya "Filtreleri temizle"ye basabilirsiniz.
                 </td>
               </tr>
             )}
             {gorunen.map((r) => (
               <tr key={r.id} className={r.otomatik ? 'oto' : ''}>
-                <td className="nowrap">{tarihTR(r.tarih)}</td>
+                <td className="nowrap">
+                  <DuzenlenebilirHucre aktif={duzenlemeModu && !r.kaynak} tur="date" deger={r.tarih} metin={tarihTR(r.tarih)} onKaydet={(v) => alanDegistir(r, 'tarih', v, 'tarih değişikliği')} />
+                </td>
                 <td className="nowrap">
                   <span className={`m2-badge ${EVRAK_SINIFI[r.evrakTuru] || ''}`}>{r.evrakTuru}</span>
                 </td>
                 <td>{r.firmaAdi}</td>
-                <td>{r.faturaNo}</td>
-                <td>{r.aciklama}</td>
-                <td>{r.giderKategorisi}</td>
+                <td>
+                  <DuzenlenebilirHucre aktif={duzenlemeModu && !r.kaynak} deger={r.faturaNo} metin={r.faturaNo} onKaydet={(v) => alanDegistir(r, 'faturaNo', v, 'fatura no değişikliği')} />
+                </td>
+                <td>
+                  <DuzenlenebilirHucre aktif={duzenlemeModu && !r.kaynak && !r.otomatik} deger={r.aciklama} metin={r.aciklama} onKaydet={(v) => alanDegistir(r, 'aciklama', v, 'açıklama değişikliği')} />
+                </td>
+                <td>
+                  <DuzenlenebilirHucre
+                    aktif={duzenlemeModu && !r.kaynak && r.evrakTuru === 'Fatura/Fiş'}
+                    tur="select"
+                    secenekler={kategoriler}
+                    deger={r.giderKategorisi}
+                    metin={r.giderKategorisi}
+                    onKaydet={(v) => alanDegistir(r, 'giderKategorisi', v, 'kategori değişikliği')}
+                  />
+                </td>
                 <td className="nowrap">{r.odemeTuru}</td>
                 <td className="nowrap">{r.odemeSekli}</td>
                 <td className="sayi">{para(r.tutar)}</td>
                 <td className="sayi">{para(r.kdv)}</td>
                 <td className="sayi">{para(r.tahsilat)}</td>
                 <td className="sayi">{para(r.odemeTediye)}</td>
+                {duzenlemeModu && (
+                  <td>
+                    {r.kaynak ? (
+                      <span className="m2-kilit" title={`Bu kayıt ${KAYNAK_ETIKET[r.kaynak] || 'başka bir sekmeden'} yönetilir`}>
+                        🔒 {KAYNAK_ETIKET[r.kaynak] || r.kaynak}
+                      </span>
+                    ) : (
+                      <div className="m2-yk-islem">
+                        <button className="m2-btn sec mini" onClick={() => setDuzenleGrup(r.grupId)}>
+                          Düzenle
+                        </button>
+                        <button className="m2-btn sec mini" onClick={() => grupSil(r)}>
+                          Sil
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
+      {duzenleGrup && (
+        <KayitDuzenleModal
+          grupId={duzenleGrup}
+          veri={veri}
+          bildir={bildir}
+          onKaydet={async (payload) => {
+            const j = await api('kayitDuzenle', { method: 'POST', body: payload });
+            onIslem(j, 'kayıt düzenleme');
+            bildir('Kayıt güncellendi (Ctrl+Z ile geri alabilirsiniz)');
+            await yukle();
+            await onDegisti?.();
+          }}
+          onKapat={() => setDuzenleGrup(null)}
+        />
+      )}
       {menu && menuKolon && (
         <FiltreMenu
           kolon={menuKolon}
@@ -1196,6 +1380,216 @@ function EkstreModal({ firma, bildir, onKapat }) {
           <p className="m2-hint">İşlemler eskiden yeniye sıralıdır, PDF ile aynı: ilk işlem en üstte, son bakiye en altta.</p>
         </>
       )}
+    </ModalKabuk>
+  );
+}
+
+// Düzenleme Modunda hücre: tıklayınca düzenlenir, Enter/başka yere tıklama kaydeder, Esc vazgeçer.
+function DuzenlenebilirHucre({ aktif, tur = 'text', secenekler, deger, metin, onKaydet }) {
+  const [acik, setAcik] = useState(false);
+  const [v, setV] = useState(deger || '');
+  if (!aktif) return metin;
+  if (!acik) {
+    return (
+      <span
+        className="m2-hucre-duzenle"
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          setV(deger || '');
+          setAcik(true);
+        }}
+        onKeyDown={(e) => e.key === 'Enter' && (setV(deger || ''), setAcik(true))}
+      >
+        {metin || '—'}
+      </span>
+    );
+  }
+  if (tur === 'select') {
+    return (
+      <select
+        autoFocus
+        className="m2-select m2-hucre-input"
+        value={v}
+        onChange={(e) => {
+          setAcik(false);
+          if (e.target.value !== deger) onKaydet(e.target.value);
+        }}
+        onBlur={() => setAcik(false)}
+      >
+        {!secenekler.includes(deger) && <option value={deger || ''}>{deger || '—'}</option>}
+        {secenekler.map((k) => (
+          <option key={k} value={k}>
+            {k}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  const bitir = (kaydet) => {
+    setAcik(false);
+    if (kaydet && v !== (deger || '')) onKaydet(v);
+  };
+  return (
+    <input
+      autoFocus
+      className="m2-input m2-hucre-input"
+      type={tur}
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={() => bitir(true)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') bitir(true);
+        if (e.key === 'Escape') bitir(false);
+      }}
+    />
+  );
+}
+
+// Datalar'daki bir kaydı (fatura/fiş veya makbuz grubu) aynı form alanlarıyla düzenler.
+// Kaydedince grubun TÜM satırları (otomatik makbuzlar dahil) tek işlemde yeniden yazılır.
+function KayitDuzenleModal({ grupId, veri, bildir, onKaydet, onKapat }) {
+  const [grup, setGrup] = useState(null);
+  const [hata, setHata] = useState('');
+  useEffect(() => {
+    api('kayitGrubu', { query: { grupId } })
+      .then(setGrup)
+      .catch((e) => setHata(e.message));
+  }, [grupId]);
+  if (!grup) {
+    return (
+      <ModalKabuk baslik="Kaydı Düzenle" onKapat={onKapat}>
+        {hata ? <div className="m2-info r">{hata}</div> : <div className="m2-empty">Yükleniyor…</div>}
+      </ModalKabuk>
+    );
+  }
+  return grup.faturalar.length ? (
+    <FaturaDuzenleForm grup={grup} veri={veri} bildir={bildir} onKaydet={onKaydet} onKapat={onKapat} />
+  ) : (
+    <MakbuzDuzenleForm grup={grup} veri={veri} bildir={bildir} onKaydet={onKaydet} onKapat={onKapat} />
+  );
+}
+
+function FaturaDuzenleForm({ grup, veri, bildir, onKaydet, onKapat }) {
+  const f = grup.faturalar[0];
+  const [tarih, setTarih] = useState(f.tarih);
+  const [firmaId, setFirmaId] = useState(f.firma_id);
+  const [faturaNo, setFaturaNo] = useState(f.fatura_no || '');
+  const [aciklama, setAciklama] = useState(f.aciklama || '');
+  const [kategori, setKategori] = useState(f.gider_kategorisi || '');
+  const [tutar, setTutar] = useState(String(f.fatura_tutari));
+  const [kdv, setKdv] = useState(f.kdv === null || f.kdv === undefined ? '' : String(f.kdv));
+  const [tur, setTur] = useState(f.odeme_turu);
+  const [detay, setDetay] = useState(f.kasa || f.odeme_hesabi || '');
+  const { hata, bekliyor, calistir } = useModalKaydet(onKaydet, onKapat);
+  const t = sayi(tutar);
+
+  function kaydet() {
+    if (!firmaId) return bildir('Firma seçin', true);
+    if (!(t > 0)) return bildir('Tutarı girin', true);
+    if (!kategori) return bildir('Gider kategorisini seçin', true);
+    const y = yontemPayload(tur, detay);
+    if (y.hata) return bildir(y.hata, true);
+    calistir({ grupId: grup.faturalar[0].grup_id, tarih, firmaId, faturaNo, aciklama, giderKategorisi: kategori, faturaTutari: tutar, kdv, ...y });
+  }
+  return (
+    <ModalKabuk baslik="Fatura / Fiş Düzenle" onKapat={onKapat}>
+      <label className="m2-label">Tarih</label>
+      <input className="m2-input" type="date" value={tarih} onChange={(e) => setTarih(e.target.value)} />
+      <label className="m2-label">Firma *</label>
+      <FirmaSecici firmalar={veri.firmalar} valueId={firmaId} onChange={(id) => setFirmaId(id)} onYeni={() => bildir('Yeni firmayı Fişler/Faturalar sekmesinden ekleyin', true)} />
+      <label className="m2-label">Fatura No</label>
+      <input className="m2-input" value={faturaNo} onChange={(e) => setFaturaNo(e.target.value)} />
+      <label className="m2-label">Açıklama</label>
+      <input className="m2-input" value={aciklama} onChange={(e) => setAciklama(e.target.value)} />
+      <label className="m2-label">Gider Kategorisi</label>
+      <select className="m2-select" value={kategori} onChange={(e) => setKategori(e.target.value)}>
+        <option value="">— Seçin —</option>
+        {veri.kategoriler.map((k) => (
+          <option key={k} value={k}>
+            {k}
+          </option>
+        ))}
+      </select>
+      <label className="m2-label">Ödeme Türü</label>
+      <OdemeSecimi
+        turler={FATURA_ODEME_TURLERI}
+        tur={tur}
+        detay={detay}
+        onChange={(a, b) => {
+          setTur(a);
+          setDetay(b);
+        }}
+        yontemler={veri.odemeYontemleri}
+        onYeni={() => bildir('Yeni ödeme yöntemini Fişler/Faturalar sekmesinden ekleyin', true)}
+        cariNotu="Cari olarak kaydedilir; firmanın borcuna eklenir."
+      />
+      <label className="m2-label">Fatura Tutarı (KDV dahil) *</label>
+      <input className="m2-input" type="number" step="any" min="0" value={tutar} onChange={(e) => setTutar(e.target.value)} />
+      <label className="m2-label">KDV Tutarı</label>
+      <input className="m2-input" type="number" step="any" min="0" placeholder="Opsiyonel" value={kdv} onChange={(e) => setKdv(e.target.value)} />
+      <p className="m2-hint">Kaydedince bu kaydın otomatik ödeme ve tahsilat makbuzları da yeni bilgilere göre yeniden yazılır.</p>
+      {hata && <div className="m2-info r">{hata}</div>}
+      <ModalAksiyon onKapat={onKapat} bekliyor={bekliyor} onKaydet={kaydet} />
+    </ModalKabuk>
+  );
+}
+
+function MakbuzDuzenleForm({ grup, veri, bildir, onKaydet, onKapat }) {
+  const m = grup.makbuzlar.find((x) => !x.otomatik) || grup.makbuzlar[0];
+  const [tarih, setTarih] = useState(m.tarih);
+  const [firmaId, setFirmaId] = useState(m.firma_id);
+  const [makbuzTuru, setMakbuzTuru] = useState(m.makbuz_turu);
+  const [faturaNo, setFaturaNo] = useState(m.fatura_no || '');
+  const [aciklama, setAciklama] = useState(m.aciklama || '');
+  const [tutar, setTutar] = useState(String(m.tutar));
+  const [tur, setTur] = useState(m.odeme_turu || '');
+  const [detay, setDetay] = useState(m.kasa || m.odeme_hesabi || '');
+  const { hata, bekliyor, calistir } = useModalKaydet(onKaydet, onKapat);
+  const t = sayi(tutar);
+
+  function kaydet() {
+    if (!firmaId) return bildir('Firma seçin', true);
+    if (!(t > 0)) return bildir('Tutarı girin', true);
+    const y = yontemPayload(tur, detay);
+    if (y.hata) return bildir(y.hata, true);
+    calistir({ grupId: m.grup_id, tarih, firmaId, makbuzTuru, faturaNo, aciklama, tutar, ...y });
+  }
+  return (
+    <ModalKabuk baslik="Makbuz Düzenle" onKapat={onKapat}>
+      <label className="m2-label">Makbuz Türü</label>
+      <div className="m2-chips">
+        {['Tahsilat', 'Ödeme'].map((k) => (
+          <button key={k} type="button" className={`m2-chip ${makbuzTuru === k ? 'on' : ''}`} onClick={() => setMakbuzTuru(k)}>
+            {k} Makbuzu
+          </button>
+        ))}
+      </div>
+      <label className="m2-label">Tarih</label>
+      <input className="m2-input" type="date" value={tarih} onChange={(e) => setTarih(e.target.value)} />
+      <label className="m2-label">Firma *</label>
+      <FirmaSecici firmalar={veri.firmalar} valueId={firmaId} onChange={(id) => setFirmaId(id)} onYeni={() => bildir('Yeni firmayı Fişler/Faturalar sekmesinden ekleyin', true)} />
+      <label className="m2-label">Fatura / Makbuz No</label>
+      <input className="m2-input" value={faturaNo} onChange={(e) => setFaturaNo(e.target.value)} />
+      <label className="m2-label">Açıklama</label>
+      <input className="m2-input" value={aciklama} onChange={(e) => setAciklama(e.target.value)} />
+      <label className="m2-label">Ödeme Türü</label>
+      <OdemeSecimi
+        turler={MAKBUZ_ODEME_TURLERI}
+        tur={tur}
+        detay={detay}
+        onChange={(a, b) => {
+          setTur(a);
+          setDetay(b);
+        }}
+        yontemler={veri.odemeYontemleri}
+        onYeni={() => bildir('Yeni ödeme yöntemini Fişler/Faturalar sekmesinden ekleyin', true)}
+      />
+      <label className="m2-label">Tutar *</label>
+      <input className="m2-input" type="number" step="any" min="0" value={tutar} onChange={(e) => setTutar(e.target.value)} />
+      <p className="m2-hint">Kaydedince ödeme şekli carisindeki karşı makbuz da yeniden yazılır.</p>
+      {hata && <div className="m2-info r">{hata}</div>}
+      <ModalAksiyon onKapat={onKapat} bekliyor={bekliyor} onKaydet={kaydet} />
     </ModalKabuk>
   );
 }

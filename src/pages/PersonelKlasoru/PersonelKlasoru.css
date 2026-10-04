@@ -1,0 +1,210 @@
+/* Personel Klasörü */
+.pk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.pk-kart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  text-align: left;
+  border-radius: 16px;
+  border: 1.5px solid rgba(57, 62, 65, 0.18);
+  background: #fff;
+  cursor: pointer;
+  color: #393e41 !important;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.pk-kart:hover,
+.pk-kart:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+  outline: none;
+}
+.pk-kart.pasif {
+  opacity: 0.7;
+  background: rgba(57, 62, 65, 0.06);
+}
+.pk-kart-ad {
+  font-size: 15px;
+  font-weight: 800;
+  color: #393e41 !important;
+}
+.pk-kart-gorev {
+  font-size: 12.5px;
+  opacity: 0.8;
+  color: #393e41 !important;
+}
+.pk-durum {
+  display: inline-block;
+  width: fit-content;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 800;
+}
+.pk-durum.aktif {
+  background: rgba(46, 125, 50, 0.15);
+  color: #2e7d32 !important;
+}
+.pk-durum.pasif {
+  background: rgba(57, 62, 65, 0.15);
+  color: #393e41 !important;
+}
+.pk-alt {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #393e41 !important;
+}
+.pk-bilgi {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.pk-alan span {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  color: #393e41 !important;
+}
+.pk-alan b {
+  font-size: 15px;
+  color: #393e41 !important;
+}
+.pk-alan.genis {
+  grid-column: 1 / -1;
+}
+.pk-sebep {
+  font-weight: 600;
+  opacity: 0.85;
+}
+.pk-goz {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  margin-left: 4px;
+  vertical-align: middle;
+  border: 1.5px solid rgba(57, 62, 65, 0.2);
+  border-radius: 8px;
+  background: #fff;
+  color: #393e41 !important;
+  cursor: pointer;
+}
+.pk-goz:hover {
+  background: rgba(233, 79, 55, 0.12);
+}
+.pk-notlar {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(57, 62, 65, 0.25);
+}
+.pk-not {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(57, 62, 65, 0.15);
+  color: #393e41 !important;
+}
+.pk-not-tarih {
+  min-width: 118px;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.7;
+}
+.pk-puantaj {
+  border-collapse: collapse;
+  min-width: 100%;
+  width: max-content;
+}
+.pk-puantaj th,
+.pk-puantaj td {
+  min-width: 34px;
+  padding: 5px 6px;
+  text-align: center;
+  border: 1px solid rgba(57, 62, 65, 0.22);
+  font-size: 13px;
+}
+.pk-puantaj th {
+  background: #393e41;
+  color: #f6f7eb !important;
+  font-weight: 800;
+}
+.pk-puantaj th small {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 600;
+  opacity: 0.75;
+  color: #f6f7eb !important;
+}
+.pk-puantaj th.hs {
+  background: #7b8185;
+}
+.pk-puantaj td {
+  background: #fff;
+  color: #393e41 !important;
+}
+.pk-puantaj td.hs {
+  background: rgba(57, 62, 65, 0.16);
+}
+.pk-puantaj td.hucre {
+  cursor: pointer;
+  font-weight: 700;
+}
+.pk-puantaj td.hucre:hover {
+  background: rgba(233, 79, 55, 0.12);
+}
+.pk-puantaj td.izin {
+  background: rgba(233, 79, 55, 0.22);
+  color: #b53a26 !important;
+  font-weight: 800;
+}
+.pk-puantaj td.bos {
+  cursor: default;
+  color: #9aa0a3 !important;
+  background: rgba(57, 62, 65, 0.05);
+}
+.pk-puantaj td.sec {
+  outline: 2.5px solid #e94f37;
+  outline-offset: -2px;
+}
+.pk-puantaj th.top,
+.pk-puantaj td.top {
+  min-width: 96px;
+  background: #e9eadb;
+  color: #393e41 !important;
+  font-weight: 800;
+}
+.pk-puantaj th.top {
+  background: #393e41;
+  color: #f6f7eb !important;
+}
+.pk-gunmenu {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.pk-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2px 16px;
+}
+.pk-form .genis {
+  grid-column: 1 / -1;
+}
+.pk-form textarea {
+  height: auto;
+  padding-top: 8px;
+  resize: vertical;
+}
