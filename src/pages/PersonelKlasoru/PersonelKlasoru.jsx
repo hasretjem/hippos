@@ -74,7 +74,7 @@ export default function PersonelKlasoru({ onNavigate }) {
   });
 
   return (
-    <div className="m2-shell pk-shell">
+    <div className="m2-shell pkl-shell">
       <button className="m2-back" onClick={() => (secili ? setSecili(null) : onNavigate ? onNavigate('settings') : (window.location.href = '/'))}>
         <ArrowLeft size={16} /> {secili ? 'Personel listesi' : 'Geri'}
       </button>
@@ -102,12 +102,12 @@ export default function PersonelKlasoru({ onNavigate }) {
             </button>
           </div>
           {liste && gorunen.length === 0 && <div className="m2-empty">Bu filtreye uyan personel yok.</div>}
-          <div className="pk-grid">
+          <div className="pkl-grid">
             {gorunen.map((p) => (
-              <button key={p.id} type="button" className={`pk-kart ${p.aktif ? '' : 'pasif'}`} onClick={() => setSecili(p.id)}>
-                <span className="pk-kart-ad">{p.adSoyad}</span>
-                <span className="pk-kart-gorev">{p.gorev || '—'}</span>
-                <span className={`pk-durum ${p.aktif ? 'aktif' : 'pasif'}`}>{p.aktif ? 'Aktif' : 'Pasif'}</span>
+              <button key={p.id} type="button" className={`pkl-kart ${p.aktif ? '' : 'pasif'}`} onClick={() => setSecili(p.id)}>
+                <span className="pkl-kart-ad">{p.adSoyad}</span>
+                <span className="pkl-kart-gorev">{p.gorev || '—'}</span>
+                <span className={`pkl-durum ${p.aktif ? 'aktif' : 'pasif'}`}>{p.aktif ? 'Aktif' : 'Pasif'}</span>
               </button>
             ))}
           </div>
@@ -167,7 +167,7 @@ function PersonelDetay({ id, bildir, yontemler, onDegisti }) {
   const kilit = veri.kilitli;
 
   const goz = (
-    <button type="button" className="pk-goz" aria-label="Maaş ve notları göster/gizle" title={goster ? 'Gizle' : 'Göster'} onClick={() => setGoster((v) => !v)}>
+    <button type="button" className="pkl-goz" aria-label="Maaş ve notları göster/gizle" title={goster ? 'Gizle' : 'Göster'} onClick={() => setGoster((v) => !v)}>
       {goster ? <EyeOff size={18} /> : <Eye size={18} />}
     </button>
   );
@@ -178,8 +178,8 @@ function PersonelDetay({ id, bildir, yontemler, onDegisti }) {
         <div className="m2-row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <div>
             <h2 style={{ margin: 0 }}>{p.adSoyad}</h2>
-            <div className="pk-alt">
-              {p.gorev || '—'} • <span className={`pk-durum ${p.aktif ? 'aktif' : 'pasif'}`}>{p.aktif ? 'Aktif' : 'Pasif'}</span>
+            <div className="pkl-alt">
+              {p.gorev || '—'} • <span className={`pkl-durum ${p.aktif ? 'aktif' : 'pasif'}`}>{p.aktif ? 'Aktif' : 'Pasif'}</span>
             </div>
           </div>
           <button className="m2-btn sec" onClick={() => setFormModal(true)}>
@@ -187,39 +187,39 @@ function PersonelDetay({ id, bildir, yontemler, onDegisti }) {
           </button>
         </div>
 
-        <div className="pk-bilgi">
-          <div className="pk-alan">
+        <div className="pkl-bilgi">
+          <div className="pkl-alan">
             <span>Maaş</span>
             <b data-alan="maas">
               {goster ? TL(p.maas) : GIZLI} {goz}
             </b>
           </div>
-          <div className="pk-alan">
+          <div className="pkl-alan">
             <span>İşe Giriş</span>
             <b>{tarihTR(p.iseGiris)}</b>
           </div>
-          <div className="pk-alan">
+          <div className="pkl-alan">
             <span>SGK Başlama</span>
             <b>{p.sgkYok ? 'Yok' : p.sgkBaslama ? tarihTR(p.sgkBaslama) : '—'}</b>
           </div>
-          <div className="pk-alan">
+          <div className="pkl-alan">
             <span>Çıkış</span>
             <b>
               {p.cikisTarihi ? tarihTR(p.cikisTarihi) : '—'}
-              {p.cikisTarihi && p.cikisSebebi && <i className="pk-sebep"> ({p.cikisSebebi})</i>}
+              {p.cikisTarihi && p.cikisSebebi && <i className="pkl-sebep"> ({p.cikisSebebi})</i>}
             </b>
           </div>
-          <div className="pk-alan">
+          <div className="pkl-alan">
             <span>Telefon</span>
             <b>{p.telefon || '—'}</b>
           </div>
-          <div className="pk-alan genis">
+          <div className="pkl-alan genis">
             <span>İkametgâh Adresi</span>
             <b>{p.adres || '—'}</b>
           </div>
         </div>
 
-        <div className="pk-notlar">
+        <div className="pkl-notlar">
           <div className="m2-row" style={{ justifyContent: 'space-between' }}>
             <h3 className="tk-baslik" style={{ margin: 0 }}>
               Personel Notları
@@ -236,8 +236,8 @@ function PersonelDetay({ id, bildir, yontemler, onDegisti }) {
           {goster &&
             veri.notlar &&
             veri.notlar.map((n) => (
-              <div key={n.id} className="pk-not">
-                <span className="pk-not-tarih">{zamanTR(n.tarih)}</span>
+              <div key={n.id} className="pkl-not">
+                <span className="pkl-not-tarih">{zamanTR(n.tarih)}</span>
                 <span style={{ flex: 1 }}>{n.metin}</span>
                 <button
                   type="button"
@@ -270,7 +270,7 @@ function PersonelDetay({ id, bildir, yontemler, onDegisti }) {
         </div>
 
         <div className="m2-table-wrap">
-          <table className="pk-puantaj">
+          <table className="pkl-puantaj">
             <thead>
               <tr>
                 {pt.gunler.map((g) => (
@@ -312,7 +312,7 @@ function PersonelDetay({ id, bildir, yontemler, onDegisti }) {
         </p>
 
         {secGun && (
-          <div className="m2-kutu pk-gunmenu">
+          <div className="m2-kutu pkl-gunmenu">
             <strong>{tarihTR(secGun)}</strong> için:
             <button className="m2-btn sec mini" disabled={kilit} onClick={() => { setIzinModal({ tarih: secGun }); setSecGun(''); }}>
               İzin Ekle
@@ -513,7 +513,7 @@ function PersonelFormModal({ personel, goster, onKaydet, onBitti, onKapat }) {
 
   return (
     <ModalKabuk baslik={yeni ? 'Yeni Personel' : 'Personel Bilgileri'} onKapat={onKapat} genis>
-      <div className="pk-form">
+      <div className="pkl-form">
         <div>
           <label className="m2-label">Ad Soyad *</label>
           <input className="m2-input" autoFocus value={adSoyad} onChange={(e) => setAdSoyad(e.target.value)} />
