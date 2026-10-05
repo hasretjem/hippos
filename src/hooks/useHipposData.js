@@ -1892,7 +1892,8 @@ export default function useHipposData(scope = 'full') {
     return { ok: true };
   }
 
-  // Futura: tam tahsilat — faturayı siler, bakiye 0 ise hareketleri de arşivler  async function futuraTamOde(faturaId, odemeTur = 'NAKİT') {
+  // Futura: tam tahsilat — faturayı siler, bakiye 0 ise hareketleri de arşivler
+  async function futuraTamOde(faturaId, odemeTur = 'NAKİT') {
     const fatura = cariFaturalar.find((f) => f.id === faturaId);
     if (!fatura) return;
     setCariFaturalar((prev) => prev.filter((f) => f.id !== faturaId));
