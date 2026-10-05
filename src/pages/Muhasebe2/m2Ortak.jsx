@@ -45,10 +45,10 @@ export async function api(resource, { method = 'GET', body, query } = {}) {
   return j;
 }
 
-export function ModalKabuk({ baslik, onKapat, genis, children }) {
+export function ModalKabuk({ baslik, onKapat, genis, ekSinif = '', children }) {
   return (
     <div className="m2-modal-bg" onClick={onKapat}>
-      <div className={`m2-modal ${genis ? 'genis' : ''}`} onClick={(e) => e.stopPropagation()}>
+      <div className={`m2-modal ${genis ? 'genis' : ''} ${ekSinif}`.trim()} onClick={(e) => e.stopPropagation()}>
         <div className="m2-modal-head">
           <h3>{baslik}</h3>
           <button onClick={onKapat} aria-label="Kapat">

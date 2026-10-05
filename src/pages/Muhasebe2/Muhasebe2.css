@@ -1013,7 +1013,16 @@
 /* ---------- Günsonları sekmesi (ön ek m2-gs-: başka sayfalarla sınıf çakışması olmasın) ---------- */
 .m2-gs-tablo td, .m2-gs-tablo th { white-space: nowrap; }
 .m2-gs-detay { margin-left: 6px; }
-.m2-gs-form { max-height: 68vh; overflow-y: auto; padding-right: 4px; }
+
+/* Filtreler: sağda, yan yana TEK SATIR (.m2-input tam genişlikte olduğu için sıfırlanır); yalnızca dar ekranda alt satıra geçer */
+.m2-gs-filtre { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.m2-gs-filtre .m2-input { width: auto; min-width: 120px; flex: 0 0 auto; }
+.m2-gs-filtre .m2-btn { flex: 0 0 auto; }
+@media (max-width: 760px) { .m2-gs-filtre { flex-wrap: wrap; justify-content: flex-start; } }
+
+/* Düzenle penceresi: daha geniş, yatay kaydırma yok */
+.m2-modal.genis.m2-gs-modal { max-width: 1400px; }
+.m2-gs-form { max-height: 68vh; overflow-y: auto; overflow-x: hidden; padding: 4px 4px 0 0; margin-top: 10px; }
 .m2-gs-bolum {
   margin: 16px 0 6px;
   font-size: 12px;
@@ -1022,10 +1031,26 @@
   text-transform: uppercase;
   color: #e94f37 !important; /* Hippos kırmızısı */
 }
-.m2-gs-izgara { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 12px; }
-.m2-gs-ozet { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 4px; }
-.m2-gs-ozet-kutu { background: rgba(0, 0, 0, 0.18); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
-.m2-gs-ozet-kutu span { font-size: 11px; color: #c9cbbf !important; }
-.m2-gs-ozet-kutu strong { font-size: 15px; color: #f6f7eb !important; }
-.m2-gs-ozet-kutu.vurgu strong { color: #f7c948 !important; }
-.m2-gs-yemek td .m2-input { min-width: 90px; text-align: right; }
+/* Etiketler tek satır; kutular alttan hizalı (etiket uzarsa kutu aşağı kaymaz) */
+.m2-gs-izgara { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px 12px; align-items: end; }
+.m2-gs-izgara > div { min-width: 0; }
+.m2-gs-izgara.m2-gs-izgara-genis { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.m2-gs-izgara .m2-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Özet kutuları: açık renkli pencerede KOYU yazı (kontrast ~13:1); vurgulu kutular koyu zeminde açık sarı (~7.5:1) */
+.m2-gs-ozet { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 4px; }
+.m2-gs-ozet-kutu { background: #e8e9db; border: 1px solid rgba(57, 62, 65, 0.15); border-radius: 10px; padding: 9px 12px; display: flex; flex-direction: column; gap: 3px; }
+.m2-gs-ozet-kutu span { font-size: 12px; font-weight: 600; color: #4a4f52 !important; }
+.m2-gs-ozet-kutu strong { font-size: 16px; font-weight: 800; color: #1d2125 !important; }
+.m2-gs-ozet-kutu.vurgu { background: #393e41; border-color: #393e41; }
+.m2-gs-ozet-kutu.vurgu span { color: #e4e6da !important; }
+.m2-gs-ozet-kutu.vurgu strong { color: #ffd166 !important; }
+
+/* Pencere içindeki küçük tablolar (cari, detaylar) 1180px'lik asgari genişliği kullanmaz */
+.m2-table.m2-gs-kucuk { min-width: 0; }
+/* Yemek kartları: sütun sayısı ne olursa olsun pencereye sığar (kolon eklenirse sütunlar eşit daralır), yatay kaydırma YOK */
+.m2-gs-yemek-wrap { overflow-x: visible; }
+.m2-table.m2-gs-yemek { min-width: 0; width: 100%; table-layout: fixed; }
+.m2-gs-yemek th, .m2-gs-yemek td { padding: 6px 6px; white-space: normal; overflow-wrap: anywhere; vertical-align: middle; }
+.m2-gs-yemek th:first-child, .m2-gs-yemek td:first-child { width: 130px; }
+.m2-gs-yemek td .m2-input { min-width: 0; width: 100%; height: 38px; padding: 0 8px; text-align: right; }

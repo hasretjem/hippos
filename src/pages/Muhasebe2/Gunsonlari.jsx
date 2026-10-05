@@ -150,7 +150,7 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
     <div className="m2-card">
       <div className="m2-row" style={{ justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap' }}>
         <h2 style={{ margin: 0 }}>Günsonları</h2>
-        <div className="m2-row" style={{ flexWrap: 'wrap' }}>
+        <div className="m2-gs-filtre">
           <select className="m2-input" aria-label="Yıl" value={yil} onChange={(e) => setYil(e.target.value)}>
             {yillar.map((y) => (
               <option key={y} value={y}>
@@ -337,7 +337,7 @@ function GunsonuDetayModal({ tip, kayit, onKapat }) {
       const liste = tip === 'anaKasaHarcamalar' ? veri.anaKasa : veri.gunlukKasa;
       if (!liste || !liste.length) return <p className="m2-empty">Bu güne ait harcama kaydı yok.</p>;
       return (
-        <table className="m2-table">
+        <table className="m2-table m2-gs-kucuk">
           <thead>
             <tr>
               <th>Ad</th>
@@ -362,7 +362,7 @@ function GunsonuDetayModal({ tip, kayit, onKapat }) {
       const kolonlar = kayit.yemekDetay?.kolonlar || [];
       const tutarlar = kayit.yemekDetay?.tutarlar || {};
       return (
-        <table className="m2-table">
+        <table className="m2-table m2-gs-kucuk">
           <thead>
             <tr>
               <th>Marka</th>
@@ -390,7 +390,7 @@ function GunsonuDetayModal({ tip, kayit, onKapat }) {
     }
     const t = kayit.anaKasaTakibi || {};
     return (
-      <table className="m2-table">
+      <table className="m2-table m2-gs-kucuk">
         <tbody>
           <tr>
             <td>Dünden Devir</td>
@@ -423,7 +423,7 @@ function GunsonuDetayModal({ tip, kayit, onKapat }) {
 function CariTablosu({ kayit }) {
   const satirlar = cariSatirlari(kayit.cariDetay);
   return (
-    <table className="m2-table">
+    <table className="m2-table m2-gs-kucuk">
       <thead>
         <tr>
           <th>Ad</th>
@@ -547,7 +547,7 @@ function GunsonuDuzenleModal({ kayit, onKapat, onKaydet, onBitti }) {
   }
 
   return (
-    <ModalKabuk baslik={`Günsonu Düzenle — ${kayit.tarih}`} onKapat={onKapat} genis>
+    <ModalKabuk baslik={`Günsonu Düzenle — ${kayit.tarih}`} onKapat={onKapat} genis ekSinif="m2-gs-modal">
       <div className="m2-gs-form">
         <div className="m2-gs-ozet" aria-label="Hesaplanan toplamlar">
           <Ozet ad="Toplam Nakit" deger={goster.toplamNakitPara} />
@@ -567,10 +567,12 @@ function GunsonuDuzenleModal({ kayit, onKapat, onKaydet, onBitti }) {
             </div>
           ))}
           <div>
-            <label className="m2-label">Kasa avansı (eksi olabilir)</label>
+            <label className="m2-label">Kasa avansı</label>
             <input className="m2-input" inputMode="decimal" value={f.avans} onChange={(e) => set('avans', e.target.value)} />
           </div>
         </div>
+
+        <p className="m2-hint">Kasa avansı eksi girilebilir (örn. -2000).</p>
 
         {f.pos.length > 0 && (
           <>
@@ -595,7 +597,7 @@ function GunsonuDuzenleModal({ kayit, onKapat, onKaydet, onBitti }) {
         {kolonlar.length === 0 ? (
           <p className="m2-hint">Bu kayıtta yemek kartı kolonu tanımlı değil.</p>
         ) : (
-          <div className="m2-table-wrap">
+          <div className="m2-table-wrap m2-gs-yemek-wrap">
             <table className="m2-table m2-gs-yemek">
               <thead>
                 <tr>
@@ -627,7 +629,7 @@ function GunsonuDuzenleModal({ kayit, onKapat, onKaydet, onBitti }) {
               </tbody>
             </table>
             <div className="m2-row" style={{ marginTop: 6 }}>
-              <input className="m2-input" placeholder="Yeni marka adı" aria-label="Yeni marka adı" value={yeniMarka} onChange={(e) => setYeniMarka(e.target.value)} />
+              <input className="m2-input" style={{ maxWidth: 320 }} placeholder="Yeni marka adı" aria-label="Yeni marka adı" value={yeniMarka} onChange={(e) => setYeniMarka(e.target.value)} />
               <button type="button" className="m2-btn sec mini" disabled={!yeniMarka.trim()} onClick={markaEkle}>
                 + Marka Ekle
               </button>
@@ -636,7 +638,7 @@ function GunsonuDuzenleModal({ kayit, onKapat, onKaydet, onBitti }) {
         )}
 
         <div className="m2-gs-bolum">Kasa ve ana kasa devri</div>
-        <div className="m2-gs-izgara">
+        <div className="m2-gs-izgara m2-gs-izgara-genis">
           <div>
             <label className="m2-label">Ana kasa harcaması</label>
             <input className="m2-input" inputMode="decimal" value={f.ana} onChange={(e) => set('ana', e.target.value)} />
