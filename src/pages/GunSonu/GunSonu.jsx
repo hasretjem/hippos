@@ -275,6 +275,32 @@ export default function GunSonu({ data, onNavigate }) {
   }, [cariOdemeler, cariGecmis, cariFaturalar]);
   const bugunCariOdemeToplamı = Object.values(bugunCariOdemeOzeti).reduce((s, v) => s + v, 0);
 
+  // Bugünkü cari ödemelerinin DETAYI: hangi cari, hangi ödeme türü, ne kadar, saat kaçta.
+  // Kaynaklar yukarıdaki özetle aynı (canlı ödemeler + arşivlenen cariler + faturalandırırken silinenler).
+  // Özetteki toplamı ve cirodan düşülen tutarı ETKİLEMEZ, sadece gösterim içindir.
+  const bugunCariOdemeDetay = useMemo(() => {
+    const gunBaslangic = new Date(); gunBaslangic.setHours(0, 0, 0, 0);
+    const ts0 = gunBaslangic.getTime();
+    const adBul = (cariId) => (cariler || []).find((c) => c.id === cariId)?.ad || 'Silinmiş cari';
+    const liste = [];
+    (cariOdemeler || []).filter((o) => o.ts >= ts0)
+      .forEach((o) => liste.push({ ts: o.ts, cari: adBul(o.cariId), tur: o.tur, tutar: Number(o.tutar) || 0 }));
+    (cariGecmis || []).filter((g) => g.ts >= ts0).forEach((g) => {
+      (g.odemelerDetay || []).filter((o) => o.ts >= ts0)
+        .forEach((o) => liste.push({ ts: o.ts, cari: adBul(g.cariId), tur: o.tur, tutar: Number(o.tutar) || 0 }));
+    });
+    const canliOdemeIdler = new Set((cariOdemeler || []).map((o) => o.id));
+    (cariFaturalar || []).forEach((f) => {
+      (Array.isArray(f.odemelerSnapshot) ? f.odemelerSnapshot : [])
+        .filter((o) => o.ts >= ts0 && !canliOdemeIdler.has(o.id))
+        .forEach((o) => liste.push({ ts: o.ts, cari: adBul(f.cariId), tur: o.tur, tutar: Number(o.tutar) || 0 }));
+    });
+    return liste.sort((a, b) => a.ts - b.ts);
+  }, [cariOdemeler, cariGecmis, cariFaturalar, cariler]);
+  const odemeDetayCirodanDusen = bugunCariOdemeDetay.filter((o) => o.tur !== 'HAVALE');
+  const odemeDetayHavale = bugunCariOdemeDetay.filter((o) => o.tur === 'HAVALE');
+  const odemeSaat = (ts) => new Date(ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
   const [cariOverrides, setCariOverrides] = useState({});
   const [cariEditingFor, setCariEditingFor] = useState(null);
   const [cariEditDraft, setCariEditDraft] = useState('');
@@ -580,9 +606,9 @@ export default function GunSonu({ data, onNavigate }) {
               <div className="gs-row-total main" style={{marginTop:8}}><span>TOPLAM CARİ TUTARI</span><strong>{TL(cariToplam)}</strong></div>
 
               {/* Ödenen Cari Tutarları — havale hariç, cirodan DÜŞÜLÜR */}
-              {bugunCariOdemeToplamı > 0 && (
+              {(bugunCariOdemeToplamı > 0 || odemeDetayHavale.length > 0) && (
                 <div className="gs-cari-odeme-panel">
-                  <span className="gs-subhead">Ödenen Cari Tutarları</span>
+                  <span className="gs-subhead gs-odeme-baslik">Ödenen Cari Tutarları</span>
                   <p className="gs-hint" style={{margin:'2px 0 6px',fontSize:11}}>Havale hariç tahsilatlar toplam cirodan düşülür</p>
                   {Object.entries(bugunCariOdemeOzeti).map(([tur, tutar]) => (
                     <div key={tur} className="gs-cari-row">
@@ -590,7 +616,37 @@ export default function GunSonu({ data, onNavigate }) {
                       <strong>{TL(tutar)}</strong>
                     </div>
                   ))}
-                  <div className="gs-row-total"><span>TOPLAM TAHSİLAT</span><strong className="neg">−{TL(bugunCariOdemeToplamı)}</strong></div>
+                  {bugunCariOdemeToplamı > 0 && (
+                    <div className="gs-row-total"><span>TOPLAM TAHSİLAT</span><strong className="neg">−{TL(bugunCariOdemeToplamı)}</strong></div>
+                  )}
+                  {odemeDetayCirodanDusen.length > 0 && (
+                    <div className="gs-odeme-detay">
+                      <span className="gs-odeme-detay-baslik">Ödeme Detayı</span>
+                      {odemeDetayCirodanDusen.map((o, i) => (
+                        <div key={i} className="gs-odeme-detay-row">
+                          <div className="gs-odeme-detay-sol">
+                            <span className="gs-odeme-detay-ad">{o.cari}</span>
+                            <span className="gs-odeme-detay-alt">{odemeSaat(o.ts)} · <b className="gs-odeme-tur">{o.tur}</b></span>
+                          </div>
+                          <strong>−{TL(o.tutar)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {odemeDetayHavale.length > 0 && (
+                    <div className="gs-odeme-detay">
+                      <span className="gs-odeme-detay-baslik havale">Havale ile alınanlar (cirodan düşülmez)</span>
+                      {odemeDetayHavale.map((o, i) => (
+                        <div key={i} className="gs-odeme-detay-row havale">
+                          <div className="gs-odeme-detay-sol">
+                            <span className="gs-odeme-detay-ad">{o.cari}</span>
+                            <span className="gs-odeme-detay-alt">{odemeSaat(o.ts)} · <b className="gs-odeme-tur">{o.tur}</b></span>
+                          </div>
+                          <strong>{TL(o.tutar)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </section>

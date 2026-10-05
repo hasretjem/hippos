@@ -1901,15 +1901,21 @@ export default function useHipposData(scope = 'full') {
     // Ödeme kaydı: cari_odemeler'e yaz (panelde ve günsonu tahsilatlarında görünsün)
   const odemeId = Date.now() + Math.floor(Math.random() * 1000);
     const odemeTs = Date.now();
-    const eklenenOdeme = { id: odemeId, cariId: fatura.cariId, ts: odemeTs, tutar: fatura.tutar, tur: odemeTur, kaynak: 'fatura' };
+    const eklenenOdeme = { id: odemeId, cariId: fatura.cariId, ts: odemeTs, tutar: Math.max(0, fatura.tutar - (fatura.tahsilatTutar || 0)), tur: odemeTur, kaynak: 'fatura' };
     setCariOdemeler((prev) => [...prev, eklenenOdeme]);
-    supabase.from('cari_odemeler').insert({ id: odemeId, cari_id: fatura.cariId, ts: odemeTs, tutar: fatura.tutar, tur: odemeTur, kaynak: 'fatura' })
+    // Satış geçmişine de TAHSİLAT_ kaydı yaz — Ayarlar'daki canlı ciro tahsilatları buradan okuyor.
+    // Tutar: şu an fiilen alınan kısım (daha önce kısmi ödeme alındıysa sadece kalanı).
+    setSalesHistory((prev) => [
+      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: cariler.find((c) => c.id === fatura.cariId)?.ad || '', amount: Math.max(0, fatura.tutar - (fatura.tahsilatTutar || 0)), method: `TAHSİLAT_${odemeTur}`, itemsCount: 0, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' }) },
+      ...prev,
+    ]);
+    supabase.from('cari_odemeler').insert({ id: odemeId, cari_id: fatura.cariId, ts: odemeTs, tutar: Math.max(0, fatura.tutar - (fatura.tahsilatTutar || 0)), tur: odemeTur, kaynak: 'fatura' })
       .then(({ error }) => { if (error) console.error('futura tam ödeme kaydı:', error.message); });
     // Fatura silindikten sonra bu carinin başka faturası ve hareketi kalmadıysa arşivle
     const kalanFatura = cariFaturalar.filter((f) => f.cariId === fatura.cariId && f.id !== faturaId);
     const kalanHareket = cariHareketler.filter((h) => h.cariId === fatura.cariId);
     if (kalanFatura.length === 0 && kalanHareket.length === 0) {
-      archiveCari(fatura.cariId, fatura.tutar, eklenenOdeme);
+      archiveCari(fatura.cariId, Math.max(0, fatura.tutar - (fatura.tahsilatTutar || 0)), eklenenOdeme);
     }
   }
 
@@ -1931,7 +1937,11 @@ export default function useHipposData(scope = 'full') {
     const odemeId = Date.now() + Math.floor(Math.random() * 1000);
     const odemeTs = Date.now();
     setCariOdemeler((prev) => [...prev, { id: odemeId, cariId: fatura.cariId, ts: odemeTs, tutar, tur: odemeTur, kaynak: 'fatura' }]);
-    supabase.from('cari_odemeler').insert({ id: odemeId, cari_id: fatura.cariId, ts: odemeTs, tutar, tur: odemeTur, kaynak: 'fatura' })
+    // Satış geçmişine de TAHSİLAT_ kaydı yaz — Ayarlar'daki canlı ciro tahsilatları buradan okuyor.
+    setSalesHistory((prev) => [
+      { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), ts: Date.now(), table: cariler.find((c) => c.id === fatura.cariId)?.ad || '', amount: tutar, method: `TAHSİLAT_${odemeTur}`, itemsCount: 0, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' }) },
+      ...prev,
+    ]);    supabase.from('cari_odemeler').insert({ id: odemeId, cari_id: fatura.cariId, ts: odemeTs, tutar, tur: odemeTur, kaynak: 'fatura' })
       .then(({ error }) => { if (error) console.error('futura kısmi ödeme kaydı:', error.message); });
   }
 

@@ -452,3 +452,18 @@
 }
 .gs-mini-dropdown-item:hover { background: #F5F2EB; }
 .gs-mini-kat { font-size: 10px; color: #83786B; }
+
+/* ========== ÖDENEN CARİ TUTARLARI — DETAY ========== */
+/* Not: yazı renkleri bilinçli olarak !important — genel stiller yazıyı beyaz yapıp okunmaz kılıyordu. */
+.gs-odeme-baslik { color: #E94F37 !important; font-weight: 800 !important; }
+.gs-odeme-detay { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #B7DDC8; display: flex; flex-direction: column; gap: 6px; }
+.gs-odeme-detay-baslik { font-size: 11px; font-weight: 800; letter-spacing: 0.4px; text-transform: uppercase; color: #E94F37 !important; }
+.gs-odeme-detay-baslik.havale { color: #7A4B00 !important; }
+.gs-odeme-detay-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #F1FBF6 !important; border: 1px solid #CDEEDB; border-radius: 10px; padding: 7px 10px; }
+.gs-odeme-detay-sol { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.gs-odeme-detay-ad { font-size: 12.5px; font-weight: 800; color: #153826 !important; }
+.gs-odeme-detay-alt { font-size: 11px; font-weight: 600; color: #3D5A4A !important; }
+.gs-odeme-tur { font-weight: 800; color: #0A5C38 !important; }
+.gs-odeme-detay-row strong { font-size: 13px; font-weight: 800; color: #A8301D !important; white-space: nowrap; }
+.gs-odeme-detay-row.havale { background: #FFF8E1 !important; border-color: #F3DFA2; }
+.gs-odeme-detay-row.havale strong, .gs-odeme-detay-row.havale .gs-odeme-tur { color: #7A4B00 !important; }
