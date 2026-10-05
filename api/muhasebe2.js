@@ -1,5 +1,6 @@
 // Muhasebe2 API — Fişler/Faturalar ve Makbuzlar + Datalar (düzenle/sil/geri al) + Hesap Özetleri + Yemek Kartları
-// + Personel Klasörü (puantaj, izin, avans) + Tahakkuklar (personel maaşı ve sabit giderler).
+// + Personel Klasörü (puantaj, izin, avans) + Tahakkuklar (personel maaşı ve sabit giderler)
+// + Günsonları (gün sonu kayıtlarını görme, düzenleme, silme, ana kasa devir zinciri).
 // Veri Supabase'de (m2_* tabloları), eski mh_* tablolarından bağımsız.
 //
 // Defter kuralı:
@@ -836,6 +837,203 @@ async function tahakkukVeri(db, donem) {
   return { tahakkuk, personeller, sabitGiderler, pasifGiderler, donemler };
 }
 
+// ---------------------------------------------------------------------------
+// Günsonları (gs_kayitlar): her günün kapanış kaydı. Anahtar TARİH ('GG.AA.YYYY', gün başına tek satır);
+// tüm sütunlar metindir. Düzenleme TOPLAMLARI otomatik hesaplar, CARİ bilgisine dokunmaz (yalnızca görülür),
+// ana kasa DEVİR ZİNCİRİNİ (her günün dünden devri = önceki günün yarına devri) sonraki günlere yayar.
+//   Toplam nakit   = kupür adet x değer toplamı + kasa avansı
+//   POS toplamı    = POS satırları toplamı        Yemek kartı = marka/kolon tutarları toplamı
+//   Ciro           = nakit + günlük kasa + cari + POS + yemek + cari tahsilat (eksi)
+//   Yarına devir   = dünden devir + bugünkü nakit - ana kasa harcaması
+// ---------------------------------------------------------------------------
+const GS_KOLON = ['tarih', 'sira', 'toplam_nakit', 'nakit_kupur', 'kasa_avansi', 'pos_toplam', 'pos_satirlari', 'ana_kasa_toplam', 'ana_kasa_harcamalar',
+  'gunluk_kasa_toplam', 'gunluk_kasa_harcamalar', 'cari_toplam', 'cari_detay', 'yemek_toplam', 'yemek_detay', 'ciro', 'ana_kasa_takibi', 'kaydeden_saat'];
+const gsSatir = (r) => Object.fromEntries(GS_KOLON.map((k) => [k, r[k] === undefined || r[k] === null ? (k === 'sira' ? null : '') : r[k]]));
+const gsParse = (t, v) => {
+  if (!t) return v;
+  try {
+    const x = JSON.parse(t);
+    return x === null || x === undefined ? v : x;
+  } catch {
+    return v;
+  }
+};
+export const gsSayi = (v) => {
+  const n = Number(String(v ?? '').trim().replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+};
+export function gsTarihIso(t) {
+  const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(String(t || '').trim());
+  return m ? `${m[3]}-${pad2(m[2])}-${pad2(m[1])}` : '';
+}
+const gsYaz = (n) => String(Math.round((Number(n) || 0) * 100) / 100);
+const gsTopla = (...l) => Math.round(l.reduce((x, n) => x + Math.round((Number(n) || 0) * 100), 0)) / 100;
+const gsEs = (a, b) => Math.abs(gsSayi(a) - gsSayi(b)) < 0.005;
+
+// Satırı ekranın kullandığı yapıya çevirir. Eski (tek JSON'lu) biçimli satırlar yalnızca görülür.
+export function gsKayit(r) {
+  const eskiBicim = String(r.toplam_nakit || '').trim().startsWith('{');
+  if (eskiBicim) return { tarih: r.tarih, sira: r.sira, eskiBicim: true, ...gsParse(r.toplam_nakit, {}), kaydedenSaat: r.nakit_kupur || '' };
+  return {
+    tarih: r.tarih,
+    sira: r.sira,
+    eskiBicim: false,
+    toplamNakitPara: gsSayi(r.toplam_nakit),
+    nakitKupurDetayi: gsParse(r.nakit_kupur, {}),
+    kasaAvansi: gsSayi(r.kasa_avansi),
+    posToplam: gsSayi(r.pos_toplam),
+    posTutarlari: gsParse(r.pos_satirlari, []),
+    anaKasaToplam: gsSayi(r.ana_kasa_toplam),
+    gunlukKasaToplam: gsSayi(r.gunluk_kasa_toplam),
+    cariToplam: gsSayi(r.cari_toplam),
+    cariDetay: gsParse(r.cari_detay, {}),
+    genelYemekToplami: gsSayi(r.yemek_toplam),
+    yemekDetay: gsParse(r.yemek_detay, {}),
+    ciro: gsParse(r.ciro, {}),
+    anaKasaTakibi: gsParse(r.ana_kasa_takibi, {}),
+    kaydedenSaat: r.kaydeden_saat || '',
+  };
+}
+
+function gsTutarGir(v, ad, eksiOlabilir = false) {
+  if (v === undefined || v === null || String(v).trim() === '') return 0;
+  const n = Number(String(v).trim().replace(',', '.'));
+  if (!Number.isFinite(n) || Math.abs(n) > 1e9) throw new HataMesaji(400, `${ad} geçersiz`);
+  if (!eksiOlabilir && n < 0) throw new HataMesaji(400, `${ad} eksi olamaz`);
+  return Math.round(n * 100) / 100;
+}
+
+// Bir günsonu satırını verilen alanlarla düzenler. Verilmeyen bölümler olduğu gibi kalır.
+// alanlar: nakitKupurDetayi {değer: adet}, kasaAvansi, posTutarlari [{label, tutar}], anaKasaToplam, gunlukKasaToplam,
+//          yemekTutarlari {marka: {kolon: tutar}}, dundenDevir, kaydedenSaat
+export function gsDuzenle(eskiRow, alanlar = {}) {
+  const e = gsKayit(eskiRow);
+  if (e.eskiBicim) throw new HataMesaji(400, 'Eski biçimli kayıt düzenlenemez, yalnızca silinebilir');
+  const yeni = { ...eskiRow };
+
+  // --- nakit
+  let kupur = e.nakitKupurDetayi;
+  let nakitDegisti = false;
+  if (alanlar.nakitKupurDetayi !== undefined) {
+    kupur = {};
+    Object.entries(alanlar.nakitKupurDetayi || {}).forEach(([k, v]) => {
+      const kk = String(k).trim();
+      if (!/^\d+(\.\d+)?$/.test(kk) || Number(kk) <= 0) throw new HataMesaji(400, 'Kupür değeri geçersiz');
+      const adet = gsTutarGir(v, `${kk} TL adedi`);
+      if (!Number.isInteger(adet)) throw new HataMesaji(400, `${kk} TL adedi tam sayı olmalı`);
+      if (adet > 0) kupur[kk] = String(adet);
+    });
+    yeni.nakit_kupur = JSON.stringify(kupur);
+    nakitDegisti = true;
+  }
+  let kasaAvansi = e.kasaAvansi;
+  if (alanlar.kasaAvansi !== undefined) {
+    kasaAvansi = gsTutarGir(alanlar.kasaAvansi, 'Kasa avansı', true);
+    yeni.kasa_avansi = gsYaz(kasaAvansi);
+    nakitDegisti = true;
+  }
+  let toplamNakit = e.toplamNakitPara;
+  if (nakitDegisti) {
+    const kupurK = Object.entries(kupur).reduce((x, [k, v]) => x + Math.round(Number(k) * 100) * Number(v), 0);
+    toplamNakit = (kupurK + Math.round(kasaAvansi * 100)) / 100;
+    yeni.toplam_nakit = gsYaz(toplamNakit);
+  }
+
+  // --- POS
+  let posToplam = e.posToplam;
+  if (alanlar.posTutarlari !== undefined) {
+    if (!Array.isArray(alanlar.posTutarlari)) throw new HataMesaji(400, 'POS satırları geçersiz');
+    const satirlar = alanlar.posTutarlari.map((p, i) => {
+      const label = String(p?.label || `POS ${i + 1}`).trim().slice(0, 40);
+      const t = gsTutarGir(p?.tutar, `${label} tutarı`);
+      return { label, tutar: t > 0 ? gsYaz(t) : '' };
+    });
+    posToplam = gsTopla(...satirlar.map((x) => gsSayi(x.tutar)));
+    yeni.pos_satirlari = JSON.stringify(satirlar);
+    yeni.pos_toplam = gsYaz(posToplam);
+  }
+
+  // --- yemek kartı (marka x kolon)
+  let yemekToplam = e.genelYemekToplami;
+  if (alanlar.yemekTutarlari !== undefined) {
+    const kolonlar = Array.isArray(e.yemekDetay.kolonlar) ? e.yemekDetay.kolonlar : [];
+    const tutarlar = {};
+    Object.entries(alanlar.yemekTutarlari || {}).forEach(([marka, satir]) => {
+      const m = String(marka).trim();
+      if (!m || m.length > 40) throw new HataMesaji(400, 'Marka adı geçersiz');
+      const girilen = {};
+      let var_ = false;
+      Object.entries(satir || {}).forEach(([kolon, v]) => {
+        if (!kolonlar.includes(kolon)) throw new HataMesaji(400, `"${kolon}" bu kayıtta yemek kartı kolonu değil`);
+        const t = gsTutarGir(v, `${m} ${kolon}`);
+        girilen[kolon] = t > 0 ? gsYaz(t) : '';
+        if (t > 0) var_ = true;
+      });
+      if (var_) tutarlar[m] = Object.fromEntries(kolonlar.map((k) => [k, girilen[k] ?? '']));
+    });
+    yemekToplam = gsTopla(...Object.values(tutarlar).flatMap((x) => Object.values(x).map(gsSayi)));
+    yeni.yemek_detay = JSON.stringify({ kolonlar, tutarlar });
+    yeni.yemek_toplam = gsYaz(yemekToplam);
+  }
+
+  // --- kasalar
+  let anaKasa = e.anaKasaToplam;
+  if (alanlar.anaKasaToplam !== undefined) {
+    anaKasa = gsTutarGir(alanlar.anaKasaToplam, 'Ana kasa harcaması');
+    yeni.ana_kasa_toplam = gsYaz(anaKasa);
+  }
+  let gunluk = e.gunlukKasaToplam;
+  if (alanlar.gunlukKasaToplam !== undefined) {
+    gunluk = gsTutarGir(alanlar.gunlukKasaToplam, 'Günlük kasa harcaması');
+    yeni.gunluk_kasa_toplam = gsYaz(gunluk);
+  }
+  if (alanlar.kaydedenSaat !== undefined) yeni.kaydeden_saat = String(alanlar.kaydedenSaat ?? '').trim().slice(0, 10);
+
+  // --- ana kasa takibi ve ciro (yalnızca sayısal olarak değiştiyse yeniden yazılır; CARİ değerleri korunur)
+  const t0 = e.anaKasaTakibi;
+  const dunden = alanlar.dundenDevir !== undefined ? gsTutarGir(alanlar.dundenDevir, 'Dünden devir', true) : gsSayi(t0.dundenDevir);
+  const takip = { dundenDevir: dunden, bugunkuNakit: toplamNakit, anaKasaHarcama: anaKasa, yarinaDevir: gsTopla(dunden, toplamNakit, -anaKasa) };
+  if (!(gsEs(t0.dundenDevir, takip.dundenDevir) && gsEs(t0.bugunkuNakit, takip.bugunkuNakit) && gsEs(t0.anaKasaHarcama, takip.anaKasaHarcama) && gsEs(t0.yarinaDevir, takip.yarinaDevir))) {
+    yeni.ana_kasa_takibi = JSON.stringify(takip);
+  }
+  const cariTahsilat = gsSayi(e.ciro.cariTahsilat);
+  const ciro = { nakit: toplamNakit, kart: posToplam, yemek: yemekToplam, cari: e.cariToplam, cariTahsilat, toplam: gsTopla(toplamNakit, gunluk, e.cariToplam, posToplam, yemekToplam, cariTahsilat) };
+  const c0 = e.ciro;
+  if (!['nakit', 'kart', 'yemek', 'cari', 'cariTahsilat', 'toplam'].every((k) => gsEs(c0[k], ciro[k]))) yeni.ciro = JSON.stringify(ciro);
+  return { row: yeni, kayit: gsKayit(yeni) };
+}
+
+const gsSirala = (satirlar) =>
+  [...satirlar].sort((a, b) => {
+    const x = gsTarihIso(a.tarih);
+    const y = gsTarihIso(b.tarih);
+    return x < y ? -1 : x > y ? 1 : (a.sira || 0) - (b.sira || 0);
+  });
+
+// liste[baslangicIdx]'ten itibaren devri yeniden hesaplar (liste yerinde güncellenir). İlk değişmeyen günde durur:
+// zaten tutarlı olan sonraki günlere ve eskiden kalma tutarsızlıklara dokunulmaz.
+export function gsZincir(liste, baslangicIdx) {
+  const degisen = [];
+  for (let j = Math.max(1, baslangicIdx); j < liste.length; j++) {
+    const k = gsKayit(liste[j]);
+    const onceki = gsKayit(liste[j - 1]);
+    if (k.eskiBicim || onceki.eskiBicim || onceki.anaKasaTakibi.yarinaDevir === undefined) break;
+    const dunden = gsSayi(onceki.anaKasaTakibi.yarinaDevir);
+    const yarina = gsTopla(dunden, k.toplamNakitPara, -k.anaKasaToplam);
+    const t = k.anaKasaTakibi;
+    if (gsEs(t.dundenDevir, dunden) && gsEs(t.yarinaDevir, yarina) && gsEs(t.bugunkuNakit, k.toplamNakitPara) && gsEs(t.anaKasaHarcama, k.anaKasaToplam)) break;
+    liste[j] = { ...liste[j], ana_kasa_takibi: JSON.stringify({ dundenDevir: dunden, bugunkuNakit: k.toplamNakitPara, anaKasaHarcama: k.anaKasaToplam, yarinaDevir: yarina }) };
+    degisen.push({ tarih: k.tarih, eskiDunden: gsSayi(t.dundenDevir), yeniDunden: dunden, eskiYarina: gsSayi(t.yarinaDevir), yeniYarina: yarina });
+  }
+  return degisen;
+}
+
+async function gsHepsi(db) {
+  const { data, error } = await db.from('gs_kayitlar').select('*').order('sira', { ascending: true });
+  kontrol(error);
+  return gsSirala((data || []).filter((r) => r.tarih).map(gsSatir));
+}
+
 export default async function handler(req, res) {
   try {
     const db = dbAl();
@@ -1171,6 +1369,12 @@ export default async function handler(req, res) {
         avanslar: (av.data || []).filter((a) => String(a.tarih).startsWith(donem)).sort((a, b) => (a.tarih < b.tarih ? -1 : 1))
           .map((a) => ({ id: a.id, tarih: a.tarih, tutar: Number(a.tutar), odemeSekli: a.kasa || a.odeme_hesabi || '', aciklama: a.aciklama || '' })),
       });
+    }
+
+    // ---------- Günsonları ----------
+    if (req.method === 'GET' && resource === 'gunsonuListe') {
+      const liste = await gsHepsi(db);
+      return res.status(200).json({ kayitlar: liste.map(gsKayit) });
     }
 
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -1741,6 +1945,65 @@ export default async function handler(req, res) {
       if (!data) throw new HataMesaji(404, 'Bu dönem için tahakkuk yok');
       const sil = await db.rpc('m2_tahakkuk_sil', { p_id: data.id });
       ozelKontrol(sil.error);
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- Günsonları: düzenle / sil / geri al ----------
+    // Düzenleme toplamları (nakit, POS, yemek, ciro) otomatik hesaplar ve ana kasa devrini sonraki günlere yayar.
+    // onizleme=true: hiçbir şey yazmadan sonucu ve etkilenecek günleri döner.
+    if (resource === 'gunsonuDuzenle') {
+      const liste = await gsHepsi(db);
+      const idx = liste.findIndex((r) => r.tarih === body.tarih);
+      if (idx < 0) throw new HataMesaji(404, 'Günsonu kaydı bulunamadı');
+      const eskiMap = new Map(liste.map((r) => [r.tarih, r]));
+      const { row, kayit } = gsDuzenle(liste[idx], body.alanlar || {});
+      liste[idx] = row;
+      // Zincir yalnızca bu günün YARINA DEVRİ değiştiyse başlar; değişmediyse sonraki günlere (eskiden kalma
+      // tutarsızlıklar dahil) hiç dokunulmaz.
+      const devirDegisti = !gsEs(gsKayit(eskiMap.get(row.tarih)).anaKasaTakibi.yarinaDevir, kayit.anaKasaTakibi.yarinaDevir);
+      const etkilenen = devirDegisti ? gsZincir(liste, idx + 1) : [];
+      if (body.onizleme) return res.status(200).json({ onizleme: true, kayit, etkilenen });
+      if (JSON.stringify(row) === JSON.stringify(eskiMap.get(row.tarih)) && !etkilenen.length) {
+        return res.status(200).json({ ok: true, degisiklikYok: true, kayit });
+      }
+      const tarihler = [row.tarih, ...etkilenen.map((x) => x.tarih)];
+      const yeniSatirlar = tarihler.map((t) => liste.find((r) => r.tarih === t));
+      const { error } = await db.rpc('m2_gunsonu_degistir', { p_tarihler: tarihler, p_satirlar: yeniSatirlar });
+      kontrol(error);
+      return res.status(200).json({ ok: true, oncesi: tarihler.map((t) => eskiMap.get(t)), sonrasi: yeniSatirlar, etkilenen, kayit });
+    }
+
+    if (resource === 'gunsonuSil') {
+      const liste = await gsHepsi(db);
+      const idx = liste.findIndex((r) => r.tarih === body.tarih);
+      if (idx < 0) throw new HataMesaji(404, 'Günsonu kaydı bulunamadı');
+      const eskiMap = new Map(liste.map((r) => [r.tarih, r]));
+      const [silinen] = liste.splice(idx, 1);
+      const etkilenen = gsZincir(liste, idx);
+      if (body.onizleme) return res.status(200).json({ onizleme: true, etkilenen });
+      const tarihler = [silinen.tarih, ...etkilenen.map((x) => x.tarih)];
+      const yeniSatirlar = etkilenen.map((x) => liste.find((r) => r.tarih === x.tarih));
+      const { error } = await db.rpc('m2_gunsonu_degistir', { p_tarihler: tarihler, p_satirlar: yeniSatirlar });
+      kontrol(error);
+      return res.status(200).json({ ok: true, oncesi: tarihler.map((t) => eskiMap.get(t)), sonrasi: yeniSatirlar, etkilenen });
+    }
+
+    // Geri al / ileri al: ilgili günler işlemden SONRAKİ haliyle birebir aynıysa istenen hale yazılır; başka biri
+    // (örn. kasadaki Gün Sonu Al ekranı) bu arada değiştirdiyse reddedilir.
+    if (resource === 'gunsonuGeriYaz') {
+      if (!Array.isArray(body.beklenen) || !Array.isArray(body.yazilacak)) throw new HataMesaji(400, 'beklenen ve yazilacak gerekli');
+      const beklenen = body.beklenen.map(gsSatir);
+      const yazilacak = body.yazilacak.map(gsSatir);
+      const tarihler = [...new Set([...beklenen, ...yazilacak].map((r) => r.tarih))];
+      if (!tarihler.length || tarihler.length > 400) throw new HataMesaji(400, 'Geçersiz istek');
+      const { data, error } = await db.from('gs_kayitlar').select('*').in('tarih', tarihler);
+      kontrol(error);
+      const simdi = gsSirala((data || []).map(gsSatir));
+      if (JSON.stringify(simdi) !== JSON.stringify(gsSirala(beklenen))) {
+        throw new HataMesaji(409, 'Bu günsonu kaydı bu arada değiştirilmiş; geri alınamadı.');
+      }
+      const { error: yazHata } = await db.rpc('m2_gunsonu_degistir', { p_tarihler: tarihler, p_satirlar: yazilacak });
+      kontrol(yazHata);
       return res.status(200).json({ ok: true });
     }
 

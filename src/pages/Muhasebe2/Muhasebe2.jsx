@@ -4,6 +4,7 @@ import { dosyaAdi, durumBul, ekstreGorunum, ekstrePdfTanimi, ekstrePdfUret, para
 import { ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, sayiFmt, tarihTR, trNorm, useModalKaydet } from './m2Ortak';
 import YemekKartlariSekmesi from './YemekKartlari';
 import TahakkuklarSekmesi from './Tahakkuklar';
+import GunsonlariSekmesi from './Gunsonlari';
 import { FILTRE_KOLONLARI, FiltreMenu, bosSecimler, filtreUygula, varsayilanTarihSecimi } from './DatalarFiltre';
 import './Muhasebe2.css';
 
@@ -101,6 +102,48 @@ export default function Muhasebe2({ onNavigate }) {
     [bildir, yukle],
   );
 
+  // Günsonları sekmesinin KENDİ geçmişi var (son 3 işlem); geri/ileri düğmeleri ve Ctrl+Z hangi sekmedeysen onu geri alır.
+  const [gsGecmis, setGsGecmis] = useState({ liste: [], index: -1 });
+  const [gsYenile, setGsYenile] = useState(0);
+  const gsGecmisRef = useRef(gsGecmis);
+  gsGecmisRef.current = gsGecmis;
+  const sekmeRef = useRef(sekme);
+  sekmeRef.current = sekme;
+
+  const gsGecmiseEkle = useCallback((sonuc, etiket) => {
+    setGsGecmis((g) => {
+      const liste = [...g.liste.slice(0, g.index + 1), { oncesi: sonuc.oncesi, sonrasi: sonuc.sonrasi, etiket }].slice(-MAKS_GECMIS);
+      return { liste, index: liste.length - 1 };
+    });
+  }, []);
+
+  const gsGeriIleri = useCallback(
+    async (yon) => {
+      if (islemKilidi.current) return;
+      const { liste, index } = gsGecmisRef.current;
+      const hedef = yon === 'geri' ? liste[index] : liste[index + 1];
+      if (!hedef) return;
+      islemKilidi.current = true;
+      try {
+        await api('gunsonuGeriYaz', {
+          method: 'POST',
+          body: { beklenen: yon === 'geri' ? hedef.sonrasi : hedef.oncesi, yazilacak: yon === 'geri' ? hedef.oncesi : hedef.sonrasi },
+        });
+        setGsGecmis((g) => ({ ...g, index: g.index + (yon === 'geri' ? -1 : 1) }));
+        bildir(`${yon === 'geri' ? 'Geri alındı' : 'İleri alındı'}: ${hedef.etiket}`);
+        setGsYenile((n) => n + 1);
+      } catch (e) {
+        bildir(e.message, true);
+      } finally {
+        islemKilidi.current = false;
+      }
+    },
+    [bildir],
+  );
+
+  const aktifGeriIleri = useCallback((yon) => (sekmeRef.current === 'gunsonlari' ? gsGeriIleri(yon) : geriIleri(yon)), [gsGeriIleri, geriIleri]);
+  const aktifGecmis = sekme === 'gunsonlari' ? gsGecmis : gecmis;
+
   useEffect(() => {
     if (!duzenlemeModu) return undefined;
     function tusa(e) {
@@ -112,15 +155,15 @@ export default function Muhasebe2({ onNavigate }) {
       const k = String(e.key).toLowerCase();
       if (k === 'z') {
         e.preventDefault();
-        geriIleri(e.shiftKey ? 'ileri' : 'geri');
+        aktifGeriIleri(e.shiftKey ? 'ileri' : 'geri');
       } else if (k === 'y') {
         e.preventDefault();
-        geriIleri('ileri');
+        aktifGeriIleri('ileri');
       }
     }
     window.addEventListener('keydown', tusa);
     return () => window.removeEventListener('keydown', tusa);
-  }, [duzenlemeModu, geriIleri]);
+  }, [duzenlemeModu, aktifGeriIleri]);
 
   async function fisFaturaKaydet(payload) {
     await api('fisFaturaKaydet', { method: 'POST', body: payload });
@@ -168,10 +211,10 @@ export default function Muhasebe2({ onNavigate }) {
         <div className="m2-ust-aksiyon">
           {duzenlemeModu && (
             <>
-              <button className="m2-btn sec mini" disabled={gecmis.index < 0} onClick={() => geriIleri('geri')} title="Ctrl+Z">
+              <button className="m2-btn sec mini" disabled={aktifGecmis.index < 0} onClick={() => aktifGeriIleri('geri')} title="Ctrl+Z">
                 ↶ Geri Al
               </button>
-              <button className="m2-btn sec mini" disabled={gecmis.index >= gecmis.liste.length - 1} onClick={() => geriIleri('ileri')} title="Ctrl+Shift+Z">
+              <button className="m2-btn sec mini" disabled={aktifGecmis.index >= aktifGecmis.liste.length - 1} onClick={() => aktifGeriIleri('ileri')} title="Ctrl+Shift+Z">
                 ↷ İleri Al
               </button>
             </>
@@ -181,7 +224,7 @@ export default function Muhasebe2({ onNavigate }) {
             className={`m2-mod-toggle ${duzenlemeModu ? 'edit' : ''}`}
             aria-pressed={duzenlemeModu}
             onClick={() => setDuzenlemeModu((v) => !v)}
-            title="Datalar sekmesinde düzenleme ve silmeye izin verir"
+            title="Datalar ve Günsonları sekmelerinde düzenleme ve silmeye izin verir"
           >
             <span className="thumb" />
             <span className="etiket e1">Basit Mod</span>
@@ -210,6 +253,9 @@ export default function Muhasebe2({ onNavigate }) {
         </button>
         <button className={`m2-tab ${sekme === 'tahakkuk' ? 'on' : ''}`} onClick={() => setSekme('tahakkuk')}>
           Tahakkuklar
+        </button>
+        <button className={`m2-tab ${sekme === 'gunsonlari' ? 'on' : ''}`} onClick={() => setSekme('gunsonlari')}>
+          Günsonları
         </button>
       </div>
 
@@ -241,6 +287,9 @@ export default function Muhasebe2({ onNavigate }) {
       </div>
       <div style={{ display: sekme === 'tahakkuk' ? undefined : 'none' }}>
         <TahakkuklarSekmesi aktif={sekme === 'tahakkuk'} bildir={bildir} kategoriler={veri.kategoriler} onDegisti={yukle} />
+      </div>
+      <div style={{ display: sekme === 'gunsonlari' ? undefined : 'none' }}>
+        <GunsonlariSekmesi aktif={sekme === 'gunsonlari'} duzenlemeModu={duzenlemeModu} bildir={bildir} yenile={gsYenile} onIslem={gsGecmiseEkle} />
       </div>
 
       {modal?.tur === 'firma' && (

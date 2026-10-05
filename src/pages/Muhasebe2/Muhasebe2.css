@@ -1008,3 +1008,24 @@
   border-bottom: 1px dashed rgba(57, 62, 65, 0.2);
   color: #393e41 !important;
 }
+
+
+/* ---------- Günsonları sekmesi (ön ek m2-gs-: başka sayfalarla sınıf çakışması olmasın) ---------- */
+.m2-gs-tablo td, .m2-gs-tablo th { white-space: nowrap; }
+.m2-gs-detay { margin-left: 6px; }
+.m2-gs-form { max-height: 68vh; overflow-y: auto; padding-right: 4px; }
+.m2-gs-bolum {
+  margin: 16px 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #e94f37 !important; /* Hippos kırmızısı */
+}
+.m2-gs-izgara { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 12px; }
+.m2-gs-ozet { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 4px; }
+.m2-gs-ozet-kutu { background: rgba(0, 0, 0, 0.18); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.m2-gs-ozet-kutu span { font-size: 11px; color: #c9cbbf !important; }
+.m2-gs-ozet-kutu strong { font-size: 15px; color: #f6f7eb !important; }
+.m2-gs-ozet-kutu.vurgu strong { color: #f7c948 !important; }
+.m2-gs-yemek td .m2-input { min-width: 90px; text-align: right; }
