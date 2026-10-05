@@ -1031,3 +1031,88 @@
   border-radius: 6px;
   font-size: 13px;
 }
+
+/* ========== FATURA: CANLI DÖNEM TOPLAMI + HAREKETLER + GERİ AL ========== */
+/* Not: yazı renkleri bilinçli olarak !important — genel stiller yazıyı beyaz yapıp okunmaz kılıyordu. */
+.futura-secim-info {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 12px !important;
+  text-align: left !important;
+  background: #E1F6EA !important;
+  border: 1px solid #CDEEDB !important;
+  border-radius: 10px !important;
+  padding: 10px 14px !important;
+  color: #0E2F21 !important;
+}
+.futura-secim-tarih { font-size: 13px !important; font-weight: 700 !important; color: #0E2F21 !important; }
+.futura-secim-toplam { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
+.futura-secim-toplam strong { font-size: 17px !important; font-weight: 800 !important; color: #0A5C38 !important; }
+.futura-secim-toplam span { font-size: 11px !important; font-weight: 600 !important; color: #3D5A4A !important; }
+
+.cr-futura-butonlar .cr-fh-btn { flex: 1; }
+.cr-fh-btn {
+  border-radius: 14px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cr-fh-btn:hover:not(:disabled) { opacity: 0.88; }
+.cr-fh-btn-hareket { background: #FFFFFF !important; color: #153826 !important; border: 1px solid #9CC9B1 !important; }
+.cr-fh-btn-geri { background: #FFF1EE !important; color: #A8301D !important; border: 1px solid #E94F37 !important; }
+.cr-fh-btn:disabled {
+  background: #EEF2F0 !important;
+  color: #5B6F64 !important;
+  border: 1px solid #C9D6CF !important;
+  cursor: not-allowed;
+  opacity: 1 !important;
+}
+.cr-fh-not {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #5B3A00 !important;
+  background: #FEF3C7 !important;
+  border-radius: 6px;
+  padding: 4px 10px;
+}
+
+/* Pencere başlıkları: Hippos kırmızısı */
+.cr-fh-baslik { color: #E94F37 !important; font-size: 16px !important; font-weight: 800 !important; }
+.cr-fh-modal { max-width: 560px !important; width: 100%; max-height: 86vh; display: flex; flex-direction: column; }
+.cr-fh-ozet {
+  background: #E1F6EA !important;
+  border: 1px solid #CDEEDB;
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cr-fh-donem { font-size: 12px; font-weight: 800; color: #0E2F21 !important; letter-spacing: 0.3px; }
+.cr-fh-satir { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: #153826 !important; }
+.cr-fh-satir span { color: #153826 !important; }
+.cr-fh-satir strong { color: #153826 !important; font-weight: 700; }
+.cr-fh-satir-toplam { border-top: 1px solid #B7DDC8; padding-top: 6px; margin-top: 2px; }
+.cr-fh-satir-toplam span, .cr-fh-satir-toplam strong { color: #0A5C38 !important; font-size: 14px; font-weight: 800; }
+.cr-fh-liste { overflow-y: auto; flex: 1; min-height: 0; padding-right: 4px; }
+.cr-fh-card { border-bottom: 1px solid #CDEEDB; padding: 10px 0; }
+.cr-fh-card-head { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; font-weight: 700; color: #153826 !important; margin-bottom: 6px; }
+.cr-fh-card-head span { color: #153826 !important; }
+.cr-fh-card-head strong { color: #0A5C38 !important; font-size: 14px; font-weight: 800; }
+.cr-fh-items { display: flex; flex-direction: column; gap: 2px; }
+.cr-fh-item { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: #3D5A4A !important; padding-left: 8px; }
+.cr-fh-item span { color: #3D5A4A !important; }
+.cr-fh-notu { margin-top: 6px; font-size: 11.5px; font-weight: 600; color: #5B3A00 !important; background: #FEF3C7 !important; border-radius: 6px; padding: 4px 8px; }
+.cr-fh-odeme { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid #CDEEDB; font-size: 12.5px; color: #153826 !important; }
+.cr-fh-odeme span { color: #153826 !important; }
+.cr-fh-odeme strong { color: #0A5C38 !important; font-weight: 800; }
+
+/* Geri Al onay penceresi */
+.cr-fh-metin { font-size: 13px; line-height: 1.5; color: #153826 !important; margin: 0 0 12px; }
+.cr-fh-metin strong { color: #0E2F21 !important; font-weight: 800; }
+.cr-fh-hata { font-size: 12.5px; font-weight: 700; color: #8A1C0F !important; background: #FDE2E2 !important; border-radius: 8px; padding: 8px 10px; margin: 0 0 12px; }
+.cr-fh-geri-onay { background: #C93A24 !important; color: #FFFFFF !important; border: none; border-radius: 14px; padding: 9px 18px; font-size: 13px; font-weight: 800; cursor: pointer; }
+.cr-fh-geri-onay:disabled { background: #7C3A30 !important; color: #FFFFFF !important; cursor: not-allowed; }

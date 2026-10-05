@@ -31,8 +31,7 @@ function parseNum(v) {
 }
 
 export default function GunSonu({ data, onNavigate }) {
-  const { salesHistory, cariler, cariHareketler, cariOdemeler, cariGecmis } = data;
-
+  const { salesHistory, cariler, cariHareketler, cariOdemeler, cariGecmis, cariFaturalar } = data;
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   function showToast(msg) {
@@ -201,11 +200,19 @@ export default function GunSonu({ data, onNavigate }) {
     const ts0 = gunBaslangic.getTime();
     const map = {};
     (cariler || []).filter((c) => c.tip === 'firma').forEach((c) => {
-      const tutar = (cariHareketler || []).filter((h) => h.cariId === c.id && h.ts >= ts0).reduce((s, h) => s + h.toplam, 0);
+      let tutar = (cariHareketler || []).filter((h) => h.cariId === c.id && h.ts >= ts0).reduce((s, h) => s + h.toplam, 0);
+      // Bugünü içeren bir aralık faturalandırıldıysa o hareketler silinmiştir; faturadaki kopyadan say.
+      // (Kopya, aynı id canlı listede varsa — örn. geri alınmışsa — iki kez sayılmaz.)
+      const canliIdler = new Set((cariHareketler || []).filter((h) => h.cariId === c.id).map((h) => h.id));
+      (cariFaturalar || [])
+        .filter((f) => f.cariId === c.id && Array.isArray(f.hareketlerSnapshot))
+        .forEach((f) => f.hareketlerSnapshot.forEach((h) => {
+          if (h.ts >= ts0 && !canliIdler.has(h.id)) tutar += Number(h.toplam) || 0;
+        }));
       map[c.ad] = (map[c.ad] || 0) + tutar;
     });
     return map;
-  }, [cariler, cariHareketler]);
+  }, [cariler, cariHareketler, cariFaturalar]);
 
   const otomatikCariListesi = useMemo(() => {
     // Firma carileri: sabit liste + bugün cari hareketi olan ve bakiyesi > 0 olanlar
@@ -257,8 +264,15 @@ export default function GunSonu({ data, onNavigate }) {
           .filter((o) => o.ts >= ts0 && o.tur !== 'HAVALE')
           .forEach((o) => { ozet[o.tur] = (ozet[o.tur] || 0) + o.tutar; });
       });
+    // Faturalandırırken silinen bugünkü ödemeler faturadaki kopyadan eklenir (canlıda varsa tekrar sayılmaz)
+    const canliOdemeIdler = new Set((cariOdemeler || []).map((o) => o.id));
+    (cariFaturalar || []).forEach((f) => {
+      (Array.isArray(f.odemelerSnapshot) ? f.odemelerSnapshot : [])
+        .filter((o) => o.ts >= ts0 && o.tur !== 'HAVALE' && !canliOdemeIdler.has(o.id))
+        .forEach((o) => { ozet[o.tur] = (ozet[o.tur] || 0) + Number(o.tutar || 0); });
+    });
     return ozet;
-  }, [cariOdemeler, cariGecmis]);
+  }, [cariOdemeler, cariGecmis, cariFaturalar]);
   const bugunCariOdemeToplamı = Object.values(bugunCariOdemeOzeti).reduce((s, v) => s + v, 0);
 
   const [cariOverrides, setCariOverrides] = useState({});

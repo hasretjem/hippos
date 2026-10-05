@@ -164,6 +164,9 @@ function rowToFatura(r) {
     donemBitis: r.donem_bitis || null,
     tahsilatTutar: Number(r.tahsilat_tutar || 0),
     odemeLog: Array.isArray(r.odeme_log) ? r.odeme_log : [],
+    // Faturalandırınca silinen hareket/ödemelerin kopyası. Eski faturalarda null (kayıt yok).
+    hareketlerSnapshot: Array.isArray(r.hareketler_snapshot) ? r.hareketler_snapshot : null,
+    odemelerSnapshot: Array.isArray(r.odemeler_snapshot) ? r.odemeler_snapshot : null,
   };
 }
 function rowToGecmis(r) {
@@ -1824,15 +1827,12 @@ export default function useHipposData(scope = 'full') {
   }
 
   // Firma carilerinde: o ana kadarki faturalanmamış bakiyeyi bir faturaya bağlar.
-  async function addCariFatura(cariId, { tarih, faturaNo, tutar, donemBaslangic, donemBitis }) {
-    const id = Date.now() + Math.floor(Math.random() * 1000);
+  async function addCariFatura(cariId, { tarih, faturaNo, tutar, donemBaslangic, donemBitis, hareketlerSnapshot = null, odemelerSnapshot = null }) {    const id = Date.now() + Math.floor(Math.random() * 1000);
     const eklenmeTs = Date.now();
-    const fatura = { id, cariId, tarih, faturaNo, tutar, eklenmeTs, donemBaslangic: donemBaslangic || null, donemBitis: donemBitis || null, tahsilatTutar: 0 };
-    setCariFaturalar((prev) => [...prev, fatura]);
+    const fatura = { id, cariId, tarih, faturaNo, tutar, eklenmeTs, donemBaslangic: donemBaslangic || null, donemBitis: donemBitis || null, tahsilatTutar: 0, odemeLog: [], hareketlerSnapshot, odemelerSnapshot };    setCariFaturalar((prev) => [...prev, fatura]);
     const { error } = await supabase
       .from('cari_faturalar')
-      .insert({ id, cari_id: cariId, tarih, fatura_no: faturaNo, tutar, eklenme_ts: eklenmeTs, donem_baslangic: donemBaslangic || null, donem_bitis: donemBitis || null, tahsilat_tutar: 0 });
-    if (error) {
+      .insert({ id, cari_id: cariId, tarih, fatura_no: faturaNo, tutar, eklenme_ts: eklenmeTs, donem_baslangic: donemBaslangic || null, donem_bitis: donemBitis || null, tahsilat_tutar: 0, hareketler_snapshot: hareketlerSnapshot, odemeler_snapshot: odemelerSnapshot });    if (error) {
       console.error('fatura kaydedilemedi:', error.message);
       setCariFaturalar((prev) => prev.filter((f) => f.id !== id));
       return null;
@@ -1848,8 +1848,47 @@ export default function useHipposData(scope = 'full') {
     ));
   }
 
-  // Futura: tam tahsilat — faturayı siler, bakiye 0 ise hareketleri de arşivler
-  async function futuraTamOde(faturaId, odemeTur = 'NAKİT') {
+   // Faturayı iptal eder: faturalandırırken silinen hareket ve ödemeleri ORİJİNAL id/saat/tutarlarıyla
+  // geri yazar, sonra faturayı siler. Sıra bilinçli: önce geri yaz, sonra sil — yarıda kalırsa
+  // veri kaybolmaz (upsert olduğu için tekrar denenebilir).
+  async function geriAlFatura(faturaId) {
+    const fatura = cariFaturalar.find((f) => f.id === faturaId);
+    if (!fatura) return { ok: false, mesaj: 'Fatura bulunamadı' };
+    if (!Array.isArray(fatura.hareketlerSnapshot)) return { ok: false, mesaj: 'Bu faturanın hareket kaydı yok (eski fatura), geri alınamaz' };
+    if ((fatura.tahsilatTutar || 0) > 0 || (fatura.odemeLog || []).length > 0) return { ok: false, mesaj: 'Tahsilat alınmış fatura geri alınamaz' };
+    const hareketler = fatura.hareketlerSnapshot;
+    const odemeler = Array.isArray(fatura.odemelerSnapshot) ? fatura.odemelerSnapshot : [];
+
+    if (hareketler.length > 0) {
+      const { error } = await supabase.from('cari_hareketler').upsert(
+        hareketler.map((h) => ({ id: h.id, cari_id: fatura.cariId, ts: h.ts, urunler: h.urunler || [], toplam: h.toplam, mutfak_notu: h.mutfakNotu || '', personel_ad: h.personelAd || null })),
+        { onConflict: 'id' }
+      );
+      if (error) return { ok: false, mesaj: 'Hareketler geri yazılamadı, fatura silinmedi: ' + error.message };
+    }
+    if (odemeler.length > 0) {
+      const { error } = await supabase.from('cari_odemeler').upsert(
+        odemeler.map((o) => ({ id: o.id, cari_id: fatura.cariId, ts: o.ts, tutar: o.tutar, tur: o.tur, kaynak: o.kaynak || 'hareket' })),
+        { onConflict: 'id' }
+      );
+      if (error) return { ok: false, mesaj: 'Ödemeler geri yazılamadı, fatura silinmedi: ' + error.message };
+    }
+    // Veritabanına yazıldı — ekranı da aynı anda güncelle (aynı id varsa tekrar eklenmez)
+    setCariHareketler((prev) => {
+      const ids = new Set(prev.map((h) => h.id));
+      return [...prev, ...hareketler.filter((h) => !ids.has(h.id)).map((h) => ({ id: h.id, cariId: fatura.cariId, ts: h.ts, urunler: h.urunler || [], toplam: Number(h.toplam), mutfakNotu: h.mutfakNotu || '', personelAd: h.personelAd || null }))];
+    });
+    setCariOdemeler((prev) => {
+      const ids = new Set(prev.map((o) => o.id));
+      return [...prev, ...odemeler.filter((o) => !ids.has(o.id)).map((o) => ({ id: o.id, cariId: fatura.cariId, ts: o.ts, tutar: Number(o.tutar), tur: o.tur, kaynak: o.kaynak || 'hareket' }))];
+    });
+    const { error: silHata } = await supabase.from('cari_faturalar').delete().eq('id', faturaId);
+    if (silHata) return { ok: false, mesaj: 'Hareketler geri yazıldı ama fatura silinemedi. Tekrar "Geri Al"a basın: ' + silHata.message };
+    setCariFaturalar((prev) => prev.filter((f) => f.id !== faturaId));
+    return { ok: true };
+  }
+
+  // Futura: tam tahsilat — faturayı siler, bakiye 0 ise hareketleri de arşivler  async function futuraTamOde(faturaId, odemeTur = 'NAKİT') {
     const fatura = cariFaturalar.find((f) => f.id === faturaId);
     if (!fatura) return;
     setCariFaturalar((prev) => prev.filter((f) => f.id !== faturaId));
@@ -2173,7 +2212,8 @@ export default function useHipposData(scope = 'full') {
     cariPersonel,
     addCariPersonel,
     deleteCariPersonel,
-    addCariFatura,
+     addCariFatura,
+    geriAlFatura,
     futuraTamOde,
     futuraKismiOde,
     deleteCariHareketler,

@@ -22,7 +22,7 @@ function padLine(name, price, width = 28) {
   return `${name} ${dots} ${priceStr}`;
 }
 
-function FuturaModal({ onClose, futuraBaslangic, futuraBitis, futuraGunSec, onSubmit }) {
+function FuturaModal({ onClose, futuraBaslangic, futuraBitis, futuraGunSec, onSubmit, donemOzet }) {
   const GUNLER = ['Pts', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
   const AYLAR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
   const bugun = new Date();
@@ -100,8 +100,20 @@ function FuturaModal({ onClose, futuraBaslangic, futuraBitis, futuraGunSec, onSu
         {futuraBaslangic && (() => {
           function trFmt(s) { const [y,m,d] = s.split('-'); return `${d}.${m}.${y}`; }
           return (
-            <div className="futura-secim-info">
-              {trFmt(futuraBaslangic)} {futuraBitis ? `→ ${trFmt(futuraBitis)}` : '→ (bitiş seçin)'}
+                        <div className="futura-secim-info">
+              <div className="futura-secim-tarih">
+                {trFmt(futuraBaslangic)} {futuraBitis ? `→ ${trFmt(futuraBitis)}` : '→ (bitiş seçin)'}
+              </div>
+              {donemOzet && (
+                <div className="futura-secim-toplam">
+                  <strong>{TL(donemOzet.tutar)}</strong>
+                  <span>
+                    {donemOzet.hareketler.length} hareket
+                    {donemOzet.odemeToplam > 0 ? ` · ${TL(donemOzet.odemeToplam)} ödeme düşüldü` : ''}
+                    {!futuraBitis ? ' · yalnızca seçili gün' : ''}
+                  </span>
+                </div>
+              )}
             </div>
           );
         })()}
@@ -178,7 +190,7 @@ export default function Cariler({ data, onNavigate }) {
   const {
     cariler, cariHareketler, cariOdemeler, cariFaturalar, cariGecmis,
     getCariBakiye, getCariSonHareket, getCariSonOdeme,
-    addCari, updateCari, deleteCari, addCariOdeme, addCariFatura, futuraTamOde, futuraKismiOde, deleteCariHareketler, deleteCariOdemeler, getCariFaturalanmamisTutar, archiveCari,
+    addCari, updateCari, deleteCari, addCariOdeme, addCariFatura, geriAlFatura, futuraTamOde, futuraKismiOde, deleteCariHareketler, deleteCariOdemeler, getCariFaturalanmamisTutar, archiveCari,
     cariPersonel, addCariPersonel, deleteCariPersonel,
     cariTeslimatBildirimleri, onaylaCariTeslimatBildirim, reddetCariTeslimatBildirim,
   } = data;
@@ -403,6 +415,40 @@ export default function Cariler({ data, onNavigate }) {
     }
   }
 
+ // Seçilen tarih aralığının hareket/ödeme toplamı. Canlı gösterim için kullanılır.
+  // bitisStr boşsa (sadece başlangıç seçilmişse) o tek günün toplamı hesaplanır.
+  function donemHesapla(basStr, bitStr) {
+    if (!selectedCari || !basStr) return null;
+    const bas = new Date(basStr + 'T00:00:00').getTime();
+    const bit = new Date((bitStr || basStr) + 'T23:59:59').getTime();
+    const hareketler = cariHareketler.filter((h) => h.cariId === selectedCari.id && h.ts >= bas && h.ts <= bit);
+    // Sadece hareket kaynaklı ödemeler (eski faturaların tahsilatları karışmaz)
+    const odemeler = cariOdemeler.filter((o) => o.cariId === selectedCari.id && o.ts >= bas && o.ts <= bit && (o.kaynak || 'hareket') !== 'fatura');
+    const hareketToplam = hareketler.reduce((s, h) => s + h.toplam, 0);
+    const odemeToplam = odemeler.reduce((s, o) => s + o.tutar, 0);
+    return { hareketler, odemeler, hareketToplam, odemeToplam, tutar: Math.max(0, hareketToplam - odemeToplam) };
+  }
+
+  // ---- Fatura: hareketleri görüntüle / geri al ----
+  const [faturaHareketModal, setFaturaHareketModal] = useState(null); // faturaId
+  const [geriAlModal, setGeriAlModal] = useState(null);               // faturaId
+  const [geriAlBusy, setGeriAlBusy] = useState(false);
+  const [geriAlHata, setGeriAlHata] = useState('');
+
+  async function submitGeriAl() {
+    if (!geriAlModal || geriAlBusy) return;
+    setGeriAlBusy(true);
+    setGeriAlHata('');
+    const sonuc = await geriAlFatura(geriAlModal);
+    setGeriAlBusy(false);
+    if (sonuc.ok) {
+      setGeriAlModal(null);
+      showToast('Fatura geri alındı, hareketler geri geldi');
+    } else {
+      setGeriAlHata(sonuc.mesaj || 'Geri alınamadı');
+    }
+  }
+
   async function submitFutura() {
     if (!selectedCari || !futuraBaslangic || !futuraBitis) return;
     const bas = new Date(futuraBaslangic + 'T00:00:00').getTime();
@@ -415,8 +461,11 @@ export default function Cariler({ data, onNavigate }) {
     const toplamOdeme = donemOdemeleri.reduce((s, o) => s + o.tutar, 0);
     const tutar = Math.max(0, toplamHareket - toplamOdeme);
     const tarih = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
-    // Önce faturayı oluştur, kaydedilemezse hiçbir şey silinmez
-    const faturaId = await addCariFatura(selectedCari.id, { tarih, faturaNo: '', tutar, donemBaslangic: futuraBaslangic, donemBitis: futuraBitis });
+      // Silinecek hareket/ödemelerin kopyası faturaya kaydedilir (Hareketler görünümü ve Geri Al için)
+    const hareketlerSnapshot = hareketler.map((h) => ({ id: h.id, ts: h.ts, urunler: h.urunler || [], toplam: h.toplam, mutfakNotu: h.mutfakNotu || '', personelAd: h.personelAd || null }));
+    const odemelerSnapshot = donemOdemeleri.map((o) => ({ id: o.id, ts: o.ts, tutar: o.tutar, tur: o.tur, kaynak: o.kaynak || 'hareket' }));
+    // Önce faturayı (kopyalarıyla) oluştur, kaydedilemezse hiçbir şey silinmez
+    const faturaId = await addCariFatura(selectedCari.id, { tarih, faturaNo: '', tutar, donemBaslangic: futuraBaslangic, donemBitis: futuraBitis, hareketlerSnapshot, odemelerSnapshot });
     if (!faturaId) { showToast('Fatura kaydedilemedi, hiçbir kayıt silinmedi'); return; }
     // Fatura kaydedildi, şimdi hareketleri sil
     await deleteCariHareketler(hareketler.map((h) => h.id));
@@ -895,6 +944,8 @@ export default function Cariler({ data, onNavigate }) {
                       {futuraFaturalar.map((f) => {
                         const kalan = futuraKalanTutar(f);
                         const gun = futuraBekleyenGun(f);
+                        const kayitVar = Array.isArray(f.hareketlerSnapshot);
+                        const tahsilatVar = (f.tahsilatTutar || 0) > 0 || (f.odemeLog || []).length > 0;
                         return (
                           <div key={f.id} className="cr-futura-card">
                             <div className="cr-futura-donem">{futuraDonemStr(f) || f.tarih}</div>
@@ -926,6 +977,24 @@ export default function Cariler({ data, onNavigate }) {
                                 Kısmi Ödeme Al
                               </button>
                             </div>
+                            <div className="cr-futura-butonlar">
+                              <button
+                                className="cr-fh-btn cr-fh-btn-hareket"
+                                disabled={!kayitVar}
+                                onClick={() => setFaturaHareketModal(f.id)}
+                              >
+                                Hareketler
+                              </button>
+                              <button
+                                className="cr-fh-btn cr-fh-btn-geri"
+                                disabled={!kayitVar || tahsilatVar}
+                                onClick={() => { setGeriAlHata(''); setGeriAlModal(f.id); }}
+                              >
+                                Geri Al
+                              </button>
+                            </div>
+                            {!kayitVar && <div className="cr-fh-not">Eski fatura — hareket kaydı yok</div>}
+                            {kayitVar && tahsilatVar && <div className="cr-fh-not">Tahsilat alınmış fatura geri alınamaz</div>}
                           </div>
                         );
                       })}
@@ -1111,8 +1180,84 @@ export default function Cariler({ data, onNavigate }) {
           futuraBitis={futuraBitis}
           futuraGunSec={futuraGunSec}
           onSubmit={submitFutura}
+          donemOzet={donemHesapla(futuraBaslangic, futuraBitis)}
         />
       )}
+
+      {faturaHareketModal && (() => {
+        const f = cariFaturalar.find((x) => x.id === faturaHareketModal);
+        if (!f || !Array.isArray(f.hareketlerSnapshot)) return null;
+        const siparisler = f.hareketlerSnapshot;
+        const odemeler = Array.isArray(f.odemelerSnapshot) ? f.odemelerSnapshot : [];
+        const hareketToplam = siparisler.reduce((t, h) => t + Number(h.toplam || 0), 0);
+        const odemeToplam = odemeler.reduce((t, o) => t + Number(o.tutar || 0), 0);
+        const girdiler = [
+          ...siparisler.map((h) => ({ tip: 'siparis', ts: h.ts, data: h })),
+          ...odemeler.map((o) => ({ tip: 'odeme', ts: o.ts, data: o })),
+        ].sort((a, b) => b.ts - a.ts);
+        return (
+          <div className="cr-modal-overlay" onClick={() => setFaturaHareketModal(null)}>
+            <div className="cr-modal cr-fh-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="cr-modal-head">
+                <h3 className="cr-fh-baslik">Fatura Hareketleri</h3>
+                <button className="cr-modal-x" onClick={() => setFaturaHareketModal(null)}><X size={16} /></button>
+              </div>
+              <div className="cr-fh-ozet">
+                <div className="cr-fh-donem">{futuraDonemStr(f) || f.tarih}</div>
+                <div className="cr-fh-satir"><span>Hareket toplamı ({siparisler.length})</span><strong>{TL(hareketToplam)}</strong></div>
+                {odemeToplam > 0 && <div className="cr-fh-satir"><span>Dönemde alınan ödemeler</span><strong>-{TL(odemeToplam)}</strong></div>}
+                <div className="cr-fh-satir cr-fh-satir-toplam"><span>Fatura tutarı</span><strong>{TL(f.tutar)}</strong></div>
+              </div>
+              <div className="cr-fh-liste">
+                {girdiler.map((g) => g.tip === 'siparis' ? (
+                  <div key={`s-${g.data.id}`} className="cr-fh-card">
+                    <div className="cr-fh-card-head">
+                      <span>{fmtDateTime(g.data.ts)}{g.data.personelAd ? ` · ${g.data.personelAd}` : ''}</span>
+                      <strong>{TL(g.data.toplam)}</strong>
+                    </div>
+                    <div className="cr-fh-items">
+                      {(g.data.urunler || []).map((u, i) => (
+                        <div key={i} className="cr-fh-item"><span>{u.ad}</span><span>{TL(u.fiyat)}</span></div>
+                      ))}
+                    </div>
+                    {g.data.mutfakNotu && <div className="cr-fh-notu">{g.data.mutfakNotu}</div>}
+                  </div>
+                ) : (
+                  <div key={`o-${g.data.id}`} className="cr-fh-odeme">
+                    <span>{fmtDateTime(g.data.ts)} · Ödeme Alındı — {g.data.tur}</span>
+                    <strong>-{TL(g.data.tutar)}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {geriAlModal && (() => {
+        const f = cariFaturalar.find((x) => x.id === geriAlModal);
+        if (!f) return null;
+        const adet = (f.hareketlerSnapshot || []).length;
+        return (
+          <div className="cr-modal-overlay" onClick={() => { if (!geriAlBusy) { setGeriAlModal(null); setGeriAlHata(''); } }}>
+            <div className="cr-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="cr-modal-head">
+                <h3 className="cr-fh-baslik">Faturayı Geri Al</h3>
+                <button className="cr-modal-x" disabled={geriAlBusy} onClick={() => { setGeriAlModal(null); setGeriAlHata(''); }}><X size={16} /></button>
+              </div>
+              <p className="cr-fh-metin">
+                <strong>{futuraDonemStr(f) || f.tarih}</strong> dönemli <strong>{TL(f.tutar)}</strong> tutarındaki fatura iptal edilecek.
+                {' '}{adet} hareket eski haline, Hareketler sekmesine geri dönecek.
+              </p>
+              {geriAlHata && <p className="cr-fh-hata">{geriAlHata}</p>}
+              <div className="cr-modal-footer">
+                <button className="cr-secondary" disabled={geriAlBusy} onClick={() => { setGeriAlModal(null); setGeriAlHata(''); }}>Vazgeç</button>
+                <button className="cr-fh-geri-onay" disabled={geriAlBusy} onClick={submitGeriAl}>{geriAlBusy ? 'Geri alınıyor…' : 'Evet, Geri Al'}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {futuraTahsilatModal && (
         <div className="cr-modal-overlay" onClick={() => setFuturaTahsilatModal(null)}>
