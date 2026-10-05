@@ -1827,12 +1827,16 @@ export default function useHipposData(scope = 'full') {
   }
 
   // Firma carilerinde: o ana kadarki faturalanmamış bakiyeyi bir faturaya bağlar.
-  async function addCariFatura(cariId, { tarih, faturaNo, tutar, donemBaslangic, donemBitis, hareketlerSnapshot = null, odemelerSnapshot = null }) {    const id = Date.now() + Math.floor(Math.random() * 1000);
+  // Firma carilerinde: o ana kadarki faturalanmamış bakiyeyi bir faturaya bağlar.
+  async function addCariFatura(cariId, { tarih, faturaNo, tutar, donemBaslangic, donemBitis, hareketlerSnapshot = null, odemelerSnapshot = null }) {
+    const id = Date.now() + Math.floor(Math.random() * 1000);
     const eklenmeTs = Date.now();
-    const fatura = { id, cariId, tarih, faturaNo, tutar, eklenmeTs, donemBaslangic: donemBaslangic || null, donemBitis: donemBitis || null, tahsilatTutar: 0, odemeLog: [], hareketlerSnapshot, odemelerSnapshot };    setCariFaturalar((prev) => [...prev, fatura]);
+    const fatura = { id, cariId, tarih, faturaNo, tutar, eklenmeTs, donemBaslangic: donemBaslangic || null, donemBitis: donemBitis || null, tahsilatTutar: 0, odemeLog: [], hareketlerSnapshot, odemelerSnapshot };
+    setCariFaturalar((prev) => [...prev, fatura]);
     const { error } = await supabase
       .from('cari_faturalar')
-      .insert({ id, cari_id: cariId, tarih, fatura_no: faturaNo, tutar, eklenme_ts: eklenmeTs, donem_baslangic: donemBaslangic || null, donem_bitis: donemBitis || null, tahsilat_tutar: 0, hareketler_snapshot: hareketlerSnapshot, odemeler_snapshot: odemelerSnapshot });    if (error) {
+      .insert({ id, cari_id: cariId, tarih, fatura_no: faturaNo, tutar, eklenme_ts: eklenmeTs, donem_baslangic: donemBaslangic || null, donem_bitis: donemBitis || null, tahsilat_tutar: 0, hareketler_snapshot: hareketlerSnapshot, odemeler_snapshot: odemelerSnapshot });
+    if (error) {
       console.error('fatura kaydedilemedi:', error.message);
       setCariFaturalar((prev) => prev.filter((f) => f.id !== id));
       return null;
@@ -1848,7 +1852,7 @@ export default function useHipposData(scope = 'full') {
     ));
   }
 
-   // Faturayı iptal eder: faturalandırırken silinen hareket ve ödemeleri ORİJİNAL id/saat/tutarlarıyla
+  // Faturayı iptal eder: faturalandırırken silinen hareket ve ödemeleri ORİJİNAL id/saat/tutarlarıyla
   // geri yazar, sonra faturayı siler. Sıra bilinçli: önce geri yaz, sonra sil — yarıda kalırsa
   // veri kaybolmaz (upsert olduğu için tekrar denenebilir).
   async function geriAlFatura(faturaId) {
@@ -2212,7 +2216,7 @@ export default function useHipposData(scope = 'full') {
     cariPersonel,
     addCariPersonel,
     deleteCariPersonel,
-     addCariFatura,
+    addCariFatura,
     geriAlFatura,
     futuraTamOde,
     futuraKismiOde,
