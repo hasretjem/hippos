@@ -179,7 +179,15 @@ function gecmisTahsilatMetni(cari, dStr, veri, mevcutBakiye) {
     '',
     ...liste.map((o) => `✅ ${TL(o.tutar)} tutarındaki tahsilatınız alınmıştır.`),
     `📊 Güncel bakiyeniz: ${bakiyeYazi(kalan)}`,
-    ...(kalan < 0 ? ['(Bir sonraki siparişlerinizden
+    ...(kalan < 0 ? ['(Bir sonraki siparişlerinizden düşülecektir)'] : []),
+    '',
+    'Teşekkürler, iyi günler! 🙏✨',
+  ].join('\n');
+  return { metin };
+}
+// ==== GEÇMİŞ TARİHLİ MESAJ YARDIMCILARI (BİTİŞ) ====
+
+function FuturaModal({ onClose, futuraBaslangic, futuraBitis, futuraGunSec, onSubmit, donemOzet }) {
   const GUNLER = ['Pts', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
   const AYLAR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
   const bugun = new Date();
