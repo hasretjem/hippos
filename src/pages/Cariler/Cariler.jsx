@@ -1788,3 +1788,68 @@ function CariBekleyenKart({ bildirim, onOnayla, onReddet }) {
     </div>
   );
 }
+// Geçmiş tarihli mesaj için tarih seçici takvim (tek gün seçilir)
+function MesajTarihModal({ onClose, seciliTarih, onSec, isaretler }) {
+  const GUNLER = ['Pts', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
+  const AYLAR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+  const bugun = new Date();
+  const toStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const bugunStr = toStr(bugun);
+  const ilk = seciliTarih ? new Date(seciliTarih + 'T12:00:00') : bugun;
+  const [yil, setYil] = useState(ilk.getFullYear());
+  const [ay, setAy] = useState(ilk.getMonth());
+  const bosluk = (new Date(yil, ay, 1).getDay() + 6) % 7;
+  const gunSayisi = new Date(yil, ay + 1, 0).getDate();
+  const hucreler = [];
+  for (let i = 0; i < bosluk; i++) hucreler.push(null);
+  for (let d = 1; d <= gunSayisi; d++) hucreler.push(new Date(yil, ay, d));
+  const buAy = yil === bugun.getFullYear() && ay === bugun.getMonth();
+  function oncekiAy() { if (ay === 0) { setYil(yil - 1); setAy(11); } else setAy(ay - 1); }
+  function sonrakiAy() { if (buAy) return; if (ay === 11) { setYil(yil + 1); setAy(0); } else setAy(ay + 1); }
+
+  return (
+    <div className="cr-modal-overlay" onClick={onClose}>
+      <div className="cr-modal cr-mt-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="cr-modal-head">
+          <h3 className="cr-fh-baslik">Mesaj Tarihi</h3>
+          <button className="cr-modal-x" onClick={onClose}><X size={16} /></button>
+        </div>
+        <div className="cr-mt-nav">
+          <button onClick={oncekiAy}>‹</button>
+          <strong>{AYLAR[ay]} {yil}</strong>
+          <button onClick={sonrakiAy} disabled={buAy}>›</button>
+        </div>
+        <div className="cr-mt-grid">
+          {GUNLER.map((g) => <div key={g} className="cr-mt-gun-baslik">{g}</div>)}
+          {hucreler.map((d, i) => {
+            if (!d) return <div key={`b${i}`} />;
+            const s = toStr(d);
+            const isr = isaretler[s] || {};
+            const secili = (seciliTarih || bugunStr) === s;
+            return (
+              <button
+                key={s}
+                disabled={s > bugunStr}
+                className={`cr-mt-gun ${s === bugunStr ? 'bugun' : ''} ${secili ? 'secili' : ''}`}
+                onClick={() => onSec(s === bugunStr ? null : s)}
+              >
+                <span>{d.getDate()}</span>
+                <span className="cr-mt-noktalar">
+                  {isr.siparis && <span className="cr-mt-nokta siparis" />}
+                  {isr.tahsilat && <span className="cr-mt-nokta tahsilat" />}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="cr-mt-lejant">
+          <span><span className="cr-mt-nokta siparis" /> Sipariş var</span>
+          <span><span className="cr-mt-nokta tahsilat" /> Tahsilat var</span>
+        </div>
+        <div className="cr-mt-alt">
+          <button className="cr-mt-bugun-btn" onClick={() => onSec(null)}>Bugün</button>
+        </div>
+      </div>
+    </div>
+  );
+}
