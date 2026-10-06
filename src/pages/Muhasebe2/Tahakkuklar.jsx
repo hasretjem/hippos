@@ -4,7 +4,8 @@ import { ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayiFmt, tarihTR, useModal
 // ---------------------------------------------------------------------------
 // Tahakkuklar: fiş/fatura gelmeden ödeme yapılan giderleri (personel maaşı, sabit giderler) gider yapar.
 //  - Şubat'ta açılınca OCAK dönemi gelir; dönem başına yalnızca 1 kez "Tahakkuk Et" yapılabilir.
-//  - Personel: net maaş (brüt - izin kesintisi) personelin carisine Cari fiş olur. Avans tahakkuka girmez.
+//  - Personel: BRÜT maaş personelin carisine Cari fiş olur. İzin kesintileri izin girilirken iade faturası, avanslar ödeme
+//    makbuzu olarak ZATEN cariye işlendiği için tahakkuktaki maaşı etkilemez; tahakkukla cari normale döner.
 //  - Sabit gider: kendi kategorisinde, kendi carisine Cari fiş olur.
 //  - Fiş tarihi = tahakkuk edilen gündür.
 // ---------------------------------------------------------------------------
@@ -137,8 +138,8 @@ export default function TahakkuklarSekmesi({ aktif, bildir, kategoriler, onDegis
                   <th className="sayi">Maaş</th>
                   <th className="sayi">Gün</th>
                   <th className="sayi">İzin</th>
-                  <th className="sayi">Kesinti</th>
-                  <th className="sayi">Net Tahakkuk</th>
+                  <th className="sayi" title="İzin kesintileri izin girilirken iade faturası olarak cariye işlendi">İzin Kesintisi</th>
+                  <th className="sayi">Tahakkuk (Maaş)</th>
                   <th className="sayi">O Ay Avans</th>
                   <th className="sayi">Ödenecek</th>
                   <th>Detay</th>
@@ -165,7 +166,7 @@ export default function TahakkuklarSekmesi({ aktif, bildir, kategoriler, onDegis
                     <td className="sayi">{p.izinGun ? sayiGun(p.izinGun) : '—'}</td>
                     <td className="sayi">{p.kesinti ? TL(p.kesinti) : '—'}</td>
                     <td className="sayi">
-                      <strong>{TL(p.net)}</strong>
+                      <strong>{TL(p.brut)}</strong>
                       {!p.fisYazilir && <span className="m2-sub">fiş yazılmaz</span>}
                     </td>
                     <td className="sayi">{p.avans ? TL(p.avans) : '—'}</td>
@@ -185,7 +186,7 @@ export default function TahakkuklarSekmesi({ aktif, bildir, kategoriler, onDegis
                 <tfoot>
                   <tr>
                     <td colSpan={6}>Personel toplamı</td>
-                    <td className="sayi">{TL(veri.personeller.reduce((x, p) => x + (p.fisYazilir ? p.net : 0), 0))}</td>
+                    <td className="sayi">{TL(veri.personeller.reduce((x, p) => x + (p.fisYazilir ? p.brut : 0), 0))}</td>
                     <td colSpan={3} />
                   </tr>
                 </tfoot>
@@ -193,7 +194,7 @@ export default function TahakkuklarSekmesi({ aktif, bildir, kategoriler, onDegis
             </table>
           </div>
           <p className="m2-hint">
-            "Ödenecek", personel carisinin bakiyesidir: net tahakkuk eksi daha önce verilen avanslar. Maaşı Makbuz formundan "Ödeme" olarak ödersiniz. Gün sütunu tam ayda 30 görünür.
+            Tahakkuk maaşı BRÜT olarak personel carisine yazar. İzin kesintileri izin girilirken iade faturası, avanslar ödeme olarak zaten cariye işlendiği için maaşı değiştirmez; bu yüzden tahakkuktan önce personel carisi eksiye düşebilir ve tahakkukla normale döner. "Ödenecek", tahakkuk sonrası cari bakiyesidir. Maaşı Makbuz formundan "Ödeme" olarak ödersiniz. Gün sütunu tam ayda 30 görünür.
           </p>
         </div>
 

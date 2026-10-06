@@ -19,7 +19,7 @@ import './Muhasebe2.css';
 const FATURA_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi', 'Cari'];
 const MAKBUZ_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi'];
 const MAKS_GECMIS = 3;
-const KAYNAK_ETIKET = { yemek_karti: 'Yemek Kartları', tahakkuk: 'Tahakkuklar', avans: 'Personel Klasörü' };
+const KAYNAK_ETIKET = { yemek_karti: 'Yemek Kartları', tahakkuk: 'Tahakkuklar', avans: 'Personel Klasörü', izin: 'Personel Klasörü' };
 
 // Bakiye: pozitif = bizim borcumuz, negatif = firma bize borçlu.
 function bakiyeEtiketi(b) {
@@ -167,10 +167,13 @@ export default function Muhasebe2({ onNavigate }) {
 
   async function fisFaturaKaydet(payload) {
     await api('fisFaturaKaydet', { method: 'POST', body: payload });
+    const evrak = payload.iade ? 'İade faturası' : 'Fatura';
     bildir(
       payload.odemeTuru === 'Cari'
-        ? 'Fatura kaydedildi (cariye yazıldı)'
-        : 'Fatura kaydedildi, ödeme ve tahsilat makbuzları otomatik oluşturuldu',
+        ? `${evrak} kaydedildi (cariye yazıldı)`
+        : payload.iade
+          ? 'İade faturası kaydedildi, tahsilat ve ödeme makbuzları otomatik oluşturuldu'
+          : 'Fatura kaydedildi, ödeme ve tahsilat makbuzları otomatik oluşturuldu',
     );
     await yukle();
   }
@@ -467,6 +470,7 @@ function yontemPayload(tur, detay) {
 // Fiş / Fatura girişi
 // ---------------------------------------------------------------------------
 function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
+  const [iade, setIade] = useState(false); // false: Fatura/Fiş, true: İade Faturası (tutar artı girilir, sistem eksi işler)
   const [tarih, setTarih] = useState(veri.bugun || bugunISO());
   const [firmaId, setFirmaId] = useState('');
   const [faturaNo, setFaturaNo] = useState('');
@@ -503,7 +507,7 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
     if (y.hata) return bildir(y.hata, true);
     setKaydediyor(true);
     try {
-      await onKaydet({ tarih, firmaId, faturaNo, aciklama, giderKategorisi: kategori, faturaTutari: tutar, kdv, ...y });
+      await onKaydet({ tarih, firmaId, faturaNo, aciklama, giderKategorisi: kategori, faturaTutari: tutar, kdv, iade, ...y });
       setFirmaId('');
       setFaturaNo('');
       setAciklama('');
@@ -524,6 +528,17 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
     <>
       <h2>Fatura / Fiş Girişi</h2>
 
+      <div className={`m2-toggle ${iade ? 'odeme' : ''}`} role="group" aria-label="Evrak türü">
+        <span className="m2-toggle-thumb" />
+        <button type="button" className={iade ? '' : 'on'} onClick={() => setIade(false)}>
+          Fatura/Fiş
+        </button>
+        <button type="button" className={iade ? 'on' : ''} onClick={() => setIade(true)}>
+          İade Faturası
+        </button>
+      </div>
+      <p className="m2-hint">{iade ? FATURA_ACIKLAMA.iade : FATURA_ACIKLAMA.fatura}</p>
+
       <label className="m2-label">Tarih</label>
       <input className="m2-input" type="date" value={tarih} onChange={(e) => setTarih(e.target.value)} />
 
@@ -539,7 +554,7 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
       />
       {firma && <div className={`m2-info ${bakiyeEtiketi(firma.bakiye).ton}`}>Şu an: {bakiyeEtiketi(firma.bakiye).metin}</div>}
 
-      <label className="m2-label">Fatura No</label>
+      <label className="m2-label">{iade ? 'İlgili / İade Fatura No' : 'Fatura No'}</label>
       <input className="m2-input" placeholder="Opsiyonel" value={faturaNo} onChange={(e) => setFaturaNo(e.target.value)} />
 
       <label className="m2-label">Açıklama</label>
@@ -566,7 +581,7 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
         </button>
       </div>
 
-      <label className="m2-label">Ödeme Türü</label>
+      <label className="m2-label">{iade ? 'İade Şekli' : 'Ödeme Türü'}</label>
       <OdemeSecimi
         turler={FATURA_ODEME_TURLERI}
         tur={tur}
@@ -577,11 +592,11 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
         }}
         yontemler={veri.odemeYontemleri}
         onYeni={(odemeTuru) => onModal({ tur: 'yontem', odemeTuru, bitince: (y) => { setTur(y.odeme_turu); setDetay(y.ad); } })}
-        cariNotu="Cari olarak kaydedilir; firmanın borcuna eklenir."
+        cariNotu={iade ? 'Cari olarak kaydedilir; firmanın borcundan düşer, para hareketi olmaz.' : 'Cari olarak kaydedilir; firmanın borcuna eklenir.'}
       />
 
       <label className="m2-label">
-        Fatura Tutarı (KDV dahil) <b>*</b>
+        {iade ? 'İade Tutarı (KDV dahil)' : 'Fatura Tutarı (KDV dahil)'} <b>*</b>
       </label>
       <input
         className="m2-input"
@@ -605,18 +620,23 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
       />
 
       {firma && t > 0 && tur === 'Cari' && (
-        <div className={`m2-info ${bakiyeEtiketi(firma.bakiye + t).ton}`}>
-          Bu kayıttan sonra: {bakiyeEtiketi(firma.bakiye + t).metin}
+        <div className={`m2-info ${bakiyeEtiketi(iade ? firma.bakiye - t : firma.bakiye + t).ton}`}>
+          Bu kayıttan sonra: {bakiyeEtiketi(iade ? firma.bakiye - t : firma.bakiye + t).metin}
         </div>
       )}
-      {firma && t > 0 && tur && tur !== 'Cari' && detay && (
+      {firma && t > 0 && tur && tur !== 'Cari' && detay && !iade && (
         <div className="m2-info">
           Otomatik oluşur: {firma.ad} için Ödeme Makbuzu ve {detay} için Tahsilat Makbuzu. {firma.ad} bakiyesi değişmez.
         </div>
       )}
+      {firma && t > 0 && tur && tur !== 'Cari' && detay && iade && (
+        <div className="m2-info">
+          Otomatik oluşur: {firma.ad} için Tahsilat Makbuzu ve {detay} için Ödeme Makbuzu (para size geri girer). {firma.ad} bakiyesi değişmez.
+        </div>
+      )}
 
       <button className="m2-btn full" disabled={kaydediyor} onClick={kaydet}>
-        {kaydediyor ? 'Kaydediliyor…' : 'Kaydet'}
+        {kaydediyor ? 'Kaydediliyor…' : iade ? 'İade Faturasını Kaydet' : 'Kaydet'}
       </button>
     </>
   );
@@ -625,6 +645,10 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
 // ---------------------------------------------------------------------------
 // Makbuz: Tahsilat / Ödeme
 // ---------------------------------------------------------------------------
+const FATURA_ACIKLAMA = {
+  fatura: 'Firmadan gelen fatura veya fiş. Cari seçilirse firmanın borcuna eklenir.',
+  iade: 'Faturadaki gelmeyen veya iade edilen kalemin tutarını ARTI olarak yazın; sistem eksi (borçtan düşen) olarak işler. Cari seçilirse firmanın borcundan düşer; Nakit, Banka veya Kart seçilirse para size geri gelmiş sayılır.',
+};
 const MAKBUZ_ACIKLAMA = {
   Tahsilat: 'Borcu olan cariden aldığınız ödeme. Tutar carinin borcundan düşer.',
   Ödeme: 'Borcunuz olan cariye yaptığınız ödeme. Tutar sizin borcunuzdan düşer.',
@@ -779,6 +803,7 @@ const DATALAR_SUTUNLAR = [
 ];
 const EVRAK_SINIFI = {
   'Fatura/Fiş': 'fatura',
+  'İade Faturası': 'iade',
   'Tahsilat Makbuzu': 'tahsilat',
   'Ödeme (Tediye) Makbuzu': 'tediye',
 };
@@ -959,7 +984,7 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
                 </td>
                 <td>
                   <DuzenlenebilirHucre
-                    aktif={duzenlemeModu && !r.kaynak && r.evrakTuru === 'Fatura/Fiş'}
+                    aktif={duzenlemeModu && !r.kaynak && (r.evrakTuru === 'Fatura/Fiş' || r.evrakTuru === 'İade Faturası')}
                     tur="select"
                     secenekler={kategoriler}
                     deger={r.giderKategorisi}
@@ -969,8 +994,8 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
                 </td>
                 <td className="nowrap">{r.odemeTuru}</td>
                 <td className="nowrap">{r.odemeSekli}</td>
-                <td className="sayi">{para(r.tutar)}</td>
-                <td className="sayi">{para(r.kdv)}</td>
+                <td className={`sayi ${r.tutar < 0 ? 'm2-neg' : ''}`}>{para(r.tutar)}</td>
+                <td className={`sayi ${r.kdv < 0 ? 'm2-neg' : ''}`}>{para(r.kdv)}</td>
                 <td className="sayi">{para(r.tahsilat)}</td>
                 <td className="sayi">{para(r.odemeTediye)}</td>
                 {duzenlemeModu && (
@@ -1539,10 +1564,10 @@ function FaturaDuzenleForm({ grup, veri, bildir, onKaydet, onKapat }) {
     if (!kategori) return bildir('Gider kategorisini seçin', true);
     const y = yontemPayload(tur, detay);
     if (y.hata) return bildir(y.hata, true);
-    calistir({ grupId: grup.faturalar[0].grup_id, tarih, firmaId, faturaNo, aciklama, giderKategorisi: kategori, faturaTutari: tutar, kdv, ...y });
+    calistir({ grupId: grup.faturalar[0].grup_id, tarih, firmaId, faturaNo, aciklama, giderKategorisi: kategori, faturaTutari: tutar, kdv, iade: !!f.iade, ...y });
   }
   return (
-    <ModalKabuk baslik="Fatura / Fiş Düzenle" onKapat={onKapat}>
+    <ModalKabuk baslik={f.iade ? 'İade Faturası Düzenle' : 'Fatura / Fiş Düzenle'} onKapat={onKapat}>
       <label className="m2-label">Tarih</label>
       <input className="m2-input" type="date" value={tarih} onChange={(e) => setTarih(e.target.value)} />
       <label className="m2-label">Firma *</label>
@@ -1573,7 +1598,7 @@ function FaturaDuzenleForm({ grup, veri, bildir, onKaydet, onKapat }) {
         onYeni={() => bildir('Yeni ödeme yöntemini Fişler/Faturalar sekmesinden ekleyin', true)}
         cariNotu="Cari olarak kaydedilir; firmanın borcuna eklenir."
       />
-      <label className="m2-label">Fatura Tutarı (KDV dahil) *</label>
+      <label className="m2-label">{f.iade ? 'İade Tutarı (KDV dahil) *' : 'Fatura Tutarı (KDV dahil) *'}</label>
       <input className="m2-input" type="number" step="any" min="0" value={tutar} onChange={(e) => setTutar(e.target.value)} />
       <label className="m2-label">KDV Tutarı</label>
       <input className="m2-input" type="number" step="any" min="0" placeholder="Opsiyonel" value={kdv} onChange={(e) => setKdv(e.target.value)} />

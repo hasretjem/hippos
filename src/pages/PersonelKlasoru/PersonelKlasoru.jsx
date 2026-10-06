@@ -129,6 +129,7 @@ function PersonelDetay({ id, bildir, yontemler, onDegisti }) {
   const [donem, setDonem] = useState(bugunISO().slice(0, 7));
   const [goster, setGoster] = useState(false); // göz: maaş + notlar + parasal değerler
   const [veri, setVeri] = useState(null);
+  const [dokum, setDokum] = useState(null); // Hakediş Dökümü: yalnızca göz açıkken istenir
   const [hata, setHata] = useState('');
   const [secGun, setSecGun] = useState('');
   const [izinModal, setIzinModal] = useState(null); // {tarih} yeni | {kayit} düzenle
@@ -139,6 +140,8 @@ function PersonelDetay({ id, bildir, yontemler, onDegisti }) {
   const yukle = useCallback(async () => {
     try {
       setVeri(await api('personelDetay', { query: { id, donem, goster: goster ? '1' : '0' } }));
+      // Hakediş Dökümü maaş bilgisi içerir: göz kapalıyken sunucudan hiç istenmez.
+      setDokum(goster ? await api('personelDokum', { query: { id, goster: '1' } }) : null);
       setHata('');
     } catch (e) {
       setHata(e.message);
@@ -432,6 +435,67 @@ function PersonelDetay({ id, bildir, yontemler, onDegisti }) {
         <p className="m2-hint">Avans, personelin carisine otomatik Ödeme Makbuzu yazar ve tahakkuka girmez; tahakkuktan sonra cari bakiyesinden düşer.</p>
       </div>
 
+      <div className="m2-card">
+        <h3 className="tk-baslik">Hakediş Dökümü</h3>
+        {!goster && <p className="m2-hint">Maaş bilgisi gizli. Görmek için göz simgesine basın.</p>}
+        {goster && !dokum && <p className="m2-hint">Yükleniyor…</p>}
+        {goster && dokum && (
+          <>
+            <div className="m2-table-wrap">
+              <table className="m2-table pkl-dokum" data-tablo="dokum">
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>İşlem</th>
+                    <th className="sayi">Borç</th>
+                    <th className="sayi">Alacak</th>
+                    <th>Açıklama</th>
+                    <th className="sayi">Bakiye</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dokum.satirlar.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="m2-empty">
+                        Henüz hareket yok.
+                      </td>
+                    </tr>
+                  )}
+                  {dokum.satirlar.map((r) => (
+                    <tr key={r.id}>
+                      <td className="nowrap">{tarihTR(r.tarih)}</td>
+                      <td className="nowrap">{r.tur}</td>
+                      <td className="sayi">{r.borc ? TL(r.borc) : '—'}</td>
+                      <td className="sayi">{r.alacak ? TL(r.alacak) : '—'}</td>
+                      <td>{r.aciklama}</td>
+                      <td className={`sayi ${r.bakiye < 0 ? 'm2-neg' : ''}`}>
+                        <strong>{TL(r.bakiye)}</strong>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                {dokum.satirlar.length > 0 && (
+                  <tfoot>
+                    <tr>
+                      <td colSpan={2}>Toplam</td>
+                      <td className="sayi">{TL(dokum.toplamBorc)}</td>
+                      <td className="sayi">{TL(dokum.toplamAlacak)}</td>
+                      <td />
+                      <td className={`sayi ${dokum.bakiye < 0 ? 'm2-neg' : ''}`}>
+                        <strong>{TL(dokum.bakiye)}</strong>
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+            <p className="m2-hint">
+              Bakiye, ödenecek maaştır. Eksi ise personel bize borçludur: avans veya izin kesintisi tahakkuktan önce girildiğinde böyle görünür ve tahakkukla normale döner.
+            </p>
+          </>
+        )}
+      </div>
+
       {izinModal && (
         <IzinModal
           personel={p}
@@ -663,6 +727,7 @@ function IzinModal({ personel, donem, ilkTarih, kayit, goster, onKaydet, onKapat
         {oneri ? `Otomatik: ${oneri.gun} gün × maaş ÷ 30 = ${TL(oneri.kesinti)}. ` : ''}İsterseniz elle değiştirebilirsiniz.
         {aralik ? ' Aralıkta toplam tutar günlere paylaştırılır.' : ''}
       </p>
+      <p className="m2-hint">Bu kesinti, personel carisine iade faturası olarak işlenir; tahakkuktaki maaşı değiştirmez.</p>
       {kesintiEl && oneri && sayi(kesinti) !== oneri.kesinti && (
         <button type="button" className="m2-link" onClick={() => { setKesintiEl(false); setKesinti(String(oneri.kesinti)); }}>
           Otomatik tutara dön

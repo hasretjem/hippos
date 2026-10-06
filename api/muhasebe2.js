@@ -1,6 +1,7 @@
 // Muhasebe2 API — Fişler/Faturalar ve Makbuzlar + Datalar (düzenle/sil/geri al) + Hesap Özetleri + Yemek Kartları
 // + Personel Klasörü (puantaj, izin, avans) + Tahakkuklar (personel maaşı ve sabit giderler)
-// + Günsonları (gün sonu kayıtlarını görme, düzenleme, silme, ana kasa devir zinciri).
+// + Günsonları (gün sonu kayıtlarını görme, düzenleme, silme, ana kasa devir zinciri)
+// + İade faturası (pozitif tutar + iade işareti; bakiyeden düşer, ekstrede Borç, Datalar'da eksi) ve izin kesintisi iadeleri.
 // Veri Supabase'de (m2_* tabloları), eski mh_* tablolarından bağımsız.
 //
 // Defter kuralı:
@@ -160,7 +161,7 @@ export function grupBul(firma, yontemler) {
 
 const kurus = (v) => Math.round((Number(v) || 0) * 100);
 
-// Ekstre satırları: Fatura/Fiş -> Alacak, Tahsilat -> Alacak, Ödeme (Tediye) -> Borç.
+// Ekstre satırları: Fatura/Fiş -> Alacak, Tahsilat -> Alacak, Ödeme (Tediye) -> Borç, İade Faturası -> Borç.
 // Sıralama: tarih, kayıt zamanı, sıra (fatura, elle makbuz, otomatik ödeme, otomatik tahsilat).
 export function ekstreHesapla(faturalar, makbuzlar) {
   const ham = [
@@ -169,14 +170,15 @@ export function ekstreHesapla(faturalar, makbuzlar) {
       tarih: f.tarih,
       zaman: f.kayit_zamani || '',
       sira: 1,
-      evrakTuru: 'Fatura/Fiş',
+      evrakTuru: f.iade ? 'İade Faturası' : 'Fatura/Fiş',
       belgeNo: f.fatura_no || '',
       aciklama: f.aciklama || '',
       odemeSekli: f.kasa || f.odeme_hesabi || '',
-      borcK: 0,
-      alacakK: kurus(f.fatura_tutari),
+      borcK: f.iade ? kurus(f.fatura_tutari) : 0,
+      alacakK: f.iade ? 0 : kurus(f.fatura_tutari),
       grupId: f.grup_id || null,
       otomatik: false,
+      kaynak: f.kaynak || null,
     })),
     ...makbuzlar.map((m) => {
       const odeme = m.makbuz_turu === 'Ödeme';
@@ -193,6 +195,7 @@ export function ekstreHesapla(faturalar, makbuzlar) {
         alacakK: odeme ? 0 : kurus(m.tutar),
         grupId: m.grup_id || null,
         otomatik: !!m.otomatik,
+        kaynak: m.kaynak || null,
       };
     }),
   ].sort((a, b) => {
@@ -221,9 +224,28 @@ export function ekstreHesapla(faturalar, makbuzlar) {
       bakiye: bakiyeK / 100,
       grupId: r.grupId,
       otomatik: r.otomatik,
+      kaynak: r.kaynak,
     };
   });
   return { satirlar, toplamBorc: toplamBorcK / 100, toplamAlacak: toplamAlacakK / 100, bakiye: bakiyeK / 100 };
+}
+
+// Personel Hakediş Dökümü: personel carisinin ekstresi, bakiye "ödenecek maaş" yönünde (alacak - borç).
+// + bakiye: personele borcumuz (ödenecek); - bakiye: personel bize borçlu (avans / izin kesintisi tahakkuktan önce girilmiş).
+function dokumTuru(r) {
+  if (r.evrakTuru === 'İade Faturası') return r.kaynak === 'izin' ? 'İzin Kesintisi' : 'İade Faturası';
+  if (r.evrakTuru === 'Fatura/Fiş') return r.kaynak === 'tahakkuk' ? 'Maaş Tahakkuku' : 'Fatura/Fiş';
+  if (r.kaynak === 'avans') return 'Avans';
+  return r.evrakTuru;
+}
+export function personelDokumHesapla(faturalar, makbuzlar) {
+  const e = ekstreHesapla(faturalar, makbuzlar);
+  return {
+    satirlar: e.satirlar.map((r) => ({ id: r.id, tarih: r.tarih, tur: dokumTuru(r), borc: r.borc, alacak: r.alacak, aciklama: r.kaynak === 'avans' ? String(r.aciklama || '').replace(/^Avans(?: — )?/, '') : r.aciklama, bakiye: 0 - r.bakiye, kaynak: r.kaynak || null })),
+    toplamBorc: e.toplamBorc,
+    toplamAlacak: e.toplamAlacak,
+    bakiye: 0 - e.bakiye,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -469,7 +491,10 @@ async function kategoriBulVeyaAc(db, ad) {
 // ---------------------------------------------------------------------------
 // Fatura ve makbuz grupları: kayıt VE düzenleme aynı satır üretimini kullanır.
 // ---------------------------------------------------------------------------
+// İade faturası: tutar POZİTİF girilir, iade=true işaretiyle bakiyeden düşer (firma ekstresinde Borç, Datalar'da eksi).
+// Cari dışı iadede para bize GERİ GELİR: firmadan otomatik tahsilat + ödeme şekline giriş (satış faturasının tam tersi).
 async function faturaGrubuUret(db, body, grupId, zaman) {
+  const iade = body.iade === true || body.iade === 'true';
   const tutar = tutarCoz(body.faturaTutari);
   if (tutar <= 0) throw new HataMesaji(400, 'Tutar sıfırdan büyük olmalı');
   const kdv = kdvCoz(body.kdv, tutar);
@@ -502,13 +527,50 @@ async function faturaGrubuUret(db, body, grupId, zaman) {
     kasa: alan.kasa,
     fatura_tutari: tutar,
     kdv,
+    iade,
     grup_id: grupId,
     ...z,
   };
 
-  // Cari dışı ödemede iki otomatik makbuz: firmaya ödeme + ödeme şekline tahsilat.
+  // Cari dışı ödemede iki otomatik makbuz: firmaya ödeme + ödeme şekline tahsilat (iadede ters yön).
   const makbuzlar = [];
-  if (odemeTuru !== 'Cari') {
+  if (odemeTuru !== 'Cari' && iade) {
+    const yontemAdi = alan.kasa || alan.odeme_hesabi;
+    const yf = await yontemFirmasi(db, yontemAdi);
+    if (yf.id === firma.id) throw new HataMesaji(400, 'Firma ile ödeme şekli aynı olamaz');
+    makbuzlar.push({
+      id: randomUUID(),
+      tarih,
+      makbuz_turu: 'Tahsilat',
+      firma_id: firma.id,
+      firma_adi: firma.ad,
+      fatura_no: faturaNo,
+      aciklama: `Otomatik: iade tahsilatı${aciklama ? ` — ${aciklama}` : ''}`,
+      odeme_turu: odemeTuru,
+      odeme_hesabi: alan.odeme_hesabi,
+      kasa: alan.kasa,
+      tutar,
+      otomatik: true,
+      grup_id: grupId,
+      ...z,
+    });
+    makbuzlar.push({
+      id: randomUUID(),
+      tarih,
+      makbuz_turu: 'Ödeme',
+      firma_id: yf.id,
+      firma_adi: yf.ad,
+      fatura_no: faturaNo,
+      aciklama: `Otomatik: ${firma.ad} iade tahsilatı`,
+      odeme_turu: null,
+      odeme_hesabi: null,
+      kasa: null,
+      tutar,
+      otomatik: true,
+      grup_id: grupId,
+      ...z,
+    });
+  } else if (odemeTuru !== 'Cari') {
     const yontemAdi = alan.kasa || alan.odeme_hesabi;
     const yf = await yontemFirmasi(db, yontemAdi);
     if (yf.id === firma.id) throw new HataMesaji(400, 'Firma ile ödeme şekli aynı olamaz');
@@ -604,11 +666,11 @@ async function makbuzGrubuUret(db, body, grupId, zaman) {
 // ---------------------------------------------------------------------------
 // Kayıt grubu (fatura + makbuzlar): anlık görüntü, düzenleme, silme, geri alma
 // ---------------------------------------------------------------------------
-const FF_KOLON = ['id', 'tarih', 'firma_id', 'firma_adi', 'fatura_no', 'aciklama', 'gider_kategorisi', 'odeme_turu', 'odeme_hesabi', 'kasa', 'fatura_tutari', 'kdv', 'grup_id', 'kaynak', 'kayit_zamani'];
+const FF_KOLON = ['id', 'tarih', 'firma_id', 'firma_adi', 'fatura_no', 'aciklama', 'gider_kategorisi', 'odeme_turu', 'odeme_hesabi', 'kasa', 'fatura_tutari', 'kdv', 'iade', 'grup_id', 'kaynak', 'kayit_zamani'];
 const MK_KOLON = ['id', 'tarih', 'makbuz_turu', 'firma_id', 'firma_adi', 'fatura_no', 'aciklama', 'odeme_turu', 'odeme_hesabi', 'kasa', 'tutar', 'otomatik', 'grup_id', 'kaynak', 'kayit_zamani'];
 const sec = (r, kolonlar) => Object.fromEntries(kolonlar.map((k) => [k, r[k] === undefined ? null : r[k]]));
 const idSirala = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-const KAYNAK_YER = { yemek_karti: 'Yemek Kartları sekmesinden', tahakkuk: 'Tahakkuklar sekmesinden', avans: "Personel Klasörü'nden" };
+const KAYNAK_YER = { yemek_karti: 'Yemek Kartları sekmesinden', tahakkuk: 'Tahakkuklar sekmesinden', avans: "Personel Klasörü'nden", izin: "Personel Klasörü'nden" };
 
 async function grupOku(db, grupId) {
   if (!grupId) throw new HataMesaji(400, 'grupId gerekli');
@@ -779,6 +841,23 @@ async function donemKilidiKontrol(db, donemler, ne) {
 }
 
 // Tahakkuk ekranının verisi: o dönem için personel ve sabit gider satırları (tahakkuk edilmişse kayıtlı değerler).
+const gunYaz = (n) => `${String(n).replace('.', ',')} gün`;
+function izinAciklamasi(satirlar) {
+  const sirali = [...satirlar].sort((x, y) => (x.tarih < y.tarih ? -1 : 1));
+  const ilk = sirali[0].tarih;
+  const son = sirali[sirali.length - 1].tarih;
+  const gun = sirali.reduce((x, z) => x + (z.tur === 'Yarım' ? 0.5 : 1), 0);
+  const sebep = (sirali.find((z) => z.sebep) || {}).sebep;
+  return `İzin kesintisi — ${ilk === son ? isoToTR(ilk) : `${isoToTR(ilk)} – ${isoToTR(son)}`} (${gunYaz(gun)}${sebep ? `, ${sebep}` : ''})`;
+}
+// Bir izin GİRİŞİNİN (aralık dahil) personel carisindeki TEK iade faturası; toplam kesinti 0 ise yazılmaz.
+function izinGrubuIade(per, satirlar, kategori, grupId) {
+  const toplamK = satirlar.reduce((x, z) => x + Math.round(Number(z.kesinti) * 100), 0);
+  if (!satirlar.length || toplamK <= 0) return null;
+  const ilk = [...satirlar].sort((x, y) => (x.tarih < y.tarih ? -1 : 1))[0];
+  return { id: randomUUID(), tarih: ilk.tarih, firma_id: per.firma_id, firma_adi: per.ad_soyad, gider_kategorisi: kategori, fatura_tutari: toplamK / 100, aciklama: izinAciklamasi(satirlar), grup_id: grupId };
+}
+
 async function tahakkukVeri(db, donem) {
   const [pr, mr, ir, ar, sr, tr, br] = await Promise.all([
     db.from('m2_personel').select('*'),
@@ -811,7 +890,7 @@ async function tahakkukVeri(db, donem) {
       : { maas, calisilanGun: pt.calisilanGun, ucretliGun: pt.ucretliGun, izinGun: pt.izinGun, brut: pt.brut, kesinti: pt.kesinti, net: pt.net };
     const avans = r2((ar.data || []).filter((a) => a.personel_id === p.id && String(a.tarih).startsWith(donem)).reduce((x, a) => x + Number(a.tutar), 0));
     const b = bakiye.get(p.firma_id) || 0;
-    personeller.push({ id: p.id, adSoyad: p.ad_soyad, gorev: p.gorev || '', firmaId: p.firma_id, ...snap, avans, bakiye: r2(b), odenecek: r2(b + (tahakkuk ? 0 : snap.net)), fisYazilir: snap.net > 0 });
+    personeller.push({ id: p.id, adSoyad: p.ad_soyad, gorev: p.gorev || '', firmaId: p.firma_id, ...snap, avans, bakiye: r2(b), odenecek: r2(b + (tahakkuk ? 0 : snap.brut)), fisYazilir: snap.brut > 0 });
   });
   personeller.sort((a, b) => a.adSoyad.localeCompare(b.adSoyad, 'tr'));
 
@@ -1109,11 +1188,11 @@ export default async function handler(req, res) {
       const [fa, mk, yo] = await Promise.all([
         db
           .from('m2_fis_faturalar')
-          .select('id,tarih,fatura_no,aciklama,odeme_hesabi,kasa,fatura_tutari,grup_id,kayit_zamani')
+          .select('id,tarih,fatura_no,aciklama,odeme_hesabi,kasa,fatura_tutari,grup_id,kayit_zamani,iade,kaynak')
           .eq('firma_id', firmaId),
         db
           .from('m2_makbuzlar')
-          .select('id,tarih,makbuz_turu,fatura_no,aciklama,odeme_hesabi,kasa,tutar,otomatik,grup_id,kayit_zamani')
+          .select('id,tarih,makbuz_turu,fatura_no,aciklama,odeme_hesabi,kasa,tutar,otomatik,grup_id,kayit_zamani,kaynak')
           .eq('firma_id', firmaId),
         db.from('m2_odeme_yontemleri').select('odeme_turu,ad'),
       ]);
@@ -1323,6 +1402,19 @@ export default async function handler(req, res) {
       });
     }
 
+    // Hakediş Dökümü: maaş bilgisi içerdiği için YALNIZCA goster=1 ise döner (göz butonuyla aynı kural).
+    if (req.method === 'GET' && resource === 'personelDokum') {
+      const per = await personelGetir(db, req.query?.id);
+      if (String(req.query?.goster || '') !== '1') return res.status(200).json({ gizli: true });
+      const [fa, mk] = await Promise.all([
+        db.from('m2_fis_faturalar').select('id,tarih,fatura_no,aciklama,odeme_hesabi,kasa,fatura_tutari,grup_id,kayit_zamani,iade,kaynak').eq('firma_id', per.firma_id),
+        db.from('m2_makbuzlar').select('id,tarih,makbuz_turu,fatura_no,aciklama,odeme_hesabi,kasa,tutar,otomatik,grup_id,kayit_zamani,kaynak').eq('firma_id', per.firma_id),
+      ]);
+      kontrol(fa.error);
+      kontrol(mk.error);
+      return res.status(200).json(personelDokumHesapla(fa.data || [], mk.data || []));
+    }
+
     // İzin formu: otomatik kesinti önerisi
     if (req.method === 'GET' && resource === 'izinOnizleme') {
       const per = await personelGetir(db, req.query?.personelId);
@@ -1340,7 +1432,8 @@ export default async function handler(req, res) {
       const donem = String(req.query?.donem || '');
       if (!DONEM_RE.test(donem)) throw new HataMesaji(400, 'Dönem geçersiz');
       const v = await tahakkukVeri(db, donem);
-      const toplam = r2(v.personeller.reduce((x, p) => x + (p.fisYazilir ? p.net : 0), 0) + v.sabitGiderler.reduce((x, g) => x + g.tutar, 0));
+      // Tahakkuk BRÜT maaşı yazar; izin kesintileri izin girilirken iade faturası olarak cariye zaten işlenmiştir.
+      const toplam = r2(v.personeller.reduce((x, p) => x + (p.fisYazilir ? p.brut : 0), 0) + v.sabitGiderler.reduce((x, g) => x + g.tutar, 0));
       return res.status(200).json({
         donem,
         guncelDonem: bugunIstanbul().slice(0, 7),
@@ -1662,7 +1755,8 @@ export default async function handler(req, res) {
       const zaman = [...eski.faturalar, ...eski.makbuzlar].map((r) => r.kayit_zamani).filter(Boolean).sort()[0];
       let yeni;
       if (eski.faturalar.length) {
-        const u = await faturaGrubuUret(db, body, grupId, zaman);
+        // Fatura <-> iade türü düzenlemede değişmez (yanlışlıkla işaret değişmesin); gerekirse silip yeniden girilir.
+        const u = await faturaGrubuUret(db, { ...body, iade: !!eski.faturalar[0].iade }, grupId, zaman);
         yeni = { faturalar: [u.fatura], makbuzlar: u.makbuzlar };
       } else {
         const u = await makbuzGrubuUret(db, body, grupId, zaman);
@@ -1813,14 +1907,26 @@ export default async function handler(req, res) {
       if (toplamK < 0) throw new HataMesaji(400, 'Kesinti eksi olamaz');
       const paylar = kurusDagit(toplamK, gunler.length);
       const sebep = metin(body.sebep);
+      // Her izin GİRİŞİ personel carisine TEK bir İADE FATURASI olarak yazılır (kesinti 0 ise yazılmaz); tahakkuk maaşı etkilemez.
+      const katAd = await kategoriBulVeyaAc(db, PERSONEL_KATEGORI);
+      let izinSatirlari;
       if (id) {
-        const { error } = await db.from('m2_personel_izin').update({ tarih: bas, tur, kesinti: paylar[0] / 100, sebep }).eq('id', id);
-        kontrol(error);
+        izinSatirlari = [{ id, personel_id: per.id, tarih: bas, tur, kesinti: paylar[0] / 100, sebep, grup_id: eskiKayit.grup_id || id }];
       } else {
-        const grupId = randomUUID();
-        const { error } = await db.from('m2_personel_izin').insert(gunler.map((g, i) => ({ personel_id: per.id, tarih: g, tur, kesinti: paylar[i] / 100, sebep, grup_id: grupId })));
-        kontrol(error);
+        // Ay sınırını aşan aralıkta her ay ayrı grup (ayrı iade faturası): tahakkuk kilidi aya göre çalışır.
+        const ayGrup = {};
+        izinSatirlari = gunler.map((g, i) => {
+          const ay = g.slice(0, 7);
+          ayGrup[ay] = ayGrup[ay] || randomUUID();
+          return { id: randomUUID(), personel_id: per.id, tarih: g, tur, kesinti: paylar[i] / 100, sebep, grup_id: ayGrup[ay] };
+        });
       }
+      const degisen = new Set(izinSatirlari.map((z) => z.id));
+      const sonuc = [...(mevcut || []).filter((x) => !degisen.has(x.id)), ...izinSatirlari];
+      const gruplar = [...new Set(izinSatirlari.map((z) => z.grup_id))];
+      const iadeler = gruplar.map((g) => izinGrubuIade(per, sonuc.filter((z) => (z.grup_id || z.id) === g), katAd, g)).filter(Boolean);
+      const { error: izinHata } = await db.rpc('m2_izin_degistir', { p_izinler: izinSatirlari, p_faturalar: iadeler, p_silinen: [], p_gruplar: gruplar });
+      ozelKontrol(izinHata);
       return res.status(200).json({ ok: true, gun: gunler.length, kesinti: toplamK / 100 });
     }
     if (resource === 'izinSil') {
@@ -1829,8 +1935,15 @@ export default async function handler(req, res) {
       kontrol(error);
       if (!data) throw new HataMesaji(404, 'İzin kaydı bulunamadı');
       await donemKilidiKontrol(db, [String(data.tarih).slice(0, 7)], 'izin kaydı silinemez');
-      const sil = await db.from('m2_personel_izin').delete().eq('id', body.id);
-      kontrol(sil.error);
+      // Silinen gün iade faturasından düşer; grupta gün kalmadıysa iade faturası da silinir.
+      const per = await personelGetir(db, data.personel_id);
+      const gk = data.grup_id || data.id;
+      const { data: hepsi, error: hepsiHata } = await db.from('m2_personel_izin').select('*').eq('personel_id', data.personel_id);
+      kontrol(hepsiHata);
+      const katAd = await kategoriBulVeyaAc(db, PERSONEL_KATEGORI);
+      const iade = izinGrubuIade(per, (hepsi || []).filter((z) => (z.grup_id || z.id) === gk && z.id !== data.id), katAd, gk);
+      const sil = await db.rpc('m2_izin_degistir', { p_izinler: [], p_faturalar: iade ? [iade] : [], p_silinen: [body.id], p_gruplar: [gk] });
+      ozelKontrol(sil.error);
       return res.status(200).json({ ok: true });
     }
 
@@ -1924,7 +2037,7 @@ export default async function handler(req, res) {
       v.personeller.forEach((p) => {
         kalemler.push({ tur: 'Personel', kaynak_id: p.id, firma_id: p.firmaId, ad: p.adSoyad, maas: p.maas, calisilan_gun: p.calisilanGun, ucretli_gun: p.ucretliGun, izin_gun: p.izinGun, brut: p.brut, kesinti: p.kesinti, net: p.net });
         if (p.fisYazilir) {
-          faturalar.push({ id: randomUUID(), tarih: bugun, firma_id: p.firmaId, firma_adi: p.adSoyad, gider_kategorisi: personelKat, fatura_tutari: p.net, kdv: null, aciklama: `Maaş tahakkuku — ${yaziAy}` });
+          faturalar.push({ id: randomUUID(), tarih: bugun, firma_id: p.firmaId, firma_adi: p.adSoyad, gider_kategorisi: personelKat, fatura_tutari: p.brut, kdv: null, aciklama: `Maaş tahakkuku — ${yaziAy}` });
         }
       });
       v.sabitGiderler.forEach((g) => {
