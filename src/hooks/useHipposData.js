@@ -833,7 +833,7 @@ export default function useHipposData(scope = 'full') {
       setCariler((cr.data || []).map(rowToCari));
       setCariHareketler((ch.data || []).map(rowToHareket));
       // Eski günlerin fatura tahsilat kayıtları (kaynak='fatura') sadece o günün günsonu için gerekli, sonrasında temizlenir
-      const bugunBaslangicTs = (() => { const t = new Date(); t.setHours(0, 0, 0, 0); return t.getTime(); })();
+      const bugunBaslangicTs = (() => { const t = new Date(); t.setHours(0, 0, 0, 0); return t.getTime() - 90 * 24 * 60 * 60 * 1000; })(); // fatura tahsilat kayıtları 3 ay saklanır, bundan eskileri silinir
       const tumOdemeler = (co.data || []).map(rowToOdeme);
       const eskiFaturaOdemeSayisi = tumOdemeler.filter((o) => o.kaynak === 'fatura' && o.ts < bugunBaslangicTs).length;
       setCariOdemeler(tumOdemeler.filter((o) => !(o.kaynak === 'fatura' && o.ts < bugunBaslangicTs)));

@@ -22,7 +22,164 @@ function padLine(name, price, width = 28) {
   return `${name} ${dots} ${priceStr}`;
 }
 
-function FuturaModal({ onClose, futuraBaslangic, futuraBitis, futuraGunSec, onSubmit, donemOzet }) {
+// ==== GEÇMİŞ TARİHLİ MESAJ YARDIMCILARI (BAŞLANGIÇ) ====
+// Bu fonksiyonlar sadece hesap yapar, ekrana dokunmaz. Bakiyeyi şu anki bakiyeden geriye doğru sararak bulur.
+function msgTarihStr(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function msgGunBas(str) { return new Date(str + 'T00:00:00').getTime(); }
+function msgGunSon(str) { return new Date(str + 'T23:59:59.999').getTime(); }
+function msgKur(n) { return Math.round(n * 100) / 100; }
+
+// Bir carinin bilinen tüm hareket ve ödemeleri: canlı kayıtlar + faturalandırırken faturaya kopyalananlar
+function cariOlaylari(cariId, veri) {
+  const hareketler = veri.cariHareketler
+    .filter((h) => h.cariId === cariId)
+    .map((h) => ({ id: h.id, ts: h.ts, toplam: Number(h.toplam) || 0, urunler: h.urunler || [], personelAd: h.personelAd || null }));
+  const hIdler = new Set(hareketler.map((h) => h.id));
+  const odemeler = veri.cariOdemeler
+    .filter((o) => o.cariId === cariId)
+    .map((o) => ({ id: o.id, ts: o.ts, tutar: Number(o.tutar) || 0, tur: o.tur }));
+  const oIdler = new Set(odemeler.map((o) => o.id));
+  veri.cariFaturalar.filter((f) => f.cariId === cariId).forEach((f) => {
+    (Array.isArray(f.hareketlerSnapshot) ? f.hareketlerSnapshot : []).forEach((h) => {
+      if (hIdler.has(h.id)) return;
+      hIdler.add(h.id);
+      hareketler.push({ id: h.id, ts: h.ts, toplam: Number(h.toplam) || 0, urunler: h.urunler || [], personelAd: h.personelAd || null });
+    });
+    (Array.isArray(f.odemelerSnapshot) ? f.odemelerSnapshot : []).forEach((o) => {
+      if (oIdler.has(o.id)) return;
+      oIdler.add(o.id);
+      odemeler.push({ id: o.id, ts: o.ts, tutar: Number(o.tutar) || 0, tur: o.tur });
+    });
+    // Faturaya kısmi ödemeler: satırı silinmişse (3 aydan eski) fatura logundan tamamla, saati bilinmez
+    (f.odemeLog || []).forEach((l, i) => {
+      const tutar = Number(l.tutar) || 0;
+      const varMi = odemeler.some((o) => new Date(o.ts).toLocaleDateString('tr-TR') === l.tarih && o.tutar === tutar && o.tur === l.tur);
+      if (varMi) return;
+      const [g, a, y] = String(l.tarih).split('.').map(Number);
+      if (!g || !a || !y) return;
+      odemeler.push({ id: `log-${f.id}-${i}`, ts: new Date(y, a - 1, g, 12, 0, 0).getTime(), tutar, tur: l.tur, saatYok: true });
+    });
+  });
+  return { hareketler, odemeler };
+}
+
+// T anındaki bakiye = şu anki bakiye - T'den sonraki hareketler + T'den sonraki ödemeler
+function bakiyeZamaninda(cariId, T, veri, mevcutBakiye) {
+  const { hareketler, odemeler } = cariOlaylari(cariId, veri);
+  const h = hareketler.filter((x) => x.ts > T).reduce((s, x) => s + x.toplam, 0);
+  const o = odemeler.filter((x) => x.ts > T).reduce((s, x) => s + x.tutar, 0);
+  return msgKur(mevcutBakiye - h + o);
+}
+
+// Takvimde hangi günlerde sipariş / tahsilat var
+function gunIsaretleriHesapla(cariId, veri) {
+  const { hareketler, odemeler } = cariOlaylari(cariId, veri);
+  const m = {};
+  const isle = (ts, k) => { const g = msgTarihStr(ts); (m[g] = m[g] || {})[k] = true; };
+  hareketler.forEach((h) => isle(h.ts, 'siparis'));
+  odemeler.forEach((o) => isle(o.ts, 'tahsilat'));
+  veri.cariGecmis.filter((g) => g.cariId === cariId).forEach((g) => (g.odemelerDetay || []).forEach((o) => isle(o.ts, 'tahsilat')));
+  return m;
+}
+
+// Seçilen günde alınan ödemeler (her biri için o andan sonraki bakiye ile)
+function gunOdemeleriHesapla(cariId, dStr, veri, mevcutBakiye) {
+  const bas = msgGunBas(dStr);
+  const son = msgGunSon(dStr);
+  const { odemeler } = cariOlaylari(cariId, veri);
+  const liste = odemeler
+    .filter((o) => o.ts >= bas && o.ts <= son)
+    .map((o) => ({ ts: o.ts, tutar: o.tutar, tur: o.tur, bakiye: bakiyeZamaninda(cariId, o.saatYok ? son : o.ts, veri, mevcutBakiye) }));
+  // Ödemesi tamamlanıp kapanan (arşivlenen) cariler: bakiyeyi arşiv kaydının kendi hareket/ödemelerinden hesapla
+  veri.cariGecmis.filter((g) => g.cariId === cariId).forEach((g) => {
+    const hd = g.hareketlerDetay || [];
+    const od = g.odemelerDetay || [];
+    od.filter((o) => o.ts >= bas && o.ts <= son).forEach((o) => {
+      const bak = msgKur(
+        hd.filter((x) => x.ts <= o.ts).reduce((s, x) => s + (Number(x.tutar) || 0), 0)
+        - od.filter((x) => x.ts <= o.ts).reduce((s, x) => s + (Number(x.tutar) || 0), 0)
+      );
+      liste.push({ ts: o.ts, tutar: Number(o.tutar) || 0, tur: o.tur, bakiye: bak });
+    });
+  });
+  return liste.sort((a, b) => a.ts - b.ts);
+}
+
+// Geçmiş güne ait cari bakiye mesajı. Sonuç: { metin } veya { hata }
+function gecmisOzetMetni(cari, dStr, veri, mevcutBakiye) {
+  const bas = msgGunBas(dStr);
+  const son = msgGunSon(dStr);
+  const { hareketler, odemeler } = cariOlaylari(cari.id, veri);
+  const gunH = hareketler.filter((h) => h.ts >= bas && h.ts <= son).sort((a, b) => a.ts - b.ts);
+  const gunO = odemeler.filter((o) => o.ts >= bas && o.ts <= son).sort((a, b) => a.ts - b.ts);
+  if (gunH.length === 0) {
+    const eskiFatura = veri.cariFaturalar.find((f) => f.cariId === cari.id && !Array.isArray(f.hareketlerSnapshot) && f.donemBaslangic && f.donemBitis && dStr >= f.donemBaslangic && dStr <= f.donemBitis);
+    if (eskiFatura) {
+      const g = (s) => new Date(s + 'T12:00:00').toLocaleDateString('tr-TR');
+      return { hata: `Bu tarih ${g(eskiFatura.donemBaslangic)} – ${g(eskiFatura.donemBitis)} faturasına dahil, hareket kaydı yok (eski fatura)` };
+    }
+    return { hata: 'Bu tarihte sipariş kaydı bulunamadı' };
+  }
+  const iskonto = cari.iskonto || 0;
+  const toplam = gunH.reduce((s, h) => s + h.toplam, 0);
+  const toplamHam = iskonto > 0 ? Math.round(toplam / (1 - iskonto / 100)) : toplam;
+  const onceki = bakiyeZamaninda(cari.id, bas - 1, veri, mevcutBakiye);
+  const sonBakiye = bakiyeZamaninda(cari.id, son, veri, mevcutBakiye);
+  // Önceki bakiye eksi (müşterinin avansı) ise sipariş önce avanstan düşer
+  const avansDusulen = onceki < 0 && toplam > 0 ? Math.min(toplam, -onceki) : 0;
+  const tarihGoster = new Date(bas).toLocaleDateString('tr-TR');
+  const ayrac = '━━━━━━━━━━━━━━';
+  const siparisSatirlari = [];
+  if (cari.tip === 'firma') {
+    gunH.forEach((h, i) => {
+      siparisSatirlari.push(`${h.personelAd || `Sipariş ${i + 1}`}:`);
+      (h.urunler || []).forEach((u) => siparisSatirlari.push(`- ${u.ad} .. ${TL(u.fiyat)}`));
+      if (i < gunH.length - 1) siparisSatirlari.push('');
+    });
+  } else {
+    gunH.forEach((h) => (h.urunler || []).forEach((u) => siparisSatirlari.push(padLine(u.ad, u.fiyat))));
+  }
+  const bakiyeEtiketi = cari.tip === 'firma' ? 'Toplam Güncel Bakiye' : 'Güncel Cari Bakiye';
+  const metin = [
+    `🌟 ${cari.ad}`,
+    `📅 ${tarihGoster}`,
+    '',
+    '📋 Önceki Cari Bakiye',
+    bakiyeYazi(onceki),
+    '',
+    `🛒 ${tarihGoster} Siparişleri`,
+    ayrac,
+    ...siparisSatirlari,
+    ayrac,
+    ...(iskonto > 0 ? [`🏷️ %${iskonto} İskonto: -${TL(Math.round(toplamHam * (iskonto / 100)))}`, ''] : []),
+    `💰 Günün Toplamı: ${TL(toplam)}`,
+    ...(avansDusulen > 0 ? [`➖ Avanstan Düşülen: ${TL(avansDusulen)}`] : []),
+    ...(gunO.length > 0 ? ['', ...gunO.map((o) => `💳 Ödeme: ${TL(o.tutar)} (${o.tur})`)] : []),
+    '',
+    `📊 ${bakiyeEtiketi}: ${bakiyeYazi(sonBakiye)}`,
+    ...(sonBakiye < 0 ? ['(Bir sonraki siparişlerinizden düşülecektir)'] : []),
+    '',
+    'Afiyet olsun, iyi günler! 😇🍽️✨',
+    '',
+    '_(Bu bilgi mesajı, düzenli hesap mutabakatı kapsamında sistem tarafından otomatik oluşturulmuştur.)_',
+  ].join('\n');
+  return { metin };
+}
+
+// Geçmiş güne ait tahsilat mesajı. Sonuç: { metin } veya { hata }
+function gecmisTahsilatMetni(cari, dStr, veri, mevcutBakiye) {
+  const liste = gunOdemeleriHesapla(cari.id, dStr, veri, mevcutBakiye);
+  if (liste.length === 0) return { hata: 'Bu tarihte tahsilat kaydı bulunamadı' };
+  const kalan = liste[liste.length - 1].bakiye;
+  const metin = [
+    `💚 Merhaba ${cari.ad},`,
+    '',
+    ...liste.map((o) => `✅ ${TL(o.tutar)} tutarındaki tahsilatınız alınmıştır.`),
+    `📊 Güncel bakiyeniz: ${bakiyeYazi(kalan)}`,
+    ...(kalan < 0 ? ['(Bir sonraki siparişlerinizden
   const GUNLER = ['Pts', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
   const AYLAR = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
   const bugun = new Date();
@@ -429,6 +586,29 @@ export default function Cariler({ data, onNavigate }) {
     return { hareketler, odemeler, hareketToplam, odemeToplam, tutar: Math.max(0, hareketToplam - odemeToplam) };
   }
 
+  // ---- Geçmiş tarihli cari / tahsilat mesajı ----
+  const [mesajTarih, setMesajTarih] = useState(null);          // 'YYYY-MM-DD' veya null (= bugün)
+  const [mesajTakvimOpen, setMesajTakvimOpen] = useState(false);
+  // Başka bir cariye geçince tarih tekrar "Bugün"e döner (yanlış günün mesajı yanlışlıkla gitmesin)
+  useEffect(() => { setMesajTarih(null); setMesajTakvimOpen(false); }, [selectedCari?.id]);
+  const mesajVeri = { cariHareketler, cariOdemeler, cariFaturalar, cariGecmis };
+
+  function openOzetGecmis(dStr) {
+    if (!selectedCari) return;
+    const sonuc = gecmisOzetMetni(selectedCari, dStr, mesajVeri, getCariBakiye(selectedCari.id));
+    if (sonuc.hata) { showToast(sonuc.hata); return; }
+    setOzetText(sonuc.metin);
+    setOzetModalOpen(true);
+  }
+
+  function openTahsilatGecmis(dStr) {
+    if (!selectedCari) return;
+    const sonuc = gecmisTahsilatMetni(selectedCari, dStr, mesajVeri, getCariBakiye(selectedCari.id));
+    if (sonuc.hata) { showToast(sonuc.hata); return; }
+    setOdemeShareText(sonuc.metin);
+    setOdemeShareOpen(true);
+  }
+
   // ---- Fatura: hareketleri görüntüle / geri al ----
   const [faturaHareketModal, setFaturaHareketModal] = useState(null); // faturaId
   const [geriAlModal, setGeriAlModal] = useState(null);               // faturaId
@@ -609,7 +789,7 @@ export default function Cariler({ data, onNavigate }) {
         const faturaEdilmemis = cariHareketler
           .filter((h) => h.cariId === selectedCari.id)
           .reduce((s, h) => s + h.toplam, 0)
-          - cariOdemeler.filter((o) => o.cariId === selectedCari.id).reduce((s, o) => s + o.tutar, 0);
+          - cariOdemeler.filter((o) => o.cariId === selectedCari.id && (o.kaynak || 'hareket') !== 'fatura').reduce((s, o) => s + o.tutar, 0);
         const toplam = getCariBakiye(selectedCari.id);
         const satirlar = [];
         if (faturaEdilmis > 0) satirlar.push(`\uD83D\uDCCB Fatura Edilmi\u015f Bakiye: ${TL(faturaEdilmis)}`);
@@ -688,7 +868,7 @@ export default function Cariler({ data, onNavigate }) {
               .reduce((s, f) => s + (f.tutar - (f.tahsilatTutar || 0)), 0);
             const faturaEdilmemis = firmalar.reduce((s, c) => {
               const hareketler = cariHareketler.filter((h) => h.cariId === c.id).reduce((a, h) => a + h.toplam, 0);
-              const odemeler = cariOdemeler.filter((o) => o.cariId === c.id).reduce((a, o) => a + o.tutar, 0);
+              const odemeler = cariOdemeler.filter((o) => o.cariId === c.id && (o.kaynak || 'hareket') !== 'fatura').reduce((a, o) => a + o.tutar, 0);
               return s + Math.max(0, hareketler - odemeler);
             }, 0);
             const toplam = faturaEdilmis + faturaEdilmemis;
@@ -790,17 +970,40 @@ export default function Cariler({ data, onNavigate }) {
                   <div className="cr-summary-actions">
                     {/* Cari Bakiye Mesajı At */}
                     <div className="cr-ozet-btn-wrap">
-                      <button className="cr-ozet-btn" onClick={openOzet}><FileText size={14} /> Cari Bakiye Mesajı At</button>
+                      <button className="cr-ozet-btn" onClick={() => (mesajTarih ? openOzetGecmis(mesajTarih) : openOzet())}><FileText size={14} /> Cari Bakiye Mesajı At</button>
                       {(() => {
                         const bugunStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
                         const gonderildi = selectedCari.ozetTarih === bugunStr;
-                        if (!selectedCari.telefon) return <span className="cr-wa-etiket gri" title="Telefon yok">—</span>;
+                        if (mesajTarih) return null; if (!selectedCari.telefon) return <span className="cr-wa-etiket gri" title="Telefon yok">—</span>;
                         return (
                           <button
                             className={`cr-wa-etiket ${gonderildi ? 'gonderildi' : 'gonderilmedi'}`}
                             onClick={() => updateCari(selectedCari.id, { ozetTarih: gonderildi ? null : bugunStr })}
                           >
                             {gonderildi ? '\u2705 Gönderildi' : '\u274C Gönderilmedi'}
+                          </button>
+                        );
+                      })()}
+                    </div>
+                    {/* Mesaj tarihi seçici (geçmiş güne ait cari / tahsilat mesajı) */}
+                    <div className="cr-mt-wrap">
+                      <button
+                        className={`cr-mt-chip ${mesajTarih ? 'gecmis' : ''}`}
+                        onClick={() => setMesajTakvimOpen(true)}
+                        title="Mesaj tarihini seç"
+                      >
+                        📅 {mesajTarih ? new Date(mesajTarih + 'T12:00:00').toLocaleDateString('tr-TR') : 'Bugün'}
+                      </button>
+                      {mesajTarih && (() => {
+                        const odemeVar = gunOdemeleriHesapla(selectedCari.id, mesajTarih, mesajVeri, getCariBakiye(selectedCari.id)).length > 0;
+                        return (
+                          <button
+                            className="cr-ozet-btn cr-tahsilat-mesaj-btn"
+                            disabled={!odemeVar}
+                            title={odemeVar ? '' : 'Bu günde tahsilat kaydı yok'}
+                            onClick={() => openTahsilatGecmis(mesajTarih)}
+                          >
+                            <MessageCircle size={14} /> Tahsilat Mesajı At
                           </button>
                         );
                       })()}
@@ -812,7 +1015,7 @@ export default function Cariler({ data, onNavigate }) {
                         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                       }
                       const bugunStr = localDateStr(Date.now());
-                      const bugunOdeme = cariOdemeler.find((o) => o.cariId === selectedCari.id && localDateStr(o.ts) === bugunStr);
+                      if (mesajTarih) return null; const bugunOdeme = cariOdemeler.find((o) => o.cariId === selectedCari.id && localDateStr(o.ts) === bugunStr);
                       // Tam ödenen cari arşivlenince ödeme kaydı silinir — bugünkü arşiv kaydına da bak
                       const bugunArsiv = cariGecmis.filter((g) => g.cariId === selectedCari.id && localDateStr(g.ts) === bugunStr).sort((a, b) => b.ts - a.ts)[0];
                       const tahsilatVar = bugunOdeme || bugunArsiv || bugunTahsilatYapildi[selectedCari.id];
@@ -1184,6 +1387,15 @@ export default function Cariler({ data, onNavigate }) {
         />
       )}
 
+      {mesajTakvimOpen && selectedCari && (
+        <MesajTarihModal
+          onClose={() => setMesajTakvimOpen(false)}
+          seciliTarih={mesajTarih}
+          onSec={(s) => { setMesajTarih(s); setMesajTakvimOpen(false); }}
+          isaretler={gunIsaretleriHesapla(selectedCari.id, mesajVeri)}
+        />
+      )}
+
       {faturaHareketModal && (() => {
         const f = cariFaturalar.find((x) => x.id === faturaHareketModal);
         if (!f || !Array.isArray(f.hareketlerSnapshot)) return null;
@@ -1334,7 +1546,7 @@ export default function Cariler({ data, onNavigate }) {
               const gonderildi = selectedCari.ozetTarih === bugunStr;
               return (
                 <button
-                  className={`cr-ozet-gonderildi-btn ${gonderildi ? 'aktif' : ''}`}
+                  className={`cr-ozet-gonderildi-btn ${gonderildi ? 'aktif' : ''}`} disabled={!!mesajTarih}
                   onClick={() => updateCari(selectedCari.id, { ozetTarih: gonderildi ? null : bugunStr })}
                 >
                   {gonderildi ? '\u2705 Gönderildi olarak işaretlendi — iptal et' : '\u274C Gönderildi olarak işaretle'}
