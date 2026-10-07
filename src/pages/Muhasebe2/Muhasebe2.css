@@ -435,6 +435,14 @@
   background: rgba(233, 79, 55, 0.15);
   color: #b53a26 !important;
 }
+.m2-badge.iade {
+  background: rgba(245, 124, 0, 0.18);
+  color: #a04a00 !important;
+}
+.m2-table td.m2-neg {
+  color: #c62828 !important; /* iade faturası: eksi tutar */
+  font-weight: 700;
+}
 .m2-empty {
   padding: 24px 0;
   opacity: 0.6;
@@ -1054,3 +1062,8 @@
 .m2-gs-yemek th, .m2-gs-yemek td { padding: 6px 6px; white-space: normal; overflow-wrap: anywhere; vertical-align: middle; }
 .m2-gs-yemek th:first-child, .m2-gs-yemek td:first-child { width: 130px; }
 .m2-gs-yemek td .m2-input { min-width: 0; width: 100%; height: 38px; padding: 0 8px; text-align: right; }
+
+/* Çekmeceden verildi kutusu */
+.m2-cekmece { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; font-size: 13px; cursor: pointer; }
+.m2-cekmece input { width: 16px; height: 16px; }
+.m2-cekmece span { color: #393e41 !important; }

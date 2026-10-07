@@ -4,7 +4,7 @@ import '../GunSonu/GunSonu.css';
 import { TL, EKMEK_TURLERI_STOK } from '../../hooks/useHipposData';
 import { supabase } from '../../services/supabase';
 import GununMenusu from './GununMenusu';
-import { MiniHarcamaFormu, useGunlukHarcamalar } from '../GunSonu/GunSonu';
+import HizliGider, { useHizliGider } from '../../components/HizliGider/HizliGider';
 import {
   ListChecks, Calculator, Eye, EyeOff, Share2, Search, X,
   Banknote, CreditCard, UtensilsCrossed, BookOpen, ExternalLink, ChevronRight, ChevronDown,
@@ -60,7 +60,7 @@ export default function Settings({ data, onNavigate }) {
 
   // Hızlı nakit giderler — Gün Sonu ekranıyla AYNI veri kaynağı (Fatura/Fiş sheet'i).
   // Buradan girilen gider Gün Sonu'nda da görünür, orada girilen burada görünür.
-  const harcamalar = useGunlukHarcamalar();
+  const hg = useHizliGider(); // harcama paneli: Muhasebe2 defteri, Gün Sonu sayfasıyla aynı kayıtlar
 
   const [toast, setToast] = useState('');
   function showToast(msg) {
@@ -418,6 +418,14 @@ export default function Settings({ data, onNavigate }) {
               <span className="st-action-title">Ekmek Stok Ekleme</span>
               <span className="st-action-sub">Fırından gelen ekmeği stoğa işle</span>
             </button>
+            <button className="st-action-card st-action-stok" onClick={() => onNavigate('stoksiparis')}>
+              <span className="st-action-ico"><ClipboardList size={22} /></span>
+              <span className="st-action-title">
+                Stok Sipariş
+                {stokOkunmadi > 0 && <span className="st-action-badge">{stokOkunmadi}</span>}
+              </span>
+              <span className="st-action-sub">Mutfak/paketçi sayımı ve toptancı siparişi</span>
+            </button>
             <button className="st-action-card" onClick={() => onNavigate('muhasebe')}>
               <span className="st-action-ico"><Receipt size={22} /></span>
               <span className="st-action-title">Muhasebe</span>
@@ -437,14 +445,6 @@ export default function Settings({ data, onNavigate }) {
               <span className="st-action-ico"><Database size={22} /></span>
               <span className="st-action-title">Veri</span>
               <span className="st-action-sub">Tüm kayıtları gör, düzenle, sil</span>
-            </button>
-            <button className="st-action-card st-action-stok" onClick={() => onNavigate('stoksiparis')}>
-              <span className="st-action-ico"><ClipboardList size={22} /></span>
-              <span className="st-action-title">
-                Stok Sipariş
-                {stokOkunmadi > 0 && <span className="st-action-badge">{stokOkunmadi}</span>}
-              </span>
-              <span className="st-action-sub">Mutfak/paketçi sayımı ve toptancı siparişi</span>
             </button>
           </div>
 
@@ -605,17 +605,9 @@ export default function Settings({ data, onNavigate }) {
               herkes (şifresiz) buraya harcama yazabilsin diye her zaman görünür. */}
           <aside className="st-harcama-panel">
             <div className="st-harcama-head"><Calculator size={15} /><span>Harcamalar</span></div>
-            <div className="st-harcama-hint">Buraya girdiklerin Gün Sonu Al sayfasına aktarılır ve Fatura/Fiş kaydı oluşturur</div>
+            <div className="st-harcama-hint">Buraya girdiklerin Gün Sonu Al sayfasında da görünür ve Muhasebe2 defterine yazılır</div>
 
-            <span className="st-subhead">Günlük Kasadan Harcamalar</span>
-            <MiniHarcamaFormu baslik="" showToast={showToast}
-              kaynak="gunlukKasa" kayitlar={harcamalar.gunlukKasa} onDegisim={harcamalar.yenile} />
-            <div className="st-harcama-total"><span>GÜNLÜK KASA TOPLAMI</span><strong>{TL(harcamalar.gunlukKasaToplam)}</strong></div>
-
-            <span className="st-subhead" style={{ marginTop: 16 }}>Ana Kasadan Harcamalar</span>
-            <MiniHarcamaFormu baslik="" showToast={showToast}
-              kaynak="anaKasa" kayitlar={harcamalar.anaKasa} onDegisim={harcamalar.yenile} />
-            <div className="st-harcama-total"><span>ANA KASA TOPLAMI</span><strong>{TL(harcamalar.anaKasaToplam)}</strong></div>
+            <HizliGider hg={hg} />
           </aside>
         </div>
       </div>

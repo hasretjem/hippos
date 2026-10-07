@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Filter, Pencil, Plus, Share2 } from 'lucide-react';
 import { dosyaAdi, durumBul, ekstreGorunum, ekstrePdfTanimi, ekstrePdfUret, paraFmt, pdfPaylasVeyaIndir } from './ekstrePdf';
-import { ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, sayiFmt, tarihTR, trNorm, useModalKaydet } from './m2Ortak';
+import { ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, sayiFmt, tarihTR, trNorm, useModalKaydet, CekmeceKutusu } from './m2Ortak';
 import YemekKartlariSekmesi from './YemekKartlari';
 import TahakkuklarSekmesi from './Tahakkuklar';
 import GunsonlariSekmesi from './Gunsonlari';
@@ -471,6 +471,7 @@ function yontemPayload(tur, detay) {
 // ---------------------------------------------------------------------------
 function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
   const [iade, setIade] = useState(false); // false: Fatura/Fiş, true: İade Faturası (tutar artı girilir, sistem eksi işler)
+  const [cekmece, setCekmece] = useState(false); // nakit ödeme çekmeceden verildi (günlük kasa)
   const [tarih, setTarih] = useState(veri.bugun || bugunISO());
   const [firmaId, setFirmaId] = useState('');
   const [faturaNo, setFaturaNo] = useState('');
@@ -507,7 +508,8 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
     if (y.hata) return bildir(y.hata, true);
     setKaydediyor(true);
     try {
-      await onKaydet({ tarih, firmaId, faturaNo, aciklama, giderKategorisi: kategori, faturaTutari: tutar, kdv, iade, ...y });
+      await onKaydet({ tarih, firmaId, faturaNo, aciklama, giderKategorisi: kategori, faturaTutari: tutar, kdv, iade, ...(cekmece && tur === 'Nakit' && !iade && tarih === veri.bugun ? { kasaGrubu: 'gunluk' } : {}), ...y });
+      setCekmece(false);
       setFirmaId('');
       setFaturaNo('');
       setAciklama('');
@@ -594,6 +596,7 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
         onYeni={(odemeTuru) => onModal({ tur: 'yontem', odemeTuru, bitince: (y) => { setTur(y.odeme_turu); setDetay(y.ad); } })}
         cariNotu={iade ? 'Cari olarak kaydedilir; firmanın borcundan düşer, para hareketi olmaz.' : 'Cari olarak kaydedilir; firmanın borcuna eklenir.'}
       />
+      {tur === 'Nakit' && !iade && tarih === veri.bugun && <CekmeceKutusu deger={cekmece} onChange={setCekmece} />}
 
       <label className="m2-label">
         {iade ? 'İade Tutarı (KDV dahil)' : 'Fatura Tutarı (KDV dahil)'} <b>*</b>
@@ -655,6 +658,7 @@ const MAKBUZ_ACIKLAMA = {
 };
 
 function MakbuzFormu({ veri, bildir, onKaydet, onModal }) {
+  const [cekmece, setCekmece] = useState(false); // nakit ödeme çekmeceden verildi (günlük kasa)
   const [makbuzTuru, setMakbuzTuru] = useState('Tahsilat');
   const [tarih, setTarih] = useState(veri.bugun || bugunISO());
   const [firmaId, setFirmaId] = useState('');
@@ -680,7 +684,8 @@ function MakbuzFormu({ veri, bildir, onKaydet, onModal }) {
     if (y.hata) return bildir(y.hata, true);
     setKaydediyor(true);
     try {
-      await onKaydet({ makbuzTuru, tarih, firmaId, faturaNo, aciklama, tutar, ...y });
+      await onKaydet({ makbuzTuru, tarih, firmaId, faturaNo, aciklama, tutar, ...(cekmece && makbuzTuru === 'Ödeme' && tur === 'Nakit' && tarih === veri.bugun ? { kasaGrubu: 'gunluk' } : {}), ...y });
+      setCekmece(false);
       setFirmaId('');
       setFaturaNo('');
       setAciklama('');
@@ -749,6 +754,7 @@ function MakbuzFormu({ veri, bildir, onKaydet, onModal }) {
         yontemler={veri.odemeYontemleri}
         onYeni={(odemeTuru) => onModal({ tur: 'yontem', odemeTuru, bitince: (y) => { setTur(y.odeme_turu); setDetay(y.ad); } })}
       />
+      {tur === 'Nakit' && makbuzTuru === 'Ödeme' && tarih === veri.bugun && <CekmeceKutusu deger={cekmece} onChange={setCekmece} />}
 
       {tur && detay && (
         <p className="m2-hint">

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import './GunSonu.css';
 import { TL } from '../../hooks/useHipposData';
+import HizliGider, { useHizliGider } from '../../components/HizliGider/HizliGider';
 // NOT: html2canvas npm paketi olarak KURULMUYOR — proje github.dev üzerinden yönetildiği
 // için terminal/npm install her zaman pratik olmuyor. Bunun yerine ihtiyaç anında CDN'den
 // tarayıcıya doğrudan yükleniyor (loadHtml2Canvas fonksiyonu, aşağıda).
@@ -30,8 +31,35 @@ function parseNum(v) {
   return parseFloat(String(v ?? '').replace(',', '.')) || 0;
 }
 
+// İŞ GÜNÜ: gece 02:00'ye kadar önceki gün sayılır (gün sonu 00:00-02:00 arasında da alınabilsin).
+const ISGUNU_KAYMA = 2 * 3600 * 1000;
+const isGunuTR = () => new Date(Date.now() - ISGUNU_KAYMA).toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+const isGunuAnahtar = (ms) => new Date(ms - ISGUNU_KAYMA).toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
+function isGunuBaslangicMs() {
+  const d = new Date(Date.now() - ISGUNU_KAYMA);
+  d.setHours(2, 0, 0, 0);
+  return d.getTime();
+}
+
+// Taslak / kayıt karşılaştırması: yazılış biçimi (9.600 / 9600) önemsiz, değerler karşılaştırılır.
+const yuvarla2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+function imzaUret(p) {
+  const kupur = Object.entries(p.nakitKupurDetayi || {}).map(([k, v]) => [Number(k), parseInt(v, 10) || 0]).filter(([, v]) => v > 0).sort((a, b) => a[0] - b[0]);
+  const pos = (p.posTutarlari || []).map((r) => [String(r.label), yuvarla2(parseNum(r.tutar))]);
+  const yemek = Object.entries((p.yemekDetay && p.yemekDetay.tutarlar) || {}).map(([m, satir]) => [m, Object.entries(satir || {}).map(([k, v]) => [k, yuvarla2(parseNum(v))]).filter(([, v]) => v).sort()]).filter(([, l]) => l.length).sort();
+  const cd = p.cariDetay || {};
+  const sabit = Object.entries(cd.sabitler || {}).map(([k, v]) => [k, yuvarla2(parseNum(v))]).filter(([, v]) => v).sort();
+  const liste = (l) => (l || []).filter((x) => x && (x.ad || parseNum(x.tutar))).map((x) => [String(x.ad || ''), yuvarla2(parseNum(x.tutar))]);
+  return JSON.stringify({ kupur, avans: yuvarla2(p.kasaAvansi), pos, kolonlar: (p.yemekDetay && p.yemekDetay.kolonlar) || [], yemek, sabit, ekstra: liste(cd.ekstra), bireysel: liste(cd.bireysel) });
+}
+const kayitImzasi = (k) => imzaUret({ nakitKupurDetayi: k.nakitKupurDetayi, kasaAvansi: k.kasaAvansi, posTutarlari: k.posTutarlari, yemekDetay: k.yemekDetay, cariDetay: k.cariDetay });
+const POS_VARSAYILAN = [{ label: 'POS 1', tutar: '' }, { label: 'POS 2', tutar: '' }];
+const YEMEK_KOLON_VARSAYILAN = ['Şirket Telefonu', 'Paket'];
+const TASLAK_ONEK = 'hippos_gunsonu_taslak_v1:';
+
 export default function GunSonu({ data, onNavigate }) {
-  const { salesHistory, cariler, cariHareketler, cariOdemeler, cariGecmis, cariFaturalar } = data;
+  const { salesHistory, cariler, cariHareketler, cariOdemeler, cariGecmis } = data;
+
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   function showToast(msg) {
@@ -39,11 +67,11 @@ export default function GunSonu({ data, onNavigate }) {
     setTimeout(() => setToast(''), 2200);
   }
 
-  const bugunTarih = useMemo(() => new Date().toLocaleDateString('tr-TR'), []);
+  const bugunTarih = useMemo(() => isGunuTR(), []);
 
   const todaysSales = useMemo(() => {
-    const todayStr = new Date().toDateString();
-    return (salesHistory || []).filter((s) => s.ts && new Date(s.ts).toDateString() === todayStr);
+    const bugunAnahtar = isGunuAnahtar(Date.now());
+    return (salesHistory || []).filter((s) => s.ts && isGunuAnahtar(new Date(s.ts).getTime()) === bugunAnahtar);
   }, [salesHistory]);
   const ciro = useMemo(() => {
     const t = { NAKİT: 0, 'KREDİ KARTI': 0, 'YEMEK KARTI': 0, CARİ: 0 };
@@ -162,13 +190,8 @@ export default function GunSonu({ data, onNavigate }) {
   // Harcamalar artık ekranda ayrı bir state'te tutulmuyor — TEK KAYNAK Fatura/Fiş sheet'i.
   // Hem bu ekran hem Yönetim Paneli aynı hook'la aynı veriyi çeker; toplamlar da buradan
   // hesaplanır, böylece iki ekran arasında kopya/çelişki oluşmaz.
-  const {
-    anaKasa: anaKasaHarcamalar,
-    gunlukKasa: gunlukKasaHarcamalar,
-    anaKasaToplam,
-    gunlukKasaToplam,
-    yenile: harcamalariYenile,
-  } = useGunlukHarcamalar();
+  const hg = useHizliGider(); // Muhasebe2 defteri; Ayarlar'daki panelle aynı kayıtlar
+  const { anaKasaToplam, gunlukKasaToplam } = hg;
 
   const [yemekKolonlari, setYemekKolonlari] = useState(['Şirket Telefonu', 'Paket']);
   const [yemekTutarlari, setYemekTutarlari] = useState({});
@@ -196,23 +219,15 @@ export default function GunSonu({ data, onNavigate }) {
   const genelYemekToplami = YEMEK_KARTLARI.reduce((s, m) => s + yemekMarkaToplam(m), 0);
 
   const bugunFirmaTutarlari = useMemo(() => {
-    const gunBaslangic = new Date(); gunBaslangic.setHours(0, 0, 0, 0);
+    const gunBaslangic = new Date(isGunuBaslangicMs());
     const ts0 = gunBaslangic.getTime();
     const map = {};
     (cariler || []).filter((c) => c.tip === 'firma').forEach((c) => {
-      let tutar = (cariHareketler || []).filter((h) => h.cariId === c.id && h.ts >= ts0).reduce((s, h) => s + h.toplam, 0);
-      // Bugünü içeren bir aralık faturalandırıldıysa o hareketler silinmiştir; faturadaki kopyadan say.
-      // (Kopya, aynı id canlı listede varsa — örn. geri alınmışsa — iki kez sayılmaz.)
-      const canliIdler = new Set((cariHareketler || []).filter((h) => h.cariId === c.id).map((h) => h.id));
-      (cariFaturalar || [])
-        .filter((f) => f.cariId === c.id && Array.isArray(f.hareketlerSnapshot))
-        .forEach((f) => f.hareketlerSnapshot.forEach((h) => {
-          if (h.ts >= ts0 && !canliIdler.has(h.id)) tutar += Number(h.toplam) || 0;
-        }));
+      const tutar = (cariHareketler || []).filter((h) => h.cariId === c.id && h.ts >= ts0).reduce((s, h) => s + h.toplam, 0);
       map[c.ad] = (map[c.ad] || 0) + tutar;
     });
     return map;
-  }, [cariler, cariHareketler, cariFaturalar]);
+  }, [cariler, cariHareketler]);
 
   const otomatikCariListesi = useMemo(() => {
     // Firma carileri: sabit liste + bugün cari hareketi olan ve bakiyesi > 0 olanlar
@@ -224,7 +239,7 @@ export default function GunSonu({ data, onNavigate }) {
 
   // Bireysel cariler: bugün cari hareketi olan ve bakiyesi > 0 olan tip=bireysel cariler
   const bugunBireyselCariler = useMemo(() => {
-    const gunBaslangic = new Date(); gunBaslangic.setHours(0, 0, 0, 0);
+    const gunBaslangic = new Date(isGunuBaslangicMs());
     const ts0 = gunBaslangic.getTime();
     const acikOlanlar = (cariler || [])
       .filter((c) => c.tip === 'bireysel')
@@ -251,7 +266,7 @@ export default function GunSonu({ data, onNavigate }) {
 
   // Bugün tahsil edilen cari ödemeleri (havale hariç) — bilgi amaçlı, cirodan düşülmez
   const bugunCariOdemeOzeti = useMemo(() => {
-    const gunBaslangic = new Date(); gunBaslangic.setHours(0, 0, 0, 0);
+    const gunBaslangic = new Date(isGunuBaslangicMs());
     const ts0 = gunBaslangic.getTime();
     const ozet = {};
     (cariOdemeler || [])
@@ -264,42 +279,9 @@ export default function GunSonu({ data, onNavigate }) {
           .filter((o) => o.ts >= ts0 && o.tur !== 'HAVALE')
           .forEach((o) => { ozet[o.tur] = (ozet[o.tur] || 0) + o.tutar; });
       });
-    // Faturalandırırken silinen bugünkü ödemeler faturadaki kopyadan eklenir (canlıda varsa tekrar sayılmaz)
-    const canliOdemeIdler = new Set((cariOdemeler || []).map((o) => o.id));
-    (cariFaturalar || []).forEach((f) => {
-      (Array.isArray(f.odemelerSnapshot) ? f.odemelerSnapshot : [])
-        .filter((o) => o.ts >= ts0 && o.tur !== 'HAVALE' && !canliOdemeIdler.has(o.id))
-        .forEach((o) => { ozet[o.tur] = (ozet[o.tur] || 0) + Number(o.tutar || 0); });
-    });
     return ozet;
-  }, [cariOdemeler, cariGecmis, cariFaturalar]);
+  }, [cariOdemeler, cariGecmis]);
   const bugunCariOdemeToplamı = Object.values(bugunCariOdemeOzeti).reduce((s, v) => s + v, 0);
-
-  // Bugünkü cari ödemelerinin DETAYI: hangi cari, hangi ödeme türü, ne kadar, saat kaçta.
-  // Kaynaklar yukarıdaki özetle aynı (canlı ödemeler + arşivlenen cariler + faturalandırırken silinenler).
-  // Özetteki toplamı ve cirodan düşülen tutarı ETKİLEMEZ, sadece gösterim içindir.
-  const bugunCariOdemeDetay = useMemo(() => {
-    const gunBaslangic = new Date(); gunBaslangic.setHours(0, 0, 0, 0);
-    const ts0 = gunBaslangic.getTime();
-    const adBul = (cariId) => (cariler || []).find((c) => c.id === cariId)?.ad || 'Silinmiş cari';
-    const liste = [];
-    (cariOdemeler || []).filter((o) => o.ts >= ts0)
-      .forEach((o) => liste.push({ ts: o.ts, cari: adBul(o.cariId), tur: o.tur, tutar: Number(o.tutar) || 0 }));
-    (cariGecmis || []).filter((g) => g.ts >= ts0).forEach((g) => {
-      (g.odemelerDetay || []).filter((o) => o.ts >= ts0)
-        .forEach((o) => liste.push({ ts: o.ts, cari: adBul(g.cariId), tur: o.tur, tutar: Number(o.tutar) || 0 }));
-    });
-    const canliOdemeIdler = new Set((cariOdemeler || []).map((o) => o.id));
-    (cariFaturalar || []).forEach((f) => {
-      (Array.isArray(f.odemelerSnapshot) ? f.odemelerSnapshot : [])
-        .filter((o) => o.ts >= ts0 && !canliOdemeIdler.has(o.id))
-        .forEach((o) => liste.push({ ts: o.ts, cari: adBul(f.cariId), tur: o.tur, tutar: Number(o.tutar) || 0 }));
-    });
-    return liste.sort((a, b) => a.ts - b.ts);
-  }, [cariOdemeler, cariGecmis, cariFaturalar, cariler]);
-  const odemeDetayCirodanDusen = bugunCariOdemeDetay.filter((o) => o.tur !== 'HAVALE');
-  const odemeDetayHavale = bugunCariOdemeDetay.filter((o) => o.tur === 'HAVALE');
-  const odemeSaat = (ts) => new Date(ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
   const [cariOverrides, setCariOverrides] = useState({});
   const [cariEditingFor, setCariEditingFor] = useState(null);
@@ -408,9 +390,110 @@ export default function GunSonu({ data, onNavigate }) {
     }
   }
 
+  // ---- Taslak (yalnızca bu bilgisayarda, her değişiklikte yerel) + "Kaydedildi" durumu ----
+  // Sayfadan çıkıp dönünce her şey yerinde kalır. Sunucudan gelen veri formu yalnızca sayfa AÇILIRKEN bir kez doldurur;
+  // sen yazarken hiçbir cevap alanlara dokunmaz (rakam geldi-gitti olmaz).
+  const kayitliKayit = gecmisKayitlar.find((r) => r.tarih === bugunTarih) || null;
+  const hydrated = useRef(false);
+  const bazRef = useRef('');
+  const [taslakHazir, setTaslakHazir] = useState(false);
+  const [eskiTaslak, setEskiTaslak] = useState(null);
+
+  function formUygula(d) {
+    setNakitAdet(d.nakitAdet || {});
+    setKasaAvansi(typeof d.kasaAvansi === 'number' ? d.kasaAvansi : -2000);
+    setPosTutarlari(d.posTutarlari && d.posTutarlari.length ? d.posTutarlari : POS_VARSAYILAN);
+    setYemekKolonlari(d.yemekKolonlari && d.yemekKolonlari.length ? d.yemekKolonlari : YEMEK_KOLON_VARSAYILAN);
+    setYemekTutarlari(d.yemekTutarlari || {});
+    setCariOverrides(d.cariOverrides || {});
+    setEkstraCariler(d.ekstraCariler || []);
+  }
+  function kayittanForm(k) {
+    const overrides = {};
+    Object.entries((k.cariDetay && k.cariDetay.sabitler) || {}).forEach(([ad, v]) => {
+      if (Math.abs(parseNum(v) - (bugunFirmaTutarlari[ad] || 0)) > 0.004) overrides[ad] = parseNum(v);
+    });
+    return { nakitAdet: k.nakitKupurDetayi || {}, kasaAvansi: k.kasaAvansi, posTutarlari: k.posTutarlari, yemekKolonlari: k.yemekDetay && k.yemekDetay.kolonlar, yemekTutarlari: k.yemekDetay && k.yemekDetay.tutarlar, cariOverrides: overrides, ekstraCariler: (k.cariDetay && k.cariDetay.ekstra) || [] };
+  }
+  function taslagiYaz() {
+    try {
+      localStorage.setItem(TASLAK_ONEK + bugunTarih, JSON.stringify({ tarih: bugunTarih, kayit: { nakitAdet, kasaAvansi, posTutarlari, yemekKolonlari, yemekTutarlari, cariOverrides, ekstraCariler }, baz: bazRef.current, ts: Date.now() }));
+    } catch { /* yerel depo yoksa taslak sessizce kapalı */ }
+  }
+
+  useEffect(() => {
+    if (loading || hydrated.current) return;
+    hydrated.current = true;
+    let taslak = null;
+    try { taslak = JSON.parse(localStorage.getItem(TASLAK_ONEK + bugunTarih)); } catch { taslak = null; }
+    const kayitIz = kayitliKayit ? kayitImzasi(kayitliKayit) : '';
+    if (taslak && taslak.kayit) {
+      if (kayitliKayit && taslak.baz !== kayitIz) {
+        const kayitliyiYukle = window.confirm('Bu gün başka bir bilgisayarda kaydedilmiş ya da düzeltilmiş.\n\nKayıtlı veriyi yüklemek için Tamam, bu bilgisayardaki taslakla devam etmek için İptal.');
+        formUygula(kayitliyiYukle ? kayittanForm(kayitliKayit) : taslak.kayit);
+      } else {
+        formUygula(taslak.kayit);
+      }
+    } else if (kayitliKayit) {
+      formUygula(kayittanForm(kayitliKayit));
+    }
+    bazRef.current = kayitIz;
+    // Başka günlere ait taslaklar: kayıtlı olanlar 3 gün sonra temizlenir; KAYDEDİLMEMİŞ olan sessizce silinmez.
+    try {
+      const anahtarlar = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(TASLAK_ONEK) && key !== TASLAK_ONEK + bugunTarih) anahtarlar.push(key);
+      }
+      const kaydedilmemis = [];
+      anahtarlar.forEach((key) => {
+        const t = JSON.parse(localStorage.getItem(key) || 'null');
+        if (!t) return;
+        if (gecmisKayitlar.some((r) => r.tarih === t.tarih)) { if (Date.now() - (t.ts || 0) > 3 * 86400000) localStorage.removeItem(key); }
+        else kaydedilmemis.push({ ...t, key });
+      });
+      if (kaydedilmemis.length) setEskiTaslak(kaydedilmemis.sort((a, b) => (b.ts || 0) - (a.ts || 0))[0]);
+    } catch { /* yerel depo yoksa taslak özelliği sessizce kapalı */ }
+    setTaslakHazir(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  useEffect(() => {
+    if (taslakHazir) taslagiYaz();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taslakHazir, nakitAdet, kasaAvansi, posTutarlari, yemekKolonlari, yemekTutarlari, cariOverrides, ekstraCariler]);
+
+  function eskiTaslagiAl() {
+    formUygula(eskiTaslak.kayit);
+    try { localStorage.removeItem(eskiTaslak.key); } catch { /* */ }
+    setEskiTaslak(null);
+  }
+  function eskiTaslagiSil() {
+    if (!window.confirm(`${eskiTaslak.tarih} taslağı silinsin mi?`)) return;
+    try { localStorage.removeItem(eskiTaslak.key); } catch { /* */ }
+    setEskiTaslak(null);
+  }
+
+  const sabitlerHesap = otomatikCariListesi.reduce((acc, ad) => { acc[ad] = cariGosterilenTutar(ad); return acc; }, {});
+  const simdikiImza = imzaUret({ nakitKupurDetayi: nakitAdet, kasaAvansi, posTutarlari, yemekDetay: { kolonlar: yemekKolonlari, tutarlar: yemekTutarlari }, cariDetay: { sabitler: sabitlerHesap, ekstra: ekstraCariler, bireysel: bugunBireyselCariler.map((c) => ({ ad: c.ad, tutar: c.bugunTutar })) } });
+  const durum = !kayitliKayit ? 'yok' : simdikiImza !== kayitImzasi(kayitliKayit) ? 'degisti' : Math.abs(gunlukKasaToplam - (kayitliKayit.gunlukKasaToplam || 0)) > 0.004 ? 'harcama' : 'tamam';
+  const durumMetni = durum === 'tamam' ? `Kaydedildi ${kayitliKayit.kaydedenSaat || ''}`
+    : durum === 'yok' ? 'Kaydedilmedi'
+    : durum === 'degisti' ? 'Kaydedilmedi, değişiklik var'
+    : `Kaydedildi ${kayitliKayit.kaydedenSaat || ''} ama günlük harcama değişti (${TL(kayitliKayit.gunlukKasaToplam)} → ${TL(gunlukKasaToplam)}). Kaydet'e basınca güncellenir.`;
+
   async function kaydet() {
     setSaving(true);
     try {
+      // Başka bilgisayarda (ya da Günsonları'ndan) bu gün sonradan değiştiyse üstüne yazmadan önce sor.
+      try {
+        const taze = await (await fetch('/api/gunsonu')).json();
+        const tk = (taze.records || []).find((r) => r.tarih === bugunTarih);
+        if (tk && kayitImzasi(tk) !== bazRef.current && !window.confirm('Bu gün başka bir yerde kaydedilmiş ya da değiştirilmiş. Üstüne yazılsın mı?')) {
+          setSaving(false);
+          return;
+        }
+      } catch { /* kontrol yapılamazsa kayıt yine denenir */ }
       // ARTIK sayfada girilen HER ŞEY ayrı ayrı gönderiliyor — api/gunsonu.js bunları
       // Sheet'te ayrı sütunlara yazıyor (listeler kendi hücrelerinde JSON, toplamlar düz
       // sayı). Önceki sürümde sadece özet toplamlar gidiyordu; nakit kupür kırılımı, POS
@@ -492,11 +575,21 @@ export default function GunSonu({ data, onNavigate }) {
           kaynakId: `GUNSONU-POS-${bugunTarih}`,
         }),
       }).catch(() => {}); // POS kaydı günsonu kaydını bloklamamalı
-      showToast('Gün sonu kaydedildi');
+      // Günsonu Geliri: TL Kasa'ya giren nakit ciro (sayılan + günlük harcama) Muhasebe2 defterine yazılır; gün başına tek kayıt, tekrar kaydedince güncellenir.
+      let gelirYazildi = true;
+      try {
+        const gr = await fetch('/api/muhasebe2?resource=gunsonuGeliriSenkron', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tarih: bugunTarih }) });
+        gelirYazildi = gr.ok;
+      } catch { gelirYazildi = false; }
+      showToast(gelirYazildi ? 'Gün sonu kaydedildi' : 'Gün sonu kaydedildi ama kasa girişi yazılamadı — tekrar Kaydet\'e basın');
       if (data.clearHarcamaTaslagi) data.clearHarcamaTaslagi();
       const gsRes = await fetch('/api/gunsonu');
       const gsJson = await gsRes.json();
       setGecmisKayitlar(gsJson.records || []);
+      const yeniKayit = (gsJson.records || []).find((r) => r.tarih === bugunTarih);
+      if (yeniKayit) bazRef.current = kayitImzasi(yeniKayit);
+      taslagiYaz();
+      hg.yenile();
     } catch {
       showToast('Kaydedilemedi — bağlantıyı kontrol et');
     } finally {
@@ -518,14 +611,27 @@ export default function GunSonu({ data, onNavigate }) {
               <button className="gs-share-btn" onClick={() => { paylasFoto(); setMenuOpen(false); }} disabled={sharing}>
                 <Share2 size={15} /> {sharing ? 'Hazırlanıyor...' : 'Paylaş'}
               </button>
-              <button className="gs-save-btn" onClick={() => { kaydet(); setMenuOpen(false); }} disabled={saving}>
-                <Save size={16} /> {saving ? 'Kaydediliyor...' : 'Gün Sonu Kaydet'}
+              <button className="gs-save-btn" onClick={() => { kaydet(); setMenuOpen(false); }} disabled={saving || durum === 'tamam'}>
+                <Save size={16} /> {saving ? 'Kaydediliyor...' : durum === 'tamam' ? 'Kaydedildi' : 'Gün Sonu Kaydet'}
               </button>
             </div>
           </>
         )}
       </div>
 
+      {!loading && taslakHazir && hg.yuklendi && (
+        <div className={`gsd-bar gsd-${durum}`} role="status">
+          <span className="gsd-metin">{durumMetni}</span>
+          <button type="button" className="gsd-btn" onClick={kaydet} disabled={saving || durum === 'tamam'}>{saving ? 'Kaydediliyor...' : 'Kaydet'}</button>
+        </div>
+      )}
+      {!loading && eskiTaslak && (
+        <div className="gsd-bar gsd-degisti" role="status">
+          <span className="gsd-metin">{eskiTaslak.tarih} gününden kaydedilmemiş taslak var.</span>
+          <button type="button" className="gsd-btn" onClick={eskiTaslagiAl}>Bugüne al</button>
+          <button type="button" className="gsd-btn" onClick={eskiTaslagiSil}>Sil</button>
+        </div>
+      )}
       {loading ? (
         <p className="gs-loading">Yükleniyor...</p>
       ) : (
@@ -606,9 +712,9 @@ export default function GunSonu({ data, onNavigate }) {
               <div className="gs-row-total main" style={{marginTop:8}}><span>TOPLAM CARİ TUTARI</span><strong>{TL(cariToplam)}</strong></div>
 
               {/* Ödenen Cari Tutarları — havale hariç, cirodan DÜŞÜLÜR */}
-              {(bugunCariOdemeToplamı > 0 || odemeDetayHavale.length > 0) && (
+              {bugunCariOdemeToplamı > 0 && (
                 <div className="gs-cari-odeme-panel">
-                  <span className="gs-subhead gs-odeme-baslik">Ödenen Cari Tutarları</span>
+                  <span className="gs-subhead">Ödenen Cari Tutarları</span>
                   <p className="gs-hint" style={{margin:'2px 0 6px',fontSize:11}}>Havale hariç tahsilatlar toplam cirodan düşülür</p>
                   {Object.entries(bugunCariOdemeOzeti).map(([tur, tutar]) => (
                     <div key={tur} className="gs-cari-row">
@@ -616,37 +722,7 @@ export default function GunSonu({ data, onNavigate }) {
                       <strong>{TL(tutar)}</strong>
                     </div>
                   ))}
-                  {bugunCariOdemeToplamı > 0 && (
-                    <div className="gs-row-total"><span>TOPLAM TAHSİLAT</span><strong className="neg">−{TL(bugunCariOdemeToplamı)}</strong></div>
-                  )}
-                  {odemeDetayCirodanDusen.length > 0 && (
-                    <div className="gs-odeme-detay">
-                      <span className="gs-odeme-detay-baslik">Ödeme Detayı</span>
-                      {odemeDetayCirodanDusen.map((o, i) => (
-                        <div key={i} className="gs-odeme-detay-row">
-                          <div className="gs-odeme-detay-sol">
-                            <span className="gs-odeme-detay-ad">{o.cari}</span>
-                            <span className="gs-odeme-detay-alt">{odemeSaat(o.ts)} · <b className="gs-odeme-tur">{o.tur}</b></span>
-                          </div>
-                          <strong>−{TL(o.tutar)}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {odemeDetayHavale.length > 0 && (
-                    <div className="gs-odeme-detay">
-                      <span className="gs-odeme-detay-baslik havale">Havale ile alınanlar (cirodan düşülmez)</span>
-                      {odemeDetayHavale.map((o, i) => (
-                        <div key={i} className="gs-odeme-detay-row havale">
-                          <div className="gs-odeme-detay-sol">
-                            <span className="gs-odeme-detay-ad">{o.cari}</span>
-                            <span className="gs-odeme-detay-alt">{odemeSaat(o.ts)} · <b className="gs-odeme-tur">{o.tur}</b></span>
-                          </div>
-                          <strong>{TL(o.tutar)}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <div className="gs-row-total"><span>TOPLAM TAHSİLAT</span><strong className="neg">−{TL(bugunCariOdemeToplamı)}</strong></div>
                 </div>
               )}
             </section>
@@ -699,16 +775,7 @@ export default function GunSonu({ data, onNavigate }) {
           <div className="gs-col">
             <section className="gs-card">
               <h2><Calculator size={16} /> Harcamalar</h2>
-
-              <span className="gs-subhead">Ana Kasadan Harcamalar <span className="gs-hint">(günlük ciroyu etkilemez, yarına devirden düşer)</span></span>
-              <MiniHarcamaFormu baslik="" showToast={showToast}
-                kaynak="anaKasa" kayitlar={anaKasaHarcamalar} onDegisim={harcamalariYenile} />
-              <div className="gs-row-total main"><span>ANA KASA TOPLAMI</span><strong>{TL(anaKasaToplam)}</strong></div>
-
-              <span className="gs-subhead" style={{ marginTop: 14 }}>Günlük Kasadan Harcamalar <span className="gs-hint">(ciroya geri eklenir)</span></span>
-              <MiniHarcamaFormu baslik="" showToast={showToast}
-                kaynak="gunlukKasa" kayitlar={gunlukKasaHarcamalar} onDegisim={harcamalariYenile} />
-              <div className="gs-row-total main"><span>GÜNLÜK KASA TOPLAMI</span><strong>{TL(gunlukKasaToplam)}</strong></div>
+              <HizliGider hg={hg} />
             </section>
 
             <section className="gs-card">

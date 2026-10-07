@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, Eye, EyeOff, Plus } from 'lucide-react';
-import { ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, tarihTR, trNorm, useModalKaydet } from '../Muhasebe2/m2Ortak';
+import { CekmeceKutusu, ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, tarihTR, trNorm, useModalKaydet } from '../Muhasebe2/m2Ortak';
 import '../Muhasebe2/Muhasebe2.css';
 import './PersonelKlasoru.css';
 
@@ -757,6 +757,7 @@ function AvansModal({ personel, donem, ilkTarih, kayit, yontemler, onKaydet, onK
   const [tur, setTur] = useState(kayit?.odemeTuru || 'Nakit');
   const [sekil, setSekil] = useState(kayit?.odemeSekli || '');
   const [aciklama, setAciklama] = useState(kayit?.aciklama || '');
+  const [cekmece, setCekmece] = useState(false); // yeni avans çekmeceden verildi (günlük kasa); düzenlemede mevcut işaret korunur
   const { hata, bekliyor, calistir } = useModalKaydet(onKaydet, onKapat);
   const secenekler = yontemler.filter((y) => y.odeme_turu === tur);
 
@@ -765,7 +766,7 @@ function AvansModal({ personel, donem, ilkTarih, kayit, yontemler, onKaydet, onK
     if (!sekil && secenekler.length === 1) setSekil(secenekler[0].ad);
   }, [tur, yontemler]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const payload = { personelId: personel.id, id: kayit?.id, tarih, tutar, odemeTuru: tur, aciklama, ...(tur === 'Nakit' ? { kasa: sekil } : { odemeHesabi: sekil }) };
+  const payload = { personelId: personel.id, id: kayit?.id, tarih, tutar, odemeTuru: tur, aciklama, ...(cekmece && !duzenle && tur === 'Nakit' && tarih === bugunISO() ? { kasaGrubu: 'gunluk' } : {}), ...(tur === 'Nakit' ? { kasa: sekil } : { odemeHesabi: sekil }) };
   return (
     <ModalKabuk baslik={`${personel.adSoyad} — ${duzenle ? 'Avansı Düzenle' : 'Avans'}`} onKapat={onKapat}>
       <label className="m2-label">Avans Tarihi *</label>
@@ -797,6 +798,7 @@ function AvansModal({ personel, donem, ilkTarih, kayit, yontemler, onKaydet, onK
           </option>
         ))}
       </select>
+      {!duzenle && tur === 'Nakit' && tarih === bugunISO() && <CekmeceKutusu deger={cekmece} onChange={setCekmece} />}
       <label className="m2-label">Avans Açıklaması</label>
       <textarea className="m2-input" rows={2} value={aciklama} onChange={(e) => setAciklama(e.target.value)} placeholder="Avans neden verildi?" />
       <p className="m2-hint">Kaydedince {personel.adSoyad} carisine otomatik Ödeme Makbuzu, seçilen ödeme şekline karşı makbuz yazılır.</p>

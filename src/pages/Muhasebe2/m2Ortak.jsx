@@ -90,3 +90,13 @@ export function ModalAksiyon({ onKapat, onKaydet, devreDisi, bekliyor }) {
     </div>
   );
 }
+
+// Nakit ödemede "çekmeceden verildi" işareti: günlük kasa sayılır, Gün Sonu'nda nakit ciroya geri eklenir. Yalnızca bugünün ödemelerinde.
+export function CekmeceKutusu({ deger, onChange }) {
+  return (
+    <label className="m2-cekmece">
+      <input type="checkbox" checked={!!deger} onChange={(e) => onChange(e.target.checked)} aria-label="Çekmeceden verildi" />
+      <span>Çekmeceden verildi (günlük kasa, Gün Sonu'nda ciroya geri eklenir)</span>
+    </label>
+  );
+}

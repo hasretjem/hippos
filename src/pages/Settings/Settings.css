@@ -52,7 +52,11 @@
 }
 
 /* ---- Üst aksiyon kartları ---- */
-.st-actions-row { display: flex; gap: 16px; }
+.st-actions-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
+/* Kart sayısı 8'e inince (Muhasebe kartı kalkınca) kendiliğinden 4 + 4 olur */
+.st-actions-row:has(> :nth-child(8):last-child) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1200px) { .st-actions-row, .st-actions-row:has(> :nth-child(8):last-child) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .st-actions-row, .st-actions-row:has(> :nth-child(8):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .st-action-card {
   flex: 1;
   background: var(--panel);
