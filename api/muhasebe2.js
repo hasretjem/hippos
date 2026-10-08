@@ -81,6 +81,12 @@ export function gelirGrupId(iso) {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }
 
+// Ödeal POS (kredi kartı) geliri de gün başına TEK kayıt: ayrı bir grup_id (nakit geliriyle karışmaz).
+export function odealGrupId(iso) {
+  const h = createHash('md5').update(`gunsonu-odeal-${iso}`).digest('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+}
+
 function tarihKontrol(tarih) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(tarih || ''))) throw new HataMesaji(400, 'Tarih geçersiz');
   return tarih;
@@ -1156,7 +1162,7 @@ async function gelirSenkron(db, tr) {
   const { data: tl, error: tlHata } = await db.from('m2_firmalar').select('id').eq('ad', 'TL Kasa').maybeSingle();
   kontrol(tlHata);
   if (!tl) return;
-  const { data: gs, error: gsHata } = await db.from('gs_kayitlar').select('toplam_nakit,gunluk_kasa_toplam').eq('tarih', tr).maybeSingle();
+  const { data: gs, error: gsHata } = await db.from('gs_kayitlar').select('toplam_nakit,gunluk_kasa_toplam,pos_toplam').eq('tarih', tr).maybeSingle();
   kontrol(gsHata);
   const sayilan = gs ? gsSayi(gs.toplam_nakit) : 0;
   const gunluk = gs ? gsSayi(gs.gunluk_kasa_toplam) : 0;
@@ -1169,6 +1175,20 @@ async function gelirSenkron(db, tr) {
     p_aciklama: `Günsonu geliri — sayılan ${fmt(sayilan)} + günlük harcama ${fmt(gunluk)}`,
   });
   kontrol(error);
+
+  // Kredi kartı (POS) toplamı: tek anlaşmalı POS (Ödeal), komisyon yok → Ödeal Kredi Kartı'na otomatik makbuz.
+  const { data: od, error: odHata } = await db.from('m2_firmalar').select('id').eq('ad', 'Ödeal Kredi Kartı').maybeSingle();
+  kontrol(odHata);
+  if (!od) return;
+  const pos = gs ? gsSayi(gs.pos_toplam) : 0;
+  const { error: odYaz } = await db.rpc('m2_gunsonu_geliri', {
+    p_grup: odealGrupId(iso),
+    p_tarih: iso,
+    p_firma: od.id,
+    p_tutar: pos,
+    p_aciklama: `Günsonu kredi kartı (POS) — ${fmt(pos)}`,
+  });
+  kontrol(odYaz);
 }
 
 // Harcama paneli verisi: günün TL Kasa nakit çıkışları, günlük/ana bloklara ayrılmış, toplamlar ve giriş kutusu seçenekleri.
@@ -1623,6 +1643,15 @@ export default async function handler(req, res) {
     }
 
     // ---------- Günsonları ----------
+    // Günün ana/günlük kasa harcama satırları (Muhasebe2 defterinden); toplamlar günsonu kaydının kendisindedir.
+    if (req.method === 'GET' && resource === 'gunsonuHarcama') {
+      const iso = gsTarihIso(req.query?.tarih);
+      if (!iso) throw new HataMesaji(400, 'Tarih geçersiz');
+      const v = await hizliGiderVeri(db, iso);
+      const donustur = (l) => l.map((x) => ({ id: x.id, firmaAdi: x.ad, aciklama: x.aciklama || '', tutar: x.tutar }));
+      return res.status(200).json({ anaKasa: donustur(v.anaKasa), gunlukKasa: donustur(v.gunlukKasa) });
+    }
+
     if (req.method === 'GET' && resource === 'gunsonuListe') {
       const liste = await gsHepsi(db);
       return res.status(200).json({ kayitlar: liste.map(gsKayit) });

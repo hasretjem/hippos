@@ -518,23 +518,7 @@ export default function GunSonu({ data, onNavigate }) {
       });
       if (!res.ok) throw new Error('save failed');
 
-      // Günsonu POS toplamını Banka/Kart Hareketleri sheet'ine otomatik yaz
-      // (tüm POS'lar Ödeal üzerinden, tek kalem olarak). kaynakId sayesinde aynı gün
-      // tekrar kaydedilirse yeni satır açılmaz, o günün POS satırı güncellenir.
-      await fetch('/api/muhasebe?resource=bankaKartHareketEkle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tarih: bugunTarih,
-          hesapTuru: 'Kredi Kartı',
-          hesapAdi: 'Ödeal Kredi Kartı',
-          yon: 'GİREN',
-          tutar: posToplam,
-          aciklama: 'Günsonu postan gelen tutar',
-          kaynakId: `GUNSONU-POS-${bugunTarih}`,
-        }),
-      }).catch(() => {}); // POS kaydı günsonu kaydını bloklamamalı
-      // Günsonu Geliri: TL Kasa'ya giren nakit ciro (sayılan + günlük harcama) Muhasebe2 defterine yazılır; gün başına tek kayıt, tekrar kaydedince güncellenir.
+      // Günsonu Geliri: TL Kasa'ya giren nakit ciro (sayılan + günlük harcama) ve Ödeal Kredi Kartı'na giren POS toplamı Muhasebe2 defterine yazılır; gün başına tek kayıt, tekrar kaydedince güncellenir.
       let gelirYazildi = true;
       try {
         const gr = await fetch('/api/muhasebe2?resource=gunsonuGeliriSenkron', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tarih: bugunTarih }) });

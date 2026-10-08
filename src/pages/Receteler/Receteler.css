@@ -1,0 +1,104 @@
+/* Reçeteler — Muhasebe2'nin koyu teması üzerine; yalnızca rc- önekli sınıflar. Yazı renkleri !important (genel stiller yazıyı beyaz yapıyor). */
+.rc-shell .m2-title small.rc-sari { color: #f5a623 !important; background: rgba(245, 166, 35, 0.16); }
+.rc-kart > .m2-hint { margin-bottom: 10px; }
+.rc-urun-tablo .m2-btn.mini, .rc-esle-tablo .m2-btn.mini, .rc-ym-tablo .m2-btn.mini { height: 34px; padding: 0 14px; }
+.rc-modal .m2-table td { vertical-align: middle; color: #393e41 !important; }
+.rc-kart { padding: 16px 18px 18px; }
+.rc-kart h4 { margin: 0 0 8px; font-size: 14px; font-weight: 800; color: #e94f37 !important; }
+.rc-modal { max-width: 880px !important; width: 100%; max-height: 92vh; overflow-y: auto; }
+.rc-modal .m2-modal-head h3 { color: #e94f37 !important; font-size: 18px; }
+
+.rc-chipler { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.rc-chipler .m2-chip b { margin-left: 4px; opacity: .75; }
+.rc-chip-uyari { border-color: #e94f37 !important; }
+.rc-arac { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+.rc-arac .m2-select, .rc-arac .m2-input { width: auto; min-width: 150px; height: 40px; }
+.rc-ara { position: relative; display: flex; align-items: center; }
+.rc-ara svg { position: absolute; left: 11px; color: rgba(57, 62, 65, .55) !important; pointer-events: none; }
+.rc-ara .m2-input { padding-left: 33px; min-width: 220px; }
+.rc-onay { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #393e41 !important; cursor: pointer; }
+.rc-onay input[type='checkbox'] { width: 17px; height: 17px; accent-color: #e94f37; }
+.rc-esik { width: 64px !important; min-width: 0 !important; text-align: center; padding: 0 6px; }
+.rc-tarih { min-width: 150px !important; }
+.rc-etiket { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: rgba(57, 62, 65, .65) !important; }
+.rc-bosluk { flex: 1; }
+.rc-kisa { width: 96px !important; min-width: 0 !important; flex: 0 0 auto; }
+.rc-toplu { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 9px 12px; margin-bottom: 10px; border-radius: 12px; background: rgba(233, 79, 55, .1); color: #393e41 !important; }
+.rc-toplu .m2-btn.mini { height: 36px; }
+
+.rc-kart .m2-table { min-width: 0; }
+.rc-urun-tablo { min-width: 980px !important; }
+.rc-ham-tablo { min-width: 1080px !important; }
+.rc-esle-tablo { min-width: 980px !important; }
+.rc-gecmis-tablo { min-width: 640px !important; }
+.rc-ym-tablo { min-width: 680px !important; }
+.rc-kart .m2-table td { vertical-align: middle; color: #393e41 !important; }
+.rc-ad { font-weight: 700; }
+.rc-islem { white-space: nowrap; }
+.rc-islem .m2-btn + .m2-btn { margin-left: 6px; }
+.rc-iyi { color: #2e7d32 !important; font-weight: 700; }
+.rc-kotu { color: #c62828 !important; font-weight: 700; }
+.rc-uyari { color: #b53a26 !important; font-weight: 700; }
+.rc-uyari-metin { margin: 8px 0 0; font-size: 12.5px; font-weight: 700; color: #b53a26 !important; }
+.rc-sonuk { font-size: 11.5px; color: rgba(57, 62, 65, .6) !important; font-weight: 600; }
+.rc-zamli td { background: rgba(245, 166, 35, .12); }
+.rc-mini-etiket { margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: rgba(57, 62, 65, .1); color: #393e41 !important; font-size: 10.5px; font-weight: 800; }
+.rc-link-ad { background: none; border: none; padding: 0; font-weight: 800; color: #393e41 !important; text-decoration: underline dotted; cursor: pointer; text-align: left; }
+.rc-link-ad:hover { color: #e94f37 !important; }
+.rc-link { background: none; border: none; padding: 0; margin-top: 4px; font-size: 12px; font-weight: 700; color: #e94f37 !important; cursor: pointer; text-decoration: underline; }
+
+.rc-rozet { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.rc-rozet.yok { background: rgba(233, 79, 55, .16); color: #b53a26 !important; }
+.rc-rozet.eksik { background: rgba(245, 166, 35, .24); color: #8a5a00 !important; }
+.rc-rozet.tamam { background: rgba(46, 125, 50, .15); color: #2e7d32 !important; }
+.rc-rozet.gerekmez { background: rgba(57, 62, 65, .12); color: #393e41 !important; }
+
+/* Seçim kutusu */
+.rc-sec { position: relative; min-width: 200px; }
+.rc-sec-liste { position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px); max-height: 280px; overflow-y: auto; background: #fff; border: 1.5px solid rgba(57, 62, 65, .2); border-radius: 12px; box-shadow: 0 10px 28px rgba(0, 0, 0, .25); padding: 4px; min-width: 250px; }
+.rc-sec-grup { padding: 6px 10px 2px; font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: #e94f37 !important; }
+.rc-sec-oge { display: flex; justify-content: space-between; gap: 10px; width: 100%; padding: 8px 10px; border: none; background: none; border-radius: 8px; cursor: pointer; text-align: left; font-weight: 700; color: #393e41 !important; }
+.rc-sec-oge:hover, .rc-sec-oge.on { background: rgba(233, 79, 55, .1); }
+.rc-sec-oge small { color: rgba(57, 62, 65, .6) !important; font-weight: 600; white-space: nowrap; }
+.rc-sec-oge.yeni { color: #e94f37 !important; border-top: 1px dashed rgba(57, 62, 65, .2); border-radius: 0 0 8px 8px; margin-top: 4px; }
+.rc-sec-bos { padding: 10px; font-size: 13px; color: rgba(57, 62, 65, .6) !important; }
+
+/* Reçete düzenleme */
+.rc-gerekmez { display: flex; align-items: center; gap: 8px; margin: 12px 0; padding: 10px 12px; border-radius: 12px; background: rgba(57, 62, 65, .07); font-weight: 700; font-size: 13px; color: #393e41 !important; cursor: pointer; }
+.rc-gerekmez input { width: 18px; height: 18px; accent-color: #e94f37; }
+.rc-ym-ust { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 10px 0; }
+.rc-tablo-kaydir { margin: 10px 0; overflow: visible; }
+.rc-recete-tablo { min-width: 0 !important; }
+.rc-recete-tablo th { position: static; }
+.rc-hucre-sec { min-width: 240px; }
+.rc-miktar { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.rc-miktar .m2-input { width: 90px; height: 38px; text-align: right; }
+.rc-miktar span { min-width: 28px; font-size: 12px; font-weight: 700; color: rgba(57, 62, 65, .7) !important; text-align: left; }
+.rc-paket { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: #393e41 !important; }
+.rc-paket input { width: 17px; height: 17px; accent-color: #e94f37; }
+.rc-ikon-btn { background: none; border: none; cursor: pointer; padding: 6px; border-radius: 8px; font-size: 18px; line-height: 1; color: rgba(57, 62, 65, .65) !important; }
+.rc-ikon-btn:hover { background: rgba(233, 79, 55, .12); color: #b53a26 !important; }
+.rc-yeni-malzeme { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; border: 1.5px dashed rgba(233, 79, 55, .6); }
+.rc-yeni-malzeme .m2-input, .rc-yeni-malzeme .m2-select { width: auto; min-width: 140px; height: 38px; }
+.rc-yeni-malzeme b { color: #e94f37 !important; }
+.rc-ozet { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; }
+.rc-ozet > div { padding: 10px 12px; border-radius: 12px; background: rgba(57, 62, 65, .07); display: flex; flex-direction: column; gap: 2px; }
+.rc-ozet span { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: rgba(57, 62, 65, .65) !important; }
+.rc-ozet b { font-size: 17px; color: #393e41 !important; }
+.rc-ozet .iyi b { color: #2e7d32 !important; }
+.rc-ozet .kotu b { color: #c62828 !important; }
+.rc-ozet small { font-size: 12px; }
+
+.rc-gecmis-ust { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 8px 0; font-size: 13px; color: #393e41 !important; }
+.rc-fiyat-ekle { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(57, 62, 65, .25); }
+.rc-fiyat-ekle b { color: #e94f37 !important; }
+.rc-fiyat-ekle .m2-input { width: auto; flex: 1 1 140px; height: 40px; }
+
+.rc-kar-izgara { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 18px; }
+.rc-kar-tablo { min-width: 0 !important; }
+
+@media (max-width: 760px) {
+  .rc-ym-ust { grid-template-columns: 1fr; }
+  .rc-kar-izgara { grid-template-columns: 1fr; }
+  .rc-ara .m2-input { min-width: 0; }
+}

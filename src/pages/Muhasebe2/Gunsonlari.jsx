@@ -42,7 +42,6 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
   const [gun, setGun] = useState('tumu');
   const [detay, setDetay] = useState(null); // { tip, kayit }
   const [duzenle, setDuzenle] = useState(null);
-  const [harcamalar, setHarcamalar] = useState({});
   const kilit = useRef(false);
 
   const yukle = useCallback(async () => {
@@ -84,35 +83,22 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
     [kayitlar, yil, ay, gun],
   );
 
-  // Ana kasa / günlük kasa harcama sütunları Muhasebe1'in gider kayıtlarından gelir (Gün Sonu ekranı harcamaları oraya yazar).
-  const tarihAnahtar = gorunen.map((k) => k.tarih).join(',');
-  useEffect(() => {
-    if (!gorunen.length) return;
-    fetch(`/api/muhasebe?resource=gunlukHarcamalar&tarihler=${gorunen.map((k) => encodeURIComponent(k.tarih)).join(',')}`)
-      .then((r) => r.json())
-      .then((j) => setHarcamalar(j.gunler || {}))
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tarihAnahtar]);
-
   const toplam = useMemo(
     () =>
       gorunen.reduce(
         (a, k) => {
-          const h = harcamalar[k.tarih] || {};
           a.nakit += k.toplamNakitPara || 0;
           a.pos += k.posToplam || 0;
-          a.anaKasa += k.anaKasaToplam || 0;
-          a.anaKasaHarc += h.anaKasaToplam || 0;
-          a.gunlukHarc += h.gunlukKasaToplam || 0;
+          a.anaKasaHarc += k.anaKasaToplam || 0;
+          a.gunlukHarc += k.gunlukKasaToplam || 0;
           a.cari += k.cariToplam || 0;
           a.yemek += k.genelYemekToplami || 0;
           a.ciro += ciroToplam(k);
           return a;
         },
-        { nakit: 0, pos: 0, anaKasa: 0, anaKasaHarc: 0, gunlukHarc: 0, cari: 0, yemek: 0, ciro: 0 },
+        { nakit: 0, pos: 0, anaKasaHarc: 0, gunlukHarc: 0, cari: 0, yemek: 0, ciro: 0 },
       ),
-    [gorunen, harcamalar],
+    [gorunen],
   );
 
   async function sil(k) {
@@ -144,7 +130,7 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
     await yukle();
   }
 
-  const sutunSayisi = 13 + (duzenlemeModu ? 1 : 0);
+  const sutunSayisi = 12 + (duzenlemeModu ? 1 : 0);
 
   return (
     <div className="m2-card">
@@ -197,7 +183,6 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
               <th>Saat</th>
               <th className="sayi">Nakit</th>
               <th className="sayi">POS</th>
-              <th className="sayi">Ana Kasa</th>
               <th className="sayi">Ana Kasa Harc.</th>
               <th className="sayi">Günlük Kasa Harc.</th>
               <th className="sayi">Cari</th>
@@ -223,9 +208,8 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
             ) : (
               gorunen.map((k) => {
                 const d = tarihCoz(k.tarih);
-                const h = harcamalar[k.tarih] || {};
-                const anaH = h.anaKasaToplam || 0;
-                const gunH = h.gunlukKasaToplam || 0;
+                const anaH = k.anaKasaToplam || 0;
+                const gunH = k.gunlukKasaToplam || 0;
                 return (
                   <tr key={k.tarih}>
                     <td>{d ? d.y : '-'}</td>
@@ -234,7 +218,6 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
                     <td>{k.kaydedenSaat || '-'}</td>
                     <td className="sayi">{sayiYaz(k.toplamNakitPara)}</td>
                     <td className="sayi">{sayiYaz(k.posToplam)}</td>
-                    <td className="sayi">{sayiYaz(k.anaKasaToplam)}</td>
                     <td className="sayi">
                       {sayiYaz(anaH)}
                       {anaH > 0 && <DetayDugme onClick={() => setDetay({ tip: 'anaKasaHarcamalar', kayit: k })} />}
@@ -278,7 +261,6 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
                 <td colSpan={4}>Toplam</td>
                 <td className="sayi">{sayiYaz(toplam.nakit)}</td>
                 <td className="sayi">{sayiYaz(toplam.pos)}</td>
-                <td className="sayi">{sayiYaz(toplam.anaKasa)}</td>
                 <td className="sayi">{sayiYaz(toplam.anaKasaHarc)}</td>
                 <td className="sayi">{sayiYaz(toplam.gunlukHarc)}</td>
                 <td className="sayi">{sayiYaz(toplam.cari)}</td>
@@ -325,7 +307,7 @@ function GunsonuDetayModal({ tip, kayit, onKapat }) {
   const [veri, setVeri] = useState(null);
   useEffect(() => {
     if (tip !== 'anaKasaHarcamalar' && tip !== 'gunlukKasaHarcamalar') return;
-    fetch(`/api/muhasebe?resource=gunlukHarcamalar&tarih=${encodeURIComponent(kayit.tarih)}`)
+    fetch(`/api/muhasebe2?resource=gunsonuHarcama&tarih=${encodeURIComponent(kayit.tarih)}`)
       .then((r) => r.json())
       .then((j) => setVeri(j))
       .catch(() => setVeri({ anaKasa: [], gunlukKasa: [] }));
@@ -335,7 +317,7 @@ function GunsonuDetayModal({ tip, kayit, onKapat }) {
     if (tip === 'anaKasaHarcamalar' || tip === 'gunlukKasaHarcamalar') {
       if (!veri) return <p className="m2-empty">Yükleniyor…</p>;
       const liste = tip === 'anaKasaHarcamalar' ? veri.anaKasa : veri.gunlukKasa;
-      if (!liste || !liste.length) return <p className="m2-empty">Bu güne ait harcama kaydı yok.</p>;
+      if (!liste || !liste.length) return <p className="m2-empty">Bu güne ait satır detayı bulunamadı (toplam günsonu kaydındadır).</p>;
       return (
         <table className="m2-table m2-gs-kucuk">
           <thead>

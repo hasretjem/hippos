@@ -1149,6 +1149,7 @@
   vertical-align: middle;
 }
 .st-action-stok .st-action-title { display: inline-flex; align-items: center; }
+.st-action-badge.sari { background: #f5a623; color: #393e41 !important; margin-left: 4px; }
 /* ---- Cariden Tahsilatlar paneli ---- */
 .st-tahsilat-blok {
   margin-top: 12px; padding-top: 12px;

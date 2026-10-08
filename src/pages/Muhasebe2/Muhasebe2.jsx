@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Filter, Pencil, Plus, Share2 } from 'lucide-react';
+import { ArrowLeft, FileUp, Filter, Pencil, Plus, Share2 } from 'lucide-react';
 import { dosyaAdi, durumBul, ekstreGorunum, ekstrePdfTanimi, ekstrePdfUret, paraFmt, pdfPaylasVeyaIndir } from './ekstrePdf';
 import { ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, sayiFmt, tarihTR, trNorm, useModalKaydet, CekmeceKutusu } from './m2Ortak';
 import YemekKartlariSekmesi from './YemekKartlari';
 import TahakkuklarSekmesi from './Tahakkuklar';
 import GunsonlariSekmesi from './Gunsonlari';
+import XmlCekmece from './XmlCekmece';
+import { rcApi } from '../Receteler/rcOrtak';
 import { FILTRE_KOLONLARI, FiltreMenu, bosSecimler, filtreUygula, varsayilanTarihSecimi } from './DatalarFiltre';
 import './Muhasebe2.css';
 
@@ -20,6 +22,37 @@ const FATURA_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi', 'Cari']
 const MAKBUZ_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi'];
 const MAKS_GECMIS = 3;
 const KAYNAK_ETIKET = { yemek_karti: 'Yemek Kartları', tahakkuk: 'Tahakkuklar', avans: 'Personel Klasörü', izin: 'Personel Klasörü' };
+
+// XML faturadaki tedarikçi adını Muhasebe2 firmalarıyla eşler (tam eşleşme, sonra kelime benzerliği).
+const FIRMA_DURAK = new Set(['ltd', 'sti', 'şti', 'as', 'aş', 'a.ş', 'a.ş.', 'san', 'tic', 've', 'limited', 'anonim', 'sirketi', 'şirketi', 'ticaret', 'sanayi', 'gida', 'gıda', 'paz', 'pazarlama', 'ith', 'ihr']);
+function firmaKelimeleri(ad) {
+  return new Set(
+    trNorm(ad)
+      .replace(/[.,;:()\-/&]/g, ' ')
+      .split(/\s+/)
+      .filter((k) => k.length > 1 && !FIRMA_DURAK.has(k)),
+  );
+}
+function firmaBul(firmalar, tedarikciAdi) {
+  const hedef = firmaKelimeleri(tedarikciAdi);
+  if (!hedef.size) return null;
+  let en = null;
+  let enPuan = 0;
+  firmalar
+    .filter((f) => !f.firma_turu || f.firma_turu === 'Firma')
+    .forEach((f) => {
+      const k = firmaKelimeleri(f.ad);
+      if (!k.size) return;
+      let ortak = 0;
+      k.forEach((x) => hedef.has(x) && (ortak += 1));
+      const puan = ortak / (k.size + hedef.size - ortak);
+      if (puan > enPuan) {
+        enPuan = puan;
+        en = f;
+      }
+    });
+  return enPuan >= 0.6 ? en : null;
+}
 
 // Bakiye: pozitif = bizim borcumuz, negatif = firma bize borçlu.
 function bakiyeEtiketi(b) {
@@ -37,6 +70,9 @@ export default function Muhasebe2({ onNavigate }) {
   const [toast, setToast] = useState(null);
   const [modal, setModal] = useState(null); // {tur, ad, odemeTuru, bitince}
   const [sekme, setSekme] = useState('giris'); // 'giris' | 'datalar'
+  const [xmlAcik, setXmlAcik] = useState(false); // yüklenen XML faturalar çekmecesi (varsayılan kapalı)
+  const [xmlBekleyen, setXmlBekleyen] = useState(0);
+  const [doldur, setDoldur] = useState(null); // { key, fatura } — çekmeceden "Aktar" ile forma gönderilir
   const zamanlayici = useRef(null);
 
   const bildir = useCallback((mesaj, hataMi = false) => {
@@ -56,6 +92,9 @@ export default function Muhasebe2({ onNavigate }) {
   useEffect(() => {
     yukle();
   }, [yukle]);
+  useEffect(() => {
+    rcApi('xmlSayi').then((j) => setXmlBekleyen(j.bekleyen || 0)).catch(() => {});
+  }, []);
 
   // ---- Düzenleme Modu ve geri/ileri alma (Ctrl+Z / Ctrl+Shift+Z, son 3 işlem; yalnızca bu oturumda) ----
   const [duzenlemeModu, setDuzenlemeModu] = useState(false);
@@ -265,10 +304,37 @@ export default function Muhasebe2({ onNavigate }) {
       {/* Formlar sekme değişince silinmesin diye gizlenir, kaldırılmaz. */}
       <div className="m2-grid" style={{ display: sekme === 'giris' ? undefined : 'none' }}>
         <div className="m2-card">
-          <FisFaturaFormu veri={veri} bildir={bildir} onKaydet={fisFaturaKaydet} onModal={setModal} />
+          <FisFaturaFormu
+            veri={veri}
+            bildir={bildir}
+            onKaydet={fisFaturaKaydet}
+            onModal={setModal}
+            doldur={doldur}
+            xmlBekleyen={xmlBekleyen}
+            onXmlAc={() => setXmlAcik((a) => !a)}
+            onXmlKullanildi={async (id) => {
+              try {
+                await rcApi('xmlDurum', { method: 'POST', body: { id, durum: 'kullanildi' } });
+                setXmlBekleyen((n) => Math.max(0, n - 1));
+              } catch {
+                /* fatura kaydedildi; yalnızca çekmece işareti güncellenemedi */
+              }
+            }}
+          />
         </div>
-        <div className="m2-card">
+        <div className="m2-card m2-xc-sarmal">
           <MakbuzFormu veri={veri} bildir={bildir} onKaydet={makbuzKaydet} onModal={setModal} />
+          {xmlAcik && (
+            <XmlCekmece
+              bildir={bildir}
+              onKapat={() => setXmlAcik(false)}
+              onSayi={setXmlBekleyen}
+              onAktar={(fatura) => {
+                setDoldur({ key: Date.now(), fatura });
+                setXmlAcik(false);
+              }}
+            />
+          )}
         </div>
       </div>
       <div style={{ display: sekme === 'datalar' ? undefined : 'none' }}>
@@ -469,7 +535,7 @@ function yontemPayload(tur, detay) {
 // ---------------------------------------------------------------------------
 // Fiş / Fatura girişi
 // ---------------------------------------------------------------------------
-function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
+function FisFaturaFormu({ veri, bildir, onKaydet, onModal, doldur, xmlBekleyen, onXmlAc, onXmlKullanildi }) {
   const [iade, setIade] = useState(false); // false: Fatura/Fiş, true: İade Faturası (tutar artı girilir, sistem eksi işler)
   const [cekmece, setCekmece] = useState(false); // nakit ödeme çekmeceden verildi (günlük kasa)
   const [tarih, setTarih] = useState(veri.bugun || bugunISO());
@@ -483,6 +549,29 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
   const [detay, setDetay] = useState('');
   const [kaydediyor, setKaydediyor] = useState(false);
   const [formKey, setFormKey] = useState(0);
+  const [aktarilan, setAktarilan] = useState(null); // çekmeceden forma aktarılan XML fatura (kaydedilince "kullanıldı" olur)
+
+  // Çekmeceden "Aktar": formu doldurur, KAYDETMEZ — kontrol edip kaydetmek size kalır.
+  useEffect(() => {
+    if (!doldur) return;
+    const f = doldur.fatura;
+    const fm = firmaBul(veri.firmalar, f.tedarikciAdi);
+    setAktarilan(f);
+    setIade(false);
+    setCekmece(false);
+    setTarih(f.tarih || veri.bugun || bugunISO());
+    setFaturaNo(f.faturaNo || '');
+    setAciklama('');
+    setTutar(f.toplam != null ? String(f.toplam) : f.odenecek != null ? String(f.odenecek) : '');
+    setKdv(f.kdvTutari ? String(f.kdvTutari) : '');
+    setTur('');
+    setDetay('');
+    setFormKey((k) => k + 1);
+    setFirmaId(fm ? fm.id : '');
+    setKategori(fm && fm.varsayilan_kategori && veri.kategoriler.includes(fm.varsayilan_kategori) ? fm.varsayilan_kategori : '');
+    if (!fm) bildir(`"${f.tedarikciAdi}" için kayıtlı firma bulunamadı — firmayı seçin veya yeni firma ekleyin`, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doldur && doldur.key]);
 
   const firma = veri.firmalar.find((f) => f.id === firmaId) || null;
   const t = sayi(tutar);
@@ -519,6 +608,10 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
       setTur('');
       setDetay('');
       setFormKey((k) => k + 1);
+      if (aktarilan) {
+        onXmlKullanildi(aktarilan.id);
+        setAktarilan(null);
+      }
     } catch (e) {
       bildir(e.message, true);
     } finally {
@@ -528,7 +621,20 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal }) {
 
   return (
     <>
-      <h2>Fatura / Fiş Girişi</h2>
+      <div className="m2-fis-baslik">
+        <h2>Fatura / Fiş Girişi</h2>
+        <button type="button" className="m2-xc-ac" onClick={onXmlAc} title="Yüklenen e-faturalardan formu doldur">
+          <FileUp size={14} /> XML faturalar {xmlBekleyen > 0 && <b>{xmlBekleyen}</b>}
+        </button>
+      </div>
+      {aktarilan && (
+        <div className="m2-xml-not">
+          <span>
+            XML'den aktarıldı: {aktarilan.tedarikciAdi} · No {aktarilan.faturaNo}. Alanları kontrol edip kaydedin; ödeme türünü siz seçin.
+          </span>
+          <button type="button" onClick={() => setAktarilan(null)}>Vazgeç</button>
+        </div>
+      )}
 
       <div className={`m2-toggle ${iade ? 'odeme' : ''}`} role="group" aria-label="Evrak türü">
         <span className="m2-toggle-thumb" />

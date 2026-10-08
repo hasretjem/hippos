@@ -52,6 +52,21 @@ export default function Settings({ data, onNavigate }) {
     cariOdemeler,
   } = data;
 
+  // Reçete hatırlatması: reçetesi yazılmamış (ve "gerekmez" işaretlenmemiş) aktif ürün sayısı
+  const [receteRozet, setReceteRozet] = useState({ receteYok: 0, fiyatEksik: 0 });
+  useEffect(() => {
+    let iptal = false;
+    fetch('/api/recete?resource=rozet')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!iptal && j) setReceteRozet({ receteYok: j.receteYok || 0, fiyatEksik: j.fiyatEksik || 0 });
+      })
+      .catch(() => {});
+    return () => {
+      iptal = true;
+    };
+  }, []);
+
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -425,6 +440,15 @@ export default function Settings({ data, onNavigate }) {
                 {stokOkunmadi > 0 && <span className="st-action-badge">{stokOkunmadi}</span>}
               </span>
               <span className="st-action-sub">Mutfak/paketçi sayımı ve toptancı siparişi</span>
+            </button>
+            <button className="st-action-card st-action-stok" onClick={() => onNavigate('receteler')}>
+              <span className="st-action-ico"><BookOpen size={22} /></span>
+              <span className="st-action-title">
+                Reçeteler
+                {receteRozet.receteYok > 0 && <span className="st-action-badge" title="Reçetesi yazılmamış ürün sayısı">{receteRozet.receteYok}</span>}
+                {receteRozet.fiyatEksik > 0 && <span className="st-action-badge sari" title="Malzeme fiyatı eksik olan reçete sayısı">{receteRozet.fiyatEksik}</span>}
+              </span>
+              <span className="st-action-sub">Ürün maliyeti, ham madde fiyatları ve kâr</span>
             </button>
             <button className="st-action-card" onClick={() => onNavigate('muhasebe')}>
               <span className="st-action-ico"><Receipt size={22} /></span>

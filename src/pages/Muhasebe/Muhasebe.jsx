@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './Muhasebe.css';
 import { TL } from '../../hooks/useHipposData';
 import { supabase } from '../../services/supabase';
-import FaturaXmlIce from './FaturaXmlIce/FaturaXmlIce';
 import {
   ArrowLeft, TrendingDown, TrendingUp, Truck, Users, ChefHat,
   Plus, Upload, X, Check, Search, MessageCircle, Trash2, FileSpreadsheet, CreditCard,
@@ -204,9 +203,6 @@ export default function Muhasebe({ onNavigate }) {
         <button className={anaTab === 'yemekKarti' ? 'active' : ''} onClick={() => sekmeyeGec('yemekKarti')}>
           <CreditCard size={15} /> Yemek Kartları
         </button>
-        <button className={anaTab === 'receteler' ? 'active' : ''} onClick={() => sekmeyeGec('receteler')}>
-          <ChefHat size={15} /> Reçeteler
-        </button>
       </div>
 
       <div className="mh-body">
@@ -217,7 +213,6 @@ export default function Muhasebe({ onNavigate }) {
         {ziyaretEdilenSekmeler.has('personel') && <div style={{ display: anaTab === 'personel' ? 'block' : 'none' }}><PersonelSekmesi showToast={showToast} /></div>}
         {ziyaretEdilenSekmeler.has('sabitGiderler') && <div style={{ display: anaTab === 'sabitGiderler' ? 'block' : 'none' }}><SabitGiderlerSekmesi showToast={showToast} /></div>}
         {ziyaretEdilenSekmeler.has('yemekKarti') && <div style={{ display: anaTab === 'yemekKarti' ? 'block' : 'none' }}><YemekKartiSekmesi showToast={showToast} /></div>}
-        {ziyaretEdilenSekmeler.has('receteler') && <div style={{ display: anaTab === 'receteler' ? 'block' : 'none' }}><ReceteSekmesi showToast={showToast} /></div>}
       </div>
 
       {toast && <div className="mh-toast">{toast}</div>}
@@ -231,7 +226,7 @@ export default function Muhasebe({ onNavigate }) {
               <button onClick={() => setXmlModalAcikGlobal(false)}><X size={18} /></button>
             </div>
             <div className="mh-drawer-body">
-              <FaturaXmlIce showToast={showToast} />
+              <p style={{ padding: 16, lineHeight: 1.5 }}>XML fatura yükleme artık yeni yerinde: Muhasebe2 &rsaquo; Fiş/Fatura &rsaquo; "XML faturalar" çekmecesi ve Ayarlar &rsaquo; Reçeteler &rsaquo; Fatura eşleme.</p>
             </div>
           </div>
         </div>
@@ -503,7 +498,7 @@ function FaturalarAltSekmesi({ showToast }) {
               <button onClick={() => { setXmlModalAcik(false); yukle(); }}><X size={18} /></button>
             </div>
             <div className="mh-drawer-body">
-              <FaturaXmlIce showToast={showToast} />
+              <p style={{ padding: 16, lineHeight: 1.5 }}>XML fatura yükleme artık yeni yerinde: Muhasebe2 &rsaquo; Fiş/Fatura &rsaquo; "XML faturalar" çekmecesi ve Ayarlar &rsaquo; Reçeteler &rsaquo; Fatura eşleme.</p>
             </div>
           </div>
         </div>
@@ -1297,7 +1292,7 @@ function SatislarAltSekmesi({ showToast }) {
               <button onClick={() => { setXmlModalAcik(false); yukle(); }}><X size={18} /></button>
             </div>
             <div className="mh-drawer-body">
-              <FaturaXmlIce showToast={showToast} />
+              <p style={{ padding: 16, lineHeight: 1.5 }}>XML fatura yükleme artık yeni yerinde: Muhasebe2 &rsaquo; Fiş/Fatura &rsaquo; "XML faturalar" çekmecesi ve Ayarlar &rsaquo; Reçeteler &rsaquo; Fatura eşleme.</p>
             </div>
           </div>
         </div>

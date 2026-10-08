@@ -1610,7 +1610,7 @@ export default function useHipposData(scope = 'full') {
     // Bilinçli olarak satış kaydından TAMAMEN AYRI, ASENKRON ve fire-and-forget: satış akışı
     // (Normal/Hızlı Satış/Paket/Masa/Cari, ödeme yöntemi fark etmeksizin — hepsi bu fonksiyona
     // uğruyor) reçete/maliyet hesabının sonucunu HİÇ beklemez, bir hata olsa bile satış
-    // etkilenmez. Reçete Sheets'te, maliyet hesabı Sheets'ten okunuyor (api/recete.js) —
+    // etkilenmez. Reçete ve ham madde fiyatları Supabase'de (api/recete.js) —
     // satış anındaki GÜNCEL maliyeti Supabase'e snapshot olarak yazıyoruz ki malzeme fiyatı
     // yarın değişse bile bugünün satışının maliyeti bugünkü değerde kilitli kalsın.
     snapshotSoldItemCosts(rows);
@@ -1649,7 +1649,9 @@ export default function useHipposData(scope = 'full') {
           await durumYaz(idler, { cost_snapshot_status: 'error' });
           continue;
         }
-        const res = await fetch(`/api/recete?resource=recete&urunId=${urun.id}`);
+        // Paket satışta "paket" işaretli kalemler (kutu, poşet…) da maliyete eklenir; masa ve hızlı satışta eklenmez.
+        const paketMi = String(grupRows[0]?.table || '').startsWith('Paket ') ? 1 : 0;
+        const res = await fetch(`/api/recete?resource=recete&urunId=${urun.id}&paket=${paketMi}`);
         const hesap = await res.json();
 
         if (hesap.receteYok) {
