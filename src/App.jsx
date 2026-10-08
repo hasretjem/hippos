@@ -12,6 +12,7 @@ import PersonelKlasoru from './pages/PersonelKlasoru/PersonelKlasoru';
 import StokSiparis from './pages/StokSiparis/StokSiparis';
 import Veri from './pages/Veri/Veri';
 import Receteler from './pages/Receteler/Receteler';
+import KasaRapor from './pages/KasaRapor/KasaRapor';
 import BottomNav from './components/BottomNav/BottomNav';
 import useHipposData, { QUICK_SALE } from './hooks/useHipposData';
 import useStokTakip from './hooks/useStokTakip';
@@ -59,7 +60,7 @@ export default function App() {
   }
 
   function handleNavigate(page, opts) {
-    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler' || page === 'endofday' || page === 'muhasebe2' || page === 'personelklasoru' || page === 'stoksiparis' || page === 'veri' || page === 'receteler') {
+    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler' || page === 'endofday' || page === 'muhasebe2' || page === 'personelklasoru' || page === 'stoksiparis' || page === 'veri' || page === 'receteler' || page === 'reports') {
       // Sadece alt menüden "Hızlı Satış"a bilerek tıklanınca seçili masa sıfırlanır.
       // Masalar sayfasından bir masaya girerken (opts.resetTable verilmez) buna dokunulmaz.
       if (page === 'pos' && opts?.resetTable) setSelectedTable(QUICK_SALE);
@@ -94,6 +95,9 @@ export default function App() {
       )}
       {activePage === 'endofday' && (
         <GunSonu data={data} onNavigate={handleNavigate} />
+      )}
+      {activePage === 'reports' && (
+        <KasaRapor onNavigate={handleNavigate} />
       )}
       {activePage === 'muhasebe2' && (
         <Muhasebe2 onNavigate={handleNavigate} />

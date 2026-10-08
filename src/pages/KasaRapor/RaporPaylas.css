@@ -1,0 +1,27 @@
+/* Alacak/Borç paylaşım kartı (1080 px, PNG'ye çevrilir). Yazı renkleri !important. */
+.rk { width: 1080px; background: #fffaf0; padding: 36px 40px 32px; font-family: system-ui, 'Segoe UI', Roboto, sans-serif; color: #1f2326 !important; font-variant-numeric: tabular-nums; line-height: 1.3; box-sizing: border-box; }
+.rk *, .rk *::before, .rk *::after { box-sizing: border-box; }
+.rk-bas { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 5px solid #1f2326; padding-bottom: 10px; }
+.rk-bas h1 { margin: 0; font-size: 44px; font-weight: 900; letter-spacing: 0.04em; color: #e94f37 !important; }
+.rk-bas span { font-size: 26px; font-weight: 800; color: #495057 !important; }
+.rk-kpi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 20px; }
+.rk-k { border-radius: 20px; padding: 16px 20px; color: #fff !important; }
+.rk-k span { display: block; font-size: 22px; font-weight: 900; letter-spacing: 0.08em; color: #fff !important; }
+.rk-k b { display: block; font-size: 44px; font-weight: 900; line-height: 1.15; white-space: nowrap; color: #fff !important; }
+.rk-k.rk-borc { background: #b02a2a; }
+.rk-k.rk-alacak { background: #1b6e34; }
+.rk-k.rk-fark { background: #1f2326; }
+.rk-k.rk-fark.rk-arti b { color: #8ce99a !important; }
+.rk-k.rk-fark.rk-eksi b { color: #ffa8a8 !important; }
+.rk-iki { display: grid; grid-template-columns: 1fr 1fr; gap: 0 36px; margin-top: 22px; align-items: start; }
+.rk-kol { min-width: 0; }
+.rk-kb { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; border-bottom: 4px solid #1f2326; padding-bottom: 6px; margin-bottom: 6px; }
+.rk-kb span { font-size: 22px; font-weight: 900; letter-spacing: 0.04em; color: #1f2326 !important; }
+.rk-kb b { font-size: 28px; font-weight: 900; color: #1f2326 !important; white-space: nowrap; }
+.rk-borc .rk-kb span, .rk-borc .rk-kb b { color: #b02a2a !important; }
+.rk-alacak .rk-kb span, .rk-alacak .rk-kb b { color: #1b6e34 !important; }
+.rk-s { display: flex; justify-content: space-between; gap: 12px; font-size: 24px; font-weight: 700; line-height: 1.6; border-bottom: 1px solid #e9dfc6; }
+.rk-ad { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #1f2326 !important; }
+.rk-t { font-weight: 900; white-space: nowrap; color: #1f2326 !important; }
+.rk-bos { font-size: 22px; font-weight: 600; color: #868e96 !important; }
+.rk-not { margin-top: 18px; font-size: 20px; font-weight: 700; color: #868e96 !important; }

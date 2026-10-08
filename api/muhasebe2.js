@@ -1691,6 +1691,28 @@ export default async function handler(req, res) {
       return res.status(200).json({ devir: k / 100 });
     }
 
+    // Alacak/Borç Raporu: tüm carilerin güncel bakiyesi (borç − alacak). Eksi = bizim borcumuz, artı = bizim alacağımız. Sıfır bakiyeler dışarıda.
+    if (req.method === 'GET' && resource === 'alacakBorcRaporu') {
+      const [oz, yo] = await Promise.all([
+        db.from('m2_firma_ozet').select('firma_id,ad,firma_turu,borc,alacak,son_islem'),
+        db.from('m2_odeme_yontemleri').select('ad,odeme_turu'),
+      ]);
+      kontrol(oz.error);
+      kontrol(yo.error);
+      const yontemTuru = new Map((yo.data || []).map((x) => [norm(x.ad), x.odeme_turu]));
+      const YONTEM_ETIKET = { Nakit: 'Kasa', 'Banka Havalesi': 'Banka', 'Kredi Kartı': 'Kredi Kartı', Ortaklar: 'Ortaklar' };
+      const satirlar = (oz.data || [])
+        .map((r) => ({
+          id: r.firma_id,
+          ad: r.ad,
+          tur: r.firma_turu === 'Ödeme Şekli' ? YONTEM_ETIKET[yontemTuru.get(norm(r.ad))] || 'Kasa / Banka' : r.firma_turu,
+          bakiye: Math.round((Number(r.borc || 0) - Number(r.alacak || 0)) * 100) / 100,
+          sonIslem: r.son_islem || null,
+        }))
+        .filter((r) => Math.abs(r.bakiye) >= 0.005);
+      return res.status(200).json({ satirlar, zaman: new Date().toISOString() });
+    }
+
     if (req.method === 'GET' && resource === 'gunsonuListe') {
       const liste = await gsHepsi(db);
       return res.status(200).json({ kayitlar: liste.map(gsKayit) });
