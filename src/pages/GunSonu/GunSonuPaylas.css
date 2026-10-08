@@ -1,0 +1,94 @@
+/* ===== Gün sonu paylaşım kartı: "takvim yaprağı" (1080 px, PNG'ye çevrilir) =====
+   Yazı renkleri !important: genel stiller yazıyı beyaz yapabiliyor. Ölçüler 1080 px görsel içindir. */
+.gsk {
+  width: 1080px; box-sizing: border-box; position: relative;
+  background: #fffaf0; padding: 64px 48px 40px;
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif; color: #1f2326 !important;
+  font-variant-numeric: tabular-nums; line-height: 1.3;
+}
+.gsk * { box-sizing: border-box; }
+.gsk-delik { position: absolute; top: 22px; left: 48px; right: 48px; display: flex; justify-content: space-between; }
+.gsk-delik i { width: 14px; height: 14px; border-radius: 50%; background: #e9dfc6; display: block; }
+
+.gsk-bas { display: grid; grid-template-columns: 330px 1fr; gap: 36px; align-items: stretch; }
+.gsk-yaprak { background: #e03131; border-radius: 24px; text-align: center; padding: 22px 10px 16px; display: flex; flex-direction: column; justify-content: center; }
+.gsk-ay { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; color: #fff !important; white-space: nowrap; }
+.gsk-gun { font-size: 176px; font-weight: 900; line-height: 1; letter-spacing: 0.02em; color: #fff !important; margin-top: 4px; }
+.gsk-ciro { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.gsk-et { font-size: 22px; font-weight: 800; letter-spacing: 0.14em; color: #868e96 !important; }
+.gsk-ciro-t { font-size: 86px; font-weight: 900; line-height: 1.04; letter-spacing: 0.005em; color: #1f2326 !important; white-space: nowrap; }
+.gsk-ay1 { font-size: 27px; font-weight: 700; letter-spacing: 0.02em; margin-top: 14px; color: #1f2326 !important; }
+.gsk-ay2 { font-size: 25px; font-weight: 700; letter-spacing: 0.02em; margin-top: 6px; color: #868e96 !important; }
+.gsk-art { color: #2b8a3e !important; font-weight: 900; }
+
+.gsk-iki { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
+.gsk-b { margin-top: 30px; }
+.gsk-bh { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; border-bottom: 4px solid #1f2326; padding-bottom: 6px; margin-bottom: 8px; }
+.gsk-bh span { font-size: 27px; font-weight: 900; letter-spacing: 0.07em; color: #1f2326 !important; display: flex; align-items: center; }
+.gsk-bh b { font-size: 30px; font-weight: 900; letter-spacing: 0.01em; color: #1f2326 !important; white-space: nowrap; }
+.gsk-nokta { display: inline-block; width: 18px; height: 18px; border-radius: 50%; margin-right: 12px; flex: 0 0 auto; }
+.gsk-t-nakit .gsk-nokta { background: #2f9e44; }
+.gsk-t-kart .gsk-nokta { background: #1c7ed6; }
+.gsk-t-yemek .gsk-nokta { background: #f59f00; }
+.gsk-t-cari .gsk-nokta { background: #7048e8; }
+.gsk-t-harcama .gsk-nokta { background: #e03131; }
+.gsk-t-kasa .gsk-nokta { background: #e8a33a; }
+.gsk-t-ekmek .gsk-nokta { background: #8b5a2b; }
+
+.gsk-s { display: flex; justify-content: space-between; gap: 18px; font-size: 26px; font-weight: 600; line-height: 1.55; color: #1f2326 !important; }
+.gsk-s span { color: #1f2326 !important; white-space: nowrap; }
+.gsk-s .gsk-ad { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.gsk .gsk-n, .gsk-s .gsk-n { color: #e03131 !important; }
+.gsk-son { font-weight: 900; border-top: 2px solid #1f2326; margin-top: 4px; padding-top: 4px; }
+.gsk-bos { font-size: 24px; font-weight: 600; color: #adb5bd !important; line-height: 1.55; }
+
+/* Yemek kartı: marka × kolon (sipariş hattı, kişi adları) tablosu, yalnız dolu kolonlar */
+.gsk-tab { display: grid; column-gap: 14px; }
+.gsk-th { font-size: 20px; font-weight: 800; letter-spacing: 0.04em; color: #868e96 !important; padding: 2px 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gsk-td { font-size: 26px; font-weight: 600; line-height: 1.55; color: #1f2326 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gsk-sag { text-align: right; }
+.gsk-kalin { font-weight: 900; }
+.gsk-silik { color: #ced4da !important; }
+
+/* Cari: isimler tek satır; uzun isim varsa tek sütun (görsel aşağı uzar, genişlemez) */
+.gsk-cari-l { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
+.gsk-cari-l.gsk-tek { grid-template-columns: 1fr; }
+
+/* Harcama: TL Kasa ve Günlük kasa yan yana, her birinin toplamı altında */
+.gsk-harcama-l { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
+.gsk-ab { font-size: 22px; font-weight: 800; letter-spacing: 0.1em; color: #c92a2a !important; margin: 2px 0 2px; }
+
+.gsk-ekmek-l { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 6px; }
+.gsk-ekmek-l div { background: #f3e6d8; border-radius: 18px; padding: 12px 8px 14px; text-align: center; }
+.gsk-ekmek-l b { display: block; font-size: 54px; font-weight: 900; line-height: 1.05; color: #4a2e14 !important; }
+.gsk-ekmek-l span { display: block; font-size: 21px; font-weight: 700; letter-spacing: 0.01em; color: #4a2e14 !important; margin-top: 2px; }
+.gsk-not { margin-top: 26px; text-align: right; font-size: 22px; font-weight: 800; letter-spacing: 0.06em; color: #e03131 !important; }
+
+/* ===== Paylaşım penceresi ===== */
+.gsp-ort { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.gsp-pen { background: #fff; border-radius: 16px; width: min(520px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column; padding: 16px 18px 18px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3); }
+.gsp-bas { display: flex; justify-content: space-between; align-items: center; margin: 0 0 10px; }
+.gsp-bas h3 { margin: 0; font-size: 17px; font-weight: 800; color: #e94f37 !important; }
+.gsp-x { border: 0; background: transparent; cursor: pointer; padding: 4px; border-radius: 8px; color: #393e41 !important; display: flex; }
+.gsp-x:hover { background: #f1f3f5; }
+.gsp-uyari { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; padding: 8px 10px; border-radius: 10px; background: #fff3bf; border: 1px solid #ffe066; margin: 0 0 10px; }
+.gsp-uyari, .gsp-uyari span, .gsp-uyari svg { color: #7a4b00 !important; }
+.gsp-uyari svg { flex: 0 0 auto; margin-top: 1px; }
+.gsp-onizleme { flex: 1 1 auto; min-height: 160px; overflow: auto; border-radius: 12px; background: #f1f3f5; display: flex; justify-content: center; align-items: flex-start; padding: 10px; }
+.gsp-onizleme img { width: 100%; height: auto; display: block; border-radius: 8px; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18); }
+.gsp-bekle { align-self: center; font-size: 14px; color: #6b7075 !important; }
+.gsp-hata { margin-top: 10px; font-size: 13px; padding: 8px 10px; border-radius: 10px; background: #ffe3e3; color: #a51111 !important; }
+.gsp-dugmeler { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.gsp-btn { flex: 1 1 120px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 42px; border-radius: 10px; border: 1px solid rgba(57, 62, 65, 0.25); background: #fff; color: #393e41 !important; font-size: 14px; font-weight: 700; cursor: pointer; }
+.gsp-btn:hover:not(:disabled) { border-color: #393e41; }
+.gsp-btn:disabled { opacity: 0.5; cursor: default; }
+.gsp-btn:focus-visible, .gsp-x:focus-visible { outline: 2px solid #e94f37; outline-offset: 2px; }
+.gsp-ana { background: #e94f37; border-color: #e94f37; color: #fff !important; }
+.gsp-ana:hover:not(:disabled) { border-color: #c73f2a; background: #d8452e; }
+/* Kart ekran dışında, gerçek boyutunda çizilir (pencere animasyonsuz: fixed konum bozulmasın) */
+.gsp-sahne { position: fixed; left: -20000px; top: 0; pointer-events: none; }
+
+/* İki harcama sütununun "Toplam" satırı aynı hizada (kısa liste boşluğu toplamın üstünde bırakır) */
+.gsk-hs { display: flex; flex-direction: column; }
+.gsk-hs > .gsk-son { margin-top: auto; }
+.gsk-hs > .gsk-s:nth-last-child(2) { margin-bottom: 4px; }

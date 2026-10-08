@@ -2,9 +2,8 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import './GunSonu.css';
 import { TL } from '../../hooks/useHipposData';
 import HizliGider, { useHizliGider } from '../../components/HizliGider/HizliGider';
-// NOT: html2canvas npm paketi olarak KURULMUYOR — proje github.dev üzerinden yönetildiği
-// için terminal/npm install her zaman pratik olmuyor. Bunun yerine ihtiyaç anında CDN'den
-// tarayıcıya doğrudan yükleniyor (loadHtml2Canvas fonksiyonu, aşağıda).
+import GunSonuPaylas from './GunSonuPaylas';
+import { paylasimVerisi } from './gunsonuPaylasVeri';
 import {
   ArrowLeft, Save, Banknote, Calculator, CreditCard, Users, Utensils,
   Plus, Trash2, AlertTriangle, Check, Lock, Delete, Pencil, Share2, MoreVertical,
@@ -347,48 +346,8 @@ export default function GunSonu({ data, onNavigate }) {
 
   const [saving, setSaving] = useState(false);
   const contentRef = useRef(null);
-  const [sharing, setSharing] = useState(false);
-  // html2canvas'ı sadece "Paylaş"a ilk basıldığında, tarayıcıya CDN'den yükler — sayfa hep
-  // yavaşlamasın diye ihtiyaç anına kadar hiç indirilmiyor, bir kere yüklenince tekrar
-  // indirmiyor (window.html2canvas zaten varsa direkt onu kullanır).
-  function loadHtml2Canvas() {
-    return new Promise((resolve, reject) => {
-      if (window.html2canvas) return resolve(window.html2canvas);
-      const existing = document.getElementById('html2canvas-cdn-script');
-      if (existing) {
-        existing.addEventListener('load', () => resolve(window.html2canvas));
-        existing.addEventListener('error', reject);
-        return;
-      }
-      const script = document.createElement('script');
-      script.id = 'html2canvas-cdn-script';
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-      script.onload = () => resolve(window.html2canvas);
-      script.onerror = reject;
-      document.body.appendChild(script);
-    });
-  }
-
-  async function paylasFoto() {
-    if (!contentRef.current) return;
-    setSharing(true);
-    try {
-      const html2canvas = await loadHtml2Canvas();
-      const canvas = await html2canvas(contentRef.current, { scale: 2, backgroundColor: '#F1FBF6', useCORS: true });
-      canvas.toBlob(async (blob) => {
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-          showToast('Fotoğraf kopyalandı — WhatsApp\'a yapıştırabilirsin');
-        } catch {
-          showToast('Kopyalanamadı — tarayıcı izin vermiyor olabilir');
-        }
-        setSharing(false);
-      }, 'image/png');
-    } catch {
-      showToast('Fotoğraf oluşturulamadı — bağlantıyı kontrol et');
-      setSharing(false);
-    }
-  }
+  // Paylaş: sayfanın ekran görüntüsü yerine ayrı "takvim yaprağı" görseli (GunSonuPaylas.jsx)
+  const [paylasAcik, setPaylasAcik] = useState(false);
 
   // ---- Taslak (yalnızca bu bilgisayarda, her değişiklikte yerel) + "Kaydedildi" durumu ----
   // Sayfadan çıkıp dönünce her şey yerinde kalır. Sunucudan gelen veri formu yalnızca sayfa AÇILIRKEN bir kez doldurur;
@@ -608,8 +567,8 @@ export default function GunSonu({ data, onNavigate }) {
             <div className="gs-float-menu-backdrop" onClick={() => setMenuOpen(false)} />
             <div className="gs-float-menu-dropdown">
               <div className="gs-float-menu-tarih">{bugunTarih}</div>
-              <button className="gs-share-btn" onClick={() => { paylasFoto(); setMenuOpen(false); }} disabled={sharing}>
-                <Share2 size={15} /> {sharing ? 'Hazırlanıyor...' : 'Paylaş'}
+              <button className="gs-share-btn" onClick={() => { setPaylasAcik(true); setMenuOpen(false); }}>
+                <Share2 size={15} /> Paylaş
               </button>
               <button className="gs-save-btn" onClick={() => { kaydet(); setMenuOpen(false); }} disabled={saving || durum === 'tamam'}>
                 <Save size={16} /> {saving ? 'Kaydediliyor...' : durum === 'tamam' ? 'Kaydedildi' : 'Gün Sonu Kaydet'}
@@ -910,6 +869,38 @@ export default function GunSonu({ data, onNavigate }) {
       )}
 
       {toast && <div className="gs-toast">{toast}</div>}
+      {paylasAcik && (
+        <GunSonuPaylas
+          onKapat={() => setPaylasAcik(false)}
+          v={paylasimVerisi({
+            tarih: bugunTarih,
+            toplamCiro,
+            ay: ayCiroKarsilastirma,
+            denoms: DENOMS,
+            nakitAdet,
+            kasaAvansi,
+            toplamNakitPara,
+            posTutarlari,
+            yemekKartlari: YEMEK_KARTLARI,
+            yemekKolonlari,
+            yemekTutarlari,
+            cariler: [
+              ...otomatikCariListesi.map((ad) => ({ ad, tutar: cariGosterilenTutar(ad) })),
+              ...ekstraCariler.map((r) => ({ ad: r.ad, tutar: parseNum(r.tutar) })),
+              ...bugunBireyselCariler.map((c) => ({ ad: c.ad, tutar: c.bugunTutar })),
+            ],
+            tahsilatlar: bugunCariOdemeOzeti,
+            anaKasa: hg.anaKasa,
+            gunlukKasa: hg.gunlukKasa,
+            anaKasaToplam,
+            gunlukKasaToplam,
+            dundenDevir: dundenDevirAnaKasa,
+            yarinaDevir: yarinaDevirAnaKasa,
+            ekmek: EKMEK_TURLERI.map((t) => ({ ad: t.label, adet: ekmekToplam[t.key] || 0 })),
+            kaydedildi: durum === 'tamam',
+          })}
+        />
+      )}
     </div>
   );
 }
