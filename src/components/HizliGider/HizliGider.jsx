@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Trash2, Lock, Plus, Check, X, AlertTriangle } from 'lucide-react';
+import { Trash2, Lock, Plus, Check, X, AlertTriangle, Building2, PencilLine, UserRound, CalendarClock, Coins, Wallet } from 'lucide-react';
 import { TL } from '../../hooks/useHipposData';
 import './HizliGider.css';
 
@@ -16,7 +16,7 @@ async function api2(resource, { method = 'GET', body, query } = {}) {
   return j;
 }
 
-const BOS = { tarih: '', gunlukKasa: [], anaKasa: [], gunlukKasaToplam: 0, anaKasaToplam: 0, cariler: [], sikCariler: [], sikSerbest: [], kategoriler: [], kapali: false, kayitliGunlukToplam: null, kayitliSaat: '', varsayilanKategori: 'Çeşitli Giderler', yuklendi: false };
+const BOS = { tarih: '', gunlukKasa: [], anaKasa: [], gunlukKasaToplam: 0, anaKasaToplam: 0, cariler: [], sikCariler: [], sikSerbest: [], kategoriler: [], kapali: false, kayitliGunlukToplam: null, kayitliSaat: '', varsayilanKategori: 'Diğer Giderler', yuklendi: false };
 
 // İki ekranın ortak verisi. Sunucudan gelen veri yalnızca bu listeyi günceller; yazılmakta olan satırlara hiç dokunmaz.
 export function useHizliGider() {
@@ -46,6 +46,13 @@ function sayiCoz(v) {
 }
 const renk = (tur) => (tur === 'cari' ? 'hg-c' : tur === 'serbest' ? 'hg-s' : tur === 'personel' || tur === 'sabit' ? 'hg-p' : 'hg-k');
 const ETIKET = { cari: 'Cari', serbest: 'Serbest', personel: 'Avans / maaş ödemesi', sabit: 'Sabit gider ödemesi' };
+const IKON = { cari: Building2, serbest: PencilLine, personel: UserRound, sabit: CalendarClock };
+function Rozet({ tur, metin, kisa }) {
+  const Ikon = IKON[tur] || Lock;
+  // Düzenlerken yer kazanmak için yalnızca simge (tür rengi ve ipucu yeterli)
+  if (kisa) return <span className="hg-rb hg-rbk" title={metin}><Ikon size={13} aria-hidden="true" /></span>;
+  return <span className="hg-rb"><Ikon size={12} aria-hidden="true" />{metin}</span>;
+}
 
 export default function HizliGider({ hg }) {
   const [onay, setOnay] = useState(null);
@@ -139,7 +146,11 @@ function Blok({ baslik, ipucu, kasaGrubu, satirlar, toplam, toplamEtiket, hg, bi
   return (
     <div className="hg-blok">
       <div className="hg-bh">
-        <span className="hg-bs">{baslik} <small>({ipucu})</small></span>
+        <span className="hg-bs">{kasaGrubu === 'gunluk' ? <Coins size={15} aria-hidden="true" /> : <Wallet size={15} aria-hidden="true" />}{baslik}</span>
+        <span className="hg-tp" title={toplamEtiket}><strong>{TL(toplam)}</strong></span>
+      </div>
+      <div className="hg-bh2">
+        <small className="hg-ipucu">{ipucu}</small>
         <button type="button" className="hg-yc" onClick={() => setYeniCari({ ad: '', kategori: '' })}><Plus size={12} />Yeni cari</button>
       </div>
       {yeniCari && (
@@ -167,14 +178,13 @@ function Blok({ baslik, ipucu, kasaGrubu, satirlar, toplam, toplamEtiket, hg, bi
         }
         return (
           <div key={s.id} className={`hg-r ${renk(s.tur)} ${s.kilitli ? 'hg-kilit' : 'hg-tikla'}`} onClick={() => !s.kilitli && setDuzen(s.id)} title={s.kilitli ? `${s.kilitEtiketi} düzenlenir` : 'Düzeltmek için tıkla'}>
-            <span className="hg-n"><span className="hg-rb">{s.kilitli ? s.kilitEtiketi : ETIKET[s.tur]}</span><span className="hg-ad">{s.ad}</span>{s.aciklama && <small>{s.aciklama}</small>}</span>
+            <span className="hg-n"><Rozet tur={s.kilitli ? 'kilit' : s.tur} metin={s.kilitli ? s.kilitEtiketi : ETIKET[s.tur]} /><span className="hg-ad">{s.ad}</span>{s.aciklama && <small>{s.aciklama}</small>}</span>
             <span className="hg-t">{TL(s.tutar)}</span>
             {s.kilitli ? <span className="hg-i" aria-hidden="true"><Lock size={14} /></span> : <button type="button" className="hg-i" aria-label="Sil" onClick={(e) => { e.stopPropagation(); setSilOnay(s.id); }}><Trash2 size={14} /></button>}
           </div>
         );
       })}
       <GirisSatiri key={anahtar} hg={hg} kasaGrubu={kasaGrubu} onBitti={() => setAnahtar((n) => n + 1)} bildir={bildir} onayIste={onayIste} onsecim={onsecim} onYeniCari={(ad) => setYeniCari({ ad, kategori: '' })} />
-      <div className="hg-tp"><span>{toplamEtiket}</span><strong>{TL(toplam)}</strong></div>
     </div>
   );
 }
@@ -258,12 +268,12 @@ function GirisSatiri({ hg, kasaGrubu, satir, onBitti, onIptal, bildir, onayIste,
   }
 
   const etiket = turGorunen ? ETIKET[turGorunen] : null;
-  const ikinci = notAcik || turGorunen === 'serbest' || duzen;
+  const ikinci = notAcik || turGorunen === 'serbest';
   return (
     <div className={`hg-giris ${turGorunen ? renk(turGorunen) : 'hg-e'} ${duzen ? 'hg-duzen' : ''}`}>
       <div className="hg-gr">
         <div className="hg-isim">
-          {etiket && <span className="hg-rb">{etiket}</span>}
+          {etiket && <Rozet tur={turGorunen} metin={etiket} kisa={duzen} />}
           <input
             className="hg-ara"
             placeholder="Ne için? Ara..."
@@ -288,7 +298,13 @@ function GirisSatiri({ hg, kasaGrubu, satir, onBitti, onIptal, bildir, onayIste,
           )}
         </div>
         <input ref={tutarRef} className="hg-tu" inputMode="decimal" placeholder="0,00" aria-label="Tutar" value={tutar} onChange={(e) => setTutar(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') kaydet(); if (e.key === 'Escape' && duzen) onIptal(); }} />
-        <button type="button" className="hg-ib" title="Not ekle" aria-label="Not" onClick={() => setNotAcik((v) => !v)}>Not</button>
+        {duzen && (
+          <span className="hg-sg" role="group" aria-label="Kasa">
+            <button type="button" className={kg === 'gunluk' ? 'on' : ''} onClick={() => setKg('gunluk')}>Günlük</button>
+            <button type="button" className={kg === 'ana' ? 'on' : ''} onClick={() => setKg('ana')}>Ana</button>
+          </span>
+        )}
+        <button type="button" className={`hg-ib hg-notb ${notAcik ? 'on' : ''}`} title="Not ekle" aria-label="Not" onClick={() => setNotAcik((v) => !v)}>Not</button>
         <button type="button" className="hg-ib hg-ok" aria-label="Kaydet" disabled={bekliyor} onClick={() => kaydet()}><Check size={15} /></button>
         {duzen && <button type="button" className="hg-ib" aria-label="Vazgeç" onClick={onIptal}><X size={15} /></button>}
       </div>
@@ -308,12 +324,6 @@ function GirisSatiri({ hg, kasaGrubu, satir, onBitti, onIptal, bildir, onayIste,
             </select>
           )}
           {notAcik && <input className="hg-not" placeholder="Not (opsiyonel)" value={not} onChange={(e) => setNot(e.target.value)} aria-label="Not metni" />}
-          {duzen && (
-            <span className="hg-sg" role="group" aria-label="Kasa">
-              <button type="button" className={kg === 'gunluk' ? 'on' : ''} onClick={() => setKg('gunluk')}>Günlük</button>
-              <button type="button" className={kg === 'ana' ? 'on' : ''} onClick={() => setKg('ana')}>Ana</button>
-            </span>
-          )}
         </div>
       )}
     </div>

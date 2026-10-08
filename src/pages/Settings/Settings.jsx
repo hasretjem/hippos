@@ -605,7 +605,7 @@ export default function Settings({ data, onNavigate }) {
               herkes (şifresiz) buraya harcama yazabilsin diye her zaman görünür. */}
           <aside className="st-harcama-panel">
             <div className="st-harcama-head"><Calculator size={15} /><span>Harcamalar</span></div>
-            <div className="st-harcama-hint">Buraya girdiklerin Gün Sonu Al sayfasında da görünür ve Muhasebe2 defterine yazılır</div>
+            
 
             <HizliGider hg={hg} />
           </aside>

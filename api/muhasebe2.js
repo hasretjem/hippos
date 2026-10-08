@@ -1134,7 +1134,7 @@ function kasaGrubuUygula(body, satirlar, tarih) {
 }
 
 const DIGER_GIDERLER = 'Diğer Giderler';
-const DIGER_KATEGORI = 'Çeşitli Giderler';
+const DIGER_KATEGORI = 'Diğer Giderler'; // mevcut kategori; serbest harcamanın varsayılanı
 
 async function digerGiderlerFirmasi(db) {
   const oku = async () => {

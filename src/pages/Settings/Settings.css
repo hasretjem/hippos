@@ -1176,3 +1176,13 @@
   color: var(--ink-soft);
 }
 .st-harcama-total strong { font-size: 14px; color: var(--ink, #393E41); letter-spacing: 0; }
+
+/* Sağ sütun genişletildi: Harcamalar paneli tek satırlık satırlarla rahat çalışsın (dar ekranda eskisi gibi) */
+@media (min-width: 1201px) {
+  .st-right-col { width: 480px; }
+  .st-right-col .st-revenue-panel, .st-right-col .st-harcama-panel { width: 100%; }
+}
+@media (min-width: 901px) and (max-width: 1200px) {
+  .st-right-col { width: 420px; }
+  .st-right-col .st-revenue-panel, .st-right-col .st-harcama-panel { width: 100%; }
+}
