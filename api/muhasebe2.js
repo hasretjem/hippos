@@ -188,7 +188,7 @@ export function ekstreHesapla(faturalar, makbuzlar) {
       tarih: f.tarih,
       zaman: f.kayit_zamani || '',
       sira: 1,
-      evrakTuru: f.iade ? 'İade Faturası' : 'Fatura/Fiş',
+      evrakTuru: f.kaynak === 'devir' ? 'Devir' : f.iade ? 'İade Faturası' : 'Fatura/Fiş',
       belgeNo: f.fatura_no || '',
       aciklama: f.aciklama || '',
       odemeSekli: f.kasa || f.odeme_hesabi || '',
@@ -688,7 +688,7 @@ const FF_KOLON = ['id', 'tarih', 'firma_id', 'firma_adi', 'fatura_no', 'aciklama
 const MK_KOLON = ['id', 'tarih', 'makbuz_turu', 'firma_id', 'firma_adi', 'fatura_no', 'aciklama', 'odeme_turu', 'odeme_hesabi', 'kasa', 'tutar', 'otomatik', 'grup_id', 'kaynak', 'kasa_grubu', 'kayit_zamani'];
 const sec = (r, kolonlar) => Object.fromEntries(kolonlar.map((k) => [k, r[k] === undefined ? null : r[k]]));
 const idSirala = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-const KAYNAK_YER = { yemek_karti: 'Yemek Kartları sekmesinden', tahakkuk: 'Tahakkuklar sekmesinden', avans: "Personel Klasörü'nden", izin: "Personel Klasörü'nden", hizli_gider: 'Harcama modülünden', gunsonu: "Gün Sonu sayfasından" };
+const KAYNAK_YER = { yemek_karti: 'Yemek Kartları sekmesinden', tahakkuk: 'Tahakkuklar sekmesinden', avans: "Personel Klasörü'nden", izin: "Personel Klasörü'nden", hizli_gider: 'Harcama modülünden', gunsonu: "Gün Sonu sayfasından", devir: 'Devir aktarımından' };
 
 async function grupOku(db, grupId) {
   if (!grupId) throw new HataMesaji(400, 'grupId gerekli');
@@ -1415,7 +1415,7 @@ export default async function handler(req, res) {
       const kayitlar = tum.map((r) => ({
         id: r.id,
         tarih: r.tarih,
-        evrakTuru: r.evrak_turu,
+        evrakTuru: r.kaynak === 'devir' ? 'Devir' : r.evrak_turu,
         firmaAdi: r.firma_adi,
         faturaNo: r.fatura_no || '',
         aciklama: r.aciklama || '',

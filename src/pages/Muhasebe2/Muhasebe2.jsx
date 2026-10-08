@@ -21,7 +21,7 @@ import './Muhasebe2.css';
 const FATURA_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi', 'Ortaklar', 'Cari'];
 const MAKBUZ_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi', 'Ortaklar'];
 const MAKS_GECMIS = 3;
-const KAYNAK_ETIKET = { yemek_karti: 'Yemek Kartları', tahakkuk: 'Tahakkuklar', avans: 'Personel Klasörü', izin: 'Personel Klasörü' };
+const KAYNAK_ETIKET = { yemek_karti: 'Yemek Kartları', tahakkuk: 'Tahakkuklar', avans: 'Personel Klasörü', izin: 'Personel Klasörü', devir: 'Devir' };
 
 // XML faturadaki tedarikçi adını Muhasebe2 firmalarıyla eşler (tam eşleşme, sonra kelime benzerliği).
 const FIRMA_DURAK = new Set(['ltd', 'sti', 'şti', 'as', 'aş', 'a.ş', 'a.ş.', 'san', 'tic', 've', 'limited', 'anonim', 'sirketi', 'şirketi', 'ticaret', 'sanayi', 'gida', 'gıda', 'paz', 'pazarlama', 'ith', 'ihr']);
