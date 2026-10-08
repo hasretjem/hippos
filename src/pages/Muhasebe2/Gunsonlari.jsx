@@ -31,6 +31,12 @@ function cariSatirlari(detay) {
   ];
 }
 const sayiYaz = (n) => TL(Number(n) || 0);
+// Cariden tahsilat (havale hariç): ciro.cariTahsilat eksi saklanır; yoksa türlere göre özetten toplanır.
+const cariTahsilatToplam = (k) => {
+  const c = k.ciro || {};
+  if (c.cariTahsilat != null && c.cariTahsilat !== '') return Math.abs(Number(c.cariTahsilat) || 0);
+  return Object.values((k.cariDetay || {}).bugunCariOdemeOzeti || {}).reduce((a, v) => a + (Number(v) || 0), 0);
+};
 
 export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile, onIslem }) {
   const simdi = new Date();
@@ -88,6 +94,7 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
       gorunen.reduce(
         (a, k) => {
           a.nakit += k.toplamNakitPara || 0;
+          a.tahsilat += cariTahsilatToplam(k);
           a.pos += k.posToplam || 0;
           a.anaKasaHarc += k.anaKasaToplam || 0;
           a.gunlukHarc += k.gunlukKasaToplam || 0;
@@ -96,7 +103,7 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
           a.ciro += ciroToplam(k);
           return a;
         },
-        { nakit: 0, pos: 0, anaKasaHarc: 0, gunlukHarc: 0, cari: 0, yemek: 0, ciro: 0 },
+        { nakit: 0, tahsilat: 0, pos: 0, anaKasaHarc: 0, gunlukHarc: 0, cari: 0, yemek: 0, ciro: 0 },
       ),
     [gorunen],
   );
@@ -130,7 +137,7 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
     await yukle();
   }
 
-  const sutunSayisi = 12 + (duzenlemeModu ? 1 : 0);
+  const sutunSayisi = 13 + (duzenlemeModu ? 1 : 0);
 
   return (
     <div className="m2-card">
@@ -186,6 +193,7 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
               <th className="sayi">Ana Kasa Harc.</th>
               <th className="sayi">Günlük Kasa Harc.</th>
               <th className="sayi">Cari</th>
+              <th className="sayi">Cari Tahsilat</th>
               <th className="sayi">Yemek Kartı</th>
               <th className="sayi">Ciro</th>
               <th>Ana Kasa Takibi</th>
@@ -231,6 +239,10 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
                       {k.cariToplam > 0 && <DetayDugme onClick={() => setDetay({ tip: 'cariDetay', kayit: k })} />}
                     </td>
                     <td className="sayi">
+                      {sayiYaz(cariTahsilatToplam(k))}
+                      {cariTahsilatToplam(k) > 0 && <DetayDugme onClick={() => setDetay({ tip: 'cariTahsilat', kayit: k })} />}
+                    </td>
+                    <td className="sayi">
                       {sayiYaz(k.genelYemekToplami)}
                       {k.genelYemekToplami > 0 && <DetayDugme onClick={() => setDetay({ tip: 'yemekDetay', kayit: k })} />}
                     </td>
@@ -264,6 +276,7 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
                 <td className="sayi">{sayiYaz(toplam.anaKasaHarc)}</td>
                 <td className="sayi">{sayiYaz(toplam.gunlukHarc)}</td>
                 <td className="sayi">{sayiYaz(toplam.cari)}</td>
+                <td className="sayi">{sayiYaz(toplam.tahsilat)}</td>
                 <td className="sayi">{sayiYaz(toplam.yemek)}</td>
                 <td className="sayi">{sayiYaz(toplam.ciro)}</td>
                 <td />
@@ -301,6 +314,7 @@ function GunsonuDetayModal({ tip, kayit, onKapat }) {
     anaKasaHarcamalar: 'Ana Kasa Harcamaları',
     gunlukKasaHarcamalar: 'Günlük Kasa Harcamaları',
     cariDetay: 'Cari Detay',
+    cariTahsilat: 'Cariden Tahsilat Detay',
     yemekDetay: 'Yemek Kartı Detay',
     anaKasaTakibi: 'Ana Kasa Takibi',
   };
@@ -340,6 +354,7 @@ function GunsonuDetayModal({ tip, kayit, onKapat }) {
       );
     }
     if (tip === 'cariDetay') return <CariTablosu kayit={kayit} />;
+    if (tip === 'cariTahsilat') return <CariTahsilatTablosu kayit={kayit} />;
     if (tip === 'yemekDetay') {
       const kolonlar = kayit.yemekDetay?.kolonlar || [];
       const tutarlar = kayit.yemekDetay?.tutarlar || {};
@@ -399,6 +414,63 @@ function GunsonuDetayModal({ tip, kayit, onKapat }) {
     <ModalKabuk baslik={`${basliklar[tip]} — ${kayit.tarih}`} onKapat={onKapat} genis>
       <div className="m2-table-wrap">{icerik()}</div>
     </ModalKabuk>
+  );
+}
+
+function CariTahsilatTablosu({ kayit }) {
+  const d = kayit.cariDetay || {};
+  const ozet = Object.entries(d.bugunCariOdemeOzeti || {});
+  const liste = Array.isArray(d.bugunCariOdemeDetay) ? d.bugunCariOdemeDetay : [];
+  return (
+    <>
+      {liste.length > 0 && (
+        <table className="m2-table m2-gs-kucuk">
+          <thead>
+            <tr>
+              <th>Cari</th>
+              <th>Ödeme Türü</th>
+              <th className="sayi">Tutar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {liste.map((x, i) => (
+              <tr key={`${x.ad}-${x.tur}-${i}`}>
+                <td>{x.ad || '—'}</td>
+                <td>{x.tur}</td>
+                <td className="sayi">{sayiYaz(x.tutar)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <table className="m2-table m2-gs-kucuk" style={liste.length ? { marginTop: 12 } : undefined}>
+        <thead>
+          <tr>
+            <th>Ödeme Türüne Göre</th>
+            <th className="sayi">Tutar</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ozet.length === 0 && (
+            <tr>
+              <td colSpan={2} className="m2-empty">Tür kırılımı kayıtlı değil.</td>
+            </tr>
+          )}
+          {ozet.map(([tur, tutar]) => (
+            <tr key={tur}>
+              <td>{tur}</td>
+              <td className="sayi">{sayiYaz(tutar)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>Toplam Tahsilat (havale hariç)</td>
+            <td className="sayi">{sayiYaz(cariTahsilatToplam(kayit))}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </>
   );
 }
 

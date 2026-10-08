@@ -285,6 +285,23 @@ export default function GunSonu({ data, onNavigate }) {
       });
     return ozet;
   }, [cariOdemeler, cariGecmis]);
+  // Aynı tahsilatların cari bazlı dökümü (Muhasebe → Günsonları → Cari Tahsilat → detay).
+  const bugunCariOdemeDetay = useMemo(() => {
+    const ts0 = new Date(isGunuBaslangicMs()).getTime();
+    const ad = (id) => (cariler || []).find((c) => c.id === id)?.ad || '';
+    const liste = [];
+    (cariOdemeler || [])
+      .filter((o) => o.ts >= ts0 && o.tur !== 'HAVALE')
+      .forEach((o) => liste.push({ ad: ad(o.cariId), tur: o.tur, tutar: o.tutar }));
+    (cariGecmis || [])
+      .filter((g) => g.ts >= ts0)
+      .forEach((g) => {
+        (g.odemelerDetay || [])
+          .filter((o) => o.ts >= ts0 && o.tur !== 'HAVALE')
+          .forEach((o) => liste.push({ ad: ad(g.cariId), tur: o.tur, tutar: o.tutar }));
+      });
+    return liste;
+  }, [cariOdemeler, cariGecmis, cariler]);
   const bugunCariOdemeToplamı = Object.values(bugunCariOdemeOzeti).reduce((s, v) => s + v, 0);
 
   const [cariOverrides, setCariOverrides] = useState({});
@@ -498,6 +515,7 @@ export default function GunSonu({ data, onNavigate }) {
           ekstra: ekstraCariler, // [{ ad, tutar }]
           bireysel: bugunBireyselCariler.map((c) => ({ ad: c.ad, tutar: c.bugunTutar })),
           bugunCariOdemeOzeti, // havale hariç tahsil edilen ödemeler, bilgi amaçlı
+          bugunCariOdemeDetay,
         },
 
         genelYemekToplami,
