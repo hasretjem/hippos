@@ -317,7 +317,17 @@ export default function GunSonu({ data, onNavigate }) {
   // Yeni Sheet yapısında bu değer anaKasaTakibi.yarinaDevir altında geliyor — api/gunsonu.js
   // eski (3 sütunlu) kayıtları da aynı şekle çevirip döndürdüğü için burada tek bir okuma
   // yeterli, format farkını düşünmeye gerek yok.
-  const dundenDevirAnaKasa = dunkuKayit ? (dunkuKayit.anaKasaTakibi?.yarinaDevir ?? dunkuKayit.yarinaDevirAnaKasa ?? dunkuKayit.yarinaDevir ?? 0) : 0;
+  // Önceki Gün Sonu kaydı yoksa (ilk gün) devir, Muhasebe2'deki TL Kasa'nın bugünden önceki bakiyesidir.
+  const [acilisDevri, setAcilisDevri] = useState(0);
+  useEffect(() => {
+    let iptal = false;
+    fetch(`/api/muhasebe2?resource=gunsonuAcilisDevri&tarih=${encodeURIComponent(bugunTarih)}`)
+      .then((r) => r.json())
+      .then((j) => { if (!iptal && Number.isFinite(Number(j.devir))) setAcilisDevri(Number(j.devir)); })
+      .catch(() => {});
+    return () => { iptal = true; };
+  }, [bugunTarih]);
+  const dundenDevirAnaKasa = dunkuKayit ? (dunkuKayit.anaKasaTakibi?.yarinaDevir ?? dunkuKayit.yarinaDevirAnaKasa ?? dunkuKayit.yarinaDevir ?? 0) : acilisDevri;
   // "Bugünkü Nakit" satırı SAF (hiçbir şey çıkarılmamış) toplamNakitPara'yı gösterir —
   // Ana Kasa harcaması AYRI bir satırda gösterilip SADECE Yarına Devir hesabında düşülür.
   // Böylece ekranda hangi rakamın nereden geldiği (sayılan nakit, ana kasa harcaması,

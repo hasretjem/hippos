@@ -1672,6 +1672,25 @@ export default async function handler(req, res) {
       return res.status(200).json({ anaKasa: donustur(v.anaKasa), gunlukKasa: donustur(v.gunlukKasa) });
     }
 
+    // İlk Gün Sonu için açılış devri: önceki Gün Sonu kaydı yokken "dünden devir ana kasa" = TL Kasa'nın o günden ÖNCEKİ bakiyesi.
+    // Bakiye (borç − alacak): devir kaydı + makbuzlar (ödeme +, tahsilat −) + fişler; günün kendi hareketleri dahil değildir.
+    if (req.method === 'GET' && resource === 'gunsonuAcilisDevri') {
+      const iso = gsTarihIso(req.query?.tarih);
+      if (!iso) throw new HataMesaji(400, 'Tarih geçersiz');
+      const { data: tl, error: tlHata } = await db.from('m2_firmalar').select('id').eq('ad', 'TL Kasa').maybeSingle();
+      kontrol(tlHata);
+      if (!tl) return res.status(200).json({ devir: 0 });
+      const [fa, mk] = await Promise.all([
+        db.from('m2_fis_faturalar').select('fatura_tutari,iade').eq('firma_id', tl.id).lt('tarih', iso),
+        db.from('m2_makbuzlar').select('tutar,makbuz_turu').eq('firma_id', tl.id).lt('tarih', iso),
+      ]);
+      kontrol(fa.error);
+      kontrol(mk.error);
+      const k = (fa.data || []).reduce((t, f) => t + (f.iade ? 1 : -1) * kurus(f.fatura_tutari), 0)
+        + (mk.data || []).reduce((t, m) => t + (m.makbuz_turu === 'Ödeme' ? 1 : -1) * kurus(m.tutar), 0);
+      return res.status(200).json({ devir: k / 100 });
+    }
+
     if (req.method === 'GET' && resource === 'gunsonuListe') {
       const liste = await gsHepsi(db);
       return res.status(200).json({ kayitlar: liste.map(gsKayit) });
