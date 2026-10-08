@@ -44,9 +44,9 @@ function sayiCoz(v) {
   const n = t.includes(',') ? parseFloat(t.replace(/\./g, '').replace(',', '.')) : parseFloat(t);
   return Number.isFinite(n) ? n : 0;
 }
-const renk = (tur) => (tur === 'cari' ? 'hg-c' : tur === 'serbest' ? 'hg-s' : tur === 'personel' || tur === 'sabit' ? 'hg-p' : 'hg-k');
-const ETIKET = { cari: 'Cari', serbest: 'Serbest', personel: 'Avans / maaş ödemesi', sabit: 'Sabit gider ödemesi' };
-const IKON = { cari: Building2, serbest: PencilLine, personel: UserRound, sabit: CalendarClock };
+const renk = (tur) => (tur === 'cari' ? 'hg-c' : tur === 'serbest' ? 'hg-s' : tur === 'personel' || tur === 'sabit' || tur === 'ortak' ? 'hg-p' : 'hg-k');
+const ETIKET = { cari: 'Cari', serbest: 'Serbest', personel: 'Avans / maaş ödemesi', sabit: 'Sabit gider ödemesi', ortak: 'Ortak (kasa hareketi)' };
+const IKON = { cari: Building2, serbest: PencilLine, personel: UserRound, sabit: CalendarClock, ortak: UserRound };
 function Rozet({ tur, metin, kisa }) {
   const Ikon = IKON[tur] || Lock;
   // Düzenlerken yer kazanmak için yalnızca simge (tür rengi ve ipucu yeterli)
@@ -113,7 +113,7 @@ function Blok({ baslik, ipucu, kasaGrubu, satirlar, toplam, toplamEtiket, hg, bi
     setSilOnay(null);
     try {
       let geriAl;
-      if (s.tur === 'personel') {
+      if (s.tur === 'personel' && s.avansId) {
         await api2('avansSil', { method: 'POST', body: { id: s.avansId } });
         geriAl = () => api2('avansKaydet', { method: 'POST', body: { personelId: s.personelId, tarih: hg.tarih, tutar: s.tutar, odemeTuru: 'Nakit', kasa: 'TL Kasa', aciklama: s.aciklama, kasaGrubu: s.kasaGrubu } });
       } else {
@@ -171,7 +171,7 @@ function Blok({ baslik, ipucu, kasaGrubu, satirlar, toplam, toplamEtiket, hg, bi
         if (silOnay === s.id) {
           return (
             <div key={s.id} className="hg-cf">
-              <span>{s.ad} {TL(s.tutar)} silinsin mi? {s.tur === 'personel' ? 'Avans makbuzu silinir, personel carisi eski haline döner.' : s.tur === 'sabit' ? 'Ödeme makbuzu silinir.' : 'Fiş ve ödeme makbuzu birlikte silinir.'}</span>
+              <span>{s.ad} {TL(s.tutar)} silinsin mi? {s.tur === 'personel' && s.avansId ? 'Avans makbuzu silinir, personel carisi eski haline döner.' : s.tur === 'personel' || s.tur === 'sabit' || s.tur === 'ortak' ? 'Makbuzlar silinir, cari eski haline döner.' : s.tutar < 0 ? 'İade faturası ve tahsilat makbuzu birlikte silinir.' : 'Fiş ve ödeme makbuzu birlikte silinir.'}</span>
               <span className="hg-cfb"><button type="button" className="hg-bt" onClick={() => setSilOnay(null)}>Vazgeç</button><button type="button" className="hg-bt hg-dn" onClick={() => sil(s)}>Sil</button></span>
             </div>
           );
@@ -196,7 +196,7 @@ function secimDen(s) {
 
 function GirisSatiri({ hg, kasaGrubu, satir, onBitti, onIptal, bildir, onayIste, onsecim, onYeniCari }) {
   const duzen = !!satir;
-  const kilitliAd = duzen && (satir.tur === 'personel' || satir.tur === 'sabit');
+  const kilitliAd = duzen && (satir.tur === 'personel' || satir.tur === 'sabit' || satir.tur === 'ortak');
   const [metin, setMetin] = useState(satir ? satir.ad : '');
   const [secim, setSecim] = useState(satir ? secimDen(satir) : null);
   const [tutar, setTutar] = useState(satir ? String(satir.tutar).replace('.', ',') : '');
@@ -243,19 +243,21 @@ function GirisSatiri({ hg, kasaGrubu, satir, onBitti, onIptal, bildir, onayIste,
   }
 
   async function kaydet(onayli) {
-    const n = sayiCoz(tutar);
-    if (!(n > 0)) { bildir('Tutarı yazın'); return; }
+    const n = sayiCoz(tutar); // eksi = kasaya giren para (iade / ortak girişi)
+    if (!n) { bildir('Tutarı yazın (kasaya para girişi için eksi yazın)'); return; }
     let t = tur;
     let firma = secim ? secim.firma : tam;
     if (secim && !secim.firma && secim.tur !== 'serbest') firma = tam;
     if (!t) { bildir('Ne için harcandığını yazın ya da cari seçin'); return; }
     if (t !== 'serbest' && !firma) { bildir('Cariyi listeden seçin'); return; }
-    if (!duzen && !onayli && (t === 'personel' || t === 'sabit')) { onayIste({ tur: t, ad: firma.ad, tutar: n, devam: () => kaydet(true) }); return; }
+    if (!duzen && !onayli && n > 0 && (t === 'personel' || t === 'sabit')) { onayIste({ tur: t, ad: firma.ad, tutar: n, devam: () => kaydet(true) }); return; }
     setBekliyor(true);
     try {
-      if (t === 'personel') {
+      if (t === 'personel' && n > 0) {
+        if (duzen && !satir.avansId) throw new Error('Bu kayıt personelden gelen para girişi. İşareti değiştirmek için silip yeniden girin.');
         await api2('avansKaydet', { method: 'POST', body: { id: duzen ? satir.avansId : undefined, personelId: firma.personelId, tarih: hg.tarih, tutar: n, odemeTuru: 'Nakit', kasa: 'TL Kasa', aciklama: not, kasaGrubu: kg } });
       } else {
+        if (t === 'personel' && duzen && satir.avansId) throw new Error('Bu kayıt bir avans. İşareti değiştirmek için silip yeniden girin.');
         await api2('hizliGiderKaydet', { method: 'POST', body: { id: duzen ? satir.id : undefined, tur: t, firmaId: firma ? firma.id : undefined, ad: metin.trim(), tutar: n, aciklama: not, kasaGrubu: kg, kategori } });
       }
       await hg.yenile();
@@ -268,6 +270,14 @@ function GirisSatiri({ hg, kasaGrubu, satir, onBitti, onIptal, bildir, onayIste,
   }
 
   const etiket = turGorunen ? ETIKET[turGorunen] : null;
+  const yazilan = sayiCoz(tutar);
+  let ipucuMetni = '';
+  if (yazilan < 0) {
+    if (turGorunen === 'ortak') ipucuMetni = 'Ortak kasaya para koydu: ortak alacaklı, TL Kasa borçlu. Fiş açılmaz.';
+    else if (turGorunen === 'personel' || turGorunen === 'sabit') ipucuMetni = 'Kasaya para girişi: firmadan tahsilat makbuzu kesilir, fiş açılmaz.';
+    else if (turGorunen) ipucuMetni = 'İade: iade faturası ve tahsilat makbuzu yazılır, kasa artar.';
+  } else if (turGorunen === 'ortak') ipucuMetni = 'Ortak kasadan para aldı: ortak borçlu, TL Kasa alacaklı. Fiş açılmaz.';
+  else if (turGorunen === 'personel' || turGorunen === 'sabit') ipucuMetni = 'Fiş/fatura açılmaz, yalnız ödeme makbuzu kesilir.';
   const ikinci = notAcik || turGorunen === 'serbest';
   return (
     <div className={`hg-giris ${turGorunen ? renk(turGorunen) : 'hg-e'} ${duzen ? 'hg-duzen' : ''}`}>
@@ -289,7 +299,7 @@ function GirisSatiri({ hg, kasaGrubu, satir, onBitti, onIptal, bildir, onayIste,
             <div className="hg-dd" role="listbox">
               {secenekler.map((o, i) => (
                 <button key={o.t + (o.c ? o.c.id : '')} type="button" role="option" aria-selected={i === aktif} className={`hg-di ${o.t === 'cari' ? renk(o.c.tur) : o.t === 'serbest' ? 'hg-s' : ''} ${i === aktif ? 'hg-ak' : ''}`} onMouseDown={(e) => { e.preventDefault(); sec(o); }}>
-                  {o.t === 'cari' && (<><span>{o.c.ad}</span><small>{o.c.tur === 'cari' ? 'kayıtlı cari' : o.c.tur === 'personel' ? 'personel: avans / maaş ödemesi' : 'sabit gider ödemesi'}</small></>)}
+                  {o.t === 'cari' && (<><span>{o.c.ad}</span><small>{o.c.tur === 'cari' ? 'kayıtlı cari' : o.c.tur === 'personel' ? 'personel: avans / maaş ödemesi' : o.c.tur === 'ortak' ? 'ortak: eksi = kasaya para koydu' : 'sabit gider ödemesi'}</small></>)}
                   {o.t === 'serbest' && (<><span>"{metin.trim()}" olarak serbest yaz</span><small>Enter</small></>)}
                   {o.t === 'yeni' && (<><span>"{metin.trim()}" adıyla yeni cari aç</span><small>+</small></>)}
                 </button>
@@ -308,7 +318,7 @@ function GirisSatiri({ hg, kasaGrubu, satir, onBitti, onIptal, bildir, onayIste,
         <button type="button" className="hg-ib hg-ok" aria-label="Kaydet" disabled={bekliyor} onClick={() => kaydet()}><Check size={15} /></button>
         {duzen && <button type="button" className="hg-ib" aria-label="Vazgeç" onClick={onIptal}><X size={15} /></button>}
       </div>
-      {(turGorunen === 'personel' || turGorunen === 'sabit') && <div className="hg-ip">Fiş/fatura açılmaz, yalnız ödeme makbuzu kesilir.</div>}
+      {ipucuMetni && <div className="hg-ip">{ipucuMetni}</div>}
       {!duzen && !turGorunen && !metin.trim() && (hg.sikCariler.length > 0 || hg.sikSerbest.length > 0) && (
         <div className="hg-cp">
           <span>Sık kullanılan:</span>

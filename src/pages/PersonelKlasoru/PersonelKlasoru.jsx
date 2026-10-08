@@ -749,7 +749,7 @@ function IzinModal({ personel, donem, ilkTarih, kayit, goster, onKaydet, onKapat
 // ---------------------------------------------------------------------------
 // Avans: mini ödeme makbuzu (tarih, tutar, ödeme türü/şekli, açıklama)
 // ---------------------------------------------------------------------------
-const AVANS_TURLERI = ['Nakit', 'Banka Havalesi', 'Kredi Kartı'];
+const AVANS_TURLERI = ['Nakit', 'Banka Havalesi', 'Kredi Kartı', 'Ortaklar'];
 function AvansModal({ personel, donem, ilkTarih, kayit, yontemler, onKaydet, onKapat }) {
   const duzenle = !!kayit;
   const [tarih, setTarih] = useState(kayit?.tarih || ilkTarih || (bugunISO().startsWith(donem) ? bugunISO() : `${donem}-01`));
@@ -789,7 +789,7 @@ function AvansModal({ personel, donem, ilkTarih, kayit, yontemler, onKaydet, onK
           </button>
         ))}
       </div>
-      <label className="m2-label">{tur === 'Nakit' ? 'Kasa' : tur === 'Banka Havalesi' ? 'Banka' : 'Kart'} *</label>
+      <label className="m2-label">{tur === 'Nakit' ? 'Kasa' : tur === 'Banka Havalesi' ? 'Banka' : tur === 'Ortaklar' ? 'Ortak' : 'Kart'} *</label>
       <select className="m2-select" aria-label="Ödeme şekli" value={sekil} onChange={(e) => setSekil(e.target.value)}>
         <option value="">— Seçin —</option>
         {secenekler.map((y) => (

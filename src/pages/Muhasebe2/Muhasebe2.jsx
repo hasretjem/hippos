@@ -18,8 +18,8 @@ import './Muhasebe2.css';
 // Cari dışı yöntemle girilen her fatura için ödeme şekli carisine otomatik makbuz yazılır (sunucu yapar).
 // ---------------------------------------------------------------------------
 
-const FATURA_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi', 'Cari'];
-const MAKBUZ_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi'];
+const FATURA_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi', 'Ortaklar', 'Cari'];
+const MAKBUZ_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi', 'Ortaklar'];
 const MAKS_GECMIS = 3;
 const KAYNAK_ETIKET = { yemek_karti: 'Yemek Kartları', tahakkuk: 'Tahakkuklar', avans: 'Personel Klasörü', izin: 'Personel Klasörü' };
 
@@ -464,6 +464,7 @@ function OdemeSecimi({ turler, tur, detay, onChange, yontemler, onYeni, cariNotu
   const kasalar = yontemler.filter((y) => y.odeme_turu === 'Nakit');
   const kartlar = yontemler.filter((y) => y.odeme_turu === 'Kredi Kartı');
   const bankalar = yontemler.filter((y) => y.odeme_turu === 'Banka Havalesi');
+  const ortaklar = yontemler.filter((y) => y.odeme_turu === 'Ortaklar');
 
   const altChip = (ad) => (
     <button
@@ -518,6 +519,14 @@ function OdemeSecimi({ turler, tur, detay, onChange, yontemler, onYeni, cariNotu
           </button>
         </div>
       )}
+      {tur === 'Ortaklar' && (
+        <div className="m2-chips alt">
+          {ortaklar.map((o) => altChip(o.ad))}
+          <button type="button" className="m2-chip yeni" onClick={() => onYeni('Ortaklar')}>
+            + Yeni Ortak
+          </button>
+        </div>
+      )}
       {tur === 'Cari' && cariNotu && <p className="m2-hint">{cariNotu}</p>}
     </div>
   );
@@ -529,6 +538,7 @@ function yontemPayload(tur, detay) {
   if (tur === 'Nakit') return detay ? { odemeTuru: tur, kasa: detay, odemeHesabi: '' } : { hata: 'Kasayı seçin' };
   if (tur === 'Kredi Kartı') return detay ? { odemeTuru: tur, odemeHesabi: detay, kasa: '' } : { hata: 'Kartı seçin' };
   if (tur === 'Banka Havalesi') return detay ? { odemeTuru: tur, odemeHesabi: detay, kasa: '' } : { hata: 'Bankayı seçin' };
+  if (tur === 'Ortaklar') return detay ? { odemeTuru: tur, odemeHesabi: detay, kasa: '' } : { hata: 'Ortağı seçin' };
   return { odemeTuru: tur, odemeHesabi: '', kasa: '' }; // Cari
 }
 
@@ -1836,12 +1846,13 @@ function YontemModal({ varsayilanTur, onKaydet, onBitti, onKapat }) {
         <option value="Nakit">Nakit (kasa)</option>
         <option value="Kredi Kartı">Kredi Kartı</option>
         <option value="Banka Havalesi">Banka Havalesi</option>
+        <option value="Ortaklar">Ortaklar</option>
       </select>
       <label className="m2-label">Ad</label>
       <input
         className="m2-input"
         autoFocus
-        placeholder={odemeTuru === 'Nakit' ? 'Örn. Ofis Kasası' : odemeTuru === 'Kredi Kartı' ? 'Örn. Garanti Kredi Kartı' : 'Örn. Garanti Bankası'}
+        placeholder={odemeTuru === 'Nakit' ? 'Örn. Ofis Kasası' : odemeTuru === 'Kredi Kartı' ? 'Örn. Garanti Kredi Kartı' : odemeTuru === 'Ortaklar' ? 'Örn. Ahmet Cepten' : 'Örn. Garanti Bankası'}
         value={ad}
         onChange={(e) => setAd(e.target.value)}
       />
