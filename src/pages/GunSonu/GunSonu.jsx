@@ -67,6 +67,11 @@ export default function GunSonu({ data, onNavigate }) {
   }
 
   const bugunTarih = useMemo(() => isGunuTR(), []);
+  // Ekrandaki gün adı / tarih, kaydın gideceği iş gününü göstermeli (gece 02:00'ye kadar önceki gün).
+  const isGunuTarihiNesne = useMemo(() => {
+    const [g, a, y] = bugunTarih.split('.').map(Number);
+    return new Date(y, a - 1, g, 12);
+  }, [bugunTarih]);
 
   const todaysSales = useMemo(() => {
     const bugunAnahtar = isGunuAnahtar(Date.now());
@@ -761,8 +766,8 @@ export default function GunSonu({ data, onNavigate }) {
           <div className="gs-col">
             <section className="gs-card gs-bilgi-card">
               <div className="gs-bilgi-tarih">
-                <span className="gun">{new Date().toLocaleDateString('tr-TR', { weekday: 'long' })}</span>
-                <span className="tarih">{new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                <span className="gun">{isGunuTarihiNesne.toLocaleDateString('tr-TR', { weekday: 'long' })}</span>
+                <span className="tarih">{isGunuTarihiNesne.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
                 <div className="gs-bilgi-toplam-ciro"><span>TOPLAM CİRO</span><strong>{TL(toplamCiro)}</strong></div>
               </div>
 
