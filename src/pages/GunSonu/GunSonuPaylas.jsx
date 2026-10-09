@@ -1,130 +1,161 @@
 import { useEffect, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { Copy, Check, Download, Share2, X, AlertTriangle } from 'lucide-react';
-import { tam, kurus, buyukHarf } from './gunsonuPaylasVeri';
+import '@fontsource/archivo-black/400.css';
+import '@fontsource/space-grotesk/500.css';
+import '@fontsource/space-grotesk/700.css';
+import { tam, buyukHarf } from './gunsonuPaylasVeri';
 import './GunSonuPaylas.css';
 
-// Gün sonu paylaşım görseli: "takvim yaprağı". Ekranda görünmeyen 1080 px genişliğinde ayrı bir kart çizilir,
-// PNG'ye çevrilir; ekran genişliğinden bağımsızdır. Görsel aşağı doğru uzayabilir, genişlemez.
+// Gün sonu paylaşım görseli: HER ZAMAN 1080 x 2400 px (sabit boyut).
+// WhatsApp uzun görselleri sohbette kırpar ve görünen pencere görselin yüksekliğine göre değişir; bu yüzden
+// boyut sabit tutulur. Tarih ve ciro görselin y=430-830 bandında (WhatsApp'ta kırpılmadan görünen bölge),
+// ayrıntılar bunun üstünde ve altında; görsele tıklayınca tamamı görünür.
+// Detay bölgesi taşarsa --k değişkeni küçülerek yazılar sığdırılır, görsel boyutu değişmez.
+
+export const KART_YUKSEKLIK = 2400;
 
 function Satir({ ad, tutar, son }) {
   return (
     <div className={`gsk-s${son ? ' gsk-son' : ''}`}>
       <span className="gsk-ad">{ad}</span>
-      <span className={tutar < 0 ? 'gsk-n' : ''}>{tam(tutar)}</span>
+      <b className={tutar < 0 ? 'gsk-n' : ''}>{tam(tutar)}</b>
     </div>
   );
 }
 
-function Bolum({ tur, baslik, toplam, children, negatif }) {
+function Kutu({ baslik, children, sinif = '' }) {
   return (
-    <section className={`gsk-b gsk-t-${tur}`}>
-      <div className="gsk-bh">
-        <span><i className="gsk-nokta" />{buyukHarf(baslik)}</span>
-        {toplam !== undefined && <b className={negatif ? 'gsk-n' : ''}>{toplam}</b>}
-      </div>
+    <section className={`gsk-kt ${sinif}`}>
+      <h3>{buyukHarf(baslik)}</h3>
       {children}
     </section>
   );
 }
 
-function HarcamaSutun({ baslik, veri }) {
+export function PaylasKarti({ v }) {
+  const { tarih, ay, nakit, kart, yemek, cari, harcama, anaKasa, ekmek } = v;
+  const harcamaSatir = [
+    ...harcama.tlKasa.satirlar.map((s) => ({ ...s, ad: `${s.ad} (TL kasa)` })),
+    ...harcama.gunluk.satirlar.map((s) => ({ ...s, ad: `${s.ad} (günlük)` })),
+  ];
+  const harcamaToplam = harcamaSatir.reduce((t, r) => t + r.tutar, 0);
+  const kirilim = yemek.kolonlar.length > 1;
+  const renkler = [
+    ['nakit', 'NAKİT', nakit.toplam],
+    ['kart', 'KREDİ KARTI', kart.toplam],
+    ['yemek', 'YEMEK KARTI', yemek.toplam],
+    ['cari', 'CARİ', cari.toplam],
+  ];
   return (
-    <div className="gsk-hs">
-      <div className="gsk-ab">{buyukHarf(baslik)}</div>
-      {veri.satirlar.length ? veri.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />) : <div className="gsk-bos">Harcama yok</div>}
-      <Satir ad="Toplam" tutar={veri.toplam} son />
+    <div className="gsk" style={{ height: KART_YUKSEKLIK }}>
+      <div className="gsk-band">
+        <span>PERPA SANDVİÇ</span>
+        <small>{v.kaydedildi ? 'GÜN SONU · DETAYLAR' : 'TASLAK · KAYDEDİLMEDİ'}</small>
+      </div>
+      <div className="gsk-ic">
+        <div className="gsk-ust">
+          <Kutu baslik="Kredi kartı">
+            {kart.satirlar.length ? kart.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />) : <div className="gsk-bos">Kart satışı yok</div>}
+            <Satir ad="Toplam" tutar={kart.toplam} son />
+          </Kutu>
+          <Kutu baslik="Ana kasa">
+            {anaKasa.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
+            <Satir ad="Yarına devir" tutar={anaKasa.yarinaDevir} son />
+          </Kutu>
+        </div>
+
+        <div className="gsk-hero">
+          <div className="gsk-dt">{buyukHarf(tarih.haftaGunu)} · {parseInt(tarih.gun, 10)} {buyukHarf(tarih.ay)} {tarih.yil}</div>
+          <div className="gsk-et">TOPLAM CİRO</div>
+          <div className="gsk-big">{tam(v.toplamCiro)}<i> ₺</i></div>
+          <div className="gsk-ayrow">
+            <em>BU AY {tam(ay.buAy)} ₺</em>
+            {ay.ayniGune > 0 && <em className="gsk-em2">GEÇEN AY AYNI GÜNE {tam(ay.ayniGune)} ₺ <b className={ay.yuzde >= 0 ? 'gsk-art' : 'gsk-nn'}>{ay.yuzde >= 0 ? '+' : '−'}%{Math.abs(ay.yuzde)}</b></em>}
+          </div>
+        </div>
+
+        <div className="gsk-tiles">
+          {renkler.map(([t, ad, tutar]) => (
+            <div key={t} className={`gsk-tile gsk-tl-${t}`}><span>{ad}</span><b>{tam(tutar)}</b></div>
+          ))}
+        </div>
+
+        <div className="gsk-alt">
+          <div className="gsk-iki">
+            <Kutu baslik="Nakit sayımı">
+              {nakit.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
+              <Satir ad="Toplam" tutar={nakit.toplam} son />
+            </Kutu>
+            <div className="gsk-sutun">
+              {harcamaSatir.length > 0 && (
+                <Kutu baslik="Harcama">
+                  {harcamaSatir.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
+                  <Satir ad="Toplam" tutar={harcamaToplam} son />
+                </Kutu>
+              )}
+              <Kutu baslik="Ekmek">
+                <div className="gsk-ekmek">
+                  {ekmek.satirlar.map((e) => <div key={e.ad}><b>{e.adet}</b><span>{e.ad}</span></div>)}
+                </div>
+                <Satir ad="Toplam ekmek" tutar={ekmek.toplam} son />
+              </Kutu>
+            </div>
+          </div>
+
+          {yemek.satirlar.length > 0 && (
+            <Kutu baslik="Yemek kartı">
+              {kirilim ? (
+                <div className="gsk-tab" style={{ gridTemplateColumns: `minmax(0, 1.25fr) repeat(${yemek.kolonlar.length}, minmax(0, 1fr)) minmax(0, 0.9fr)` }}>
+                  <span className="gsk-th" />
+                  {yemek.kolonlar.map((k) => <span key={k} className="gsk-th gsk-sag">{k}</span>)}
+                  <span className="gsk-th gsk-sag">Toplam</span>
+                  {yemek.satirlar.map((r) => [
+                    <span key={`${r.ad}-a`} className="gsk-td">{r.ad}</span>,
+                    ...r.parcalar.map((p, i) => <span key={`${r.ad}-${i}`} className={`gsk-td gsk-sag${p ? '' : ' gsk-silik'}`}>{p ? tam(p) : '–'}</span>),
+                    <span key={`${r.ad}-t`} className="gsk-td gsk-sag gsk-kalin">{tam(r.tutar)}</span>,
+                  ])}
+                  <span className="gsk-td gsk-tt">Toplam</span>
+                  {yemek.kolonlar.map((k, i) => <span key={k} className="gsk-td gsk-sag gsk-tt">{tam(yemek.satirlar.reduce((a, r) => a + r.parcalar[i], 0))}</span>)}
+                  <span className="gsk-td gsk-sag gsk-tt">{tam(yemek.toplam)}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="gsk-cl">{yemek.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}</div>
+                  <Satir ad="Toplam" tutar={yemek.toplam} son />
+                </>
+              )}
+            </Kutu>
+          )}
+
+
+          {cari.satirlar.length > 0 && (
+            <Kutu baslik="Cari">
+              <div className={`gsk-cl${cari.tekSutun ? ' gsk-tek' : ''}`}>
+                {cari.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
+              </div>
+              <Satir ad="Cari toplamı" tutar={cari.toplam} son />
+            </Kutu>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-export function PaylasKarti({ v }) {
-  const { tarih, ay, nakit, kart, yemek, cari, harcama, anaKasa, ekmek } = v;
-  const harcamaVar = harcama.tlKasa.satirlar.length || harcama.gunluk.satirlar.length;
-  const kirilim = yemek.kolonlar.length > 1;
-  return (
-    <div className="gsk">
-      <div className="gsk-delik" aria-hidden="true">{Array.from({ length: 24 }, (_, i) => <i key={i} />)}</div>
-      <header className="gsk-bas">
-        <div className="gsk-yaprak">
-          <div className="gsk-ay">{buyukHarf(tarih.ay)} {tarih.yil}</div>
-          <div className="gsk-gun">{tarih.gun}</div>
-        </div>
-        <div className="gsk-ciro">
-          <div className="gsk-et">TOPLAM CİRO</div>
-          <div className="gsk-ciro-t">{kurus(v.toplamCiro)} ₺</div>
-          <div className="gsk-ay1">Bu ay {tam(ay.buAy)} ₺ · Geçen ay {tam(ay.gecenAy)} ₺</div>
-          {ay.ayniGune > 0 && (
-            <div className="gsk-ay2">
-              Geçen ay aynı güne {tam(ay.ayniGune)} ₺{' '}
-              <b className={ay.yuzde >= 0 ? 'gsk-art' : 'gsk-n'}>{ay.yuzde >= 0 ? '+' : '−'}%{Math.abs(ay.yuzde)}</b>
-            </div>
-          )}
-        </div>
-      </header>
-
-      <div className="gsk-iki">
-        <Bolum tur="nakit" baslik="Nakit" toplam={tam(nakit.toplam)} negatif={nakit.toplam < 0}>
-          {nakit.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
-        </Bolum>
-        <div>
-          <Bolum tur="kart" baslik="Kredi kartı" toplam={tam(kart.toplam)}>
-            {kart.satirlar.length ? kart.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />) : <div className="gsk-bos">Kart satışı yok</div>}
-          </Bolum>
-          <Bolum tur="kasa" baslik="Ana kasa" toplam={tam(anaKasa.yarinaDevir)} negatif={anaKasa.yarinaDevir < 0}>
-            {anaKasa.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
-            <Satir ad="Yarına devir" tutar={anaKasa.yarinaDevir} son />
-          </Bolum>
-        </div>
-      </div>
-
-      {yemek.satirlar.length > 0 && (
-        <Bolum tur="yemek" baslik="Yemek kartı" toplam={tam(yemek.toplam)}>
-          {kirilim ? (
-            <div className="gsk-tab" style={{ gridTemplateColumns: `minmax(0, 1.25fr) repeat(${yemek.kolonlar.length}, minmax(0, 1fr)) minmax(0, 0.9fr)` }}>
-              <span className="gsk-th" />
-              {yemek.kolonlar.map((k) => <span key={k} className="gsk-th gsk-sag">{k}</span>)}
-              <span className="gsk-th gsk-sag">Toplam</span>
-              {yemek.satirlar.map((r) => [
-                <span key={`${r.ad}-a`} className="gsk-td gsk-ad">{r.ad}</span>,
-                ...r.parcalar.map((p, i) => <span key={`${r.ad}-${i}`} className={`gsk-td gsk-sag${p ? '' : ' gsk-silik'}`}>{p ? tam(p) : '–'}</span>),
-                <span key={`${r.ad}-t`} className="gsk-td gsk-sag gsk-kalin">{tam(r.tutar)}</span>,
-              ])}
-            </div>
-          ) : (
-            yemek.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)
-          )}
-        </Bolum>
-      )}
-
-      {cari.satirlar.length > 0 && (
-        <Bolum tur="cari" baslik="Cari" toplam={tam(cari.toplam)} negatif={cari.toplam < 0}>
-          <div className={`gsk-cari-l${cari.tekSutun ? ' gsk-tek' : ''}`}>
-            {cari.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
-          </div>
-        </Bolum>
-      )}
-
-      {harcamaVar ? (
-        <Bolum tur="harcama" baslik="Harcama">
-          <div className="gsk-harcama-l">
-            <HarcamaSutun baslik="TL Kasa" veri={harcama.tlKasa} />
-            <HarcamaSutun baslik="Günlük kasa" veri={harcama.gunluk} />
-          </div>
-        </Bolum>
-      ) : null}
-
-      <Bolum tur="ekmek" baslik="Ekmek" toplam={`${ekmek.toplam} adet`}>
-        <div className="gsk-ekmek-l">
-          {ekmek.satirlar.map((e) => (
-            <div key={e.ad}><b>{e.adet}</b><span>{e.ad}</span></div>
-          ))}
-        </div>
-      </Bolum>
-
-      {!v.kaydedildi && <div className="gsk-not">Kaydedilmemiş taslak</div>}
-    </div>
-  );
+// Detay bölgesi 2400 px'e sığmıyorsa yazıları küçült (görsel boyutu sabit kalır).
+function sigdir(kart) {
+  const ic = kart.querySelector('.gsk-ic');
+  const alt = kart.querySelector('.gsk-alt');
+  const bant = kart.querySelector('.gsk-band');
+  if (!ic || !alt || !bant) return;
+  const sinir = KART_YUKSEKLIK - 14;
+  let k = 1;
+  alt.style.setProperty('--k', '1');
+  while (bant.offsetHeight + ic.offsetHeight > sinir && k > 0.5) {
+    k = Math.round((k - 0.04) * 100) / 100;
+    alt.style.setProperty('--k', String(k));
+  }
 }
 
 export default function GunSonuPaylas({ v, onKapat }) {
@@ -142,8 +173,12 @@ export default function GunSonuPaylas({ v, onKapat }) {
     setHata('');
     (async () => {
       try {
-        if (document.fonts && document.fonts.ready) await document.fonts.ready;
-        const canvas = await html2canvas(kartRef.current, { scale: 1, backgroundColor: null, useCORS: true, logging: false });
+        if (document.fonts) {
+          await Promise.all([document.fonts.load("40px 'Archivo Black'"), document.fonts.load("700 40px 'Space Grotesk'"), document.fonts.load("500 40px 'Space Grotesk'")]).catch(() => {});
+          await document.fonts.ready;
+        }
+        sigdir(kartRef.current);
+        const canvas = await html2canvas(kartRef.current, { scale: 1, backgroundColor: null, useCORS: true, logging: false, width: 1080, height: KART_YUKSEKLIK, windowWidth: 1080 });
         const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
         if (!blob) throw new Error('bos');
         url = URL.createObjectURL(blob);
@@ -185,7 +220,7 @@ export default function GunSonuPaylas({ v, onKapat }) {
     if (!png) return;
     const dosya = new File([png.blob], dosyaAdi, { type: 'image/png' });
     if (!navigator.canShare({ files: [dosya] })) { setHata('Bu cihaz dosya paylaşımını desteklemiyor. İndir ile kaydet.'); return; }
-    try { await navigator.share({ files: [dosya] }); } catch { /* kullanıcı vazgeçti */ }
+    try { await navigator.share({ files: [dosya], text: `${v.tarih.gun} ${v.tarih.ay} ${v.tarih.haftaGunu} · Ciro ${tam(v.toplamCiro)} ₺` }); } catch { /* kullanıcı vazgeçti */ }
   }
 
   return (

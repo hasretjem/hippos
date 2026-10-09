@@ -1,68 +1,65 @@
-/* ===== Gün sonu paylaşım kartı: "takvim yaprağı" (1080 px, PNG'ye çevrilir) =====
-   Yazı renkleri !important: genel stiller yazıyı beyaz yapabiliyor. Ölçüler 1080 px görsel içindir. */
-.gsk {
-  width: 1080px; box-sizing: border-box; position: relative;
-  background: #fffaf0; padding: 64px 48px 40px;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif; color: #1f2326 !important;
-  font-variant-numeric: tabular-nums; line-height: 1.3;
-}
+/* ===== Gün sonu paylaşım kartı (1080 x 2400 px sabit, PNG'ye çevrilir) =====
+   Tasarım B (neo-brutalist afiş). Yazı renkleri !important: genel stiller yazıyı beyaz yapabiliyor.
+   Tarih + ciro y=430-830 bandında: WhatsApp'ın kırpmadan gösterdiği bölge. */
+.gsk { width: 1080px; box-sizing: border-box; position: relative; overflow: hidden; background: #ffd23f;
+  font-family: 'Space Grotesk', system-ui, sans-serif; font-weight: 700; color: #000 !important; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .gsk * { box-sizing: border-box; }
-.gsk-delik { position: absolute; top: 22px; left: 48px; right: 48px; display: flex; justify-content: space-between; }
-.gsk-delik i { width: 14px; height: 14px; border-radius: 50%; background: #e9dfc6; display: block; }
+.gsk-band { height: 130px; background: #000; display: flex; align-items: center; justify-content: space-between; padding: 0 44px;
+  font-family: 'Archivo Black', sans-serif; font-size: 52px; letter-spacing: 0.04em; color: #ffd23f !important; }
+.gsk-band small { font-family: 'Space Grotesk', sans-serif; font-size: 40px; font-weight: 700; color: #fff !important; }
+.gsk-ic { padding: 0 44px 0 44px; }
+.gsk-n, .gsk .gsk-n { color: #c92a2a !important; }
 
-.gsk-bas { display: grid; grid-template-columns: 330px 1fr; gap: 36px; align-items: stretch; }
-.gsk-yaprak { background: #e03131; border-radius: 24px; text-align: center; padding: 22px 10px 16px; display: flex; flex-direction: column; justify-content: center; }
-.gsk-ay { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; color: #fff !important; white-space: nowrap; }
-.gsk-gun { font-size: 176px; font-weight: 900; line-height: 1; letter-spacing: 0.02em; color: #fff !important; margin-top: 4px; }
-.gsk-ciro { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
-.gsk-et { font-size: 22px; font-weight: 800; letter-spacing: 0.14em; color: #868e96 !important; }
-.gsk-ciro-t { font-size: 86px; font-weight: 900; line-height: 1.04; letter-spacing: 0.005em; color: #1f2326 !important; white-space: nowrap; }
-.gsk-ay1 { font-size: 27px; font-weight: 700; letter-spacing: 0.02em; margin-top: 14px; color: #1f2326 !important; }
-.gsk-ay2 { font-size: 25px; font-weight: 700; letter-spacing: 0.02em; margin-top: 6px; color: #868e96 !important; }
-.gsk-art { color: #2b8a3e !important; font-weight: 900; }
+.gsk-ust { display: grid; grid-template-columns: 1fr 1fr; margin-top: 14px; min-height: 264px; align-items: start; }
+.gsk-kt { background: #fff; border: 7px solid #000; border-right-width: 17px; border-bottom-width: 17px; padding: 10px 22px 8px; margin: 14px 12px 0 0; }
+.gsk-kt h3 { margin: 0 0 4px; font-family: 'Archivo Black', sans-serif; font-weight: 400; font-size: calc(38px * var(--k, 1)); color: #e94f37 !important; }
+.gsk-s { display: flex; justify-content: space-between; gap: 14px; font-size: calc(30px * var(--k, 1)); line-height: 1.2; border-bottom: 3px solid #000; color: #000 !important; }
+.gsk-s .gsk-ad { min-width: 0; white-space: nowrap; overflow: hidden; color: #000 !important; }
+.gsk-s b { font-weight: 700; white-space: nowrap; color: #000 !important; }
+.gsk-s b.gsk-n { color: #c92a2a !important; }
+.gsk-son { background: #ffd23f; padding: 0 10px; margin-top: 6px; border-bottom: 0; font-family: 'Archivo Black', sans-serif; }
+.gsk-son .gsk-ad, .gsk-son b { font-family: 'Archivo Black', sans-serif; font-weight: 400; }
+.gsk-bos { font-size: calc(30px * var(--k, 1)); color: #555 !important; }
 
-.gsk-iki { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
-.gsk-b { margin-top: 30px; }
-.gsk-bh { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; border-bottom: 4px solid #1f2326; padding-bottom: 6px; margin-bottom: 8px; }
-.gsk-bh span { font-size: 27px; font-weight: 900; letter-spacing: 0.07em; color: #1f2326 !important; display: flex; align-items: center; }
-.gsk-bh b { font-size: 30px; font-weight: 900; letter-spacing: 0.01em; color: #1f2326 !important; white-space: nowrap; }
-.gsk-nokta { display: inline-block; width: 18px; height: 18px; border-radius: 50%; margin-right: 12px; flex: 0 0 auto; }
-.gsk-t-nakit .gsk-nokta { background: #2f9e44; }
-.gsk-t-kart .gsk-nokta { background: #1c7ed6; }
-.gsk-t-yemek .gsk-nokta { background: #f59f00; }
-.gsk-t-cari .gsk-nokta { background: #7048e8; }
-.gsk-t-harcama .gsk-nokta { background: #e03131; }
-.gsk-t-kasa .gsk-nokta { background: #e8a33a; }
-.gsk-t-ekmek .gsk-nokta { background: #8b5a2b; }
+.gsk-hero { background: #fff; border: 9px solid #000; border-right-width: 25px; border-bottom-width: 25px; padding: 16px 30px 18px; margin: 22px 12px 0 0; }
+.gsk-dt { font-family: 'Archivo Black', sans-serif; font-size: 68px; line-height: 1.05; white-space: nowrap; color: #e94f37 !important; letter-spacing: 0.01em; }
+.gsk-et { font-size: 50px; letter-spacing: 0.06em; margin-top: 6px; color: #000 !important; }
+.gsk-big { font-family: 'Archivo Black', sans-serif; font-size: 160px; line-height: 0.98; white-space: nowrap; letter-spacing: -0.02em; color: #000 !important; }
+.gsk-big i { font-style: normal; font-size: 110px; }
+.gsk-ayrow { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-top: 4px; }
+.gsk-ayrow em { font-style: normal; font-size: 44px; background: #000; color: #fff !important; padding: 2px 16px; border-radius: 8px; white-space: nowrap; }
+.gsk-ayrow .gsk-em2 { font-size: 32px; background: #fff; color: #000 !important; border: 4px solid #000; }
+.gsk-ayrow .gsk-em2 b { color: #000 !important; }
+.gsk-ayrow .gsk-art { color: #1b7a2f !important; }
+.gsk-ayrow .gsk-nn { color: #c92a2a !important; }
 
-.gsk-s { display: flex; justify-content: space-between; gap: 18px; font-size: 26px; font-weight: 600; line-height: 1.55; color: #1f2326 !important; }
-.gsk-s span { color: #1f2326 !important; white-space: nowrap; }
-.gsk-s .gsk-ad { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.gsk .gsk-n, .gsk-s .gsk-n { color: #e03131 !important; }
-.gsk-son { font-weight: 900; border-top: 2px solid #1f2326; margin-top: 4px; padding-top: 4px; }
-.gsk-bos { font-size: 24px; font-weight: 600; color: #adb5bd !important; line-height: 1.55; }
+.gsk-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 24px; margin: 20px 12px 0 0; }
+.gsk-tile { border: 8px solid #000; border-right-width: 18px; border-bottom-width: 18px; padding: 8px 20px 6px; }
+.gsk-tile span { display: block; font-size: 42px; letter-spacing: 0.04em; color: #000 !important; }
+.gsk-tile b { display: block; font-family: 'Archivo Black', sans-serif; font-weight: 400; font-size: 84px; line-height: 1.1; color: #000 !important; white-space: nowrap; }
+.gsk-tl-nakit { background: #4cd964; }
+.gsk-tl-kart { background: #6ec1ff; }
+.gsk-tl-yemek { background: #ff9f45; }
+.gsk-tl-cari { background: #d3b5ff; }
 
-/* Yemek kartı: marka × kolon (sipariş hattı, kişi adları) tablosu, yalnız dolu kolonlar */
+.gsk-alt { --k: 1; }
+.gsk-iki { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
+.gsk-sutun { display: flex; flex-direction: column; }
+.gsk-alt > .gsk-kt { margin-right: 12px; }
+.gsk-cl { display: grid; grid-template-columns: 1fr 1fr; column-gap: 36px; }
+.gsk-cl.gsk-tek { grid-template-columns: 1fr; }
+.gsk-cl .gsk-s { font-size: calc(28px * var(--k, 1)); }
 .gsk-tab { display: grid; column-gap: 14px; }
-.gsk-th { font-size: 20px; font-weight: 800; letter-spacing: 0.04em; color: #868e96 !important; padding: 2px 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gsk-td { font-size: 26px; font-weight: 600; line-height: 1.55; color: #1f2326 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gsk-th { font-size: calc(26px * var(--k, 1)); color: #444 !important; padding: 0 0 4px; white-space: nowrap; overflow: hidden; border-bottom: 3px solid #000; }
+.gsk-td { font-size: calc(30px * var(--k, 1)); line-height: 1.22; color: #000 !important; white-space: nowrap; overflow: hidden; border-bottom: 3px solid #000; }
 .gsk-sag { text-align: right; }
-.gsk-kalin { font-weight: 900; }
-.gsk-silik { color: #ced4da !important; }
-
-/* Cari: isimler tek satır; uzun isim varsa tek sütun (görsel aşağı uzar, genişlemez) */
-.gsk-cari-l { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
-.gsk-cari-l.gsk-tek { grid-template-columns: 1fr; }
-
-/* Harcama: TL Kasa ve Günlük kasa yan yana, her birinin toplamı altında */
-.gsk-harcama-l { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
-.gsk-ab { font-size: 22px; font-weight: 800; letter-spacing: 0.1em; color: #c92a2a !important; margin: 2px 0 2px; }
-
-.gsk-ekmek-l { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 6px; }
-.gsk-ekmek-l div { background: #f3e6d8; border-radius: 18px; padding: 12px 8px 14px; text-align: center; }
-.gsk-ekmek-l b { display: block; font-size: 54px; font-weight: 900; line-height: 1.05; color: #4a2e14 !important; }
-.gsk-ekmek-l span { display: block; font-size: 21px; font-weight: 700; letter-spacing: 0.01em; color: #4a2e14 !important; margin-top: 2px; }
-.gsk-not { margin-top: 26px; text-align: right; font-size: 22px; font-weight: 800; letter-spacing: 0.06em; color: #e03131 !important; }
+.gsk-kalin { font-weight: 700; }
+.gsk-silik { color: #aaa !important; }
+.gsk-tt { background: #ffd23f; font-family: 'Archivo Black', sans-serif; border-bottom: 0; }
+.gsk-ekmek { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 8px; }
+.gsk-ekmek div { border: 5px solid #000; text-align: center; padding: 2px 0; background: #c3f0ca; }
+.gsk-ekmek b { display: block; font-family: 'Archivo Black', sans-serif; font-weight: 400; font-size: calc(52px * var(--k, 1)); line-height: 1.1; color: #000 !important; }
+.gsk-ekmek span { display: block; font-size: calc(26px * var(--k, 1)); color: #000 !important; }
 
 /* ===== Paylaşım penceresi ===== */
 .gsp-ort { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -87,8 +84,5 @@
 .gsp-ana:hover:not(:disabled) { border-color: #c73f2a; background: #d8452e; }
 /* Kart ekran dışında, gerçek boyutunda çizilir (pencere animasyonsuz: fixed konum bozulmasın) */
 .gsp-sahne { position: fixed; left: -20000px; top: 0; pointer-events: none; }
-
-/* İki harcama sütununun "Toplam" satırı aynı hizada (kısa liste boşluğu toplamın üstünde bırakır) */
-.gsk-hs { display: flex; flex-direction: column; }
-.gsk-hs > .gsk-son { margin-top: auto; }
-.gsk-hs > .gsk-s:nth-last-child(2) { margin-bottom: 4px; }
+.gsk-sutun .gsk-ekmek span { font-size: calc(21px * var(--k, 1)); }
+.gsk-sutun .gsk-ekmek { gap: 6px; }
