@@ -143,7 +143,17 @@ function rowToCari(r) {
     onOdeme: r.on_odeme || 0,
     ozetTarih: r.ozet_tarih || null,
     tahsilatMesajTarih: r.tahsilat_mesaj_tarih || null,
+    odemeTarihi: r.odeme_tarihi || null,
+    odemeTarihiBelirsiz: !!r.odeme_tarihi_belirsiz,
     olusturmaTs: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+  };
+}
+function rowToDuzeltme(r) {
+  return {
+    id: r.id, cariId: r.cari_id, cariAd: r.cari_ad || '', hareketId: r.hareket_id, tip: r.tip,
+    hareketTs: Number(r.hareket_ts), ts: Number(r.ts), gunAnahtari: r.gun_anahtari,
+    ciroEtkisi: Number(r.ciro_etkisi) || 0, onceki: r.onceki || null, sonraki: r.sonraki || null,
+    notMetni: r.not_metni || '', raporSnapshot: r.rapor_snapshot || null, geriAlindi: !!r.geri_alindi,
   };
 }
 function rowToHareket(r) {
@@ -179,6 +189,7 @@ function rowToPaketTeslimat(r) {
     tutar: r.tutar === null || r.tutar === undefined ? null : Number(r.tutar),
     odemeYontemi: r.odeme_yontemi, notMetni: r.not_metni, fotoUrl: r.foto_url,
     paketciAdi: r.paketci_adi, durum: r.durum, onayNotu: r.onay_notu,
+    odemeTarihi: r.odeme_tarihi || null, odemeTarihiBelirsiz: !!r.odeme_tarihi_belirsiz,
     ts: Number(r.ts), onayTs: r.onay_ts ? Number(r.onay_ts) : null,
   };
 }
@@ -569,6 +580,7 @@ export default function useHipposData(scope = 'full') {
   const [actionHistory, setActionHistory] = useState([]);
   const [cariler, setCariler] = useState([]);
   const [cariHareketler, setCariHareketler] = useState([]);
+  const [cariDuzeltmeler, setCariDuzeltmeler] = useState([]);
   const [cariOdemeler, setCariOdemeler] = useState([]);
   const [cariFaturalar, setCariFaturalar] = useState([]);
   const [cariGecmis, setCariGecmis] = useState([]);
@@ -768,7 +780,7 @@ export default function useHipposData(scope = 'full') {
     let cancelled = false;
 
     async function loadAll() {
-      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn, ss, bv, bvk] = await Promise.all([
+      const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn, ss, bv, bvk, cdz] = await Promise.all([
         supabase.from('table_state').select('*'),
         supabase.from('packages').select('*'),
         supabase.from('package_meta').select('*').eq('id', 1).maybeSingle(),
@@ -789,6 +801,7 @@ export default function useHipposData(scope = 'full') {
         supabase.from('store_settings').select('*').eq('id', 1).maybeSingle(),
         supabase.from('bosvar_bildirimleri').select('*'),
         supabase.from('bosvar_kayitlari').select('*'),
+        supabase.from('cari_duzeltmeler').select('*'),
       ]);
       if (cancelled) return;
 
@@ -801,6 +814,7 @@ export default function useHipposData(scope = 'full') {
           globalIconSize: ss.data.global_icon_size ?? 22,
         });
       }
+      setCariDuzeltmeler((cdz.data || []).map(rowToDuzeltme).sort((a, b) => b.ts - a.ts));
       setPaketTeslimatlari((pt.data || []).map(rowToPaketTeslimat).sort((a, b) => b.ts - a.ts));
       setCariTeslimatBildirimleri((ctb.data || []).map(rowToCariTeslimatBildirim).sort((a, b) => b.ts - a.ts));
       setBosvarBildirimleri((bv.data || []).map(rowToBosvar).sort((a, b) => b.ts - a.ts));
@@ -889,6 +903,7 @@ export default function useHipposData(scope = 'full') {
       action_history: need([]),
       cariler: need(['paketci']),
       cari_hareketler: need([]),
+      cari_duzeltmeler: need([]),
       cari_odemeler: need([]),
       cari_faturalar: need([]),
       cari_gecmis: need([]),
@@ -992,9 +1007,22 @@ export default function useHipposData(scope = 'full') {
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cari_hareketler' }, (payload) => {
           setCariHareketler((prev) => (prev.some((h) => h.id === payload.new.id) ? prev : [...prev, rowToHareket(payload.new)]));
         })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'cari_hareketler' }, (payload) => {
+          setCariHareketler((prev) => prev.map((h) => (h.id === payload.new.id ? rowToHareket(payload.new) : h)));
+        })
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'cari_hareketler' }, (payload) => {
           setCariHareketler((prev) => prev.filter((h) => h.id !== payload.old.id));
         });
+    }
+    if (wants.cari_duzeltmeler) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'cari_duzeltmeler' }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          setCariDuzeltmeler((prev) => prev.filter((d) => d.id !== payload.old.id));
+        } else {
+          const row = rowToDuzeltme(payload.new);
+          setCariDuzeltmeler((prev) => (prev.some((d) => d.id === row.id) ? prev.map((d) => (d.id === row.id ? row : d)) : [row, ...prev]));
+        }
+      });
     }
     if (wants.cari_odemeler) {
       channel = channel
@@ -1730,6 +1758,8 @@ export default function useHipposData(scope = 'full') {
     if (patch.onOdeme !== undefined) dbPatch.on_odeme = patch.onOdeme;
     if (patch.ozetTarih !== undefined) dbPatch.ozet_tarih = patch.ozetTarih;
     if (patch.tahsilatMesajTarih !== undefined) dbPatch.tahsilat_mesaj_tarih = patch.tahsilatMesajTarih;
+    if (patch.odemeTarihi !== undefined) dbPatch.odeme_tarihi = patch.odemeTarihi;
+    if (patch.odemeTarihiBelirsiz !== undefined) dbPatch.odeme_tarihi_belirsiz = patch.odemeTarihiBelirsiz;
     if (Object.keys(dbPatch).length === 0) return;
     supabase.from('cariler').update(dbPatch).eq('id', id).then(({ error }) => {
       if (error) console.error('cari güncellenemedi:', error.message);
@@ -1978,6 +2008,187 @@ export default function useHipposData(scope = 'full') {
     supabase.from('cari_hareketler').delete().eq('cari_id', cariId).then(({ error }) => { if (error) console.error(error.message); });
     supabase.from('cari_odemeler').delete().eq('cari_id', cariId).then(({ error }) => { if (error) console.error(error.message); });
     supabase.from('cari_faturalar').delete().eq('cari_id', cariId).then(({ error }) => { if (error) console.error(error.message); });
+    // Cari kapandı — ödeme günü uyarısı da kalkar.
+    updateCari(cariId, { odemeTarihi: null, odemeTarihiBelirsiz: false });
+  }
+
+  // ================== CARİ HAREKET DÜZENLEME (sil / tutar değiştir / ürün ekle) ==================
+  // MİMARİ: Geçmiş günlerin günsonu kayıtlarına DOKUNULMAZ. Her düzeltme cari_duzeltmeler'e yazılır ve
+  // DÜZELTMENİN YAPILDIĞI günün günsonunda ayrı bir "Cari Düzeltme" satırı olarak görünüp o günün
+  // cirosuna eklenir/düşer. Aynı gün içindeki düzeltmede ciro etkisi 0'dır: bugünkü cari toplamı zaten
+  // doğrudan cari_hareketler'den hesaplanıyor, hareket değişince toplam kendiliğinden değişir.
+  // Silme GERÇEKTEN silmez: hareketin tam kopyası düzeltme kaydında (onceki) saklanır, geri alınabilir.
+  function duzIsGunu(ms) {
+    return new Date(ms - 2 * 3600 * 1000).toLocaleDateString('en-CA', { timeZone: 'Europe/Istanbul' });
+  }
+  const duzYuvarla = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+  // Hareketin satış raporundaki karşılığı: aynı anda yazılmış, aynı tutarlı CARİ satış kaydı + ürün satırları.
+  // Eşleşme bulunamazsa (ön ödeme/eski kayıt) null döner — cari düzeltilir, rapor değişmez, kullanıcıya söylenir.
+  async function duzRaporBul(h) {
+    try {
+      const { data: sh, error } = await supabase.from('sales_history').select('*')
+        .eq('method', 'CARİ').gte('ts', h.ts - 5000).lte('ts', h.ts + 5000);
+      if (error) return null;
+      const aday = (sh || [])
+        .filter((r) => Math.abs(Number(r.amount) - Number(h.toplam)) < 0.005)
+        .sort((a, b) => Math.abs(Number(a.ts) - h.ts) - Math.abs(Number(b.ts) - h.ts))[0];
+      if (!aday) return null;
+      const { data: items } = await supabase.from('sold_items').select('*').eq('satis_id', aday.id);
+      return { satis: aday, items: items || [] };
+    } catch {
+      return null;
+    }
+  }
+
+  async function duzKaydiYaz(dz) {
+    const { error } = await supabase.from('cari_duzeltmeler').insert({
+      id: dz.id, cari_id: dz.cariId, cari_ad: dz.cariAd, hareket_id: dz.hareketId, tip: dz.tip,
+      hareket_ts: dz.hareketTs, ts: dz.ts, gun_anahtari: dz.gunAnahtari, ciro_etkisi: dz.ciroEtkisi,
+      onceki: dz.onceki, sonraki: dz.sonraki, not_metni: dz.notMetni || null,
+      rapor_snapshot: dz.raporSnapshot, geri_alindi: false,
+    });
+    return error;
+  }
+
+  async function silCariHareket(hareketId, notMetni) {
+    const h = cariHareketler.find((x) => x.id === hareketId);
+    if (!h) return { ok: false, mesaj: 'Kayıt bulunamadı (başka cihazda silinmiş olabilir)' };
+    const cari = cariler.find((c) => c.id === h.cariId);
+    const simdi = Date.now();
+    const gecmisGun = duzIsGunu(h.ts) < duzIsGunu(simdi);
+    const rapor = await duzRaporBul(h);
+    const dz = {
+      id: simdi * 1000 + Math.floor(Math.random() * 1000), cariId: h.cariId, cariAd: cari?.ad || '',
+      hareketId: h.id, tip: 'sil', hareketTs: h.ts, ts: simdi, gunAnahtari: duzIsGunu(simdi),
+      ciroEtkisi: gecmisGun ? -duzYuvarla(h.toplam) : 0,
+      onceki: { urunler: h.urunler, toplam: h.toplam, mutfakNotu: h.mutfakNotu || '', personelAd: h.personelAd || null },
+      sonraki: null, notMetni: (notMetni || '').trim(), geriAlindi: false,
+      raporSnapshot: rapor ? { satis: rapor.satis, items: rapor.items } : null,
+    };
+    const yazHata = await duzKaydiYaz(dz);
+    if (yazHata) return { ok: false, mesaj: 'Düzeltme kaydı yazılamadı, hiçbir şey silinmedi: ' + yazHata.message };
+    const { error: silHata } = await supabase.from('cari_hareketler').delete().eq('id', h.id);
+    if (silHata) {
+      await supabase.from('cari_duzeltmeler').delete().eq('id', dz.id);
+      return { ok: false, mesaj: 'Hareket silinemedi: ' + silHata.message };
+    }
+    if (rapor) {
+      if (rapor.items.length > 0) await supabase.from('sold_items').delete().eq('satis_id', rapor.satis.id);
+      await supabase.from('sales_history').delete().eq('id', rapor.satis.id);
+      setSalesHistory((prev) => prev.filter((r) => r.id !== rapor.satis.id));
+      setSoldItems((prev) => prev.filter((r) => r.satisId !== rapor.satis.id));
+    }
+    setCariHareketler((prev) => prev.filter((x) => x.id !== h.id));
+    setCariDuzeltmeler((prev) => [{ ...dz }, ...prev]);
+    return { ok: true, raporSenkron: !!rapor, ciroEtkisi: dz.ciroEtkisi };
+  }
+
+  // urunler: [{ ad, fiyat }] — mevcut kalemler AYNI SIRADA (fiyatı değişmiş olabilir), yeni kalemler sona eklenir.
+  async function guncelleCariHareket(hareketId, urunler, notMetni) {
+    const h = cariHareketler.find((x) => x.id === hareketId);
+    if (!h) return { ok: false, mesaj: 'Kayıt bulunamadı (başka cihazda değişmiş olabilir)' };
+    const eski = h.urunler || [];
+    const yeni = (urunler || []).map((u) => ({ ad: u.ad, fiyat: duzYuvarla(u.fiyat) }));
+    if (yeni.length < eski.length) return { ok: false, mesaj: 'Kalem çıkarmak için kaydı sil' };
+    if (yeni.some((u) => !u.ad || !(u.fiyat >= 0))) return { ok: false, mesaj: 'Ürün adı ve geçerli bir fiyat gerekli' };
+    const hamEski = eski.reduce((s, u) => s + (Number(u.fiyat) || 0), 0);
+    const hamYeni = yeni.reduce((s, u) => s + u.fiyat, 0);
+    if (yeni.length === eski.length && Math.abs(hamYeni - hamEski) < 0.005 && yeni.every((u, i) => u.fiyat === duzYuvarla(eski[i].fiyat))) {
+      return { ok: false, mesaj: 'Değişiklik yok' };
+    }
+    const cari = cariler.find((c) => c.id === h.cariId);
+    const isk = cari?.iskonto || 0;
+    const delta = hamYeni - hamEski;
+    const deltaNet = isk > 0 ? Math.round(delta * (1 - isk / 100)) : duzYuvarla(delta);
+    const yeniToplam = duzYuvarla(Number(h.toplam) + deltaNet);
+    if (yeniToplam < 0) return { ok: false, mesaj: 'Toplam eksiye düşemez' };
+    const eklenen = yeni.slice(eski.length);
+    const tip = eklenen.length > 0 ? 'urun_ekle' : 'tutar';
+    const simdi = Date.now();
+    const gecmisGun = duzIsGunu(h.ts) < duzIsGunu(simdi);
+    const rapor = await duzRaporBul(h);
+
+    let raporDegisim = null;
+    let degisenler = [];
+    let eklenenRows = [];
+    if (rapor) {
+      const kullanildi = new Set();
+      eski.forEach((u, i) => {
+        if (duzYuvarla(yeni[i].fiyat) === duzYuvarla(u.fiyat)) return;
+        const bulunan = rapor.items.find((it) => !kullanildi.has(it.id) && it.ad === u.ad && duzYuvarla(it.fiyat) === duzYuvarla(u.fiyat));
+        if (bulunan) { kullanildi.add(bulunan.id); degisenler.push({ id: bulunan.id, eskiFiyat: Number(bulunan.fiyat), yeniFiyat: yeni[i].fiyat }); }
+      });
+      eklenenRows = eklenen.map((u, j) => {
+        const urun = (products || []).find((p) => p.ad === u.ad);
+        return {
+          id: `${h.ts}-dz${simdi}-${j}`, ts: h.ts, ad: u.ad, fiyat: u.fiyat,
+          kategori: urun?.kategori || '', alt_kategori: urun?.altKategori || '',
+          table_name: rapor.satis.table_name, satis_id: rapor.satis.id,
+        };
+      });
+      raporDegisim = {
+        satisId: rapor.satis.id, eskiAmount: Number(rapor.satis.amount), eskiItemsCount: rapor.satis.items_count,
+        degisen: degisenler, eklenenIdler: eklenenRows.map((r) => r.id),
+      };
+    }
+
+    const dz = {
+      id: simdi * 1000 + Math.floor(Math.random() * 1000), cariId: h.cariId, cariAd: cari?.ad || '',
+      hareketId: h.id, tip, hareketTs: h.ts, ts: simdi, gunAnahtari: duzIsGunu(simdi),
+      ciroEtkisi: gecmisGun ? duzYuvarla(yeniToplam - Number(h.toplam)) : 0,
+      onceki: { urunler: eski, toplam: Number(h.toplam) }, sonraki: { urunler: yeni, toplam: yeniToplam },
+      notMetni: (notMetni || '').trim(), geriAlindi: false, raporSnapshot: raporDegisim,
+    };
+    const yazHata = await duzKaydiYaz(dz);
+    if (yazHata) return { ok: false, mesaj: 'Düzeltme kaydı yazılamadı, hiçbir şey değişmedi: ' + yazHata.message };
+    const { error: upHata } = await supabase.from('cari_hareketler').update({ urunler: yeni, toplam: yeniToplam }).eq('id', h.id);
+    if (upHata) {
+      await supabase.from('cari_duzeltmeler').delete().eq('id', dz.id);
+      return { ok: false, mesaj: 'Hareket güncellenemedi: ' + upHata.message };
+    }
+    if (rapor) {
+      await Promise.all(degisenler.map((d) => supabase.from('sold_items').update({ fiyat: d.yeniFiyat }).eq('id', d.id)));
+      if (eklenenRows.length > 0) await supabase.from('sold_items').insert(eklenenRows);
+      await supabase.from('sales_history').update({ amount: yeniToplam, items_count: (rapor.satis.items_count || 0) + eklenenRows.length }).eq('id', rapor.satis.id);
+      setSalesHistory((prev) => prev.map((r) => (r.id === rapor.satis.id ? { ...r, amount: yeniToplam, itemsCount: (r.itemsCount || 0) + eklenenRows.length } : r)));
+    }
+    setCariHareketler((prev) => prev.map((x) => (x.id === h.id ? { ...x, urunler: yeni, toplam: yeniToplam } : x)));
+    setCariDuzeltmeler((prev) => [{ ...dz }, ...prev]);
+    return { ok: true, raporSenkron: !!rapor, ciroEtkisi: dz.ciroEtkisi, yeniToplam };
+  }
+
+  // Silinen bir cari kaydını (ve varsa rapor kayıtlarını) olduğu gibi geri getirir.
+  async function geriAlSilinenCariHareket(duzeltmeId) {
+    const dz = cariDuzeltmeler.find((d) => d.id === duzeltmeId);
+    if (!dz || dz.tip !== 'sil' || dz.geriAlindi || !dz.onceki) return { ok: false, mesaj: 'Geri alınacak kayıt bulunamadı' };
+    if (!cariler.some((c) => c.id === dz.cariId)) return { ok: false, mesaj: 'Bu cari artık yok, kayıt geri getirilemez' };
+    const o = dz.onceki;
+    const { error: hErr } = await supabase.from('cari_hareketler').upsert(
+      { id: dz.hareketId, cari_id: dz.cariId, ts: dz.hareketTs, urunler: o.urunler || [], toplam: o.toplam, mutfak_notu: o.mutfakNotu || '', personel_ad: o.personelAd || null },
+      { onConflict: 'id' }
+    );
+    if (hErr) return { ok: false, mesaj: 'Hareket geri yazılamadı: ' + hErr.message };
+    const snap = dz.raporSnapshot;
+    if (snap && snap.satis) {
+      await supabase.from('sales_history').upsert(snap.satis, { onConflict: 'id' });
+      if ((snap.items || []).length > 0) await supabase.from('sold_items').upsert(snap.items, { onConflict: 'id' });
+    }
+    const simdi = Date.now();
+    await supabase.from('cari_duzeltmeler').update({ geri_alindi: true }).eq('id', dz.id);
+    // Düzeltme başka (kapanmış) bir günün günsonuna yazılmışsa, geri alma bugüne ters yönde ciro düzeltmesi olarak yazılır.
+    let yeniKayit = null;
+    if (dz.gunAnahtari !== duzIsGunu(simdi) && dz.ciroEtkisi !== 0) {
+      yeniKayit = {
+        id: simdi * 1000 + Math.floor(Math.random() * 1000), cariId: dz.cariId, cariAd: dz.cariAd,
+        hareketId: dz.hareketId, tip: 'geri_al', hareketTs: dz.hareketTs, ts: simdi, gunAnahtari: duzIsGunu(simdi),
+        ciroEtkisi: -dz.ciroEtkisi, onceki: null, sonraki: o, notMetni: 'Silme geri alındı', raporSnapshot: null, geriAlindi: false,
+      };
+      await duzKaydiYaz(yeniKayit);
+    }
+    setCariHareketler((prev) => (prev.some((x) => x.id === dz.hareketId) ? prev : [...prev, { id: dz.hareketId, cariId: dz.cariId, ts: dz.hareketTs, urunler: o.urunler || [], toplam: Number(o.toplam), mutfakNotu: o.mutfakNotu || '', personelAd: o.personelAd || null }]));
+    setCariDuzeltmeler((prev) => [...(yeniKayit ? [yeniKayit] : []), ...prev.map((d) => (d.id === dz.id ? { ...d, geriAlindi: true } : d))]);
+    return { ok: true };
   }
 
   // ================== PAKETÇİ MOBİL PANELİ ==================
@@ -1999,11 +2210,12 @@ export default function useHipposData(scope = 'full') {
 
   // Paketçi "Teslim Ettim" / "Kısmi Ödeme Aldım" gönderince çağrılır. Oluşan kaydı (id ile
   // birlikte) geri döner — paketçi ekranı bunu "son 5 işlem" geri-al listesinde tutar.
-  async function submitPaketTeslimat({ paketAdi, tip, tutar, odemeYontemi, notMetni, fotoUrl, paketciAdi }) {
+  async function submitPaketTeslimat({ paketAdi, tip, tutar, odemeYontemi, notMetni, fotoUrl, paketciAdi, odemeTarihi = null, odemeTarihiBelirsiz = false }) {
     const ts = Date.now();
     const row = {
       paket_adi: paketAdi, tip, tutar: tutar ?? null, odeme_yontemi: odemeYontemi || null,
       not_metni: notMetni || null, foto_url: fotoUrl || null, paketci_adi: paketciAdi, durum: 'bekliyor', ts,
+      odeme_tarihi: odemeTarihi || null, odeme_tarihi_belirsiz: !!odemeTarihiBelirsiz,
     };
     const { data, error } = await supabase.from('paket_teslimatlari').insert(row).select().single();
     if (error) {
@@ -2215,6 +2427,10 @@ export default function useHipposData(scope = 'full') {
     dataLoaded,
     cariler,
     cariHareketler,
+    cariDuzeltmeler,
+    silCariHareket,
+    guncelleCariHareket,
+    geriAlSilinenCariHareket,
     cariOdemeler,
     cariFaturalar,
     cariGecmis,

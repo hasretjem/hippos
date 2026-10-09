@@ -11,6 +11,8 @@ import {
 import ProductButton, { getDisplayName } from '../../components/ProductButton';
 import { resolveButtonStyle } from '../../constants/themeDefaults';
 import BosVarPanel from '../../components/bosvar/BosVarPanel';
+import OdemeTarihiSecici from '../../components/OdemeTarihi/OdemeTarihiSecici';
+import { bugunAnahtar, trTarih, odemeSecimiGecerli } from '../../utils/odemeTarihi';
 import '../../components/bosvar/bosvar.css';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
@@ -587,6 +589,25 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [cariEditDraft, setCariEditDraft] = useState({ telefon: '', adres: '' });
   const [cariWaPhoneEntry, setCariWaPhoneEntry] = useState(false);
   const [cariWaPhoneDraft, setCariWaPhoneDraft] = useState('');
+  // Bireysel cariye gönderirken ödeme tarihi: ya bir gün seçilir ya "belirsiz" — ikisi birden olmaz, biri şart.
+  const [cariOdemeSecim, setCariOdemeSecim] = useState({ tarih: null, belirsiz: false });
+  const cariOdemeGecerli = !cariConfirm || cariConfirm.cari.tip !== 'bireysel' || odemeSecimiGecerli(cariOdemeSecim);
+  useEffect(() => {
+    if (!cariConfirm) return;
+    // Paket ekranında paketçi "Cari" seçip ödeme tarihi girdiyse, kasiyer için başlangıç değeri o olur.
+    const pt = (paketTeslimatlari || [])
+      .filter((h) => h.paketAdi === selectedTable && h.odemeYontemi === 'Cari' && h.durum !== 'reddedildi' && (h.odemeTarihi || h.odemeTarihiBelirsiz))
+      .sort((a, b) => b.ts - a.ts)[0];
+    if (pt) {
+      setCariOdemeSecim({
+        tarih: pt.odemeTarihi && pt.odemeTarihi >= bugunAnahtar() ? pt.odemeTarihi : null,
+        belirsiz: !!pt.odemeTarihiBelirsiz,
+      });
+    } else {
+      setCariOdemeSecim({ tarih: null, belirsiz: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cariConfirm?.cari?.id]);
 
   function normalizeTrPhone(phone) {
     let digits = (phone || '').replace(/[^0-9]/g, '');
@@ -630,6 +651,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const kalan = totalPayIskontoSonrasi - cariPay;
     const mutfakNotu = currentOrder.filter((i) => i.note).map((i) => i.ad).join(' · ');
     const cariAdi = cariObj?.ad || 'Cari';
+
+    // Bireysel cari: seçilen ödeme tarihini cariye yaz (en son girilen geçerli; "belirsiz" eski tarihi siler)
+    if (cariObj?.tip === 'bireysel' && cariConfirm && odemeSecimiGecerli(cariOdemeSecim)) {
+      updateCari(cariId, {
+        odemeTarihi: cariOdemeSecim.belirsiz ? null : cariOdemeSecim.tarih,
+        odemeTarihiBelirsiz: !!cariOdemeSecim.belirsiz,
+      });
+    }
 
     // Cariye hareketi yaz
     const hareketId = addCariHareket(cariId, {
@@ -714,6 +743,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       '',
       `\uD83D\uDCCA G\u00FCncel Cari Bakiye: ${bakiyeYazi(yeniBakiye)}`,
       ...(yeniBakiye < 0 ? ['(Bir sonraki sipari\u015flerinizden d\u00FC\u015F\u00FClecektir)'] : []),      '',
+      ...(cariOdemeSecim.tarih ? [`\uD83D\uDDD3\uFE0F ${trTarih(cariOdemeSecim.tarih)} tarihinde \u00F6deme yapaca\u011F\u0131n\u0131z\u0131 s\u00F6ylemi\u015Ftiniz, te\u015Fekk\u00FCr ederiz \uD83D\uDE0A\uD83D\uDE4F`, ''] : []),
       'Afiyet olsun, iyi g\u00FCnler! \uD83D\uDE07\uD83C\uDF7D\uFE0F\u2728',
     ].join('\n');
     waShare(mesaj, cari.telefon);
@@ -749,6 +779,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       '',
       `\uD83D\uDCCA G\u00FCncel Cari Bakiye: ${bakiyeYazi(yeniBakiye2)}`,
       ...(yeniBakiye2 < 0 ? ['(Bir sonraki sipari\u015flerinizden d\u00FC\u015F\u00FClecektir)'] : []),      '',
+      ...(cariOdemeSecim.tarih ? [`\uD83D\uDDD3\uFE0F ${trTarih(cariOdemeSecim.tarih)} tarihinde \u00F6deme yapaca\u011F\u0131n\u0131z\u0131 s\u00F6ylemi\u015Ftiniz, te\u015Fekk\u00FCr ederiz \uD83D\uDE0A\uD83D\uDE4F`, ''] : []),
       'Afiyet olsun, iyi g\u00FCnler! \uD83D\uDE07\uD83C\uDF7D\uFE0F\u2728',
     ].join('\n');
     waShare(mesaj, cariWaPhoneDraft.trim());
@@ -1316,6 +1347,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                     <Package size={11} /> {bekleyenHareket.paketciAdi} — {new Date(bekleyenHareket.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
                   </div>
                   {bekleyenHareket.notMetni && <div className="ds-courier-note">"{bekleyenHareket.notMetni}"</div>}
+                  {bekleyenHareket.odemeYontemi === 'Cari' && (bekleyenHareket.odemeTarihi || bekleyenHareket.odemeTarihiBelirsiz) && (
+                    <div className="ds-courier-note">📅 Ödeme tarihi: {bekleyenHareket.odemeTarihi ? trTarih(bekleyenHareket.odemeTarihi) : 'Belirsiz'}</div>
+                  )}
                   {bekleyenHareket.fotoUrl && (
                     <button onClick={() => setPhotoModalUrl(bekleyenHareket.fotoUrl)} className="ds-courier-foto-link">
                       Fotoğrafı Gör
@@ -1649,7 +1683,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       {/* CARİ ONAY MODALI — picker'dan bağımsız */}
       {!cariPickerOpen && cariConfirm && (
         <div className="ds-modal-overlay" onClick={() => setCariConfirm(null)}>
-          <div className="ds-modal ds-table-picker-modal ds-cari-modal" onClick={(e) => e.stopPropagation()}>
+          <div className={`ds-modal ds-table-picker-modal ds-cari-modal${cariConfirm.cari.tip === 'bireysel' && !cariWaPhoneEntry ? ' tarihli' : ''}`} onClick={(e) => e.stopPropagation()}>
             <>
               <div className="ds-modal-head">
                 <h3>{cariWaPhoneEntry ? 'Numara Kaydet' : 'Cariye Gönder'}</h3>
@@ -1661,11 +1695,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   {personelSecimAdi && (
                     <div className="ds-cari-confirm-personel">👤 {personelSecimAdi}</div>
                   )}
+                  {cariConfirm.cari.tip === 'bireysel' && (
+                    <div className="ds-odeme-tarih-blok"><OdemeTarihiSecici value={cariOdemeSecim} onChange={setCariOdemeSecim} /></div>
+                  )}
                   <div className="ds-cari-confirm-actions">
                     <button className="ds-secondary-btn" onClick={() => setCariConfirm(null)}>İptal</button>
-                    <button className="ds-primary-btn" onClick={confirmSendPlain}>Onayla</button>
+                    <button className="ds-primary-btn" disabled={!cariOdemeGecerli} onClick={confirmSendPlain}>Onayla</button>
                   </div>
-                  <button className="ds-cari-wa-btn" onClick={confirmSendWithWhatsapp}>
+                  <button className="ds-cari-wa-btn" disabled={!cariOdemeGecerli} onClick={confirmSendWithWhatsapp}>
                     <MessageCircle size={15} />
                     {cariConfirm.cari.telefon ? 'WhatsApp\'tan İlet' : 'Kayıtlı Numarası Yok'}
                   </button>
@@ -1697,7 +1734,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
       {/* CARİ SEÇ MODALI */}
       {cariPickerOpen && (
         <div className="ds-modal-overlay" onClick={() => setCariPickerOpen(false)}>
-          <div className="ds-modal ds-table-picker-modal ds-cari-modal" onClick={(e) => e.stopPropagation()}>
+          <div className={`ds-modal ds-table-picker-modal ds-cari-modal${cariConfirm && cariConfirm.cari.tip === 'bireysel' && !cariWaPhoneEntry ? ' tarihli' : ''}`} onClick={(e) => e.stopPropagation()}>
 
             {cariConfirm ? (
               <>
@@ -1709,12 +1746,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 {!cariWaPhoneEntry ? (
                   <>
                     <div className="ds-cari-confirm-name">{cariConfirm.cari.ad.toLocaleUpperCase('tr-TR')}</div>
+                    {cariConfirm.cari.tip === 'bireysel' && (
+                      <div className="ds-odeme-tarih-blok"><OdemeTarihiSecici value={cariOdemeSecim} onChange={setCariOdemeSecim} /></div>
+                    )}
                     <div className="ds-cari-confirm-actions">
                       <button className="ds-secondary-btn" onClick={() => setCariConfirm(null)}>İptal</button>
-                      <button className="ds-primary-btn" onClick={confirmSendPlain}>Onayla</button>
+                      <button className="ds-primary-btn" disabled={!cariOdemeGecerli} onClick={confirmSendPlain}>Onayla</button>
                     </div>
                     {cariConfirm.cari.tip === 'bireysel' && (
-                      <button className="ds-cari-wa-btn" onClick={confirmSendWithWhatsapp}>
+                      <button className="ds-cari-wa-btn" disabled={!cariOdemeGecerli} onClick={confirmSendWithWhatsapp}>
                         <MessageCircle size={15} />
                         {cariConfirm.cari.telefon ? 'WhatsApp\'tan İlet' : 'Kayıtlı Numarası Yok'}
                       </button>
