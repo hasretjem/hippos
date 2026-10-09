@@ -1572,3 +1572,7 @@
   cursor: pointer;
   color: var(--ink-muted);
 }
+/* Ödeme tarihi seçicili (bireysel cari) onay penceresi: iki aylık takvim yan yana sığsın */
+.ds-cari-modal.tarihli { max-width: 540px; }
+.ds-odeme-tarih-blok { margin: 4px 0 14px; padding: 12px; border: 1px solid #E3DFCF; border-radius: 14px; background: #FBFAF4; }
+.ds-primary-btn:disabled, .ds-cari-wa-btn:disabled { opacity: 0.35; cursor: not-allowed; filter: none; transform: none; }

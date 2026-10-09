@@ -20,7 +20,7 @@ const tarihSayi = (t) => {
 const ciroToplam = (k) => {
   const c = k.ciro || {};
   if (c.toplam != null) return Number(c.toplam) || 0;
-  return (Number(c.nakit) || 0) + (Number(c.kart) || 0) + (Number(c.yemek) || 0) + (Number(c.cari) || 0) + (Number(c.cariTahsilat) || 0);
+  return (Number(c.nakit) || 0) + (Number(c.kart) || 0) + (Number(c.yemek) || 0) + (Number(c.cari) || 0) + (Number(c.cariTahsilat) || 0) + (Number(c.cariDuzeltme) || 0);
 };
 function cariSatirlari(detay) {
   const d = detay || {};

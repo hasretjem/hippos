@@ -4,6 +4,8 @@ import BosVarPaketci from '../../components/bosvar/BosVarPaketci';
 import '../../components/bosvar/bosvar.css';
 import StokSayimEkrani from '../../components/StokSayim/StokSayimEkrani';
 import { TL } from '../../hooks/useHipposData';
+import OdemeTarihiSecici from '../../components/OdemeTarihi/OdemeTarihiSecici';
+import { odemeGunuDurumu, odemeSecimiGecerli } from '../../utils/odemeTarihi';
 import {
   Package, Users, Camera, Image as ImageIcon, StickyNote, Check, X,
   ChevronLeft, Wallet, Undo2, Clock, User, AlertTriangle, CupSoda, PackageOpen, ClipboardList,
@@ -107,6 +109,15 @@ export default function Paketci({ data }) {
       .filter((c) => !q || c.ad.toLowerCase().includes(q))
       .sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
   }, [cariler, cariSearch, getCariBakiye]);
+
+  // Ödeme günü gelen (ya da geçen) bireysel cariler — bakiyesi kapanmış cari uyarı vermez.
+  const odemeGunuCariler = useMemo(() => {
+    return (cariler || [])
+      .map((c) => ({ c, d: odemeGunuDurumu(c, getCariBakiye(c.id)) }))
+      .filter((x) => x.d)
+      .sort((a, b) => b.d.gun - a.d.gun)
+      .map((x) => (x.d.tip === 'gecikti' ? `${x.c.ad} (${x.d.gun} gün gecikti)` : x.c.ad));
+  }, [cariler, getCariBakiye]);
 
   const selectedCariData = selectedCari
     ? {
@@ -215,6 +226,13 @@ export default function Paketci({ data }) {
             setBosvarTik={setBosvarTik}
             showToast={showToast}
           />
+        )}
+
+        {tab === 'cariler' && odemeGunuCariler.length > 0 && (
+          <div className="pk-odeme-uyari">
+            <div className="pk-odeme-uyari-ust">!! BUGÜN ÖDEME GÜNÜ !!</div>
+            <div className="pk-odeme-uyari-alt">{odemeGunuCariler.join(' · ')}</div>
+          </div>
         )}
 
         {tab === 'cariler' && !selectedCari && (
@@ -455,6 +473,7 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
   const [tutar, setTutar] = useState('');
   const [odemeYontemi, setOdemeYontemi] = useState(isCari ? '' : isPaketOdeme ? '' : 'Nakit');
   const [notMetni, setNotMetni] = useState('');
+  const [odemeSecim, setOdemeSecim] = useState({ tarih: null, belirsiz: false }); // Cari seçilince: ödeme tarihi ya da belirsiz
   const [evidenceType, setEvidenceType] = useState(null); // 'fis' | 'yemek_karti' | 'not'
   const [fotoFile, setFotoFile] = useState(null);
   const [fotoPreview, setFotoPreview] = useState(null);
@@ -475,6 +494,8 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
   //  Kredi Kartı / Yemek Kartı → fotoğraf zorunlu
   const paketOdemeFotoGerek = isPaketOdeme && (odemeYontemi === 'Kredi Kartı' || odemeYontemi === 'Yemek Kartı');
   const paketOdemeNotGerek = isPaketOdeme && (odemeYontemi === 'Nakit' || odemeYontemi === 'Cari');
+  const odemeTarihiGerek = isPaketOdeme && odemeYontemi === 'Cari';
+  const odemeTarihiTamam = !odemeTarihiGerek || odemeSecimiGecerli(odemeSecim);
 
   const parsedTutar = parseFloat(tutar.replace(',', '.'));
   const tutarAsimVar = isKismi && !isNaN(parsedTutar) && modal.ustTutar != null && parsedTutar > modal.ustTutar;
@@ -486,6 +507,7 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
   const canSubmit = tutarGecerli && kanitVar && notZorunluTamam
     && (isKismi && !isPaketOdeme ? notMetni.trim().length > 0 && !!odemeYontemi : true)
     && (isPaketOdeme ? !!odemeYontemi : true)
+    && odemeTarihiTamam
     && !uploading;
 
   async function handleSubmit() {
@@ -506,6 +528,8 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
         notMetni: notMetni.trim() || null,
         fotoUrl,
         paketciAdi,
+        odemeTarihi: odemeTarihiGerek && !odemeSecim.belirsiz ? odemeSecim.tarih : null,
+        odemeTarihiBelirsiz: odemeTarihiGerek && !!odemeSecim.belirsiz,
       });
       label = `${modal.hedefId} — ${modal.tip === 'teslim_edildi' ? 'Teslim' : 'Kısmi Öd.'}`;
     } else {
@@ -608,6 +632,11 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
                 />
               </div>
             )}
+            {odemeTarihiGerek && (
+              <div className="pk-modal-section pk-odeme-tarih-kutu">
+                <OdemeTarihiSecici value={odemeSecim} onChange={setOdemeSecim} />
+              </div>
+            )}
           </>
         ) : (
           <div className="pk-modal-section">
@@ -646,6 +675,7 @@ function ActionModal({ modal, paketciAdi, uploadTeslimatFoto, onClose, onSubmitt
             {isPaketOdeme && !odemeYontemi && 'Ödeme yöntemi seç. '}
             {isPaketOdeme && odemeYontemi && paketOdemeFotoGerek && !fotoFile && 'Fotoğraf/ekran görüntüsü yükle. '}
             {isPaketOdeme && odemeYontemi && paketOdemeNotGerek && !notMetni.trim() && 'Not yaz. '}
+            {odemeTarihiGerek && !odemeTarihiTamam && 'Ödeme tarihi seç ya da "Ödeme Tarihi Belirsiz"e bas. '}
             {!isKismi && !isPaketOdeme && !kanitVar && 'Fotoğraf yükle veya not yaz.'}
           </p>
         )}

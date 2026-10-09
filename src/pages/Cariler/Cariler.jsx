@@ -4,8 +4,11 @@ import { TL, bakiyeYazi } from '../../hooks/useHipposData';
 import {
   Search, Plus, User, Building2, Phone, MapPin, Clock, Wallet,
   Copy, MessageCircle, X, ChevronUp, ChevronDown, FileText, History, Check,
-  Banknote, CreditCard, UtensilsCrossed, Landmark, StickyNote, ArrowLeft, Download, Trash2,
+  Banknote, CreditCard, UtensilsCrossed, Landmark, StickyNote, ArrowLeft, Download, Trash2, Pencil, Undo2, CalendarDays,
 } from 'lucide-react';
+import OdemeTarihiSecici from '../../components/OdemeTarihi/OdemeTarihiSecici';
+import { getDisplayName } from '../../components/ProductButton';
+import { odemeGunuDurumu, odemeSecimiGecerli, trTarih, isGunuAnahtarMs } from '../../utils/odemeTarihi';
 
 function fmtDateTime(ts) {
   if (!ts) return '—';
@@ -358,6 +361,7 @@ export default function Cariler({ data, onNavigate }) {
     addCari, updateCari, deleteCari, addCariOdeme, addCariFatura, geriAlFatura, futuraTamOde, futuraKismiOde, deleteCariHareketler, deleteCariOdemeler, getCariFaturalanmamisTutar, archiveCari,
     cariPersonel, addCariPersonel, deleteCariPersonel,
     cariTeslimatBildirimleri, onaylaCariTeslimatBildirim, reddetCariTeslimatBildirim,
+    cariDuzeltmeler, silCariHareket, guncelleCariHareket, geriAlSilinenCariHareket, products,
   } = data;
 
   function bekleyenBildirim(cariId) {
@@ -367,6 +371,8 @@ export default function Cariler({ data, onNavigate }) {
   const [activeTab, setActiveTab] = useState('bireysel');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCariId, setSelectedCariId] = useState(null);
+  const [duzenleHareketId, setDuzenleHareketId] = useState(null); // düzenleme/silme penceresi açık hareket
+  const [odemeTarihiModal, setOdemeTarihiModal] = useState(false);
   const [detailTab, setDetailTab] = useState('hareketler');
   const searchRef = useRef(null);
 
@@ -806,6 +812,7 @@ export default function Cariler({ data, onNavigate }) {
         if (toplam < 0) satirlar.push('(Bir sonraki siparişlerinizden düşülecektir)');        return satirlar;
       })(),
       '',
+      ...((selectedCari.tip !== 'firma' && selectedCari.odemeTarihi && !selectedCari.odemeTarihiBelirsiz) ? [`🗓️ ${trTarih(selectedCari.odemeTarihi)} tarihinde ödeme yapacağınızı söylemiştiniz 😊 Hatırlatmak istedik 🙏`, ''] : []),
       'Afiyet olsun, iyi günler! 😇🍽️✨',
       '',
       '_(Bu bilgi mesajı, düzenli hesap mutabakatı kapsamında sistem tarafından otomatik oluşturulmuştur.)_',
@@ -840,6 +847,37 @@ export default function Cariler({ data, onNavigate }) {
         ...odemelerListe.map((o) => ({ tip: 'odeme', ts: o.ts, data: o })),
       ].sort((a, b) => b.ts - a.ts)
     : [];
+  const iptalEdilenler = selectedCari
+    ? (cariDuzeltmeler || []).filter((d) => d.cariId === selectedCari.id && d.tip === 'sil' && !d.geriAlindi)
+    : [];
+  const birlesikGosterim = [
+    ...birlesikHareketler,
+    ...iptalEdilenler.map((d) => ({ tip: 'iptal', ts: d.hareketTs, data: d })),
+  ].sort((a, b) => b.ts - a.ts);
+  function sonDuzenleme(hareketId) {
+    return (cariDuzeltmeler || []).filter((d) => d.hareketId === hareketId && (d.tip === 'tutar' || d.tip === 'urun_ekle') && !d.geriAlindi).sort((a, b) => b.ts - a.ts)[0] || null;
+  }
+  async function hareketKaydet(hareketId, urunler, notMetni) {
+    const r = await guncelleCariHareket(hareketId, urunler, notMetni);
+    if (r.ok) {
+      setDuzenleHareketId(null);
+      showToast(`Kayıt güncellendi${r.ciroEtkisi ? ` · günsonu cirosuna ${r.ciroEtkisi > 0 ? '+' : ''}${TL(r.ciroEtkisi)}` : ''}${r.raporSenkron ? '' : ' · satış raporu eşleşmedi, raporlar değişmedi'}`);
+    }
+    return r;
+  }
+  async function hareketSil(hareketId, notMetni) {
+    const r = await silCariHareket(hareketId, notMetni);
+    if (r.ok) {
+      setDuzenleHareketId(null);
+      showToast(`Kayıt iptal edildi${r.ciroEtkisi ? ` · günsonu cirosundan ${TL(Math.abs(r.ciroEtkisi))} düşülecek` : ''}${r.raporSenkron ? '' : ' · satış raporu eşleşmedi, raporlar değişmedi'}`);
+    }
+    return r;
+  }
+  async function iptaliGeriAl(duzeltmeId) {
+    if (!window.confirm('Bu kayıt geri getirilsin mi?')) return;
+    const r = await geriAlSilinenCariHareket(duzeltmeId);
+    showToast(r.ok ? 'Kayıt geri getirildi' : r.mesaj);
+  }
   const faturalanmamis = selectedCari ? getCariFaturalanmamisTutar(selectedCari.id) : 0;
   const faturalarListe = selectedCari ? cariFaturalar.filter((f) => f.cariId === selectedCari.id).sort((a, b) => b.eklenmeTs - a.eklenmeTs) : [];
 
@@ -932,6 +970,11 @@ export default function Cariler({ data, onNavigate }) {
                       <span className="cr-item-date">{sh ? fmtDateTime(sh.ts) : '—'}</span>
                       {c.not && <span className="cr-item-note">{c.not}</span>}
                     </div>
+                    {(() => {
+                      const od = odemeGunuDurumu(c, b);
+                      if (!od) return null;
+                      return <div className="cr-odeme-gunu-uyari">⏰ {od.tip === 'bugun' ? 'Bugün ödeme günü' : `Ödeme günü geçti (${od.gun} gün)`}</div>;
+                    })()}
                     {bekleyen && (
                       <div className="cr-pending-badge">🟡 Bekleyen ödeme talebi ({TL(bekleyen.tutar)})</div>
                     )}
@@ -969,6 +1012,15 @@ export default function Cariler({ data, onNavigate }) {
                   onReddet={(sebep) => reddetCariTeslimatBildirim(bekleyenBildirim(selectedCari.id).id, sebep)}
                 />
               )}
+              {selectedCari.tip === 'bireysel' && selectedCari.odemeTarihi && !selectedCari.odemeTarihiBelirsiz && (() => {
+                const od = odemeGunuDurumu(selectedCari, bakiye);
+                return (
+                  <button type="button" className={`cr-odeme-banner${od ? ' acil' : ''}`} onClick={() => setOdemeTarihiModal(true)}>
+                    <CalendarDays size={15} />
+                    {od ? (od.tip === 'bugun' ? 'BUGÜN ÖDEME GÜNÜ' : `ÖDEME GÜNÜ GEÇTİ (${od.gun} gün)`) : 'Ödeme tarihi'}: {trTarih(selectedCari.odemeTarihi)}
+                  </button>
+                );
+              })()}
               <div className="cr-summary-card">
                 <div className="cr-summary-head">
                   <div>
@@ -1076,6 +1128,12 @@ export default function Cariler({ data, onNavigate }) {
                   <div><MapPin size={13} /><span>{selectedCari.adres || '—'}</span></div>
                   <div><Clock size={13} /><span>Son Sipariş: {sonHareket ? fmtDateTime(sonHareket.ts) : '—'}</span></div>
                   <div><Wallet size={13} /><span>Son Tahsilat: {sonOdeme ? fmtDateTime(sonOdeme.ts) : '—'}</span></div>
+                  {selectedCari.tip === 'bireysel' && (
+                    <button type="button" className="cr-odeme-tarih-satir" onClick={() => setOdemeTarihiModal(true)}>
+                      <CalendarDays size={13} />
+                      <span>Ödeme Tarihi: {selectedCari.odemeTarihi ? trTarih(selectedCari.odemeTarihi) : selectedCari.odemeTarihiBelirsiz ? 'Belirsiz' : '—'} (değiştir)</span>
+                    </button>
+                  )}
                 </div>
                 <div className="cr-balance-row">
                   <span>Güncel Cari Bakiye</span>
@@ -1094,18 +1152,35 @@ export default function Cariler({ data, onNavigate }) {
               <div className="cr-detail-body">
                 {detailTab === 'hareketler' && (
                   <div className="cr-hareket-list">
-                    {birlesikHareketler.length === 0 && <p className="cr-empty">Henüz hareket yok</p>}
+                    {birlesikGosterim.length === 0 && <p className="cr-empty">Henüz hareket yok</p>}
                     {odemelerListe.length > 0 && (
                       <div className="cr-odeme-total">
                         <span>Toplam Tahsilat</span>
                         <strong>{TL(toplamTahsilat)}</strong>
                       </div>
                     )}
-                    {birlesikHareketler.map((entry) =>
-                      entry.tip === 'siparis' ? (
+                    {birlesikGosterim.map((entry) =>
+                      entry.tip === 'iptal' ? (
+                        <div key={`i-${entry.data.id}`} className="cr-hareket-card cr-hareket-iptal">
+                          <div className="cr-hareket-head">
+                            <span>{fmtDateTime(entry.data.hareketTs)} · İPTAL EDİLDİ</span>
+                            <strong>{TL(entry.data.onceki?.toplam || 0)}</strong>
+                          </div>
+                          <div className="cr-hareket-items">
+                            {(entry.data.onceki?.urunler || []).map((u, i) => (
+                              <div key={i} className="cr-hareket-item"><span>{u.ad}</span><span>{TL(u.fiyat)}</span></div>
+                            ))}
+                          </div>
+                          <div className="cr-hareket-note"><StickyNote size={11} /> {fmtDateTime(entry.data.ts)} tarihinde iptal edildi{entry.data.notMetni ? ` — ${entry.data.notMetni}` : ''}</div>
+                          <button className="cr-iptal-geri-btn" onClick={() => iptaliGeriAl(entry.data.id)}><Undo2 size={12} /> Geri Al</button>
+                        </div>
+                      ) : entry.tip === 'siparis' ? (
                         <div key={`s-${entry.data.id}`} className="cr-hareket-card">
                           <div className="cr-hareket-head">
-                            <span>{fmtDateTime(entry.data.ts)}</span>
+                            <span className="cr-hareket-tarih">
+                              {fmtDateTime(entry.data.ts)}
+                              <button className="cr-duz-btn" title="Kaydı düzenle" onClick={() => setDuzenleHareketId(entry.data.id)}><Pencil size={13} /></button>
+                            </span>
                             {(() => {
                               const isk = selectedCari.iskonto || 0;
                               if (isk <= 0) return <strong>{TL(entry.data.toplam)}</strong>;
@@ -1130,6 +1205,11 @@ export default function Cariler({ data, onNavigate }) {
                             ))}
                           </div>
                           {entry.data.mutfakNotu && <div className="cr-hareket-note"><StickyNote size={11} /> {entry.data.mutfakNotu}</div>}
+                          {(() => {
+                            const d = sonDuzenleme(entry.data.id);
+                            if (!d) return null;
+                            return <div className="cr-hareket-duzenlendi"><Pencil size={10} /> Düzenlendi ({fmtDateTime(d.ts)}) — önceki tutar {TL(d.onceki?.toplam || 0)}{d.notMetni ? ` · ${d.notMetni}` : ''}</div>;
+                          })()}
                         </div>
                       ) : (
                         <div key={`o-${entry.data.id}`} className="cr-odeme-row">
@@ -1669,6 +1749,35 @@ export default function Cariler({ data, onNavigate }) {
         </div>
       )}
 
+      {/* KAYIT DÜZENLE / SİL */}
+      {duzenleHareketId && (() => {
+        const hd = cariHareketler.find((h) => h.id === duzenleHareketId);
+        if (!hd) return null;
+        return (
+          <HareketDuzenleModal
+            hareket={hd}
+            cari={selectedCari}
+            products={products || []}
+            onClose={() => setDuzenleHareketId(null)}
+            onKaydet={hareketKaydet}
+            onSil={hareketSil}
+          />
+        );
+      })()}
+
+      {/* ÖDEME TARİHİ DEĞİŞTİR */}
+      {odemeTarihiModal && selectedCari && (
+        <OdemeTarihiModal
+          cari={selectedCari}
+          onClose={() => setOdemeTarihiModal(false)}
+          onKaydet={(secim) => {
+            updateCari(selectedCari.id, { odemeTarihi: secim.belirsiz ? null : secim.tarih, odemeTarihiBelirsiz: !!secim.belirsiz });
+            setOdemeTarihiModal(false);
+            showToast(secim.belirsiz ? 'Ödeme tarihi belirsiz olarak kaydedildi' : `Ödeme tarihi ${trTarih(secim.tarih)} olarak kaydedildi`);
+          }}
+        />
+      )}
+
       {/* GEÇMİŞ HAREKETLER (arşiv) */}
       {gecmisOpen && (
         <div className="cr-modal-overlay" onClick={() => setGecmisOpen(false)}>
@@ -1694,6 +1803,156 @@ export default function Cariler({ data, onNavigate }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ---- Ödeme tarihi değiştirme penceresi ----
+function OdemeTarihiModal({ cari, onClose, onKaydet }) {
+  const [secim, setSecim] = useState({ tarih: cari.odemeTarihi || null, belirsiz: !!cari.odemeTarihiBelirsiz });
+  const degisti = (secim.tarih || null) !== (cari.odemeTarihi || null) || !!secim.belirsiz !== !!cari.odemeTarihiBelirsiz;
+  return (
+    <div className="cr-modal-overlay" onClick={onClose}>
+      <div className="cr-modal cr-odeme-tarih-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="cr-modal-head">
+          <h3 className="cr-duz-baslik">{cari.ad} — Ödeme Tarihi</h3>
+          <button className="cr-modal-x" onClick={onClose}><X size={16} /></button>
+        </div>
+        <OdemeTarihiSecici value={secim} onChange={setSecim} />
+        <div className="cr-modal-footer">
+          <button className="cr-secondary" onClick={onClose}>Vazgeç</button>
+          <button className="cr-primary" disabled={!odemeSecimiGecerli(secim) || !degisti} onClick={() => onKaydet(secim)}>Kaydet</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Cari kaydı düzenleme / silme penceresi ----
+// Düzenleme: tutar değiştir + menüden ürün ekle. Silme: kayıt silinmez, iptal edildi olarak saklanır (geri alınabilir).
+function HareketDuzenleModal({ hareket, cari, products, onClose, onKaydet, onSil }) {
+  const [mod, setMod] = useState('duzenle'); // 'duzenle' | 'sil'
+  const [satirlar, setSatirlar] = useState(() => (hareket.urunler || []).map((u) => ({ ad: u.ad, fiyat: String(u.fiyat) })));
+  const [eklenenler, setEklenenler] = useState([]);
+  const [arama, setArama] = useState('');
+  const [notMetni, setNotMetni] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [hata, setHata] = useState('');
+
+  const sayi = (v) => { const n = parseFloat(String(v).replace(',', '.')); return Number.isFinite(n) ? n : NaN; };
+  const eskiUrunler = hareket.urunler || [];
+  const yeniUrunler = [...satirlar, ...eklenenler].map((u) => ({ ad: u.ad, fiyat: sayi(u.fiyat) }));
+  const gecerli = yeniUrunler.every((u) => u.ad && u.fiyat >= 0);
+  const hamEski = eskiUrunler.reduce((a, u) => a + (Number(u.fiyat) || 0), 0);
+  const hamYeni = yeniUrunler.reduce((a, u) => a + (Number.isFinite(u.fiyat) ? u.fiyat : 0), 0);
+  const isk = cari?.iskonto || 0;
+  const delta = hamYeni - hamEski;
+  const deltaNet = isk > 0 ? Math.round(delta * (1 - isk / 100)) : Math.round(delta * 100) / 100;
+  const yeniToplam = Math.round((Number(hareket.toplam) + deltaNet) * 100) / 100;
+  const degisti = eklenenler.length > 0 || satirlar.some((u, i) => sayi(u.fiyat) !== Number(eskiUrunler[i].fiyat));
+  const gecmisGun = isGunuAnahtarMs(hareket.ts) < isGunuAnahtarMs(Date.now());
+
+  const aramaSonuc = useMemo(() => {
+    const q = arama.trim().toLocaleLowerCase('tr-TR');
+    if (!q) return [];
+    return (products || [])
+      .filter((p) => p.durum !== 'PASIF' && !p.isAzVariant && (getDisplayName(p) || '').toLocaleLowerCase('tr-TR').includes(q))
+      .slice(0, 8);
+  }, [arama, products]);
+
+  async function kaydet() {
+    if (!gecerli || !degisti || busy) return;
+    setBusy(true); setHata('');
+    const r = await onKaydet(hareket.id, yeniUrunler, notMetni);
+    setBusy(false);
+    if (!r.ok) setHata(r.mesaj);
+  }
+  async function sil() {
+    if (notMetni.trim().length < 2 || busy) return;
+    setBusy(true); setHata('');
+    const r = await onSil(hareket.id, notMetni);
+    setBusy(false);
+    if (!r.ok) setHata(r.mesaj);
+  }
+
+  const ciroNotu = gecmisGun
+    ? 'Bu kayıt geçmiş güne ait: o günün günsonu değişmez, fark BUGÜNÜN günsonunda "Cari Düzeltme" olarak ayrıca gösterilir ve cirodan düşer / ciroya eklenir.'
+    : 'Bu kayıt bugüne ait: bugünkü günsonu cari toplamı doğrudan güncellenir.';
+
+  return (
+    <div className="cr-modal-overlay" onClick={onClose}>
+      <div className="cr-modal cr-duz-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="cr-modal-head">
+          <h3 className="cr-duz-baslik">{fmtDateTime(hareket.ts)} — Kaydı Düzenle</h3>
+          <button className="cr-modal-x" onClick={onClose}><X size={16} /></button>
+        </div>
+
+        <div className="cr-duz-mod">
+          <button className={mod === 'duzenle' ? 'active' : ''} onClick={() => { setMod('duzenle'); setHata(''); }}><Pencil size={13} /> Tutar / Ürün</button>
+          <button className={`sil ${mod === 'sil' ? 'active' : ''}`} onClick={() => { setMod('sil'); setHata(''); }}><Trash2 size={13} /> Kaydı Sil</button>
+        </div>
+
+        {mod === 'duzenle' ? (
+          <>
+            <div className="cr-duz-liste">
+              {satirlar.map((u, i) => (
+                <div key={i} className="cr-duz-satir">
+                  <span className="ad">{u.ad}</span>
+                  <input type="text" inputMode="decimal" value={u.fiyat} onChange={(e) => setSatirlar((prev) => prev.map((x, j) => (j === i ? { ...x, fiyat: e.target.value } : x)))} />
+                </div>
+              ))}
+              {eklenenler.map((u, i) => (
+                <div key={`e-${i}`} className="cr-duz-satir yeni">
+                  <span className="ad">+ {u.ad}</span>
+                  <input type="text" inputMode="decimal" value={u.fiyat} onChange={(e) => setEklenenler((prev) => prev.map((x, j) => (j === i ? { ...x, fiyat: e.target.value } : x)))} />
+                  <button className="cr-duz-x" onClick={() => setEklenenler((prev) => prev.filter((_, j) => j !== i))}><X size={12} /></button>
+                </div>
+              ))}
+            </div>
+
+            <div className="cr-duz-ekle">
+              <input className="cr-modal-input" placeholder="Menüden ürün ekle... (ara)" value={arama} onChange={(e) => setArama(e.target.value)} />
+              {aramaSonuc.length > 0 && (
+                <div className="cr-duz-sonuc">
+                  {aramaSonuc.map((p) => (
+                    <button key={p.id} onClick={() => { setEklenenler((prev) => [...prev, { ad: getDisplayName(p), fiyat: String(p.fiyat) }]); setArama(''); }}>
+                      <span>{getDisplayName(p)}</span><strong>{TL(p.fiyat)}</strong>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="cr-duz-toplam">
+              <span>Cariye yazılan toplam</span>
+              <span><s>{TL(hareket.toplam)}</s> → <strong>{TL(yeniToplam)}</strong></span>
+            </div>
+            {isk > 0 && <div className="cr-duz-ipucu">Cari iskontosu (%{isk}) fark üzerine uygulanır.</div>}
+            <div className="cr-duz-ipucu">{ciroNotu}</div>
+            <input className="cr-modal-input" placeholder="Not (opsiyonel) — neden düzeltildi?" value={notMetni} onChange={(e) => setNotMetni(e.target.value)} />
+          </>
+        ) : (
+          <>
+            <div className="cr-duz-liste">
+              {eskiUrunler.map((u, i) => (
+                <div key={i} className="cr-duz-satir salt"><span className="ad">{u.ad}</span><span>{TL(u.fiyat)}</span></div>
+              ))}
+            </div>
+            <div className="cr-duz-toplam sil"><span>Silinecek tutar</span><strong>{TL(hareket.toplam)}</strong></div>
+            <div className="cr-duz-ipucu">Kayıt gerçekten silinmez: "iptal edildi" olarak saklanır, istersen Geri Al ile getirirsin. Satış raporlarından da düşülür.</div>
+            <div className="cr-duz-ipucu">{gecmisGun ? `Bugünün günsonunda "Cari Düzeltme: ${cari?.ad} −${TL(hareket.toplam)}" olarak gösterilir ve toplam cirodan düşer.` : 'Bugüne ait: bugünkü günsonu cari toplamından kendiliğinden düşer.'}</div>
+            <input className="cr-modal-input" placeholder="Neden siliniyor? (zorunlu)" value={notMetni} onChange={(e) => setNotMetni(e.target.value)} />
+          </>
+        )}
+
+        {hata && <div className="cr-duz-hata">{hata}</div>}
+        <div className="cr-modal-footer">
+          <button className="cr-secondary" onClick={onClose}>Vazgeç</button>
+          {mod === 'duzenle'
+            ? <button className="cr-primary" disabled={!gecerli || !degisti || busy} onClick={kaydet}>{busy ? 'Kaydediliyor…' : 'Kaydet'}</button>
+            : <button className="cr-primary cr-danger-btn" disabled={notMetni.trim().length < 2 || busy} onClick={sil}>{busy ? 'Siliniyor…' : 'Kaydı Sil'}</button>}
+        </div>
+      </div>
     </div>
   );
 }

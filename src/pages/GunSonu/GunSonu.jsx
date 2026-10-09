@@ -49,15 +49,15 @@ function imzaUret(p) {
   const cd = p.cariDetay || {};
   const sabit = Object.entries(cd.sabitler || {}).map(([k, v]) => [k, yuvarla2(parseNum(v))]).filter(([, v]) => v).sort();
   const liste = (l) => (l || []).filter((x) => x && (x.ad || parseNum(x.tutar))).map((x) => [String(x.ad || ''), yuvarla2(parseNum(x.tutar))]);
-  return JSON.stringify({ kupur, avans: yuvarla2(p.kasaAvansi), pos, kolonlar: (p.yemekDetay && p.yemekDetay.kolonlar) || [], yemek, sabit, ekstra: liste(cd.ekstra), bireysel: liste(cd.bireysel) });
+  return JSON.stringify({ duz: yuvarla2(p.cariDuzeltme), kupur, avans: yuvarla2(p.kasaAvansi), pos, kolonlar: (p.yemekDetay && p.yemekDetay.kolonlar) || [], yemek, sabit, ekstra: liste(cd.ekstra), bireysel: liste(cd.bireysel) });
 }
-const kayitImzasi = (k) => imzaUret({ nakitKupurDetayi: k.nakitKupurDetayi, kasaAvansi: k.kasaAvansi, posTutarlari: k.posTutarlari, yemekDetay: k.yemekDetay, cariDetay: k.cariDetay });
+const kayitImzasi = (k) => imzaUret({ cariDuzeltme: k.ciro && k.ciro.cariDuzeltme, nakitKupurDetayi: k.nakitKupurDetayi, kasaAvansi: k.kasaAvansi, posTutarlari: k.posTutarlari, yemekDetay: k.yemekDetay, cariDetay: k.cariDetay });
 const POS_VARSAYILAN = [{ label: 'POS 1', tutar: '' }, { label: 'POS 2', tutar: '' }];
 const YEMEK_KOLON_VARSAYILAN = ['Şirket Telefonu', 'Paket'];
 const TASLAK_ONEK = 'hippos_gunsonu_taslak_v1:';
 
 export default function GunSonu({ data, onNavigate }) {
-  const { salesHistory, cariler, cariHareketler, cariOdemeler, cariGecmis } = data;
+  const { salesHistory, cariler, cariHareketler, cariOdemeler, cariGecmis, cariDuzeltmeler } = data;
 
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -304,6 +304,15 @@ export default function GunSonu({ data, onNavigate }) {
   }, [cariOdemeler, cariGecmis, cariler]);
   const bugunCariOdemeToplamı = Object.values(bugunCariOdemeOzeti).reduce((s, v) => s + v, 0);
 
+  // Cari Düzeltmeleri: GEÇMİŞ güne ait bir cari kaydı bugün silinir / tutarı değişir / ürün eklenirse,
+  // o günün günsonuna dokunulmaz; fark BUGÜNÜN cirosuna ayrı satır olarak yansır (tahsilat gibi).
+  const bugunGunAnahtari = isGunuAnahtar(Date.now());
+  const bugunCariDuzeltmeleri = useMemo(
+    () => (cariDuzeltmeler || []).filter((d) => d.gunAnahtari === bugunGunAnahtari && !d.geriAlindi && d.ciroEtkisi !== 0).sort((a, b) => a.ts - b.ts),
+    [cariDuzeltmeler, bugunGunAnahtari]
+  );
+  const cariDuzeltmeToplam = Math.round(bugunCariDuzeltmeleri.reduce((a, d) => a + d.ciroEtkisi, 0) * 100) / 100;
+
   const [cariOverrides, setCariOverrides] = useState({});
   const [cariEditingFor, setCariEditingFor] = useState(null);
   const [cariEditDraft, setCariEditDraft] = useState('');
@@ -334,7 +343,7 @@ export default function GunSonu({ data, onNavigate }) {
   // sayıma girmiyor. Yani toplamNakitPara harcama düşülmüş HALDE geliyor.
   // O harcama bir satış kaybı değil, sadece bir gider — cironun bundan etkilenmemesi için
   // harcanan tutar ciroya GERİ EKLENİR. (Giderin kendisi Fatura/Fiş sheet'inden takip edilir.)
-  const toplamCiro = toplamNakitPara + gunlukKasaToplam + cariToplam + posToplam + genelYemekToplami - bugunCariTahsilatDusulen;
+  const toplamCiro = toplamNakitPara + gunlukKasaToplam + cariToplam + posToplam + genelYemekToplami - bugunCariTahsilatDusulen + cariDuzeltmeToplam;
   // gelir (yoksa 0). Düzeltmek gerekirse Sheets'ten yapılmalı, buradan değil.
   // Yeni Sheet yapısında bu değer anaKasaTakibi.yarinaDevir altında geliyor — api/gunsonu.js
   // eski (3 sütunlu) kayıtları da aynı şekle çevirip döndürdüğü için burada tek bir okuma
@@ -466,7 +475,7 @@ export default function GunSonu({ data, onNavigate }) {
   }
 
   const sabitlerHesap = otomatikCariListesi.reduce((acc, ad) => { acc[ad] = cariGosterilenTutar(ad); return acc; }, {});
-  const simdikiImza = imzaUret({ nakitKupurDetayi: nakitAdet, kasaAvansi, posTutarlari, yemekDetay: { kolonlar: yemekKolonlari, tutarlar: yemekTutarlari }, cariDetay: { sabitler: sabitlerHesap, ekstra: ekstraCariler, bireysel: bugunBireyselCariler.map((c) => ({ ad: c.ad, tutar: c.bugunTutar })) } });
+  const simdikiImza = imzaUret({ cariDuzeltme: cariDuzeltmeToplam, nakitKupurDetayi: nakitAdet, kasaAvansi, posTutarlari, yemekDetay: { kolonlar: yemekKolonlari, tutarlar: yemekTutarlari }, cariDetay: { sabitler: sabitlerHesap, ekstra: ekstraCariler, bireysel: bugunBireyselCariler.map((c) => ({ ad: c.ad, tutar: c.bugunTutar })) } });
   const durum = !kayitliKayit ? 'yok' : simdikiImza !== kayitImzasi(kayitliKayit) ? 'degisti' : Math.abs(gunlukKasaToplam - (kayitliKayit.gunlukKasaToplam || 0)) > 0.004 ? 'harcama' : 'tamam';
   const durumMetni = durum === 'tamam' ? `Kaydedildi ${kayitliKayit.kaydedenSaat || ''}`
     : durum === 'yok' ? 'Kaydedilmedi'
@@ -516,6 +525,7 @@ export default function GunSonu({ data, onNavigate }) {
           bireysel: bugunBireyselCariler.map((c) => ({ ad: c.ad, tutar: c.bugunTutar })),
           bugunCariOdemeOzeti, // havale hariç tahsil edilen ödemeler, bilgi amaçlı
           bugunCariOdemeDetay,
+          duzeltmeler: bugunCariDuzeltmeleri.map((d) => ({ ad: d.cariAd, tip: d.tip, hareketTs: d.hareketTs, tutar: d.ciroEtkisi, not: d.notMetni })),
         },
 
         genelYemekToplami,
@@ -534,6 +544,7 @@ export default function GunSonu({ data, onNavigate }) {
           yemek: genelYemekToplami,
           cari: cariToplam,
           cariTahsilat: -bugunCariTahsilatDusulen,
+          cariDuzeltme: cariDuzeltmeToplam,
           toplam: toplamCiro,
         },
 
@@ -699,6 +710,23 @@ export default function GunSonu({ data, onNavigate }) {
                     </div>
                   ))}
                   <div className="gs-row-total"><span>TOPLAM TAHSİLAT</span><strong className="neg">−{TL(bugunCariOdemeToplamı)}</strong></div>
+                </div>
+              )}
+
+              {/* Cari Düzeltmeleri — geçmiş günlere ait cari kayıtlarında bugün yapılan düzeltmeler, toplam ciroya yansır */}
+              {bugunCariDuzeltmeleri.length > 0 && (
+                <div className="gs-cari-odeme-panel">
+                  <span className="gs-subhead">Cari Düzeltmeleri</span>
+                  <p className="gs-hint" style={{margin:'2px 0 6px',fontSize:11}}>Geçmiş güne ait cari kayıtlarında yapılan düzeltmeler toplam cirodan düşülür / ciroya eklenir</p>
+                  {bugunCariDuzeltmeleri.map((d) => (
+                    <div key={d.id} className="gs-cari-row">
+                      <span className="ad">
+                        {d.cariAd} · {new Date(d.hareketTs).toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' })} kaydı {({ sil: 'silindi', tutar: 'tutarı değişti', urun_ekle: 'ürün eklendi', geri_al: 'silme geri alındı' })[d.tip] || 'düzeltildi'}
+                      </span>
+                      <strong className={d.ciroEtkisi < 0 ? 'neg' : ''}>{d.ciroEtkisi < 0 ? '−' : '+'}{TL(Math.abs(d.ciroEtkisi))}</strong>
+                    </div>
+                  ))}
+                  <div className="gs-row-total"><span>NET DÜZELTME</span><strong className={cariDuzeltmeToplam < 0 ? 'neg' : ''}>{cariDuzeltmeToplam < 0 ? '−' : '+'}{TL(Math.abs(cariDuzeltmeToplam))}</strong></div>
                 </div>
               )}
             </section>
