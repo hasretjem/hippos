@@ -10,13 +10,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "adm-zip": "^0.6.0",
-    "lucide-react": "^0.460.0",
-    "googleapis": "^144.0.0",
-    "@supabase/supabase-js": "^2.110.8",
-    "html2canvas": "^1.4.1",
+    "@fontsource/archivo-black": "^5.3.0",
+    "@fontsource/space-grotesk": "^5.3.0",
     "@mdi/js": "^7.4.47",
     "@mdi/react": "^1.6.1",
+    "@supabase/supabase-js": "^2.110.8",
+    "adm-zip": "^0.6.0",
+    "googleapis": "^144.0.0",
+    "html2canvas": "^1.4.1",
+    "lucide-react": "^0.460.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

@@ -2,6 +2,7 @@
 // Kurallar: sıfır olan satır görsele girmez, satırlar tutara göre büyükten küçüğe dizilir,
 // yemek kartında yalnızca o gün dolu olan kolonlar (sipariş hattı, kişi adları...) gösterilir.
 
+const GUNLER = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
 const AYLAR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 const TAM = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 });
 const KURUS = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -21,11 +22,12 @@ export function kurus(v) {
 }
 export const buyukHarf = (s) => String(s || '').toLocaleUpperCase('tr-TR');
 
-// "02.02.2026" (tr-TR) -> { gun: '02', ay: 'Şubat', yil: 2026, iso: '2026-02-02' }
+// "02.02.2026" (tr-TR) -> { gun: '02', ay: 'Şubat', yil: 2026, haftaGunu: 'Pazartesi', iso: '2026-02-02' }
 export function tarihParcalari(trTarih) {
   const [g, a, y] = String(trTarih || '').split('.').map((x) => parseInt(x, 10));
   const iki = (n) => String(n || 0).padStart(2, '0');
-  return { gun: iki(g), ay: AYLAR[(a || 1) - 1] || '', yil: y || '', iso: `${y}-${iki(a)}-${iki(g)}` };
+  const hg = y && a && g ? GUNLER[new Date(y, a - 1, g, 12).getDay()] : '';
+  return { gun: iki(g), ay: AYLAR[(a || 1) - 1] || '', yil: y || '', haftaGunu: hg, iso: `${y}-${iki(a)}-${iki(g)}` };
 }
 
 const TAHSILAT_ADI = { NAKIT: 'nakit', KART: 'kart', KREDI_KARTI: 'kart', 'KREDİ KARTI': 'kart', YEMEK: 'yemek kartı', YEMEK_KARTI: 'yemek kartı' };
@@ -57,7 +59,7 @@ export function paylasimVerisi(g) {
     .map(([tur, v]) => ({ ad: `Tahsilat (${TAHSILAT_ADI[tur] || String(tur).toLocaleLowerCase('tr-TR')})`, tutar: -sayi(v) }));
   const cariHepsi = [...cariSatir, ...tahsilatSatir];
   // Uzun isim varsa tek sütun: isimler tek satırda kalsın, görsel aşağı uzasın (genişlemesin)
-  const cariTekSutun = cariHepsi.some((c) => c.ad.length > 24);
+  const cariTekSutun = cariHepsi.some((c) => c.ad.length > 30);
 
   const harcama = (liste) => (liste || []).map((s) => ({ ad: s.ad || 'Harcama', tutar: sayi(s.tutar) })).filter(dolu).sort(buyuktenKucuge);
 
