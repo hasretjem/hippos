@@ -848,7 +848,7 @@ export default function Cariler({ data, onNavigate }) {
       ].sort((a, b) => b.ts - a.ts)
     : [];
   const iptalEdilenler = selectedCari
-    ? (cariDuzeltmeler || []).filter((d) => d.cariId === selectedCari.id && d.tip === 'sil' && !d.geriAlindi)
+    ? (cariDuzeltmeler || []).filter((d) => d.cariId === selectedCari.id && d.tip === 'sil' && !d.geriAlindi && d.gunAnahtari !== isGunuAnahtarMs(d.hareketTs))
     : [];
   const birlesikGosterim = [
     ...birlesikHareketler,
