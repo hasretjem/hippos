@@ -1,65 +1,86 @@
 /* ===== Gün sonu paylaşım kartı (1080 x 2400 px sabit, PNG'ye çevrilir) =====
-   Tasarım B (neo-brutalist afiş). Yazı renkleri !important: genel stiller yazıyı beyaz yapabiliyor.
-   Tarih + ciro y=430-830 bandında: WhatsApp'ın kırpmadan gösterdiği bölge. */
+   Neo-brutalist afiş. Tüm bölümler SABİT konum/yükseklikte (mutlak): WhatsApp'ın görünen penceresi (~y 320..1790)
+   kalın çerçevenin içi; yemek kartı üstte, harcama/cari altta. Gölge yerine kalın sağ/alt kenar (html2canvas box-shadow'u bozuyor).
+   Yazı renkleri !important: genel stiller yazıyı beyaz yapabiliyor. Taşan kutuda --k küçülür. */
 .gsk { width: 1080px; box-sizing: border-box; position: relative; overflow: hidden; background: #ffd23f;
   font-family: 'Space Grotesk', system-ui, sans-serif; font-weight: 700; color: #000 !important; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .gsk * { box-sizing: border-box; }
-.gsk-band { height: 130px; background: #000; display: flex; align-items: center; justify-content: space-between; padding: 0 44px;
-  font-family: 'Archivo Black', sans-serif; font-size: 52px; letter-spacing: 0.04em; color: #ffd23f !important; }
-.gsk-band small { font-family: 'Space Grotesk', sans-serif; font-size: 40px; font-weight: 700; color: #fff !important; }
-.gsk-ic { padding: 0 44px 0 44px; }
 .gsk-n, .gsk .gsk-n { color: #c92a2a !important; }
 
-.gsk-ust { display: grid; grid-template-columns: 1fr 1fr; margin-top: 14px; min-height: 264px; align-items: start; }
-.gsk-kt { background: #fff; border: 7px solid #000; border-right-width: 17px; border-bottom-width: 17px; padding: 10px 22px 8px; margin: 14px 12px 0 0; }
-.gsk-kt h3 { margin: 0 0 4px; font-family: 'Archivo Black', sans-serif; font-weight: 400; font-size: calc(38px * var(--k, 1)); color: #e94f37 !important; }
+.gsk-kt { position: absolute; background: #fff; border: 7px solid #000; border-right-width: 18px; border-bottom-width: 18px; padding: 12px 22px 8px; overflow: hidden; --k: 1; }
+.gsk-kt h3 { margin: 0 0 4px; font-family: 'Archivo Black', sans-serif; font-weight: 400; font-size: calc(38px * var(--k, 1)); line-height: 1.2; color: #e94f37 !important; }
 .gsk-s { display: flex; justify-content: space-between; gap: 14px; font-size: calc(30px * var(--k, 1)); line-height: 1.2; border-bottom: 3px solid #000; color: #000 !important; }
 .gsk-s .gsk-ad { min-width: 0; white-space: nowrap; overflow: hidden; color: #000 !important; }
 .gsk-s b { font-weight: 700; white-space: nowrap; color: #000 !important; }
 .gsk-s b.gsk-n { color: #c92a2a !important; }
-.gsk-son { background: #ffd23f; padding: 0 10px; margin-top: 6px; border-bottom: 0; font-family: 'Archivo Black', sans-serif; }
+.gsk-bossatir, .gsk-bossatir .gsk-ad, .gsk-bossatir b { color: #9a9a9a !important; }
+.gsk-bossatir { border-bottom-color: #bbb; }
+.gsk-son { background: #ffd23f; padding: 0 10px; margin-top: 6px; border-bottom: 0; font-family: 'Archivo Black', sans-serif; font-size: calc(32px * var(--k, 1)); }
 .gsk-son .gsk-ad, .gsk-son b { font-family: 'Archivo Black', sans-serif; font-weight: 400; }
 .gsk-bos { font-size: calc(30px * var(--k, 1)); color: #555 !important; }
 
-.gsk-hero { background: #fff; border: 9px solid #000; border-right-width: 25px; border-bottom-width: 25px; padding: 16px 30px 18px; margin: 22px 12px 0 0; }
-.gsk-dt { font-family: 'Archivo Black', sans-serif; font-size: 68px; line-height: 1.05; white-space: nowrap; color: #e94f37 !important; letter-spacing: 0.01em; }
-.gsk-et { font-size: 50px; letter-spacing: 0.06em; margin-top: 6px; color: #000 !important; }
-.gsk-big { font-family: 'Archivo Black', sans-serif; font-size: 160px; line-height: 0.98; white-space: nowrap; letter-spacing: -0.02em; color: #000 !important; }
-.gsk-big i { font-style: normal; font-size: 110px; }
-.gsk-ayrow { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-top: 4px; }
-.gsk-ayrow em { font-style: normal; font-size: 44px; background: #000; color: #fff !important; padding: 2px 16px; border-radius: 8px; white-space: nowrap; }
-.gsk-ayrow .gsk-em2 { font-size: 32px; background: #fff; color: #000 !important; border: 4px solid #000; }
-.gsk-ayrow .gsk-em2 b { color: #000 !important; }
-.gsk-ayrow .gsk-art { color: #1b7a2f !important; }
-.gsk-ayrow .gsk-nn { color: #c92a2a !important; }
-
-.gsk-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 24px; margin: 20px 12px 0 0; }
-.gsk-tile { border: 8px solid #000; border-right-width: 18px; border-bottom-width: 18px; padding: 8px 20px 6px; }
-.gsk-tile span { display: block; font-size: 42px; letter-spacing: 0.04em; color: #000 !important; }
-.gsk-tile b { display: block; font-family: 'Archivo Black', sans-serif; font-weight: 400; font-size: 84px; line-height: 1.1; color: #000 !important; white-space: nowrap; }
-.gsk-tl-nakit { background: #4cd964; }
-.gsk-tl-kart { background: #6ec1ff; }
-.gsk-tl-yemek { background: #ff9f45; }
-.gsk-tl-cari { background: #d3b5ff; }
-
-.gsk-alt { --k: 1; }
-.gsk-iki { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
-.gsk-sutun { display: flex; flex-direction: column; }
-.gsk-alt > .gsk-kt { margin-right: 12px; }
-.gsk-cl { display: grid; grid-template-columns: 1fr 1fr; column-gap: 36px; }
-.gsk-cl.gsk-tek { grid-template-columns: 1fr; }
-.gsk-cl .gsk-s { font-size: calc(28px * var(--k, 1)); }
-.gsk-tab { display: grid; column-gap: 14px; }
-.gsk-th { font-size: calc(26px * var(--k, 1)); color: #444 !important; padding: 0 0 4px; white-space: nowrap; overflow: hidden; border-bottom: 3px solid #000; }
-.gsk-td { font-size: calc(30px * var(--k, 1)); line-height: 1.22; color: #000 !important; white-space: nowrap; overflow: hidden; border-bottom: 3px solid #000; }
+/* Yemek kartı (üst) */
+.gsk-yemek { left: 44px; width: 992px; top: 16px; height: 276px; padding: 8px 22px; display: flex; }
+.gsk-ytab { display: flex; flex-direction: column; width: 100%; }
+.gsk-ygrid { display: grid; column-gap: 0; }
+.gsk-ygrid > .gsk-sag { padding-left: 14px; }
+.gsk-ytop { margin-top: auto; }
+.gsk-yh { font-family: 'Archivo Black', sans-serif; font-weight: 400; font-size: calc(28px * var(--k, 1)); color: #e94f37 !important; white-space: nowrap; overflow: hidden; padding-bottom: 2px; }
+.gsk-yb { font-size: calc(34px * var(--k, 1)); }
+.gsk-td { font-size: calc(24px * var(--k, 1)); line-height: 1.1; color: #000 !important; white-space: nowrap; overflow: hidden; border-bottom: 3px solid #000; }
 .gsk-sag { text-align: right; }
 .gsk-kalin { font-weight: 700; }
 .gsk-silik { color: #aaa !important; }
-.gsk-tt { background: #ffd23f; font-family: 'Archivo Black', sans-serif; border-bottom: 0; }
-.gsk-ekmek { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 8px; }
-.gsk-ekmek div { border: 5px solid #000; text-align: center; padding: 2px 0; background: #c3f0ca; }
-.gsk-ekmek b { display: block; font-family: 'Archivo Black', sans-serif; font-weight: 400; font-size: calc(52px * var(--k, 1)); line-height: 1.1; color: #000 !important; }
-.gsk-ekmek span { display: block; font-size: calc(26px * var(--k, 1)); color: #000 !important; }
+.gsk-tt { background: #ffd23f; font-family: 'Archivo Black', sans-serif; font-weight: 400; border-bottom: 0; font-size: calc(26px * var(--k, 1)); }
+
+/* Çerçeve ve etiketler */
+.gsk-cerceve { position: absolute; left: 30px; width: 1020px; top: 340px; height: 1436px; border: 10px solid #000; }
+.gsk-tab { position: absolute; left: 50%; transform: translateX(-50%); background: #000; color: #ffd23f !important; font-family: 'Archivo Black', sans-serif; font-size: 26px; letter-spacing: 0.12em; padding: 3px 24px; line-height: 1.2; white-space: nowrap; }
+.gsk-tab-ust { top: 326px; }
+.gsk-tab-alt { top: 1738px; }
+
+/* Tarih + ciro */
+.gsk-hero { position: absolute; left: 56px; width: 968px; top: 372px; height: 276px; background: #fff; border: 9px solid #000; border-right-width: 20px; border-bottom-width: 20px; padding: 6px 22px 8px; overflow: hidden; }
+.gsk-dt { font-family: 'Archivo Black', sans-serif; font-size: 66px; line-height: 1.05; white-space: nowrap; color: #e94f37 !important; letter-spacing: 0.01em; }
+.gsk-et { font-size: 36px; letter-spacing: 0.06em; margin-top: 6px; color: #000 !important; }
+.gsk-big { font-family: 'Archivo Black', sans-serif; font-size: 112px; line-height: 1.02; white-space: nowrap; letter-spacing: -0.02em; color: #000 !important; }
+.gsk-big i { font-style: normal; font-size: 68px; }
+.gsk-taslak { position: absolute; right: 14px; top: 10px; background: #c92a2a; color: #fff !important; font-family: 'Archivo Black', sans-serif; font-size: 26px; padding: 2px 14px; border-radius: 6px; letter-spacing: 0.08em; }
+.gsk-ay { position: absolute; right: 14px; top: 80px; width: 380px; }
+.gsk-ar { display: flex; justify-content: space-between; align-items: baseline; font-size: 24px; border-bottom: 4px solid #000; line-height: 1.45; color: #000 !important; }
+.gsk-ar span { color: #000 !important; }
+.gsk-ar b { font-family: 'Archivo Black', sans-serif; font-weight: 400; font-size: 37px; color: #000 !important; }
+.gsk-ar b.gsk-k { color: #e94f37 !important; }
+
+/* Renkli özet kutuları */
+.gsk-tile { position: absolute; width: 474px; height: 150px; border: 8px solid #000; border-right-width: 18px; border-bottom-width: 18px; padding: 2px 20px; overflow: hidden; }
+.gsk-tile span { display: block; font-size: 34px; letter-spacing: 0.04em; color: #000 !important; }
+.gsk-tile b { display: block; font-family: 'Archivo Black', sans-serif; font-weight: 400; font-size: 72px; line-height: 1.05; color: #000 !important; white-space: nowrap; }
+.gsk-t1 { left: 56px; top: 664px; background: #4cd964; }
+.gsk-t2 { left: 550px; top: 664px; background: #6ec1ff; }
+.gsk-t3 { left: 56px; top: 824px; background: #ff9f45; }
+.gsk-t4 { left: 550px; top: 824px; background: #d3b5ff; }
+
+.gsk-b-nakit { left: 56px; top: 986px; width: 474px; height: 454px; }
+.gsk-b-kart { left: 550px; top: 986px; width: 474px; height: 206px; }
+.gsk-b-ana { left: 550px; top: 1202px; width: 474px; height: 238px; }
+
+/* Ekmek */
+.gsk-b-ekmek { left: 56px; top: 1454px; width: 968px; height: 272px; padding: 10px 20px; }
+.gsk-ekmek { display: grid; gap: 12px; margin-top: 2px; }
+.gsk-eb { border: 6px solid #000; background: #c3f0ca; text-align: center; height: 176px; padding: 4px 6px; display: flex; flex-direction: column; align-items: center; overflow: hidden; }
+.gsk-eb b { font-family: 'Archivo Black', sans-serif; font-weight: 400; font-size: 66px; line-height: 1.05; color: #000 !important; }
+.gsk-eb span { font-size: 24px; line-height: 1.1; margin-top: 2px; color: #000 !important; }
+.gsk-et2 { background: #000; }
+.gsk-et2 b { color: #fff !important; }
+.gsk-et2 span { font-family: 'Archivo Black', sans-serif; font-size: 31px; line-height: 1.08; margin-top: 6px; color: #ffd23f !important; }
+
+/* Alt gizli bölge */
+.gsk-b-harcama { left: 44px; top: 1850px; width: 486px; height: 530px; }
+.gsk-b-cari { left: 550px; top: 1850px; width: 486px; height: 230px; }
+.gsk-b-tahsilat { left: 550px; top: 2096px; width: 486px; height: 284px; }
+.gsk-b-harcama .gsk-s, .gsk-b-cari .gsk-s, .gsk-b-tahsilat .gsk-s { font-size: calc(27px * var(--k, 1)); }
+.gsk-b-harcama .gsk-son, .gsk-b-cari .gsk-son, .gsk-b-tahsilat .gsk-son { font-size: calc(30px * var(--k, 1)); }
 
 /* ===== Paylaşım penceresi ===== */
 .gsp-ort { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -84,5 +105,3 @@
 .gsp-ana:hover:not(:disabled) { border-color: #c73f2a; background: #d8452e; }
 /* Kart ekran dışında, gerçek boyutunda çizilir (pencere animasyonsuz: fixed konum bozulmasın) */
 .gsp-sahne { position: fixed; left: -20000px; top: 0; pointer-events: none; }
-.gsk-sutun .gsk-ekmek span { font-size: calc(21px * var(--k, 1)); }
-.gsk-sutun .gsk-ekmek { gap: 6px; }

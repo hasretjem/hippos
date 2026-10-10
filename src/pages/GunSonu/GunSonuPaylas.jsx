@@ -8,25 +8,24 @@ import { tam, buyukHarf } from './gunsonuPaylasVeri';
 import './GunSonuPaylas.css';
 
 // Gün sonu paylaşım görseli: HER ZAMAN 1080 x 2400 px (sabit boyut).
-// WhatsApp uzun görselleri sohbette kırpar ve görünen pencere görselin yüksekliğine göre değişir; bu yüzden
-// boyut sabit tutulur. Tarih ve ciro görselin y=430-830 bandında (WhatsApp'ta kırpılmadan görünen bölge),
-// ayrıntılar bunun üstünde ve altında; görsele tıklayınca tamamı görünür.
-// Detay bölgesi taşarsa --k değişkeni küçülerek yazılar sığdırılır, görsel boyutu değişmez.
+// WhatsApp uzun görselleri sohbette kırpar; görünen pencere yaklaşık y=320..1790. Bu yüzden her bölüm SABİT konum ve
+// yükseklikte: kalın çerçevenin içi (pencere) özet bilgiler, dışı (yukarıda yemek kartı, aşağıda harcama/cari) ayrıntı.
+// Bilgi artarsa yalnızca o kutunun yazısı küçülür (--k), görsel boyutu ve kutu yerleri değişmez.
 
 export const KART_YUKSEKLIK = 2400;
 
-function Satir({ ad, tutar, son }) {
+function Satir({ ad, tutar, son, bos }) {
   return (
-    <div className={`gsk-s${son ? ' gsk-son' : ''}`}>
+    <div className={`gsk-s${son ? ' gsk-son' : ''}${bos ? ' gsk-bossatir' : ''}`}>
       <span className="gsk-ad">{ad}</span>
-      <b className={tutar < 0 ? 'gsk-n' : ''}>{tam(tutar)}</b>
+      <b className={tutar < 0 ? 'gsk-n' : ''}>{bos ? '—' : tam(tutar)}</b>
     </div>
   );
 }
 
 function Kutu({ baslik, children, sinif = '' }) {
   return (
-    <section className={`gsk-kt ${sinif}`}>
+    <section className={`gsk-kt gsk-fit ${sinif}`}>
       <h3>{buyukHarf(baslik)}</h3>
       {children}
     </section>
@@ -34,128 +33,128 @@ function Kutu({ baslik, children, sinif = '' }) {
 }
 
 export function PaylasKarti({ v }) {
-  const { tarih, ay, nakit, kart, yemek, cari, harcama, anaKasa, ekmek } = v;
+  const { tarih, ay, nakit, kart, yemek, harcama, anaKasa, ekmek, cari, cariTahsilat } = v;
   const harcamaSatir = [
-    ...harcama.tlKasa.satirlar.map((s) => ({ ...s, ad: `${s.ad} (TL kasa)` })),
+    ...harcama.tlKasa.satirlar.map((s) => ({ ...s, ad: `${s.ad} (kasa)` })),
     ...harcama.gunluk.satirlar.map((s) => ({ ...s, ad: `${s.ad} (günlük)` })),
   ];
   const harcamaToplam = harcamaSatir.reduce((t, r) => t + r.tutar, 0);
   const kirilim = yemek.kolonlar.length > 1;
+  const sablon = `minmax(0, 1.25fr) repeat(${yemek.kolonlar.length}, minmax(0, 1fr)) minmax(0, 0.9fr)`;
   const renkler = [
-    ['nakit', 'NAKİT', nakit.toplam],
-    ['kart', 'KREDİ KARTI', kart.toplam],
-    ['yemek', 'YEMEK KARTI', yemek.toplam],
-    ['cari', 'CARİ', cari.toplam],
+    ['nakit', 'NAKİT', nakit.toplam, 'gsk-t1'],
+    ['kart', 'KREDİ KARTI', kart.toplam, 'gsk-t2'],
+    ['yemek', 'YEMEK KARTI', yemek.toplam, 'gsk-t3'],
+    ['cari', 'CARİ', v.cariGenel, 'gsk-t4'],
   ];
+  const ayDeger = (n) => (n > 0 ? tam(n) : '—');
   return (
     <div className="gsk" style={{ height: KART_YUKSEKLIK }}>
-      <div className="gsk-band">
-        <span>PERPA SANDVİÇ</span>
-        <small>{v.kaydedildi ? 'GÜN SONU · DETAYLAR' : 'TASLAK · KAYDEDİLMEDİ'}</small>
-      </div>
-      <div className="gsk-ic">
-        <div className="gsk-ust">
-          <Kutu baslik="Kredi kartı">
-            {kart.satirlar.length ? kart.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />) : <div className="gsk-bos">Kart satışı yok</div>}
-            <Satir ad="Toplam" tutar={kart.toplam} son />
-          </Kutu>
-          <Kutu baslik="Ana kasa">
-            {anaKasa.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
-            <Satir ad="Yarına devir" tutar={anaKasa.yarinaDevir} son />
-          </Kutu>
-        </div>
-
-        <div className="gsk-hero">
-          <div className="gsk-dt">{buyukHarf(tarih.haftaGunu)} · {parseInt(tarih.gun, 10)} {buyukHarf(tarih.ay)} {tarih.yil}</div>
-          <div className="gsk-et">TOPLAM CİRO</div>
-          <div className="gsk-big">{tam(v.toplamCiro)}<i> ₺</i></div>
-          <div className="gsk-ayrow">
-            <em>BU AY {tam(ay.buAy)} ₺</em>
-            {ay.ayniGune > 0 && <em className="gsk-em2">GEÇEN AY AYNI GÜNE {tam(ay.ayniGune)} ₺ <b className={ay.yuzde >= 0 ? 'gsk-art' : 'gsk-nn'}>{ay.yuzde >= 0 ? '+' : '−'}%{Math.abs(ay.yuzde)}</b></em>}
-          </div>
-        </div>
-
-        <div className="gsk-tiles">
-          {renkler.map(([t, ad, tutar]) => (
-            <div key={t} className={`gsk-tile gsk-tl-${t}`}><span>{ad}</span><b>{tam(tutar)}</b></div>
-          ))}
-        </div>
-
-        <div className="gsk-alt">
-          <div className="gsk-iki">
-            <Kutu baslik="Nakit sayımı">
-              {nakit.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
-              <Satir ad="Toplam" tutar={nakit.toplam} son />
-            </Kutu>
-            <div className="gsk-sutun">
-              {harcamaSatir.length > 0 && (
-                <Kutu baslik="Harcama">
-                  {harcamaSatir.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
-                  <Satir ad="Toplam" tutar={harcamaToplam} son />
-                </Kutu>
-              )}
-              <Kutu baslik="Ekmek">
-                <div className="gsk-ekmek">
-                  {ekmek.satirlar.map((e) => <div key={e.ad}><b>{e.adet}</b><span>{e.ad}</span></div>)}
-                </div>
-                <Satir ad="Toplam ekmek" tutar={ekmek.toplam} son />
-              </Kutu>
+      {/* Üst gizli bölge: yemek kartı (sabit uzunlukta) */}
+      <section className="gsk-kt gsk-fit gsk-yemek">
+        {kirilim ? (
+          <div className="gsk-ytab">
+            <div className="gsk-ygrid" style={{ gridTemplateColumns: sablon }}>
+              <span className="gsk-yh gsk-yb">YEMEK KARTI</span>
+              {yemek.kolonlar.map((k) => <span key={k} className="gsk-yh gsk-sag">{k}</span>)}
+              <span className="gsk-yh gsk-sag">Toplam</span>
+              {yemek.satirlar.map((r) => [
+                <span key={`${r.ad}-a`} className="gsk-td">{r.ad}</span>,
+                ...r.parcalar.map((p, i) => <span key={`${r.ad}-${i}`} className={`gsk-td gsk-sag${p ? '' : ' gsk-silik'}`}>{p ? tam(p) : '–'}</span>),
+                <span key={`${r.ad}-t`} className="gsk-td gsk-sag gsk-kalin">{tam(r.tutar)}</span>,
+              ])}
+            </div>
+            <div className="gsk-ygrid gsk-ytop" style={{ gridTemplateColumns: sablon }}>
+              <span className="gsk-td gsk-tt">Toplam</span>
+              {yemek.kolonlar.map((k, i) => <span key={k} className="gsk-td gsk-sag gsk-tt">{tam(yemek.satirlar.reduce((a, r) => a + r.parcalar[i], 0))}</span>)}
+              <span className="gsk-td gsk-sag gsk-tt">{tam(yemek.toplam)}</span>
             </div>
           </div>
+        ) : (
+          <div className="gsk-ytab">
+            <div className="gsk-ygrid" style={{ gridTemplateColumns: '1fr auto' }}>
+              <span className="gsk-yh gsk-yb">YEMEK KARTI</span><span className="gsk-yh" />
+              {yemek.satirlar.map((r) => [<span key={`${r.ad}-a`} className="gsk-td">{r.ad}</span>, <span key={`${r.ad}-t`} className="gsk-td gsk-sag gsk-kalin">{tam(r.tutar)}</span>])}
+            </div>
+            <div className="gsk-ygrid gsk-ytop" style={{ gridTemplateColumns: '1fr auto' }}>
+              <span className="gsk-td gsk-tt">Toplam</span><span className="gsk-td gsk-sag gsk-tt">{tam(yemek.toplam)}</span>
+            </div>
+          </div>
+        )}
+      </section>
 
-          {yemek.satirlar.length > 0 && (
-            <Kutu baslik="Yemek kartı">
-              {kirilim ? (
-                <div className="gsk-tab" style={{ gridTemplateColumns: `minmax(0, 1.25fr) repeat(${yemek.kolonlar.length}, minmax(0, 1fr)) minmax(0, 0.9fr)` }}>
-                  <span className="gsk-th" />
-                  {yemek.kolonlar.map((k) => <span key={k} className="gsk-th gsk-sag">{k}</span>)}
-                  <span className="gsk-th gsk-sag">Toplam</span>
-                  {yemek.satirlar.map((r) => [
-                    <span key={`${r.ad}-a`} className="gsk-td">{r.ad}</span>,
-                    ...r.parcalar.map((p, i) => <span key={`${r.ad}-${i}`} className={`gsk-td gsk-sag${p ? '' : ' gsk-silik'}`}>{p ? tam(p) : '–'}</span>),
-                    <span key={`${r.ad}-t`} className="gsk-td gsk-sag gsk-kalin">{tam(r.tutar)}</span>,
-                  ])}
-                  <span className="gsk-td gsk-tt">Toplam</span>
-                  {yemek.kolonlar.map((k, i) => <span key={k} className="gsk-td gsk-sag gsk-tt">{tam(yemek.satirlar.reduce((a, r) => a + r.parcalar[i], 0))}</span>)}
-                  <span className="gsk-td gsk-sag gsk-tt">{tam(yemek.toplam)}</span>
-                </div>
-              ) : (
-                <>
-                  <div className="gsk-cl">{yemek.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}</div>
-                  <Satir ad="Toplam" tutar={yemek.toplam} son />
-                </>
-              )}
-            </Kutu>
-          )}
+      {/* Görünen pencere: kalın çerçeve */}
+      <div className="gsk-cerceve" />
+      <div className="gsk-tab gsk-tab-ust">▲ YEMEK KARTI ▲</div>
+      <div className="gsk-tab gsk-tab-alt">▼ HARCAMA · CARİ ▼</div>
 
-
-          {cari.satirlar.length > 0 && (
-            <Kutu baslik="Cari">
-              <div className={`gsk-cl${cari.tekSutun ? ' gsk-tek' : ''}`}>
-                {cari.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
-              </div>
-              <Satir ad="Cari toplamı" tutar={cari.toplam} son />
-            </Kutu>
-          )}
+      <div className="gsk-hero">
+        {!v.kaydedildi && <div className="gsk-taslak">TASLAK</div>}
+        <div className="gsk-dt">{buyukHarf(tarih.haftaGunu)} · {parseInt(tarih.gun, 10)} {buyukHarf(tarih.ay)}</div>
+        <div className="gsk-et">TOPLAM CİRO</div>
+        <div className="gsk-big">{tam(v.toplamCiro)}<i> ₺</i></div>
+        <div className="gsk-ay">
+          <div className="gsk-ar"><span>BU AY</span><b>{ayDeger(ay.buAy)}</b></div>
+          <div className="gsk-ar"><span>GEÇEN AY 1–{ay.gun}</span><b className="gsk-k">{ayDeger(ay.ayniGune)}</b></div>
+          <div className="gsk-ar"><span>GEÇEN AY TAMAMI</span><b className="gsk-k">{ayDeger(ay.gecenAy)}</b></div>
         </div>
       </div>
+
+      {renkler.map(([t, ad, tutar, sinif]) => (
+        <div key={t} className={`gsk-tile ${sinif}`}><span>{ad}</span><b>{tam(tutar)}</b></div>
+      ))}
+
+      <Kutu baslik="Nakit sayımı" sinif="gsk-b-nakit">
+        {nakit.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} bos={s.bos} />)}
+        <Satir ad="Toplam" tutar={nakit.toplam} son />
+      </Kutu>
+      <Kutu baslik="Kredi kartı" sinif="gsk-b-kart">
+        {kart.satirlar.length ? kart.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />) : <div className="gsk-bos">Kart satışı yok</div>}
+        <Satir ad="Toplam" tutar={kart.toplam} son />
+      </Kutu>
+      <Kutu baslik="Ana kasa" sinif="gsk-b-ana">
+        {anaKasa.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
+        <Satir ad="Yarına devir" tutar={anaKasa.yarinaDevir} son />
+      </Kutu>
+
+      <Kutu baslik="Ekmek" sinif="gsk-b-ekmek">
+        <div className="gsk-ekmek" style={{ gridTemplateColumns: `repeat(${ekmek.satirlar.length + 1}, 1fr)` }}>
+          {ekmek.satirlar.map((e) => <div key={e.ad} className="gsk-eb"><b>{e.adet}</b><span>{e.ad}</span></div>)}
+          <div className="gsk-eb gsk-et2"><b>{ekmek.toplam}</b><span>TOPLAM EKMEK</span></div>
+        </div>
+      </Kutu>
+
+      {/* Alt gizli bölge */}
+      <Kutu baslik="Harcama" sinif="gsk-b-harcama">
+        {harcamaSatir.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
+        {harcamaSatir.length > 0 && <Satir ad="Toplam" tutar={harcamaToplam} son />}
+      </Kutu>
+      <Kutu baslik="Cari" sinif="gsk-b-cari">
+        {cari.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
+        {cari.satirlar.length > 0 && <Satir ad="Cari toplamı" tutar={cari.toplam} son />}
+      </Kutu>
+      <Kutu baslik="Cari tahsilat" sinif="gsk-b-tahsilat">
+        {cariTahsilat.satirlar.map((s, i) => <Satir key={i} ad={s.ad} tutar={s.tutar} />)}
+        {cariTahsilat.satirlar.length > 0 && <Satir ad="Toplam" tutar={cariTahsilat.toplam} son />}
+      </Kutu>
     </div>
   );
 }
 
-// Detay bölgesi 2400 px'e sığmıyorsa yazıları küçült (görsel boyutu sabit kalır).
+// Her kutu sabit boyutlu; içerik taşarsa (satır sayısı veya uzun isim) yalnızca o kutunun yazısı küçülür.
 function sigdir(kart) {
-  const ic = kart.querySelector('.gsk-ic');
-  const alt = kart.querySelector('.gsk-alt');
-  const bant = kart.querySelector('.gsk-band');
-  if (!ic || !alt || !bant) return;
-  const sinir = KART_YUKSEKLIK - 14;
-  let k = 1;
-  alt.style.setProperty('--k', '1');
-  while (bant.offsetHeight + ic.offsetHeight > sinir && k > 0.5) {
-    k = Math.round((k - 0.04) * 100) / 100;
-    alt.style.setProperty('--k', String(k));
-  }
+  kart.querySelectorAll('.gsk-fit').forEach((kutu) => {
+    let k = 1;
+    kutu.style.setProperty('--k', '1');
+    const tasti = () => {
+      if (kutu.scrollHeight > kutu.clientHeight + 1) return true;
+      return [...kutu.querySelectorAll('.gsk-ad, .gsk-td, .gsk-yh')].some((e) => e.scrollWidth > e.clientWidth + 1);
+    };
+    while (tasti() && k > 0.45) {
+      k = Math.round((k - 0.04) * 100) / 100;
+      kutu.style.setProperty('--k', String(k));
+    }
+  });
 }
 
 export default function GunSonuPaylas({ v, onKapat }) {

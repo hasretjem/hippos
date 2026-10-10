@@ -37,11 +37,11 @@ const dolu = (r) => Math.abs(sayi(r.tutar)) >= 0.005;
 export function paylasimVerisi(g) {
   const tarih = tarihParcalari(g.tarih);
 
+  // Nakit kutusu sabit boyutlu: tüm kupürler her zaman listelenir (adedi 0 olanlar silik "—" görünür)
   const nakitSatir = [...(g.denoms || [])].sort((a, b) => b - a)
     .map((d) => ({ d, adet: parseInt((g.nakitAdet || {})[d], 10) || 0 }))
-    .filter((x) => x.adet > 0)
-    .map((x) => ({ ad: `${x.d} × ${x.adet}`, tutar: x.d * x.adet }));
-  if (sayi(g.kasaAvansi) !== 0) nakitSatir.push({ ad: 'Kasa avansı', tutar: sayi(g.kasaAvansi) });
+    .map((x) => (x.adet > 0 ? { ad: `${x.d} × ${x.adet}`, tutar: x.d * x.adet } : { ad: `${x.d} × 0`, tutar: 0, bos: true }));
+  nakitSatir.push(sayi(g.kasaAvansi) !== 0 ? { ad: 'Kasa avansı', tutar: sayi(g.kasaAvansi) } : { ad: 'Kasa avansı', tutar: 0, bos: true });
 
   const kartSatir = (g.posTutarlari || []).map((r) => ({ ad: r.label || 'POS', tutar: sayi(r.tutar) })).filter(dolu);
 
@@ -61,12 +61,11 @@ export function paylasimVerisi(g) {
   const duzeltmeSatir = (g.duzeltmeler || [])
     .filter((d) => sayi(d.tutar) !== 0)
     .map((d) => ({
-      ad: `Düzeltme · ${d.cariAd || 'Cari'} (${new Date(d.hareketTs).toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul', day: '2-digit', month: '2-digit' })} ${DUZ_ADI[d.tip] || 'düzeltildi'})`,
+      ad: `${d.cariAd || 'Cari'} (${d.tip === 'sil' ? 'silinen cari' : DUZ_ADI[d.tip] || 'düzeltildi'})`,
       tutar: sayi(d.tutar),
     }));
-  const cariHepsi = [...cariSatir, ...tahsilatSatir, ...duzeltmeSatir];
-  // Uzun isim varsa tek sütun: isimler tek satırda kalsın, görsel aşağı uzasın (genişlemesin)
-  const cariTekSutun = cariHepsi.some((c) => c.ad.length > 30);
+  // Cari: o günün cari satışları. Cari tahsilat: tahsilatlar + silinen/düzeltilen cariler. İkisi de günsonu cirosundan düşer.
+  const tahsilatHepsi = [...tahsilatSatir, ...duzeltmeSatir];
 
   const harcama = (liste) => (liste || []).map((s) => ({ ad: s.ad || 'Harcama', tutar: sayi(s.tutar) })).filter(dolu).sort(buyuktenKucuge);
 
@@ -75,22 +74,25 @@ export function paylasimVerisi(g) {
     { ad: 'Dünden devir', tutar: sayi(g.dundenDevir) },
     { ad: '+ Bugünkü nakit', tutar: sayi(g.toplamNakitPara) },
   ];
-  if (anaKasaHarcama !== 0) anaKasaSatir.push({ ad: '− TL Kasa harcaması', tutar: -anaKasaHarcama });
+  if (anaKasaHarcama !== 0) anaKasaSatir.push({ ad: '− Harcama', tutar: -anaKasaHarcama });
 
   const ay = g.ay || {};
   const ayniGune = sayi(ay.gecenAyAyniGune);
   const yuzde = ayniGune > 0 ? Math.round((sayi(ay.buAy) / ayniGune - 1) * 100) : null;
 
-  const ekmek = (g.ekmek || []).map((e) => ({ ad: String(e.ad || '').replace(/\s*Ekmeği$/i, ''), adet: parseInt(e.adet, 10) || 0 }));
+  // "Domatesli/Fesleğenli Ekmeği" -> "Domatesli Fesleğenli Ekmek"
+  const ekmek = (g.ekmek || []).map((e) => ({ ad: `${String(e.ad || '').replace(/\s*Ekmeği$/i, '').replace(/\//g, ' ')} Ekmek`, adet: parseInt(e.adet, 10) || 0 }));
 
   return {
     tarih,
     toplamCiro: sayi(g.toplamCiro),
-    ay: { buAy: sayi(ay.buAy), gecenAy: sayi(ay.gecenAy), ayniGune, yuzde },
+    ay: { buAy: sayi(ay.buAy), gecenAy: sayi(ay.gecenAy), ayniGune, yuzde, gun: parseInt(tarih.gun, 10) || 0 },
     nakit: { satirlar: nakitSatir, toplam: sayi(g.toplamNakitPara) },
     kart: { satirlar: kartSatir, toplam: kartSatir.reduce((s, r) => s + r.tutar, 0) },
     yemek: { kolonlar: yemekKolon, satirlar: yemekSatir, toplam: yemekSatir.reduce((s, r) => s + r.tutar, 0) },
-    cari: { satirlar: cariHepsi, toplam: cariHepsi.reduce((s, r) => s + r.tutar, 0), tekSutun: cariTekSutun },
+    cari: { satirlar: cariSatir, toplam: cariSatir.reduce((s, r) => s + r.tutar, 0) },
+    cariTahsilat: { satirlar: tahsilatHepsi, toplam: tahsilatHepsi.reduce((s, r) => s + r.tutar, 0) },
+    cariGenel: cariSatir.reduce((s, r) => s + r.tutar, 0) + tahsilatHepsi.reduce((s, r) => s + r.tutar, 0),
     harcama: {
       tlKasa: { satirlar: harcama(g.anaKasa), toplam: anaKasaHarcama },
       gunluk: { satirlar: harcama(g.gunlukKasa), toplam: sayi(g.gunlukKasaToplam) },
