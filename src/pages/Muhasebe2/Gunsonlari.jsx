@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ModalAksiyon, ModalKabuk, TL, useModalKaydet } from './m2Ortak';
 
 // Günsonları: Muhasebe1'deki "Gün Sonu Kayıtları" tablosunun aynısı (aynı gs_kayitlar verisi) + Düzenleme Modu'nda
-// Düzenle / Sil. Düzenleme toplamları (nakit, POS, yemek kartı, ciro) sunucuda otomatik hesaplanır ve ana kasa devrini
-// sonraki günlere yayar. CARİ bilgisi yalnızca görülür, buradan değiştirilemez.
+// Düzenle / Sil. Düzenleme toplamları (nakit, POS, yemek kartı, ciro) sunucuda otomatik hesaplanır. Devir ve harcama
+// toplamları TL Kasa defterinden türetilir (burada değiştirilmez); harcama satırları "detay" penceresinde yerinde
+// düzeltilir. CARİ bilgisi yalnızca görülür, buradan değiştirilemez.
 
 const AYLAR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 const KUPURLER = ['200', '100', '50', '20', '10', '5'];
@@ -113,8 +114,7 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
     kilit.current = true;
     try {
       const on = await api('gunsonuSil', { method: 'POST', body: { tarih: k.tarih, onizleme: true } });
-      const ek = on.etkilenen.length ? `\n\n${on.etkilenen.length} sonraki günün ana kasa devri yeniden hesaplanacak.` : '';
-      if (!window.confirm(`${k.tarih} günsonu kaydı silinecek.${ek}\n\nEmin misiniz?`)) return;
+      if (!window.confirm(`${k.tarih} günsonu kaydı silinecek.\n\nDevir TL Kasa defterinden hesaplandığı için sonraki günlerin devri bu kayda bağlı değildir. Bu günün Günsonu Geliri TL Kasa'dan kaldırılır.\n\nEmin misiniz?`)) return;
       const s = await api('gunsonuSil', { method: 'POST', body: { tarih: k.tarih } });
       onIslem(s, `${k.tarih} günsonu silindi`);
       bildir('Günsonu kaydı silindi (Ctrl+Z ile geri alabilirsiniz)');
@@ -133,7 +133,7 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
       return;
     }
     onIslem(sonuc, `${sonuc.kayit.tarih} günsonu düzenlendi`);
-    bildir(`Günsonu güncellendi${sonuc.etkilenen?.length ? `, ${sonuc.etkilenen.length} sonraki günün devri yeniden hesaplandı` : ''} (Ctrl+Z ile geri alabilirsiniz)`);
+    bildir('Günsonu güncellendi (Ctrl+Z ile geri alabilirsiniz)');
     await yukle();
   }
 
@@ -287,7 +287,19 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
         </table>
       </div>
 
-      {detay && <GunsonuDetayModal tip={detay.tip} kayit={detay.kayit} onKapat={() => setDetay(null)} />}
+      {detay && (
+        <GunsonuDetayModal
+          tip={detay.tip}
+          kayit={detay.kayit}
+          duzenlemeModu={duzenlemeModu}
+          bildir={bildir}
+          onKapat={() => setDetay(null)}
+          onDegisti={() => {
+            yukle();
+            yenile?.();
+          }}
+        />
+      )}
       {duzenle && (
         <GunsonuDuzenleModal
           kayit={duzenle}
@@ -309,7 +321,7 @@ function DetayDugme({ onClick }) {
 }
 
 // ------------------------------ Detay pencereleri ------------------------------
-function GunsonuDetayModal({ tip, kayit, onKapat }) {
+function GunsonuDetayModal({ tip, kayit, onKapat, duzenlemeModu, bildir, onDegisti }) {
   const basliklar = {
     anaKasaHarcamalar: 'Ana Kasa Harcamaları',
     gunlukKasaHarcamalar: 'Günlük Kasa Harcamaları',
@@ -319,13 +331,18 @@ function GunsonuDetayModal({ tip, kayit, onKapat }) {
     anaKasaTakibi: 'Ana Kasa Takibi',
   };
   const [veri, setVeri] = useState(null);
+  const [yenileSay, setYenileSay] = useState(0);
   useEffect(() => {
     if (tip !== 'anaKasaHarcamalar' && tip !== 'gunlukKasaHarcamalar') return;
     fetch(`/api/muhasebe2?resource=gunsonuHarcama&tarih=${encodeURIComponent(kayit.tarih)}`)
       .then((r) => r.json())
       .then((j) => setVeri(j))
       .catch(() => setVeri({ anaKasa: [], gunlukKasa: [] }));
-  }, [tip, kayit.tarih]);
+  }, [tip, kayit.tarih, yenileSay]);
+  const harcamaDegisti = () => {
+    setYenileSay((n) => n + 1);
+    onDegisti?.();
+  };
 
   function icerik() {
     if (tip === 'anaKasaHarcamalar' || tip === 'gunlukKasaHarcamalar') {
@@ -339,15 +356,12 @@ function GunsonuDetayModal({ tip, kayit, onKapat }) {
               <th>Ad</th>
               <th>Açıklama</th>
               <th className="sayi">Tutar</th>
+              {duzenlemeModu && <th>İşlem</th>}
             </tr>
           </thead>
           <tbody>
             {liste.map((x, i) => (
-              <tr key={x.id || i}>
-                <td>{x.firmaAdi}</td>
-                <td>{x.aciklama || '—'}</td>
-                <td className="sayi">{sayiYaz(x.tutar)}</td>
-              </tr>
+              <HarcamaSatiri key={x.id || i} x={x} gunTarih={kayit.tarih} duzenlemeModu={duzenlemeModu} bildir={bildir} onDegisti={harcamaDegisti} />
             ))}
           </tbody>
         </table>
@@ -414,6 +428,97 @@ function GunsonuDetayModal({ tip, kayit, onKapat }) {
     <ModalKabuk baslik={`${basliklar[tip]} — ${kayit.tarih}`} onKapat={onKapat} genis>
       <div className="m2-table-wrap">{icerik()}</div>
     </ModalKabuk>
+  );
+}
+
+const trIso = (t) => {
+  const c = tarihCoz(t);
+  return c ? `${c.y}-${String(c.m).padStart(2, '0')}-${String(c.d).padStart(2, '0')}` : '';
+};
+
+// Harcama satırı: Düzenleme Modu'nda tutar/açıklama/tarih yerinde değişir (fiş/makbuz grubu güncellenir; ekstre, Gün Sonu ve Günsonları birlikte değişir).
+function HarcamaSatiri({ x, gunTarih, duzenlemeModu, bildir, onDegisti }) {
+  const [acik, setAcik] = useState(false);
+  const [bekliyor, setBekliyor] = useState(false);
+  const [f, setF] = useState({ tutar: '', aciklama: '', tarih: '' });
+  const baslat = () => {
+    setF({ tutar: String(x.tutar ?? ''), aciklama: x.aciklama || '', tarih: trIso(gunTarih) });
+    setAcik(true);
+  };
+  async function kaydet() {
+    if (bekliyor) return;
+    const body = { grupId: x.id };
+    if (f.tutar !== String(x.tutar ?? '')) body.tutar = f.tutar;
+    if (f.aciklama !== (x.aciklama || '')) body.aciklama = f.aciklama;
+    if (f.tarih && f.tarih !== trIso(gunTarih)) body.tarih = f.tarih;
+    if (Object.keys(body).length === 1) {
+      setAcik(false);
+      return;
+    }
+    setBekliyor(true);
+    try {
+      await api('harcamaDegistir', { method: 'POST', body });
+      bildir('Harcama güncellendi; devir ve toplamlar defterden yeniden hesaplandı');
+      setAcik(false);
+      onDegisti();
+    } catch (e) {
+      bildir(e.message, true);
+    } finally {
+      setBekliyor(false);
+    }
+  }
+  async function sil() {
+    if (bekliyor) return;
+    if (!window.confirm(`${x.firmaAdi} — ${sayiYaz(x.tutar)} harcaması silinecek (fiş/makbuz kaydıyla birlikte).\n\nEmin misiniz?`)) return;
+    setBekliyor(true);
+    try {
+      await api('harcamaSil', { method: 'POST', body: { grupId: x.id } });
+      bildir('Harcama silindi');
+      onDegisti();
+    } catch (e) {
+      bildir(e.message, true);
+    } finally {
+      setBekliyor(false);
+    }
+  }
+  if (acik) {
+    return (
+      <tr>
+        <td>{x.firmaAdi}</td>
+        <td>
+          <input className="m2-input" aria-label="Açıklama" value={f.aciklama} onChange={(e) => setF((p) => ({ ...p, aciklama: e.target.value }))} />
+          <input className="m2-input" type="date" aria-label="Tarih" style={{ marginTop: 4 }} value={f.tarih} onChange={(e) => setF((p) => ({ ...p, tarih: e.target.value }))} />
+        </td>
+        <td className="sayi">
+          <input className="m2-input" aria-label="Tutar" inputMode="decimal" value={f.tutar} onChange={(e) => setF((p) => ({ ...p, tutar: e.target.value }))} />
+        </td>
+        <td>
+          <button type="button" className="m2-btn mini" disabled={bekliyor} onClick={kaydet}>
+            Kaydet
+          </button>{' '}
+          <button type="button" className="m2-btn sec mini" disabled={bekliyor} onClick={() => setAcik(false)}>
+            Vazgeç
+          </button>
+        </td>
+      </tr>
+    );
+  }
+  return (
+    <tr>
+      <td>{x.firmaAdi}</td>
+      <td>{x.aciklama || '—'}</td>
+      <td className="sayi">{sayiYaz(x.tutar)}</td>
+      {duzenlemeModu && (
+        <td>
+          <button type="button" className="m2-btn sec mini" disabled={bekliyor} onClick={baslat}>
+            Düzenle
+          </button>{' '}
+          <button type="button" className="m2-btn sec mini" disabled={bekliyor} onClick={sil}>
+            Sil
+          </button>
+        </td>
+      )}
+    </tr>
   );
 }
 
@@ -520,10 +625,7 @@ function baslangicForm(k) {
     kupur,
     avans: String(k.kasaAvansi ?? 0),
     pos: (k.posTutarlari || []).map((p) => ({ label: p.label, tutar: String(p.tutar ?? '') })),
-    ana: String(k.anaKasaToplam ?? 0),
-    gunluk: String(k.gunlukKasaToplam ?? 0),
     yemek,
-    dunden: String(k.anaKasaTakibi?.dundenDevir ?? 0),
     saat: k.kaydedenSaat || '',
   };
 }
@@ -535,10 +637,7 @@ function alanlariUret(f, bas) {
   if (fark(f.kupur, bas.kupur)) a.nakitKupurDetayi = f.kupur;
   if (f.avans !== bas.avans) a.kasaAvansi = f.avans;
   if (fark(f.pos, bas.pos)) a.posTutarlari = f.pos;
-  if (f.ana !== bas.ana) a.anaKasaToplam = f.ana;
-  if (f.gunluk !== bas.gunluk) a.gunlukKasaToplam = f.gunluk;
   if (fark(f.yemek, bas.yemek)) a.yemekTutarlari = f.yemek;
-  if (f.dunden !== bas.dunden) a.dundenDevir = f.dunden;
   if (f.saat !== bas.saat) a.kaydedenSaat = f.saat;
   return a;
 }
@@ -585,7 +684,6 @@ function GunsonuDuzenleModal({ kayit, onKapat, onKaydet, onBitti }) {
   }, [f, bas, kayit.tarih]);
 
   const goster = onizleme?.kayit || kayit;
-  const etkilenen = onizleme?.etkilenen || [];
   const set = (alan, v) => setF((p) => ({ ...p, [alan]: v }));
 
   function markaEkle() {
@@ -596,7 +694,6 @@ function GunsonuDuzenleModal({ kayit, onKapat, onKaydet, onBitti }) {
   }
 
   function kaydet() {
-    if (etkilenen.length && !window.confirm(`${etkilenen.length} sonraki günün ana kasa devri yeniden hesaplanacak.\n\nDevam edilsin mi?`)) return;
     calistir({ tarih: kayit.tarih, alanlar });
   }
 
@@ -691,42 +788,32 @@ function GunsonuDuzenleModal({ kayit, onKapat, onKaydet, onBitti }) {
           </div>
         )}
 
-        <div className="m2-gs-bolum">Kasa ve ana kasa devri</div>
+        <div className="m2-gs-bolum">Kasa ve ana kasa devri (TL Kasa defterinden)</div>
         <div className="m2-gs-izgara m2-gs-izgara-genis">
           <div>
             <label className="m2-label">Ana kasa harcaması</label>
-            <input className="m2-input" inputMode="decimal" value={f.ana} onChange={(e) => set('ana', e.target.value)} />
+            <input className="m2-input" value={sayiYaz(goster.anaKasaToplam)} readOnly disabled />
           </div>
           <div>
             <label className="m2-label">Günlük kasa harcaması</label>
-            <input className="m2-input" inputMode="decimal" value={f.gunluk} onChange={(e) => set('gunluk', e.target.value)} />
+            <input className="m2-input" value={sayiYaz(goster.gunlukKasaToplam)} readOnly disabled />
           </div>
           <div>
             <label className="m2-label">Dünden devir</label>
-            <input className="m2-input" inputMode="decimal" value={f.dunden} onChange={(e) => set('dunden', e.target.value)} />
+            <input className="m2-input" value={sayiYaz(goster.anaKasaTakibi?.dundenDevir)} readOnly disabled />
           </div>
           <div>
             <label className="m2-label">Kaydeden saat</label>
             <input className="m2-input" value={f.saat} onChange={(e) => set('saat', e.target.value)} />
           </div>
         </div>
-        <p className="m2-hint">Ana kasa harcaması ciroyu etkilemez, yarına devirden düşer. Günlük kasa harcaması ciroya eklenir.</p>
+        <p className="m2-hint">Harcamalar fiş/makbuzlardan, devir TL Kasa bakiyesinden gelir; değiştirmek için listedeki "detay" penceresinden harcama satırını düzeltin.</p>
 
         <div className="m2-gs-bolum">Cari (değiştirilemez, yalnızca görülür)</div>
         <div className="m2-table-wrap">
           <CariTablosu kayit={kayit} />
         </div>
 
-        {etkilenen.length > 0 && (
-          <div className="m2-info" role="status">
-            {etkilenen.length} sonraki günün ana kasa devri yeniden hesaplanacak:{' '}
-            {etkilenen
-              .slice(0, 3)
-              .map((x) => `${x.tarih.slice(0, 5)} yarına devir ${sayiYaz(x.eskiYarina)} → ${sayiYaz(x.yeniYarina)}`)
-              .join('; ')}
-            {etkilenen.length > 3 ? '…' : ''}
-          </div>
-        )}
         {onizHata && <div className="m2-info r">{onizHata}</div>}
         {hata && <div className="m2-info r">{hata}</div>}
       </div>

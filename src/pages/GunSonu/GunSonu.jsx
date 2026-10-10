@@ -133,18 +133,6 @@ export default function GunSonu({ data, onNavigate }) {
     loadAll();
   }, []);
 
-  // Sheets'teki satır sırasına güvenmiyoruz (elle düzenlenmiş/yeniden sıralanmış olabilir) —
-  // "Tarih" alanını (GG.AA.YYYY) gerçek tarihe çevirip en son güne göre buluyoruz. Bu sayede
-  // Sheet'te bir gün sonu kaydını sonradan elle düzeltirsen, o değişiklik burada da yansır.
-  function parseTrTarih(t) {
-    const [g, a, y] = (t || '').split('.').map(Number);
-    return new Date(y, (a || 1) - 1, g || 1).getTime();
-  }
-  const dunkuKayit = useMemo(() => {
-    const others = gecmisKayitlar.filter((r) => r.tarih !== bugunTarih);
-    if (others.length === 0) return null;
-    return [...others].sort((a, b) => parseTrTarih(b.tarih) - parseTrTarih(a.tarih))[0];
-  }, [gecmisKayitlar, bugunTarih]);
 
   const [nakitAdet, setNakitAdet] = useState({});
   const sayilanNakitToplami = DENOMS.reduce((s, d) => s + d * (parseInt(nakitAdet[d], 10) || 0), 0);
@@ -349,16 +337,19 @@ export default function GunSonu({ data, onNavigate }) {
   // eski (3 sütunlu) kayıtları da aynı şekle çevirip döndürdüğü için burada tek bir okuma
   // yeterli, format farkını düşünmeye gerek yok.
   // Önceki Gün Sonu kaydı yoksa (ilk gün) devir, Muhasebe2'deki TL Kasa'nın bugünden önceki bakiyesidir.
-  const [acilisDevri, setAcilisDevri] = useState(0);
+  // Devir TEK KAYNAKTAN gelir: TL Kasa defteri (Muhasebe2). Dünden devir = TL Kasa'nın bugünden ÖNCEKİ bakiyesi;
+  // böylece geçmiş güne makbuz/fiş eklenip silinince devir kendiliğinden doğru kalır. Günsonu kaydındaki devir kaynak değildir.
+  // Harcama paneli (ana/günlük toplamlar) değişince yeniden okunur.
+  const [devirVeri, setDevirVeri] = useState({ dunden: 0, bugunHareket: 0 });
   useEffect(() => {
     let iptal = false;
-    fetch(`/api/muhasebe2?resource=gunsonuAcilisDevri&tarih=${encodeURIComponent(bugunTarih)}`)
+    fetch(`/api/muhasebe2?resource=gunsonuDevir&tarih=${encodeURIComponent(bugunTarih)}`)
       .then((r) => r.json())
-      .then((j) => { if (!iptal && Number.isFinite(Number(j.devir))) setAcilisDevri(Number(j.devir)); })
+      .then((j) => { if (!iptal && Number.isFinite(Number(j.dunden))) setDevirVeri({ dunden: Number(j.dunden), bugunHareket: Number(j.bugunHareket) || 0 }); })
       .catch(() => {});
     return () => { iptal = true; };
-  }, [bugunTarih]);
-  const dundenDevirAnaKasa = dunkuKayit ? (dunkuKayit.anaKasaTakibi?.yarinaDevir ?? dunkuKayit.yarinaDevirAnaKasa ?? dunkuKayit.yarinaDevir ?? 0) : acilisDevri;
+  }, [bugunTarih, anaKasaToplam, gunlukKasaToplam]);
+  const dundenDevirAnaKasa = devirVeri.dunden;
   // "Bugünkü Nakit" satırı SAF (hiçbir şey çıkarılmamış) toplamNakitPara'yı gösterir —
   // Ana Kasa harcaması AYRI bir satırda gösterilip SADECE Yarına Devir hesabında düşülür.
   // Böylece ekranda hangi rakamın nereden geldiği (sayılan nakit, ana kasa harcaması,
@@ -373,7 +364,10 @@ export default function GunSonu({ data, onNavigate }) {
   // gerçekte 11.400) ve fark her gün "dünden devir" olarak birikerek taşınıyordu.
   // Ekrandaki "Ana Kasa Harcama" satırı zaten eksi gösteriliyordu; formül artık onunla tutarlı.
   // Kullanıcı kuralı (15-16 Eylül): "Ana kasa gideri yarına devir ana kasadan düşülür."
-  const yarinaDevirAnaKasa = dundenDevirAnaKasa + toplamNakitPara - anaKasaToplam;
+  // Yarına devir = TL Kasa'nın gün sonu bakiyesi: dünden devir + bugünkü TL Kasa hareketleri (harcamalar dahil) + sayılan nakit + günlük harcama (Günsonu Geliri).
+  // Harcamalar fişlerden geldiği için bu, "dünden devir + nakit − ana kasa harcaması" ile aynıdır; fark varsa "diğer hareket" olarak görünür.
+  const yarinaDevirAnaKasa = Math.round((dundenDevirAnaKasa + devirVeri.bugunHareket + toplamNakitPara + gunlukKasaToplam) * 100) / 100;
+  const digerKasaHareketi = Math.round((devirVeri.bugunHareket + anaKasaToplam + gunlukKasaToplam) * 100) / 100;
 
   // Enter'a basınca fareyle sıradaki alana tıklamayı beklemeden, DOM sırasındaki bir sonraki
   // "gs-tabbable" alanına odaklanır — sayfadaki neredeyse her giriş kutusunda kullanılıyor.
@@ -863,11 +857,12 @@ export default function GunSonu({ data, onNavigate }) {
               <span className="gs-subhead big" style={{ marginTop: 14 }}>Ana Kasa Takibi</span>
               <div className="gs-anakasa-takip">
                 <div>
-                  <span>Dünden Devir Ana Kasa {!dunkuKayit && <em className="gs-no-record">(kayıt yok)</em>}</span>
+                  <span>Dünden Devir Ana Kasa</span>
                   <strong>{TL(dundenDevirAnaKasa)}</strong>
                 </div>
                 <div><span>Bugünkü Nakit</span><strong>{TL(toplamNakitPara)}</strong></div>
                 <div><span>Ana Kasa Harcama</span><strong>{TL(-anaKasaToplam)}</strong></div>
+                {Math.abs(digerKasaHareketi) >= 0.005 && <div><span>Diğer TL Kasa hareketleri</span><strong>{TL(digerKasaHareketi)}</strong></div>}
                 <div className="total"><span>Yarına Devir Ana Kasa</span><strong>{TL(yarinaDevirAnaKasa)}</strong></div>
               </div>
             </section>

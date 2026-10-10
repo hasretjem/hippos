@@ -1166,7 +1166,7 @@ async function gelirSenkron(db, tr) {
   const { data: gs, error: gsHata } = await db.from('gs_kayitlar').select('toplam_nakit,gunluk_kasa_toplam,pos_toplam').eq('tarih', tr).maybeSingle();
   kontrol(gsHata);
   const sayilan = gs ? gsSayi(gs.toplam_nakit) : 0;
-  const gunluk = gs ? gsSayi(gs.gunluk_kasa_toplam) : 0;
+  const gunluk = gs ? (await tlKasaOzeti(db)).gun(iso).gunluk : 0; // günlük harcama defterden (kayıttaki değer kaynak değil)
   const fmt = (n) => n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const { error } = await db.rpc('m2_gunsonu_geliri', {
     p_grup: gelirGrupId(iso),
@@ -1305,11 +1305,131 @@ async function hizliGiderVeri(db, iso) {
   };
 }
 
+
+// ---------------------------------------------------------------------------
+// TL Kasa defteri = devir ve harcama toplamlarının TEK kaynağı.
+// Günsonu kaydındaki devir / ana kasa / günlük kasa değerleri artık kaynak değildir; okunurken defterden türetilir.
+//   Bakiye: fiş (iade +, fatura −), makbuz (Ödeme +, Tahsilat −)  — TL Kasa firmasının satırları.
+//   Harcama: TL Kasa'ya yazılan otomatik makbuzlar (Tahsilat +, hızlı gider ödemesi −), kasa_grubu 'gunluk' ise günlük kasa.
+// ---------------------------------------------------------------------------
+async function sayfaSayfaOku(kur) {
+  const hepsi = [];
+  for (let bas = 0; ; bas += 1000) {
+    const { data, error } = await kur().range(bas, bas + 999);
+    kontrol(error);
+    hepsi.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return hepsi;
+}
+
+export function tlKasaOzetiHesapla(fislar, makbuzlar) {
+  const gunler = new Map();
+  const gun = (iso) => {
+    if (!gunler.has(iso)) gunler.set(iso, { net: 0, gelir: 0, ana: 0, gunluk: 0 });
+    return gunler.get(iso);
+  };
+  const kr = (v) => Math.round(Number(v || 0) * 100);
+  fislar.forEach((f) => { gun(f.tarih).net += (f.iade ? 1 : -1) * kr(f.fatura_tutari); });
+  makbuzlar.forEach((m) => {
+    const g = gun(m.tarih);
+    const t = kr(m.tutar);
+    g.net += (m.makbuz_turu === 'Ödeme' ? 1 : -1) * t;
+    if (m.kaynak === 'gunsonu') g.gelir += (m.makbuz_turu === 'Ödeme' ? 1 : -1) * t;
+    if (m.otomatik && (m.makbuz_turu === 'Tahsilat' || (m.makbuz_turu === 'Ödeme' && m.kaynak === 'hizli_gider'))) {
+      const isaret = m.makbuz_turu === 'Ödeme' ? -1 : 1;
+      if (m.kasa_grubu === 'gunluk') g.gunluk += isaret * t;
+      else g.ana += isaret * t;
+    }
+  });
+  const gunler100 = [...gunler.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  const bakiye = (iso, dahil) => gunler100.reduce((x, [d, v]) => (d < iso || (dahil && d === iso) ? x + v.net : x), 0) / 100;
+  const al = (iso) => {
+    const v = gunler.get(iso) || { net: 0, gelir: 0, ana: 0, gunluk: 0 };
+    return { net: v.net / 100, gelir: v.gelir / 100, ana: v.ana / 100, gunluk: v.gunluk / 100 };
+  };
+  return { bakiyeOnce: (iso) => bakiye(iso, false), bakiyeKadar: (iso) => bakiye(iso, true), gun: al };
+}
+
+async function tlKasaOzeti(db) {
+  const { data: tl, error } = await db.from('m2_firmalar').select('id').eq('ad', 'TL Kasa').maybeSingle();
+  kontrol(error);
+  if (!tl) return tlKasaOzetiHesapla([], []);
+  const [fa, mk] = await Promise.all([
+    sayfaSayfaOku(() => db.from('m2_fis_faturalar').select('tarih,fatura_tutari,iade').eq('firma_id', tl.id).order('id')),
+    sayfaSayfaOku(() => db.from('m2_makbuzlar').select('tarih,tutar,makbuz_turu,otomatik,kaynak,kasa_grubu').eq('firma_id', tl.id).order('id')),
+  ]);
+  return tlKasaOzetiHesapla(fa, mk);
+}
+
+// Günsonu satırlarının devir / ana kasa / günlük kasa / ciro alanlarını defterden türetir (saklanan değer yok sayılır).
+// gelirOverride {tarih: gelir}: önizleme için, o günün TL Kasa geliri "bu kadar olsaydı" hesabı.
+export function gsTurevle(ozet, liste, gelirOverride = {}) {
+  let delta = 0;
+  return liste.map((satir) => {
+    const k = gsKayit(satir);
+    if (k.eskiBicim) return satir;
+    const iso = gsTarihIso(satir.tarih);
+    const g = ozet.gun(iso);
+    const sayilan = gsSayi(satir.toplam_nakit);
+    const gelirYeni = gelirOverride[satir.tarih] !== undefined ? gelirOverride[satir.tarih] : gsTopla(sayilan, g.gunluk);
+    const dunden = gsTopla(ozet.bakiyeOnce(iso), delta);
+    delta = gsTopla(delta, gelirYeni, -g.gelir);
+    const yarina = gsTopla(ozet.bakiyeKadar(iso), delta);
+    const diger = gsTopla(yarina, -dunden, -sayilan, g.ana);
+    const takip = { dundenDevir: dunden, bugunkuNakit: sayilan, anaKasaHarcama: g.ana, yarinaDevir: yarina };
+    if (Math.abs(diger) >= 0.005) takip.digerHareket = diger;
+    const yeni = { ...satir, ana_kasa_toplam: gsYaz(g.ana), gunluk_kasa_toplam: gsYaz(g.gunluk), ana_kasa_takibi: JSON.stringify(takip) };
+    const ciro = gsParse(satir.ciro, null);
+    if (ciro && ciro.toplam !== undefined) yeni.ciro = JSON.stringify({ ...ciro, toplam: gsTopla(ciro.toplam, g.gunluk, -gsSayi(satir.gunluk_kasa_toplam)) });
+    return yeni;
+  });
+}
+
+// TL Kasa'yı etkileyen bir işlemden sonra, etkilenen günlerin Günsonu Geliri'ni defterdeki günlük harcamaya göre yeniler.
+const TL_YAZAN = new Set(['fisFaturaKaydet', 'makbuzKaydet', 'kayitDuzenle', 'kayitAlan', 'kayitSil', 'kayitGeriYaz', 'avansKaydet', 'avansSil', 'hizliGiderKaydet', 'hizliGiderSil', 'hizliGiderGeriYaz', 'harcamaDegistir', 'harcamaSil']);
+
+async function etkilenenGunler(db, body) {
+  const kume = new Set([isGunuIstanbul()]);
+  try { if (body.tarih) kume.add(tarihKontrol(body.tarih)); } catch { /* geçersiz tarih zaten işlem hatası verir */ }
+  for (const id of [body.grupId, body.id]) {
+    if (!id) continue;
+    const [f, m] = await Promise.all([
+      db.from('m2_fis_faturalar').select('tarih').eq('grup_id', id),
+      db.from('m2_makbuzlar').select('tarih').eq('grup_id', id),
+    ]);
+    [...(f.data || []), ...(m.data || [])].forEach((r) => kume.add(r.tarih));
+  }
+  return kume;
+}
+
+async function gelirTazele(db, isoKume) {
+  for (const iso of isoKume) {
+    const tr = isoToTR(iso);
+    const { data, error } = await db.from('gs_kayitlar').select('tarih').eq('tarih', tr).maybeSingle();
+    kontrol(error);
+    if (data) await gelirSenkron(db, tr);
+  }
+}
+
 export default async function handler(req, res) {
   try {
     const db = dbAl();
     const resource = req.query?.resource;
     const body = req.body || {};
+
+    if (req.method === 'POST' && TL_YAZAN.has(resource)) {
+      const once = await etkilenenGunler(db, body);
+      const jsonAsil = res.json.bind(res);
+      res.json = (v) => {
+        if ((res.statusCode || 200) >= 400 || !v || v.error) return jsonAsil(v);
+        etkilenenGunler(db, body)
+          .then((sonra) => gelirTazele(db, new Set([...once, ...sonra])))
+          .catch((e) => console.error('Günsonu geliri yenilenemedi:', e))
+          .finally(() => jsonAsil(v));
+        return res;
+      };
+    }
 
     // ---------- Okuma ----------
     if (req.method === 'GET' && resource === 'baslangic') {
@@ -1691,6 +1811,16 @@ export default async function handler(req, res) {
       return res.status(200).json({ devir: k / 100 });
     }
 
+    // Gün Sonu ekranı için devir: dünden devir = TL Kasa'nın o günden ÖNCEKİ bakiyesi; bugunHareket = o günün TL Kasa hareketleri
+    // (Günsonu Geliri hariç). Yarına devir = dünden devir + bugunHareket + sayılan nakit + günlük harcama.
+    if (req.method === 'GET' && resource === 'gunsonuDevir') {
+      const iso = gsTarihIso(req.query?.tarih);
+      if (!iso) throw new HataMesaji(400, 'Tarih geçersiz');
+      const oz = await tlKasaOzeti(db);
+      const g = oz.gun(iso);
+      return res.status(200).json({ dunden: oz.bakiyeOnce(iso), bugunHareket: gsTopla(g.net, -g.gelir) });
+    }
+
     // Alacak/Borç Raporu: tüm carilerin güncel bakiyesi (borç − alacak). Eksi = bizim borcumuz, artı = bizim alacağımız. Sıfır bakiyeler dışarıda.
     if (req.method === 'GET' && resource === 'alacakBorcRaporu') {
       const [oz, yo] = await Promise.all([
@@ -1715,7 +1845,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET' && resource === 'gunsonuListe') {
       const liste = await gsHepsi(db);
-      return res.status(200).json({ kayitlar: liste.map(gsKayit) });
+      return res.status(200).json({ kayitlar: gsTurevle(await tlKasaOzeti(db), liste).map(gsKayit) });
     }
 
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -2419,6 +2549,43 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, id: g });
     }
 
+    // ---------- Günsonları'ndan harcama düzeltme: kaydın (fiş/makbuz grubunun) tutar, açıklama ve tarihi yerinde değişir ----------
+    // Yalnızca Fişler/Makbuz formundan ve Harcama panelinden girilen kayıtlar; tahakkuk, avans, yemek kartı vb. kendi sekmesinden yönetilir.
+    // Tutar grubun TÜM satırlarında (fiş, ödeme makbuzu, TL Kasa makbuzu) birlikte değişir.
+    if (resource === 'harcamaDegistir' || resource === 'harcamaSil') {
+      const grupId = body.grupId;
+      const eski = await grupOku(db, grupId);
+      if (grupBosMu(eski)) throw new HataMesaji(404, 'Kayıt bulunamadı');
+      const kaynak = grupKaynagi(eski);
+      if (kaynak && kaynak !== 'hizli_gider') throw new HataMesaji(409, `Bu kayıt ${KAYNAK_YER[kaynak] || 'başka bir sekmeden'} yönetiliyor, buradan değiştirilemez.`);
+      if (resource === 'harcamaSil') {
+        await grupDegistir(db, grupId, { faturalar: [], makbuzlar: [] });
+        return res.status(200).json({ ok: true, grupId, oncesi: eski, sonrasi: { faturalar: [], makbuzlar: [] } });
+      }
+      const yeni = JSON.parse(JSON.stringify(eski));
+      const tumu = [...yeni.faturalar, ...yeni.makbuzlar];
+      if (body.tutar !== undefined) {
+        const t = tutarCoz(body.tutar);
+        if (!(t > 0)) throw new HataMesaji(400, 'Tutar sıfırdan büyük olmalı');
+        yeni.faturalar.forEach((f) => {
+          const eskiTutar = Number(f.fatura_tutari) || 0;
+          if (f.kdv !== null && f.kdv !== undefined && eskiTutar > 0) f.kdv = r2((Number(f.kdv) || 0) * (t / eskiTutar));
+          f.fatura_tutari = t;
+        });
+        yeni.makbuzlar.forEach((m) => (m.tutar = t));
+      }
+      if (body.aciklama !== undefined) {
+        const satir = yeni.faturalar[0] || yeni.makbuzlar.find((m) => !m.otomatik);
+        if (satir) satir.aciklama = metin(body.aciklama);
+      }
+      if (body.tarih) {
+        const tarih = tarihKontrol(body.tarih);
+        tumu.forEach((r) => (r.tarih = tarih));
+      }
+      await grupDegistir(db, grupId, yeni);
+      return res.status(200).json({ ok: true, grupId, oncesi: eski, sonrasi: await grupOku(db, grupId) });
+    }
+
     // Günsonu Geliri'ni kayıtlı günsonu verisinden yeniden hesaplar (idempotent: aynı gün tek kayıt, tekrar kaydedince güncellenir).
     if (resource === 'gunsonuGeliriSenkron') {
       if (!gsTarihIso(body.tarih)) throw new HataMesaji(400, 'Tarih geçersiz');
@@ -2434,39 +2601,57 @@ export default async function handler(req, res) {
       const liste = await gsHepsi(db);
       const idx = liste.findIndex((r) => r.tarih === body.tarih);
       if (idx < 0) throw new HataMesaji(404, 'Günsonu kaydı bulunamadı');
-      const eskiMap = new Map(liste.map((r) => [r.tarih, r]));
-      const { row, kayit } = gsDuzenle(liste[idx], body.alanlar || {});
-      liste[idx] = row;
-      // Zincir yalnızca bu günün YARINA DEVRİ değiştiyse başlar; değişmediyse sonraki günlere (eskiden kalma
-      // tutarsızlıklar dahil) hiç dokunulmaz.
-      const devirDegisti = !gsEs(gsKayit(eskiMap.get(row.tarih)).anaKasaTakibi.yarinaDevir, kayit.anaKasaTakibi.yarinaDevir);
-      const etkilenen = devirDegisti ? gsZincir(liste, idx + 1) : [];
-      if (body.onizleme) return res.status(200).json({ onizleme: true, kayit, etkilenen });
-      if (JSON.stringify(row) === JSON.stringify(eskiMap.get(row.tarih)) && !etkilenen.length) {
-        return res.status(200).json({ ok: true, degisiklikYok: true, kayit });
+      const oz = await tlKasaOzeti(db);
+      const eskiTurev = gsTurevle(oz, liste);
+      // Düzenleme türetilmiş (defterden gelen) görünüm üzerinde yapılır; devir ve harcamalar buradan düzenlenmez.
+      const { alanlar: gelen } = { alanlar: { ...(body.alanlar || {}) } };
+      delete gelen.dundenDevir;
+      delete gelen.anaKasaToplam;
+      delete gelen.gunlukKasaToplam;
+      const { row } = gsDuzenle(eskiTurev[idx], gelen);
+      const iso = gsTarihIso(row.tarih);
+      const yeniListe = [...liste];
+      yeniListe[idx] = row;
+      const gelirYeni = gsTopla(gsSayi(row.toplam_nakit), oz.gun(iso).gunluk);
+      const yeniTurev = gsTurevle(oz, yeniListe, { [row.tarih]: gelirYeni });
+      const kayit = gsKayit(yeniTurev[idx]);
+      // Bu günün nakdi değiştiyse sonraki günlerin devri de değişir (defterden otomatik; yalnızca bilgi için listelenir).
+      const etkilenen = [];
+      for (let j = idx + 1; j < liste.length; j++) {
+        const e = gsKayit(eskiTurev[j]).anaKasaTakibi;
+        const y = gsKayit(yeniTurev[j]).anaKasaTakibi;
+        if (gsEs(e.dundenDevir, y.dundenDevir) && gsEs(e.yarinaDevir, y.yarinaDevir)) continue;
+        etkilenen.push({ tarih: liste[j].tarih, eskiDunden: gsSayi(e.dundenDevir), yeniDunden: gsSayi(y.dundenDevir), eskiYarina: gsSayi(e.yarinaDevir), yeniYarina: gsSayi(y.yarinaDevir) });
       }
-      const tarihler = [row.tarih, ...etkilenen.map((x) => x.tarih)];
-      const yeniSatirlar = tarihler.map((t) => liste.find((r) => r.tarih === t));
-      const { error } = await db.rpc('m2_gunsonu_degistir', { p_tarihler: tarihler, p_satirlar: yeniSatirlar });
+      if (body.onizleme) return res.status(200).json({ onizleme: true, kayit, etkilenen });
+      if (JSON.stringify(row) === JSON.stringify(eskiTurev[idx])) return res.status(200).json({ ok: true, degisiklikYok: true, kayit });
+      const { error } = await db.rpc('m2_gunsonu_degistir', { p_tarihler: [row.tarih], p_satirlar: [row] });
       kontrol(error);
       await gelirSenkron(db, row.tarih);
-      return res.status(200).json({ ok: true, oncesi: tarihler.map((t) => eskiMap.get(t)), sonrasi: yeniSatirlar, etkilenen, kayit });
+      return res.status(200).json({ ok: true, oncesi: [liste[idx]], sonrasi: [row], etkilenen, kayit });
     }
 
     if (resource === 'gunsonuSil') {
       const liste = await gsHepsi(db);
       const idx = liste.findIndex((r) => r.tarih === body.tarih);
       if (idx < 0) throw new HataMesaji(404, 'Günsonu kaydı bulunamadı');
-      const eskiMap = new Map(liste.map((r) => [r.tarih, r]));
-      const [silinen] = liste.splice(idx, 1);
-      const etkilenen = gsZincir(liste, idx);
+      const oz = await tlKasaOzeti(db);
+      const eskiTurev = gsTurevle(oz, liste);
+      const silinen = liste[idx];
+      const gSil = oz.gun(gsTarihIso(silinen.tarih)).gelir;
+      // Silinen günün TL Kasa geliri de kalkar; sonraki günlerin devri o kadar azalır (defterden otomatik).
+      const etkilenen = [];
+      if (Math.abs(gSil) >= 0.005) {
+        for (let j = idx + 1; j < liste.length; j++) {
+          const e = gsKayit(eskiTurev[j]).anaKasaTakibi;
+          etkilenen.push({ tarih: liste[j].tarih, eskiDunden: gsSayi(e.dundenDevir), yeniDunden: gsTopla(e.dundenDevir, -gSil), eskiYarina: gsSayi(e.yarinaDevir), yeniYarina: gsTopla(e.yarinaDevir, -gSil) });
+        }
+      }
       if (body.onizleme) return res.status(200).json({ onizleme: true, etkilenen });
-      const tarihler = [silinen.tarih, ...etkilenen.map((x) => x.tarih)];
-      const yeniSatirlar = etkilenen.map((x) => liste.find((r) => r.tarih === x.tarih));
-      const { error } = await db.rpc('m2_gunsonu_degistir', { p_tarihler: tarihler, p_satirlar: yeniSatirlar });
+      const { error } = await db.rpc('m2_gunsonu_degistir', { p_tarihler: [silinen.tarih], p_satirlar: [] });
       kontrol(error);
       await gelirSenkron(db, silinen.tarih);
-      return res.status(200).json({ ok: true, oncesi: tarihler.map((t) => eskiMap.get(t)), sonrasi: yeniSatirlar, etkilenen });
+      return res.status(200).json({ ok: true, oncesi: [silinen], sonrasi: [], etkilenen });
     }
 
     // Geri al / ileri al: ilgili günler işlemden SONRAKİ haliyle birebir aynıysa istenen hale yazılır; başka biri
