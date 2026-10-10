@@ -10,8 +10,8 @@ import {
 } from 'lucide-react';
 
 const DENOMS = [5, 10, 20, 50, 100, 200];
-const HEDEF_KUPUR = { 5: 20, 10: 40, 20: 30, 50: 10, 100: 4, 200: 0 };
-const HEDEF_TOPLAM = Object.entries(HEDEF_KUPUR).reduce((s, [k, v]) => s + Number(k) * v, 0);
+// Yarına bozukluk hedefi (kupür -> gereken adet). Varsayılan; kayıtlı değer sunucudan (ayarlar tablosu) gelir ve PIN'le değiştirilebilir.
+const HEDEF_KUPUR_VARSAYILAN = { 5: 20, 10: 40, 20: 30, 50: 10, 100: 4, 200: 0 };
 
 const YEMEK_KARTLARI = ['Edenred', 'Pluxee', 'Setcard', 'Multinet', 'Metropol', 'Tokenflex'];
 
@@ -85,37 +85,23 @@ export default function GunSonu({ data, onNavigate }) {
     return { ...t, total: t['NAKİT'] + t['KREDİ KARTI'] + t['YEMEK KARTI'] + t['CARİ'] };
   }, [todaysSales]);
 
-  const ayCiroKarsilastirma = useMemo(() => {
-    const now = new Date();
-    const buAyBaslangic = new Date(now.getFullYear(), now.getMonth(), 1);
-    const gecenAyBaslangic = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const gecenAyBitis = new Date(now.getFullYear(), now.getMonth(), 0);
-    const gunNo = now.getDate();
-
-    let buAy = 0, gecenAy = 0, gecenAyAyniGune = 0;
-    (salesHistory || []).forEach((s) => {
-      if (!s.ts) return;
-      const d = new Date(s.ts);
-      if (d >= buAyBaslangic) buAy += s.amount;
-      else if (d >= gecenAyBaslangic && d <= gecenAyBitis) {
-        gecenAy += s.amount;
-        if (d.getDate() <= gunNo) gecenAyAyniGune += s.amount;
-      }
-    });
-    return { buAy, gecenAy, gecenAyAyniGune, farkTamAy: buAy - gecenAy, farkAyniGune: buAy - gecenAyAyniGune };
-  }, [salesHistory]);
-
   const [gecmisKayitlar, setGecmisKayitlar] = useState([]);
+  const [hedefKupur, setHedefKupur] = useState(HEDEF_KUPUR_VARSAYILAN);
+  const hedefToplam = Object.entries(hedefKupur).reduce((t, [k, v]) => t + Number(k) * (Number(v) || 0), 0);
   const [ekmekToplam, setEkmekToplam] = useState({ buyukBeyaz: 0, kucukBeyaz: 0, domatesli: 0, kucukKepek: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadAll() {
       try {
-        const [gsRes, ekRes] = await Promise.all([fetch('/api/gunsonu'), fetch('/api/ekmek')]);
+        const [gsRes, ekRes, hdRes] = await Promise.all([fetch('/api/gunsonu'), fetch('/api/ekmek'), fetch('/api/gunsonu?ayar=bozukluk_hedefi').catch(() => null)]);
         const gsJson = await gsRes.json();
         const ekJson = await ekRes.json();
         setGecmisKayitlar(gsJson.records || []);
+        try {
+          const hd = hdRes && hdRes.ok ? await hdRes.json() : null;
+          if (hd && hd.deger) setHedefKupur({ ...HEDEF_KUPUR_VARSAYILAN, ...hd.deger });
+        } catch { /* kayıtlı hedef okunamazsa varsayılan kalır */ }
         const toplam = { buyukBeyaz: 0, kucukBeyaz: 0, domatesli: 0, kucukKepek: 0 };
         (ekJson.records || []).forEach((r) => {
           toplam.buyukBeyaz += r.buyukBeyaz || 0;
@@ -145,7 +131,35 @@ export default function GunSonu({ data, onNavigate }) {
   const [avansPinError, setAvansPinError] = useState(false);
   const [avansDraft, setAvansDraft] = useState('');
   const [avansStep, setAvansStep] = useState('pin');
+  const [pinAmac, setPinAmac] = useState('avans'); // 'avans' | 'hedef'
+  const [hedefDuzenle, setHedefDuzenle] = useState(false);
+  const [hedefDraft, setHedefDraft] = useState({});
+  const [hedefKaydediliyor, setHedefKaydediliyor] = useState(false);
+  function openHedefPin() {
+    setPinAmac('hedef');
+    setAvansPinValue('');
+    setAvansPinError(false);
+    setAvansStep('pin');
+    setAvansPinOpen(true);
+  }
+  async function saveHedef() {
+    setHedefKaydediliyor(true);
+    try {
+      const deger = {};
+      DENOMS.forEach((d) => { deger[d] = Math.max(0, parseInt(hedefDraft[d], 10) || 0); });
+      const r = await fetch('/api/gunsonu', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ayar: 'bozukluk_hedefi', deger }) });
+      if (!r.ok) throw new Error('kaydedilemedi');
+      setHedefKupur(deger);
+      setHedefDuzenle(false);
+      showToast('Bozukluk hedefi kaydedildi');
+    } catch {
+      showToast('Hedef kaydedilemedi — bağlantıyı kontrol et');
+    } finally {
+      setHedefKaydediliyor(false);
+    }
+  }
   function openAvansPin() {
+    setPinAmac('avans');
     setAvansPinValue('');
     setAvansPinError(false);
     setAvansDraft(String(Math.abs(kasaAvansi)));
@@ -154,6 +168,12 @@ export default function GunSonu({ data, onNavigate }) {
   }
   function checkAvansPin(digits) {
     if (digits === KASA_AVANS_PIN) {
+      if (pinAmac === 'hedef') {
+        setAvansPinOpen(false);
+        setHedefDraft(Object.fromEntries(DENOMS.map((d) => [d, String(hedefKupur[d] ?? 0)])));
+        setHedefDuzenle(true);
+        return;
+      }
       setAvansStep('edit');
     } else {
       setAvansPinError(true);
@@ -290,6 +310,28 @@ export default function GunSonu({ data, onNavigate }) {
       });
     return liste;
   }, [cariOdemeler, cariGecmis, cariler]);
+  // Tahsilat mesajı durumu için cari bazlı (cariId'li) döküm — yalnızca ekranda rozet göstermek için.
+  const bugunTahsilatCariler = useMemo(() => {
+    const ts0 = new Date(isGunuBaslangicMs()).getTime();
+    const map = new Map();
+    const ekle = (cariId, tutar) => map.set(cariId, (map.get(cariId) || 0) + (Number(tutar) || 0));
+    (cariOdemeler || []).filter((o) => o.ts >= ts0 && o.tur !== 'HAVALE').forEach((o) => ekle(o.cariId, o.tutar));
+    (cariGecmis || []).filter((g) => g.ts >= ts0).forEach((g) => {
+      (g.odemelerDetay || []).filter((o) => o.ts >= ts0 && o.tur !== 'HAVALE').forEach((o) => ekle(g.cariId, o.tutar));
+    });
+    return [...map.entries()].map(([cariId, tutar]) => ({ cariId, tutar }));
+  }, [cariOdemeler, cariGecmis]);
+  // Cariler sayfasındaki "bugün" ile aynı: takvim günü (YYYY-MM-DD, yerel).
+  const takvimBugun = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+  const cariById = (id) => (cariler || []).find((c) => c.id === id);
+  const cariByAd = (ad) => (cariler || []).find((c) => c.ad === ad && c.tip === 'firma');
+  // tur: 'bakiye' (ozetTarih) | 'tahsilat' (tahsilatMesajTarih). Telefonu olmayana "—".
+  function MesajRozet({ cari, tur }) {
+    if (!cari) return null;
+    if (!String(cari.telefon || '').trim()) return <span className="gs-msg gs-msg-yok" title="Telefon kayıtlı değil">—</span>;
+    const gonderildi = (tur === 'tahsilat' ? cari.tahsilatMesajTarih : cari.ozetTarih) === takvimBugun;
+    return <span className={`gs-msg ${gonderildi ? 'gs-msg-ok' : 'gs-msg-bekler'}`}>{gonderildi ? 'Mesaj gönderildi' : 'Mesaj gönderilmedi'}</span>;
+  }
   const bugunCariOdemeToplamı = Object.values(bugunCariOdemeOzeti).reduce((s, v) => s + v, 0);
 
   // Cari Düzeltmeleri: GEÇMİŞ güne ait bir cari kaydı bugün silinir / tutarı değişir / ürün eklenirse,
@@ -379,6 +421,15 @@ export default function GunSonu({ data, onNavigate }) {
     if (idx !== -1 && idx < all.length - 1) all[idx + 1].focus();
   }
 
+  // Yemek kartı tablosu: Enter sütun-sütun ilerler (aşağı, sonra sağdaki sütunun en üstü). Son kutudan sonra odak bırakılır.
+  function handleYemekEnter(e, m, k) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const sonraki = m + 1 < YEMEK_KARTLARI.length ? [m + 1, k] : (k + 1 < yemekKolonlari.length ? [0, k + 1] : null);
+    if (!sonraki) { e.target.blur(); return; }
+    document.getElementById(`gs-y-${sonraki[0]}-${sonraki[1]}`)?.focus();
+  }
+
   const [saving, setSaving] = useState(false);
   const contentRef = useRef(null);
   // Paylaş: sayfanın ekran görüntüsü yerine ayrı "takvim yaprağı" görseli (GunSonuPaylas.jsx)
@@ -389,6 +440,34 @@ export default function GunSonu({ data, onNavigate }) {
   // sen yazarken hiçbir cevap alanlara dokunmaz (rakam geldi-gitti olmaz).
   const kayitliKayit = gecmisKayitlar.find((r) => r.tarih === bugunTarih) || null;
   const hydrated = useRef(false);
+
+  // AYLIK CİRO: yalnızca KAYITLI gün sonlarının toplamı (Günsonları sekmesindeki kayıtlar). Satış verisi kullanılmaz.
+  // Bugün kaydedildiyse kayıttaki ciro, kaydedilmediyse ekrandaki anlık toplam ciro sayılır (Kaydet'e basana kadar kayıt değeri geçerli).
+  const ayCiroKarsilastirma = useMemo(() => {
+    const coz = (t) => { const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(String(t || '').trim()); return m ? { g: +m[1], a: +m[2], y: +m[3] } : null; };
+    const kayitCiro = (k) => {
+      const c = k.ciro || {};
+      if (c.toplam != null) return Number(c.toplam) || 0;
+      return (Number(c.nakit) || 0) + (Number(c.kart) || 0) + (Number(c.yemek) || 0) + (Number(c.cari) || 0) + (Number(c.cariTahsilat) || 0) + (Number(c.cariDuzeltme) || 0);
+    };
+    const bugun = coz(bugunTarih);
+    if (!bugun) return { buAy: 0, gecenAy: 0, gecenAyAyniGune: 0, farkTamAy: 0, farkAyniGune: 0 };
+    const gAy = bugun.a === 1 ? 12 : bugun.a - 1;
+    const gYil = bugun.a === 1 ? bugun.y - 1 : bugun.y;
+    let buAy = 0, gecenAy = 0, gecenAyAyniGune = 0;
+    gecmisKayitlar.forEach((k) => {
+      const t = coz(k.tarih);
+      if (!t || k.tarih === bugunTarih) return;
+      const c = kayitCiro(k);
+      if (t.y === bugun.y && t.a === bugun.a) buAy += c;
+      else if (t.y === gYil && t.a === gAy) {
+        gecenAy += c;
+        if (t.g <= bugun.g) gecenAyAyniGune += c;
+      }
+    });
+    buAy += kayitliKayit ? kayitCiro(kayitliKayit) : toplamCiro;
+    return { buAy, gecenAy, gecenAyAyniGune, farkTamAy: buAy - gecenAy, farkAyniGune: buAy - gecenAyAyniGune };
+  }, [gecmisKayitlar, bugunTarih, kayitliKayit, toplamCiro]);
   const bazRef = useRef('');
   const [taslakHazir, setTaslakHazir] = useState(false);
   const [eskiTaslak, setEskiTaslak] = useState(null);
@@ -600,6 +679,7 @@ export default function GunSonu({ data, onNavigate }) {
         )}
       </div>
 
+      <div className="gsd-header">
       {!loading && taslakHazir && hg.yuklendi && (
         <div className={`gsd-bar gsd-${durum}`} role="status">
           <span className="gsd-metin">{durumMetni}</span>
@@ -613,10 +693,104 @@ export default function GunSonu({ data, onNavigate }) {
           <button type="button" className="gsd-btn" onClick={eskiTaslagiSil}>Sil</button>
         </div>
       )}
+      </div>
       {loading ? (
         <p className="gs-loading">Yükleniyor...</p>
       ) : (
         <div className="gs-content-3col" ref={contentRef}>
+
+          <div className="gs-col">
+            <section className="gs-card">
+              <h2><Users size={16} /> Cari Müşteriler <span className="gs-auto-tag">otomatik</span></h2>
+              <div className="gs-cari-list">
+                {otomatikCariListesi.map((ad) => (
+                  <div key={ad} className="gs-cari-row">
+                    {cariEditingFor === ad ? (
+                      <>
+                        <span className="ad">{ad}</span>
+                        <input type="number" autoFocus value={cariEditDraft} onChange={(e) => setCariEditDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveCariEdit()} />
+                        <button className="gs-cari-save" onClick={saveCariEdit}><Check size={12} /></button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="ad">{ad}</span>
+                        {cariGosterilenTutar(ad) > 0 && <MesajRozet cari={cariByAd(ad)} tur="bakiye" />}
+                        <strong>{TL(cariGosterilenTutar(ad))}</strong>
+                        <button className="gs-cari-edit" onClick={() => startCariEdit(ad)}><Pencil size={11} /></button>
+                      </>
+                    )}
+                  </div>
+                ))}
+                {ekstraCariler.map((row, idx) => (
+                  <div key={idx} className="gs-cari-row extra">
+                    <input className="ad-input gs-tabbable" placeholder="Cari adı" value={row.ad} onChange={(e) => updateEkstraCari(idx, 'ad', e.target.value)} onKeyDown={handleTabEnter} />
+                    <input type="number" placeholder="0" className="gs-tabbable" value={row.tutar} onChange={(e) => updateEkstraCari(idx, 'tutar', e.target.value)} onKeyDown={handleTabEnter} />
+                    <button className="gs-row-del" onClick={() => removeEkstraCari(idx)}><Trash2 size={12} /></button>
+                  </div>
+                ))}
+                <button className="gs-add-row-btn" onClick={addEkstraCari}><Plus size={13} /> Cari Ekle</button>
+              </div>
+              <div className="gs-row-total main"><span>FİRMA CARİ TOPLAMI</span><strong>{TL(otomatikCariListesi.reduce((s, ad) => s + cariGosterilenTutar(ad), 0) + ekstraCariler.reduce((s, r) => s + parseNum(r.tutar), 0))}</strong></div>
+
+              {/* Bireysel Cariler */}
+              {bugunBireyselCariler.length > 0 && (
+                <>
+                  <span className="gs-subhead" style={{marginTop:12}}>Bireysel Cariler</span>
+                  <div className="gs-cari-list">
+                    {bugunBireyselCariler.map((c) => (
+                      <div key={c.id} className="gs-cari-row">
+                        <span className="ad">{c.ad}</span>
+                        <MesajRozet cari={cariById(c.id)} tur="bakiye" />
+                        <strong>{TL(c.bugunTutar)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="gs-row-total"><span>BİREYSEL CARİ TOPLAMI</span><strong>{TL(bireyselCariToplam)}</strong></div>
+                </>
+              )}
+
+              <div className="gs-row-total main" style={{marginTop:8}}><span>TOPLAM CARİ TUTARI</span><strong>{TL(cariToplam)}</strong></div>
+
+              {/* Ödenen Cari Tutarları — havale hariç, cirodan DÜŞÜLÜR */}
+              {bugunCariOdemeToplamı > 0 && (
+                <div className="gs-cari-odeme-panel">
+                  <span className="gs-subhead">Ödenen Cari Tutarları</span>
+                  <p className="gs-hint" style={{margin:'2px 0 6px',fontSize:11}}>Havale hariç tahsilatlar toplam cirodan düşülür</p>
+                  {Object.entries(bugunCariOdemeOzeti).map(([tur, tutar]) => (
+                    <div key={tur} className="gs-cari-row">
+                      <span className="ad">{tur}</span>
+                      <strong>{TL(tutar)}</strong>
+                    </div>
+                  ))}
+                  <div className="gs-row-total"><span>TOPLAM TAHSİLAT</span><strong className="neg">−{TL(bugunCariOdemeToplamı)}</strong></div>
+                  {bugunTahsilatCariler.filter((t) => t.tutar > 0).map((t) => (
+                    <div key={t.cariId} className="gs-cari-row">
+                      <span className="ad">{cariById(t.cariId)?.ad || 'Cari'} · tahsilat</span>
+                      <MesajRozet cari={cariById(t.cariId)} tur="tahsilat" />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Cari Düzeltmeleri — geçmiş günlere ait cari kayıtlarında bugün yapılan düzeltmeler, toplam ciroya yansır */}
+              {bugunCariDuzeltmeleri.length > 0 && (
+                <div className="gs-cari-odeme-panel">
+                  <span className="gs-subhead">Cari Düzeltmeleri</span>
+                  <p className="gs-hint" style={{margin:'2px 0 6px',fontSize:11}}>Geçmiş güne ait cari kayıtlarında yapılan düzeltmeler toplam cirodan düşülür / ciroya eklenir</p>
+                  {bugunCariDuzeltmeleri.map((d) => (
+                    <div key={d.id} className="gs-cari-row">
+                      <span className="ad">
+                        {d.cariAd} · {new Date(d.hareketTs).toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' })} kaydı {({ sil: 'silindi', tutar: 'tutarı değişti', urun_ekle: 'ürün eklendi', geri_al: 'silme geri alındı' })[d.tip] || 'düzeltildi'}
+                      </span>
+                      <MesajRozet cari={cariById(d.cariId)} tur="bakiye" />
+                      <strong className={d.ciroEtkisi < 0 ? 'neg' : ''}>{d.ciroEtkisi < 0 ? '−' : '+'}{TL(Math.abs(d.ciroEtkisi))}</strong>
+                    </div>
+                  ))}
+                  <div className="gs-row-total"><span>NET DÜZELTME</span><strong className={cariDuzeltmeToplam < 0 ? 'neg' : ''}>{cariDuzeltmeToplam < 0 ? '−' : '+'}{TL(Math.abs(cariDuzeltmeToplam))}</strong></div>
+                </div>
+              )}
+            </section>
+          </div>
 
           <div className="gs-col">
             <section className="gs-card">
@@ -644,96 +818,12 @@ export default function GunSonu({ data, onNavigate }) {
             </section>
 
             <section className="gs-card">
-              <h2><Users size={16} /> Cari Müşteriler <span className="gs-auto-tag">otomatik</span></h2>
-              <div className="gs-cari-list">
-                {otomatikCariListesi.map((ad) => (
-                  <div key={ad} className="gs-cari-row">
-                    {cariEditingFor === ad ? (
-                      <>
-                        <span className="ad">{ad}</span>
-                        <input type="number" autoFocus value={cariEditDraft} onChange={(e) => setCariEditDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveCariEdit()} />
-                        <button className="gs-cari-save" onClick={saveCariEdit}><Check size={12} /></button>
-                      </>
-                    ) : (
-                      <>
-                        <span className="ad">{ad}</span>
-                        <strong>{TL(cariGosterilenTutar(ad))}</strong>
-                        <button className="gs-cari-edit" onClick={() => startCariEdit(ad)}><Pencil size={11} /></button>
-                      </>
-                    )}
-                  </div>
-                ))}
-                {ekstraCariler.map((row, idx) => (
-                  <div key={idx} className="gs-cari-row extra">
-                    <input className="ad-input gs-tabbable" placeholder="Cari adı" value={row.ad} onChange={(e) => updateEkstraCari(idx, 'ad', e.target.value)} onKeyDown={handleTabEnter} />
-                    <input type="number" placeholder="0" className="gs-tabbable" value={row.tutar} onChange={(e) => updateEkstraCari(idx, 'tutar', e.target.value)} onKeyDown={handleTabEnter} />
-                    <button className="gs-row-del" onClick={() => removeEkstraCari(idx)}><Trash2 size={12} /></button>
-                  </div>
-                ))}
-                <button className="gs-add-row-btn" onClick={addEkstraCari}><Plus size={13} /> Cari Ekle</button>
-              </div>
-              <div className="gs-row-total main"><span>FİRMA CARİ TOPLAMI</span><strong>{TL(otomatikCariListesi.reduce((s, ad) => s + cariGosterilenTutar(ad), 0) + ekstraCariler.reduce((s, r) => s + parseNum(r.tutar), 0))}</strong></div>
-
-              {/* Bireysel Cariler */}
-              {bugunBireyselCariler.length > 0 && (
-                <>
-                  <span className="gs-subhead" style={{marginTop:12}}>Bireysel Cariler</span>
-                  <div className="gs-cari-list">
-                    {bugunBireyselCariler.map((c) => (
-                      <div key={c.id} className="gs-cari-row">
-                        <span className="ad">{c.ad}</span>
-                        <strong>{TL(c.bugunTutar)}</strong>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="gs-row-total"><span>BİREYSEL CARİ TOPLAMI</span><strong>{TL(bireyselCariToplam)}</strong></div>
-                </>
-              )}
-
-              <div className="gs-row-total main" style={{marginTop:8}}><span>TOPLAM CARİ TUTARI</span><strong>{TL(cariToplam)}</strong></div>
-
-              {/* Ödenen Cari Tutarları — havale hariç, cirodan DÜŞÜLÜR */}
-              {bugunCariOdemeToplamı > 0 && (
-                <div className="gs-cari-odeme-panel">
-                  <span className="gs-subhead">Ödenen Cari Tutarları</span>
-                  <p className="gs-hint" style={{margin:'2px 0 6px',fontSize:11}}>Havale hariç tahsilatlar toplam cirodan düşülür</p>
-                  {Object.entries(bugunCariOdemeOzeti).map(([tur, tutar]) => (
-                    <div key={tur} className="gs-cari-row">
-                      <span className="ad">{tur}</span>
-                      <strong>{TL(tutar)}</strong>
-                    </div>
-                  ))}
-                  <div className="gs-row-total"><span>TOPLAM TAHSİLAT</span><strong className="neg">−{TL(bugunCariOdemeToplamı)}</strong></div>
-                </div>
-              )}
-
-              {/* Cari Düzeltmeleri — geçmiş günlere ait cari kayıtlarında bugün yapılan düzeltmeler, toplam ciroya yansır */}
-              {bugunCariDuzeltmeleri.length > 0 && (
-                <div className="gs-cari-odeme-panel">
-                  <span className="gs-subhead">Cari Düzeltmeleri</span>
-                  <p className="gs-hint" style={{margin:'2px 0 6px',fontSize:11}}>Geçmiş güne ait cari kayıtlarında yapılan düzeltmeler toplam cirodan düşülür / ciroya eklenir</p>
-                  {bugunCariDuzeltmeleri.map((d) => (
-                    <div key={d.id} className="gs-cari-row">
-                      <span className="ad">
-                        {d.cariAd} · {new Date(d.hareketTs).toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' })} kaydı {({ sil: 'silindi', tutar: 'tutarı değişti', urun_ekle: 'ürün eklendi', geri_al: 'silme geri alındı' })[d.tip] || 'düzeltildi'}
-                      </span>
-                      <strong className={d.ciroEtkisi < 0 ? 'neg' : ''}>{d.ciroEtkisi < 0 ? '−' : '+'}{TL(Math.abs(d.ciroEtkisi))}</strong>
-                    </div>
-                  ))}
-                  <div className="gs-row-total"><span>NET DÜZELTME</span><strong className={cariDuzeltmeToplam < 0 ? 'neg' : ''}>{cariDuzeltmeToplam < 0 ? '−' : '+'}{TL(Math.abs(cariDuzeltmeToplam))}</strong></div>
-                </div>
-              )}
-            </section>
-          </div>
-
-          <div className="gs-col">
-            <section className="gs-card">
               <h2><CreditCard size={16} /> Kart Tutarları</h2>
               <div className="gs-dynrow-list">
                 {posTutarlari.map((row, idx) => (
                   <div key={idx} className="gs-dynrow">
-                    <input className="gs-dynrow-label gs-tabbable" value={row.label} onChange={(e) => updatePosRow(idx, 'label', e.target.value)} onKeyDown={handleTabEnter} />
-                    <input type="number" placeholder="0" className="gs-tabbable" value={row.tutar} onChange={(e) => updatePosRow(idx, 'tutar', e.target.value)} onKeyDown={handleTabEnter} />
+                    <input className="gs-dynrow-label" value={row.label} onChange={(e) => updatePosRow(idx, 'label', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} />
+                    <input type="number" placeholder="0" className="gs-tabbable" value={row.tutar} onChange={(e) => updatePosRow(idx, 'tutar', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && idx === posTutarlari.length - 1) { e.preventDefault(); document.getElementById('gs-y-0-0')?.focus(); } else handleTabEnter(e); }} />
                     {posTutarlari.length > 1 && <button className="gs-row-del" onClick={() => removePosRow(idx)}><Trash2 size={12} /></button>}
                   </div>
                 ))}
@@ -755,11 +845,11 @@ export default function GunSonu({ data, onNavigate }) {
                   ))}
                   <span>Toplam</span>
                 </div>
-                {YEMEK_KARTLARI.map((marka) => (
+                {YEMEK_KARTLARI.map((marka, mi) => (
                   <div key={marka} className="gs-yemek-row" style={{ gridTemplateColumns: `88px repeat(${yemekKolonlari.length}, 1fr) 76px` }}>
                     <span className="marka">{marka}</span>
-                    {yemekKolonlari.map((k) => (
-                      <input key={k} type="number" placeholder="0" className="gs-tabbable" value={(yemekTutarlari[marka] || {})[k] || ''} onChange={(e) => updateYemekTutar(marka, k, e.target.value)} onKeyDown={handleTabEnter} />
+                    {yemekKolonlari.map((k, ki) => (
+                      <input key={k} id={`gs-y-${mi}-${ki}`} type="number" placeholder="0" value={(yemekTutarlari[marka] || {})[k] || ''} onChange={(e) => updateYemekTutar(marka, k, e.target.value)} onKeyDown={(e) => handleYemekEnter(e, mi, ki)} />
                     ))}
                     <strong className="gs-yemek-toplam">{TL(yemekMarkaToplam(marka))}</strong>
                   </div>
@@ -775,30 +865,6 @@ export default function GunSonu({ data, onNavigate }) {
               <h2><Calculator size={16} /> Harcamalar</h2>
               <HizliGider hg={hg} />
             </section>
-
-            <section className="gs-card">
-              <h2><Banknote size={16} /> Yarına Bozukluk Hedefi</h2>
-              <div className="gs-hedef-table">
-                <div className="gs-hedef-head"><span>Kupür</span><span>Gereken</span><span>Girilen</span><span>Eksik</span></div>
-                {Object.entries(HEDEF_KUPUR).filter(([, adet]) => adet > 0).map(([d, hedefAdet]) => {
-                  const girilen = parseInt(nakitAdet[d], 10) || 0;
-                  const fark = hedefAdet - girilen;
-                  let label, cls;
-                  if (fark > 0) { label = fark; cls = 'warn'; }
-                  else if (fark < 0) { label = `+${-fark}`; cls = 'fazla'; }
-                  else { label = '✓'; cls = 'ok'; }
-                  return (
-                    <div key={d} className="gs-hedef-row">
-                      <span>{d} ₺</span>
-                      <span>{hedefAdet}</span>
-                      <span>{girilen}</span>
-                      <strong className={cls}>{label}</strong>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="gs-row-total"><span>Hedef Toplam</span><strong>{TL(HEDEF_TOPLAM)}</strong></div>
-            </section>
           </div>
 
           {/* SAĞ SÜTUN — Bilgi. En dikkat çekici sütun: büyük tarih/gün başlığı + Hippos'un
@@ -813,28 +879,31 @@ export default function GunSonu({ data, onNavigate }) {
 
               <span className="gs-subhead big">Ciro Karşılaştırma</span>
               <div className="gs-canli-karsilastirma">
-                {[
-                  { label: 'Nakit', hippos: ciro['NAKİT'], gs: toplamNakitPara },
-                  { label: 'Kredi Kartı', hippos: ciro['KREDİ KARTI'], gs: posToplam },
-                  { label: 'Yemek Kartı', hippos: ciro['YEMEK KARTI'], gs: genelYemekToplami },
-                  { label: 'Cari', hippos: ciro['CARİ'], gs: cariToplam },
-                ].map((r) => {
-                  const fark = r.gs - r.hippos;
+                {(() => {
+                  const satirlar = [
+                    { label: 'Nakit', fark: toplamNakitPara - (ciro['NAKİT'] || 0) },
+                    { label: 'Kredi Kartı', fark: posToplam - (ciro['KREDİ KARTI'] || 0) },
+                    { label: 'Yemek Kartı', fark: genelYemekToplami - (ciro['YEMEK KARTI'] || 0) },
+                    { label: 'Cari', fark: cariToplam - (ciro['CARİ'] || 0) },
+                  ];
+                  const toplamFark = satirlar.reduce((t, r) => t + r.fark, 0);
                   return (
-                    <div key={r.label} className="gs-karsilastirma-row">
-                      <span className="ad">{r.label}</span>
-                      <span className="hp">H: {TL(r.hippos)}</span>
-                      <span className="gsv">G: {TL(r.gs)}</span>
-                      <strong className={Math.abs(fark) > 0.5 ? 'warn' : 'ok'}>{TL(fark)}</strong>
-                    </div>
+                    <>
+                      <div className="gs-karsilastirma-grid">
+                        {satirlar.map((r) => (
+                          <div key={r.label} className="gs-karsilastirma-hucre">
+                            <span className="ad">{r.label}</span>
+                            <strong className={Math.abs(r.fark) > 0.5 ? 'warn' : 'ok'}>{Math.abs(r.fark) > 0.5 ? TL(r.fark) : '✓'}</strong>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="gs-karsilastirma-toplam">
+                        <span>Toplam Fark</span>
+                        <strong className={Math.abs(toplamFark) > 0.5 ? 'warn' : 'ok'}>{Math.abs(toplamFark) > 0.5 ? TL(toplamFark) : '✓'}</strong>
+                      </div>
+                    </>
                   );
-                })}
-                <div className="gs-karsilastirma-toplam">
-                  <span>Toplam Fark</span>
-                  <strong className={Math.abs((toplamNakitPara - ciro['NAKİT']) + (posToplam - ciro['KREDİ KARTI']) + (genelYemekToplami - ciro['YEMEK KARTI']) + (cariToplam - ciro['CARİ'])) > 0.5 ? 'warn' : 'ok'}>
-                    {TL((toplamNakitPara - ciro['NAKİT']) + (posToplam - ciro['KREDİ KARTI']) + (genelYemekToplami - ciro['YEMEK KARTI']) + (cariToplam - ciro['CARİ']))}
-                  </strong>
-                </div>
+                })()}
               </div>
 
               <span className="gs-subhead big" style={{ marginTop: 14 }}>Bugünkü Ekmek Çıkışı</span>
@@ -866,6 +935,42 @@ export default function GunSonu({ data, onNavigate }) {
                 <div className="total"><span>Yarına Devir Ana Kasa</span><strong>{TL(yarinaDevirAnaKasa)}</strong></div>
               </div>
             </section>
+
+            <section className="gs-card gs-hedef-card">
+              <h2><Banknote size={16} /> Yarına Bozukluk Hedefi
+                {!hedefDuzenle && <button type="button" className="gs-avans-edit-btn gs-hedef-duzenle" onClick={openHedefPin}><Lock size={12} /> Düzenle</button>}
+              </h2>
+              <div className="gs-hedef-table">
+                <div className="gs-hedef-head"><span>Kupür</span><span>Gereken</span><span>Girilen</span><span>Eksik</span></div>
+                {DENOMS.filter((d) => hedefDuzenle || (hedefKupur[d] || 0) > 0).map((d) => {
+                  const hedefAdet = hedefKupur[d] || 0;
+                  const girilen = parseInt(nakitAdet[d], 10) || 0;
+                  const fark = hedefAdet - girilen;
+                  let label, cls;
+                  if (fark > 0) { label = fark; cls = 'warn'; }
+                  else if (fark < 0) { label = `+${-fark}`; cls = 'fazla'; }
+                  else { label = '✓'; cls = 'ok'; }
+                  return (
+                    <div key={d} className="gs-hedef-row">
+                      <span>{d} ₺</span>
+                      {hedefDuzenle
+                        ? <input type="number" min={0} className="gs-hedef-input" value={hedefDraft[d] ?? ''} onChange={(e) => setHedefDraft((p) => ({ ...p, [d]: e.target.value }))} />
+                        : <span>{hedefAdet}</span>}
+                      <span>{girilen}</span>
+                      <strong className={cls}>{label}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+              {hedefDuzenle ? (
+                <div className="gs-hedef-aksiyon">
+                  <button type="button" className="gs-hedef-kaydet" onClick={saveHedef} disabled={hedefKaydediliyor}>{hedefKaydediliyor ? 'Kaydediliyor...' : 'Kaydet'}</button>
+                  <button type="button" className="gs-hedef-vazgec" onClick={() => setHedefDuzenle(false)} disabled={hedefKaydediliyor}>Vazgeç</button>
+                </div>
+              ) : (
+                <div className="gs-row-total"><span>Hedef Toplam</span><strong>{TL(hedefToplam)}</strong></div>
+              )}
+            </section>
           </div>
 
         </div>
@@ -875,7 +980,7 @@ export default function GunSonu({ data, onNavigate }) {
         <div className="gs-modal-overlay" onClick={() => setAvansPinOpen(false)}>
           {avansStep === 'pin' ? (
             <div className={`gs-modal gs-pin-modal ${avansPinError ? 'shake' : ''}`} onClick={(e) => e.stopPropagation()}>
-              <h3><Lock size={15} /> Kasa Avansını Değiştir</h3>
+              <h3><Lock size={15} /> {pinAmac === 'hedef' ? 'Bozukluk Hedefini Değiştir' : 'Kasa Avansını Değiştir'}</h3>
               <div className="gs-pin-dots">
                 {[0, 1, 2, 3].map((i) => <span key={i} className={`gs-pin-dot ${avansPinValue.length > i ? 'filled' : ''}`} />)}
               </div>
