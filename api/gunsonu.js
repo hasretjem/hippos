@@ -107,6 +107,27 @@ function recordToRow({ tarih, toplamNakitPara, nakitKupurDetayi, kasaAvansi, pos
 
 export default async function handler(req, res) {
   try {
+    // Ayarlar (şimdilik yalnızca "bozukluk_hedefi": kupür -> gereken adet). GET ?ayar=bozukluk_hedefi, POST { ayar, deger }
+    if (req.method === 'GET' && req.query?.ayar === 'bozukluk_hedefi') {
+      const { data, error } = await db.from('ayarlar').select('deger').eq('anahtar', 'bozukluk_hedefi').maybeSingle();
+      if (error) throw new Error(error.message);
+      return res.status(200).json({ deger: data?.deger || null });
+    }
+    if (req.method === 'POST' && req.body?.ayar === 'bozukluk_hedefi') {
+      const g = req.body.deger;
+      if (!g || typeof g !== 'object') return res.status(400).json({ error: 'deger gerekli' });
+      const temiz = {};
+      for (const [k, v] of Object.entries(g)) {
+        const d = parseInt(k, 10);
+        const n = parseInt(v, 10);
+        if (!Number.isFinite(d) || d <= 0 || !Number.isFinite(n) || n < 0 || n > 100000) return res.status(400).json({ error: 'geçersiz değer' });
+        temiz[String(d)] = n;
+      }
+      const { error } = await db.from('ayarlar').upsert({ anahtar: 'bozukluk_hedefi', deger: temiz, guncelleme: new Date().toISOString() }, { onConflict: 'anahtar' });
+      if (error) throw new Error(error.message);
+      return res.status(200).json({ ok: true, deger: temiz });
+    }
+
     if (req.method === 'GET') {
       const rows = await tumSatirlar();
       return res.status(200).json({ records: rows.map(rowToRecord) });
