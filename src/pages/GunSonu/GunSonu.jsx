@@ -935,6 +935,7 @@ export default function GunSonu({ data, onNavigate }) {
               ...bugunBireyselCariler.map((c) => ({ ad: c.ad, tutar: c.bugunTutar })),
             ],
             tahsilatlar: bugunCariOdemeOzeti,
+            duzeltmeler: bugunCariDuzeltmeleri.map((d) => ({ cariAd: d.cariAd, hareketTs: d.hareketTs, tip: d.tip, tutar: d.ciroEtkisi })),
             anaKasa: hg.anaKasa,
             gunlukKasa: hg.gunlukKasa,
             anaKasaToplam,

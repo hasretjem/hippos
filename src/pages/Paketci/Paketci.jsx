@@ -171,6 +171,13 @@ export default function Paketci({ data }) {
       )}
 
       <div className="pk-body" style={tab === 'stok' ? { display: 'none' } : undefined}>
+        {tab !== 'stok' && odemeGunuCariler.length > 0 && (
+          <div className="pk-odeme-uyari">
+            <div className="pk-odeme-uyari-ust">!! BUGÜN ÖDEME GÜNÜ !!</div>
+            <div className="pk-odeme-uyari-alt">{odemeGunuCariler.join(' · ')}</div>
+          </div>
+        )}
+
         {tab === 'paketler' && !selectedPaket && !selectedBosvarKaydi && (
           <div className="pk-list">
             {paketListesi.length === 0 && bosvarKayitListesi.length === 0 && <div className="pk-empty">Şu an açık teslimat yok.</div>}
@@ -226,13 +233,6 @@ export default function Paketci({ data }) {
             setBosvarTik={setBosvarTik}
             showToast={showToast}
           />
-        )}
-
-        {tab === 'cariler' && odemeGunuCariler.length > 0 && (
-          <div className="pk-odeme-uyari">
-            <div className="pk-odeme-uyari-ust">!! BUGÜN ÖDEME GÜNÜ !!</div>
-            <div className="pk-odeme-uyari-alt">{odemeGunuCariler.join(' · ')}</div>
-          </div>
         )}
 
         {tab === 'cariler' && !selectedCari && (

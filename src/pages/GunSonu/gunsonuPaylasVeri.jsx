@@ -57,7 +57,14 @@ export function paylasimVerisi(g) {
   const tahsilatSatir = Object.entries(g.tahsilatlar || {})
     .filter(([, v]) => sayi(v) !== 0)
     .map(([tur, v]) => ({ ad: `Tahsilat (${TAHSILAT_ADI[tur] || String(tur).toLocaleLowerCase('tr-TR')})`, tutar: -sayi(v) }));
-  const cariHepsi = [...cariSatir, ...tahsilatSatir];
+  const DUZ_ADI = { sil: 'silindi', tutar: 'tutar değişti', urun_ekle: 'ürün eklendi', geri_al: 'silme geri alındı' };
+  const duzeltmeSatir = (g.duzeltmeler || [])
+    .filter((d) => sayi(d.tutar) !== 0)
+    .map((d) => ({
+      ad: `Düzeltme · ${d.cariAd || 'Cari'} (${new Date(d.hareketTs).toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul', day: '2-digit', month: '2-digit' })} ${DUZ_ADI[d.tip] || 'düzeltildi'})`,
+      tutar: sayi(d.tutar),
+    }));
+  const cariHepsi = [...cariSatir, ...tahsilatSatir, ...duzeltmeSatir];
   // Uzun isim varsa tek sütun: isimler tek satırda kalsın, görsel aşağı uzasın (genişlemesin)
   const cariTekSutun = cariHepsi.some((c) => c.ad.length > 30);
 
