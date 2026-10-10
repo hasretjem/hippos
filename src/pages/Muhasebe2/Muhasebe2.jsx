@@ -6,6 +6,7 @@ import YemekKartlariSekmesi from './YemekKartlari';
 import TahakkuklarSekmesi from './Tahakkuklar';
 import GunsonlariSekmesi from './Gunsonlari';
 import XmlCekmece from './XmlCekmece';
+import OdealKontrolSekmesi from './OdealKontrol';
 import { rcApi } from '../Receteler/rcOrtak';
 import { FILTRE_KOLONLARI, FiltreMenu, bosSecimler, filtreUygula, varsayilanTarihSecimi } from './DatalarFiltre';
 import './Muhasebe2.css';
@@ -299,6 +300,9 @@ export default function Muhasebe2({ onNavigate }) {
         <button className={`m2-tab ${sekme === 'gunsonlari' ? 'on' : ''}`} onClick={() => setSekme('gunsonlari')}>
           Günsonları
         </button>
+        <button className={`m2-tab ${sekme === 'odeal' ? 'on' : ''}`} onClick={() => setSekme('odeal')}>
+          Ödeal Kontrol
+        </button>
       </div>
 
       {/* Formlar sekme değişince silinmesin diye gizlenir, kaldırılmaz. */}
@@ -357,6 +361,7 @@ export default function Muhasebe2({ onNavigate }) {
       <div style={{ display: sekme === 'tahakkuk' ? undefined : 'none' }}>
         <TahakkuklarSekmesi aktif={sekme === 'tahakkuk'} bildir={bildir} kategoriler={veri.kategoriler} onDegisti={yukle} />
       </div>
+      <OdealKontrolSekmesi aktif={sekme === 'odeal'} bildir={bildir} />
       <div style={{ display: sekme === 'gunsonlari' ? undefined : 'none' }}>
         <GunsonlariSekmesi aktif={sekme === 'gunsonlari'} duzenlemeModu={duzenlemeModu} bildir={bildir} yenile={gsYenile} onIslem={gsGecmiseEkle} />
       </div>

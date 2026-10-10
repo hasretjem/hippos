@@ -1332,6 +1332,65 @@ export default async function handler(req, res) {
       });
     }
 
+    // Ödeal Kontrol (YALNIZ OKUMA): yüklenen Ödeal ekstresini karşılaştırmak için muhasebe tarafındaki Ödeal hareketlerini getirir.
+    //  - Giden: odeme_hesabi = 'Ödeal Kredi Kartı' olan ödeme (tediye) makbuzları (firma ile birlikte)
+    //  - Gelen: Günsonu'ndan Ödeal Kredi Kartı carisine yazılan POS geliri (kaynak = gunsonu)
+    if (req.method === 'GET' && resource === 'odealKontrol') {
+      const tarihOk = (t) => /^\d{4}-\d{2}-\d{2}$/.test(String(t || ''));
+      const bas = req.query?.bas;
+      const bit = req.query?.bit;
+      if (!tarihOk(bas) || !tarihOk(bit)) throw new HataMesaji(400, 'bas ve bit (YYYY-MM-DD) gerekli');
+      const gunEkle = (t, n) => {
+        const d = new Date(`${t}T12:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + n);
+        return d.toISOString().slice(0, 10);
+      };
+      const ODEAL = 'Ödeal Kredi Kartı';
+      const [mk, pos, ob, es, fi] = await Promise.all([
+        db
+          .from('m2_makbuzlar')
+          .select('id,tarih,firma_id,firma_adi,tutar,aciklama,otomatik')
+          .eq('makbuz_turu', 'Ödeme')
+          .eq('odeme_hesabi', ODEAL)
+          .gte('tarih', gunEkle(bas, -4))
+          .lte('tarih', gunEkle(bit, 4))
+          .order('tarih'),
+        db
+          .from('m2_datalar')
+          .select('tarih,odeme_tediye')
+          .eq('kaynak', 'gunsonu')
+          .eq('firma_adi', ODEAL)
+          .gte('tarih', gunEkle(bas, -4))
+          .lte('tarih', gunEkle(bit, 1)),
+        db.from('m2_firma_ozet').select('borc,alacak').eq('ad', ODEAL).maybeSingle(),
+        db.from('m2_odeal_eslemeleri').select('anahtar,firma_id,ornek_aciklama'),
+        db.from('m2_firmalar').select('id,ad,firma_turu'),
+      ]);
+      [mk, pos, ob, es, fi].forEach((r) => kontrol(r.error));
+      const posGun = {};
+      (pos.data || []).forEach((r) => {
+        posGun[r.tarih] = Math.round(((posGun[r.tarih] || 0) + (Number(r.odeme_tediye) || 0)) * 100) / 100;
+      });
+      return res.status(200).json({
+        odemeler: (mk.data || []).map((r) => ({
+          id: r.id,
+          tarih: r.tarih,
+          firmaId: r.firma_id,
+          firmaAdi: r.firma_adi,
+          tutar: Number(r.tutar) || 0,
+          aciklama: r.aciklama || '',
+          otomatik: !!r.otomatik,
+        })),
+        posGunleri: Object.entries(posGun).map(([tarih, tutar]) => ({ tarih, tutar })),
+        hipposBakiye: ob.data ? Math.round(((Number(ob.data.borc) || 0) - (Number(ob.data.alacak) || 0)) * 100) / 100 : null,
+        eslemeler: (es.data || []).map((e) => ({ anahtar: e.anahtar, firmaId: e.firma_id, ornek: e.ornek_aciklama || '' })),
+        firmalar: (fi.data || [])
+          .filter((f) => !f.firma_turu || f.firma_turu === 'Firma')
+          .map((f) => ({ id: f.id, ad: f.ad }))
+          .sort((a, b) => a.ad.localeCompare(b.ad, 'tr')),
+      });
+    }
+
     // Hesap Özetleri: her cari için kart bilgisi. Bakiye = Borç - Alacak (eksi = firma alacaklı, bizim borcumuz).
     //   Borç   : ödeme (tediye) makbuzları
     //   Alacak : fatura/fişler + tahsilat makbuzları
@@ -1737,6 +1796,26 @@ export default async function handler(req, res) {
       const { error } = await db.from('m2_makbuzlar').insert(makbuzlar);
       kontrol(error);
       return res.status(200).json({ ok: true, bakiye: await bakiyeGetir(db, firma.id) });
+    }
+
+    // ---------- Ödeal Kontrol: açıklama -> firma eşlemesi (yalnız aracın kendi listesi; muhasebe kaydına DOKUNMAZ) ----------
+    if (resource === 'odealEsle') {
+      const anahtar = String(body.anahtar || '').trim().slice(0, 200);
+      if (!anahtar) throw new HataMesaji(400, 'anahtar gerekli');
+      const firma = await firmaGetir(db, body.firmaId);
+      const { error } = await db
+        .from('m2_odeal_eslemeleri')
+        .upsert({ anahtar, firma_id: firma.id, ornek_aciklama: String(body.ornek || '').trim().slice(0, 200) || null }, { onConflict: 'anahtar' });
+      kontrol(error);
+      return res.status(200).json({ ok: true });
+    }
+
+    if (resource === 'odealEslemeSil') {
+      const anahtar = String(body.anahtar || '').trim();
+      if (!anahtar) throw new HataMesaji(400, 'anahtar gerekli');
+      const { error } = await db.from('m2_odeal_eslemeleri').delete().eq('anahtar', anahtar);
+      kontrol(error);
+      return res.status(200).json({ ok: true });
     }
 
     // ---------- Firma bilgisi düzenleme ----------
