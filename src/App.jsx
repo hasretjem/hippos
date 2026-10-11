@@ -14,6 +14,8 @@ import Veri from './pages/Veri/Veri';
 import Receteler from './pages/Receteler/Receteler';
 import KasaRapor from './pages/KasaRapor/KasaRapor';
 import BottomNav from './components/BottomNav/BottomNav';
+import MobilTabloYoneticisi from './components/MobilTablo/MobilTabloYoneticisi';
+import useIsMobile from './hooks/useIsMobile';
 import useHipposData, { QUICK_SALE } from './hooks/useHipposData';
 import useStokTakip from './hooks/useStokTakip';
 import { supabase } from './services/supabase';
@@ -35,6 +37,8 @@ export default function App() {
   const stok = useStokTakip(true);
   const data = { ...baseData, stok };
   const [activePage, setActivePage] = useState('tables');
+  // Telefon görünümü: tabloları ekrana sığdıran yardımcı (masaüstünde hiç bağlanmaz)
+  const mobil = useIsMobile();
   const [selectedTable, setSelectedTable] = useState(QUICK_SALE);
 
   useEffect(() => {
@@ -73,6 +77,7 @@ export default function App() {
 
   return (
     <>
+      {mobil && <MobilTabloYoneticisi />}
       {activePage === 'pos' && (
         <DirectSale
           data={data}

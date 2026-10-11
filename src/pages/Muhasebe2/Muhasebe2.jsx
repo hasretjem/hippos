@@ -9,6 +9,7 @@ import XmlCekmece from './XmlCekmece';
 import { rcApi } from '../Receteler/rcOrtak';
 import { FILTRE_KOLONLARI, FiltreMenu, bosSecimler, filtreUygula, varsayilanTarihSecimi } from './DatalarFiltre';
 import './Muhasebe2.css';
+import useIsMobile from '../../hooks/useIsMobile';
 
 // ---------------------------------------------------------------------------
 // Muhasebe2 — Sekmeler: "Fişler/Faturalar ve Makbuzlar" (giriş), "Datalar" (Excel düzeninde döküm,
@@ -931,6 +932,8 @@ const EVRAK_SINIFI = {
 };
 
 function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, onDegisti }) {
+  // Telefonda Tutar/Tahsilat/Ödeme tek "Miktar" sütununda da gösterilir (masaüstünde bu sütun yok)
+  const mobil = useIsMobile();
   const [kayitlar, setKayitlar] = useState(null);
   const [sinirli, setSinirli] = useState(false);
   const [yukleniyor, setYukleniyor] = useState(false);
@@ -1071,20 +1074,21 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
                   </div>
                 </th>
               ))}
+              {mobil && <th className="sayi">Miktar</th>}
               {duzenlemeModu && <th>İşlem</th>}
             </tr>
           </thead>
           <tbody>
             {kayitlar && kayitlar.length === 0 && (
               <tr>
-                <td colSpan={DATALAR_SUTUNLAR.length + (duzenlemeModu ? 1 : 0)} className="m2-empty">
+                <td colSpan={DATALAR_SUTUNLAR.length + (duzenlemeModu ? 1 : 0) + (mobil ? 1 : 0)} className="m2-empty">
                   Henüz kayıt yok.
                 </td>
               </tr>
             )}
             {kayitlar && kayitlar.length > 0 && gorunen.length === 0 && (
               <tr>
-                <td colSpan={DATALAR_SUTUNLAR.length + (duzenlemeModu ? 1 : 0)} className="m2-empty">
+                <td colSpan={DATALAR_SUTUNLAR.length + (duzenlemeModu ? 1 : 0) + (mobil ? 1 : 0)} className="m2-empty">
                   Seçili filtrelere uyan kayıt yok. Tarih filtresinden başka bir ay seçebilir veya "Filtreleri temizle"ye basabilirsiniz.
                 </td>
               </tr>
@@ -1120,6 +1124,10 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
                 <td className={`sayi ${r.kdv < 0 ? 'm2-neg' : ''}`}>{para(r.kdv)}</td>
                 <td className="sayi">{para(r.tahsilat)}</td>
                 <td className="sayi">{para(r.odemeTediye)}</td>
+                {mobil && (() => {
+                  const m = [r.tutar, r.tahsilat, r.odemeTediye].find((x) => x !== null && x !== undefined && x !== 0);
+                  return <td className={`sayi ${m < 0 ? 'm2-neg' : ''}`}>{para(m)}</td>;
+                })()}
                 {duzenlemeModu && (
                   <td>
                     {r.kaynak ? (

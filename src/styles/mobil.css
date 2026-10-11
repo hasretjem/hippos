@@ -326,4 +326,94 @@
   .cr-odeme-tur-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cr-futura-butonlar { flex-wrap: wrap; }
   .cr-toast { bottom: calc(var(--mnav-pay) + 16px); max-width: calc(100vw - 24px); }
+
+  /* =====================================================================
+     TABLOLAR — tek satır, yana kaydırma yok (MobilTabloYoneticisi ile birlikte)
+     ===================================================================== */
+  table[data-mtablo] { min-width: 0 !important; width: 100% !important; table-layout: fixed; }
+  table[data-mtablo] th, table[data-mtablo] td {
+    padding: 7px 4px !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap !important;
+  }
+  table[data-mtablo] th { font-size: 10px !important; letter-spacing: 0 !important; }
+  table[data-mtablo] th .m2-th { min-width: 0; gap: 2px; }
+  table[data-mtablo] th .m2-th > span { overflow: hidden; text-overflow: ellipsis; }
+  table[data-mtablo][data-msayi="1"] td, table[data-mtablo][data-msayi="2"] td,
+  table[data-mtablo][data-msayi="3"] td, table[data-mtablo][data-msayi="4"] td { font-size: 13px !important; }
+  table[data-mtablo][data-msayi="5"] td { font-size: 12px !important; }
+  table[data-mtablo][data-msayi="6"] td, table[data-mtablo][data-msayi="7"] td, table[data-mtablo][data-msayi="8"] td { font-size: 11px !important; }
+  table[data-mtablo] th[data-mbos] { width: 32px; }
+  table[data-mtablo] th[data-mbos="islem"] { width: 74px; }
+  table[data-mtablo][data-msayi="4"] th[data-mana] { width: 34%; }
+  table[data-mtablo][data-msayi="5"] th[data-mana] { width: 30%; }
+  table[data-mtablo] td.sayi, table[data-mtablo] th.sayi { padding-left: 2px !important; padding-right: 3px !important; text-overflow: clip; }
+  table[data-mtablo][data-msayi="6"] th[data-mana], table[data-mtablo][data-msayi="7"] th[data-mana], table[data-mtablo][data-msayi="8"] th[data-mana] { width: 28%; }
+  table[data-mtablo] td .m2-yk-islem { display: flex; flex-direction: column; gap: 4px; }
+  table[data-mtablo] td .m2-btn.mini { padding: 5px 4px; font-size: 11px; width: 100%; min-width: 0; }
+  table[data-mtablo] td input, table[data-mtablo] td select { width: 100%; min-width: 0; }
+  table[data-mtablo] td .m2-pill, table[data-mtablo] td [class*="rozet"], table[data-mtablo] td [class*="etiket"] {
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle;
+  }
+  .m2-table-wrap { overflow-x: hidden; }
+  table[data-mtablo] .m2-badge { font-size: 10px; padding: 2px 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
+  .mtablo-bar {
+    display: flex; align-items: center; gap: 6px; overflow-x: auto; padding: 2px 0 8px; scrollbar-width: none;
+  }
+  .mtablo-bar::-webkit-scrollbar { display: none; }
+  .mtablo-etiket { font-size: 12px; font-weight: 700; color: #83786B !important; flex-shrink: 0; }
+  .mtablo-cip {
+    flex-shrink: 0; height: 32px; padding: 0 12px; border-radius: 999px; border: 1.5px solid rgba(57, 62, 65, 0.25);
+    background: #fff; font-size: 12.5px; font-weight: 700; color: #393E41 !important; cursor: pointer; font-family: inherit; white-space: nowrap;
+  }
+  .mtablo-cip.on { background: #E94F37; border-color: #E94F37; color: #fff !important; }
+  .mtablo-balon {
+    position: fixed; z-index: 500; display: none; padding: 10px 14px; border-radius: 12px;
+    background: #393E41; color: #fff !important; font-size: 14px; font-weight: 600; line-height: 1.35;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3); word-break: break-word;
+  }
+
+  /* =====================================================================
+     YÖNETİM PANELİ (Settings) — canlı ciro en üstte
+     ===================================================================== */
+  .st-shell { height: 100dvh; width: 100%; padding: 10px 10px calc(var(--mnav-pay) + 12px); }
+  .st-columns { flex-direction: column; gap: 12px; }
+  .st-right-col { order: -1; width: 100% !important; position: static; }
+  .st-revenue-panel, .st-harcama-panel { width: 100% !important; }
+  .st-left { width: 100%; gap: 12px; }
+  .st-actions-row, .st-actions-row:has(> :nth-child(8):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px; }
+  .st-action-card { padding: 14px 12px; gap: 6px; }
+  .st-action-ico { width: 38px; height: 38px; border-radius: 11px; }
+  .st-action-title { font-size: 15px; }
+  .st-action-sub { font-size: 11.5px; }
+  .st-history-wrap { bottom: calc(var(--mnav-pay) + 12px); right: 12px; }
+  .st-modal-overlay { padding: 10px; align-items: flex-end; }
+  .st-modal { max-width: 100% !important; width: 100% !important; max-height: 92dvh; overflow-y: auto; }
+
+  /* =====================================================================
+     GERİ BUTONLU SAYFALAR
+     ===================================================================== */
+  .gs-shell { height: 100dvh; overflow-y: auto; }
+  .gs-content-3col { grid-template-columns: minmax(0, 1fr); }
+  .kr-shell { padding: 8px 10px calc(var(--mnav-pay) + 10px); overflow-y: auto; }
+  .kr-sekmeler { margin-left: 0; overflow-x: auto; max-width: 100%; scrollbar-width: none; flex: 1 0 100%; order: 3; }
+  .kr-sekmeler button { flex-shrink: 0; font-size: 15px; }
+  .m2-shell { padding: 12px 10px 32px; }
+  .vr-shell { height: 100dvh; }
+
+  /* Stok Sipariş: tüm sütunlar tek satırda sığar */
+  .ss-shell { height: 100dvh; }
+  .ss-toolbar { flex-wrap: wrap; gap: 8px; }
+  .ss-table-head { font-size: 10.5px; }
+  .ss-table-head .ss-col { white-space: normal; line-height: 1.15; }
+  .ss-col { padding: 3px 3px; }
+  .ss-col-sil { width: 26px; }
+  .ss-col-ad { flex: 1; min-width: 0; }
+  .ss-col-num { width: 46px; }
+  .ss-col-birim { width: 44px; font-size: 12px; }
+  .ss-col-hedef { width: 50px; }
+  .ss-col-not { width: 56px; }
+  .ss-col-kendim { width: 34px; }
+  .ss-input { font-size: 13px; min-width: 0; }
+
+  /* Ürünler */
+  .pr-shell { height: 100dvh; overflow-y: auto; }
 }
