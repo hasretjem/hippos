@@ -1,0 +1,329 @@
+/* =====================================================================
+   HIPPOS — TELEFON GÖRÜNÜMÜ
+   Bu dosyadaki HER kural (max-width: 640px) içindedir. Kasadaki bilgisayarlarda
+   (ve 640px'ten geniş her ekranda) hiçbiri devreye girmez; masaüstü görünüm aynen kalır.
+   Yazı renklerinde !important bilinçli: genel stiller yazıyı beyaz yapıp okunmaz kılıyor.
+   ===================================================================== */
+
+@media (max-width: 640px) {
+
+  /* ---------- Genel ---------- */
+  :root { --mnav-kapali: calc(34px + env(safe-area-inset-bottom, 0px)); --mnav-acik: calc(104px + env(safe-area-inset-bottom, 0px)); }
+  html, body { overscroll-behavior-y: none; -webkit-text-size-adjust: 100%; }
+  body { --mnav-pay: var(--mnav-kapali); }
+  body.mnav-acik { --mnav-pay: var(--mnav-acik); }
+  input, select, textarea { font-size: 16px; } /* iOS'ta yazarken sayfa büyümesin */
+
+  /* ---------- Alt menü (ok ile açılan, sabitlenebilir) ---------- */
+  .mnav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+    background: #F6F7EB;
+    border-top: 1px solid rgba(57, 62, 65, 0.16);
+    box-shadow: 0 -6px 20px rgba(57, 62, 65, 0.16);
+    border-radius: 18px 18px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .mnav-tutamac { position: relative; height: 34px; display: flex; align-items: center; justify-content: center; }
+  .mnav-ok {
+    position: relative; height: 34px; padding: 0 34px; border: none; background: none;
+    color: #393E41 !important; display: flex; align-items: center; cursor: pointer;
+  }
+  .mnav-ok svg { color: #393E41 !important; }
+  .mnav-nokta { position: absolute; top: 6px; right: 24px; width: 9px; height: 9px; border-radius: 50%; background: #E94F37; box-shadow: 0 0 0 2px #F6F7EB; }
+  .mnav-sabitle {
+    position: absolute; right: 8px; top: 4px; height: 26px; padding: 0 10px; border-radius: 999px;
+    border: 1px solid rgba(57, 62, 65, 0.18); background: transparent;
+    display: flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; color: #83786B !important; cursor: pointer;
+  }
+  .mnav-sabitle svg { color: #83786B !important; }
+  .mnav-sabitle.on { background: #E94F37; border-color: #E94F37; color: #fff !important; }
+  .mnav-sabitle.on svg { color: #fff !important; }
+  .mnav-ikaz {
+    text-align: center; font-size: 12px; font-weight: 800; color: #E94F37 !important;
+    animation: nav-pulse 1.2s ease-in-out infinite; padding-bottom: 2px;
+  }
+  .mnav-butonlar { display: flex; gap: 2px; padding: 0 6px 8px; }
+  .mnav-butonlar button {
+    flex: 1; min-width: 0; height: 56px; border: none; background: none; border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    color: #393E41 !important; cursor: pointer; font-family: inherit;
+  }
+  .mnav-butonlar button svg { color: #393E41 !important; }
+  .mnav-butonlar button .label { font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; color: inherit !important; }
+  .mnav-butonlar button.active { background: #E94F37; color: #fff !important; }
+  .mnav-butonlar button.active svg { color: #fff !important; }
+  .mnav-butonlar .nav-badge { top: -6px; right: -10px; }
+  .mnav-butonlar button.active .nav-badge { background: #fff; color: #E94F37 !important; }
+
+
+  /* =====================================================================
+     MASALAR (Tables)
+     ===================================================================== */
+  .tb-shell {
+    height: 100dvh; width: 100%;
+    padding: 10px 10px calc(var(--mnav-pay) + 12px);
+    gap: 10px;
+    overflow-y: auto; overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tb-top-row { flex-wrap: wrap; gap: 8px; }
+  .tb-logo-capsule { height: 52px; padding: 3px 12px 3px 3px; order: 0; }
+  .tb-logo-title { font-size: 22px; }
+  .tb-logo-sub { font-size: 10px; }
+  .tb-mutfak-not-btn { order: 1; flex: 1; min-width: 0; height: 52px; padding: 0 12px; gap: 8px; }
+  .tb-mutfak-not-btn span { font-size: 19px; overflow: hidden; text-overflow: ellipsis; }
+  .tb-quicksale { order: 2; flex: 1 0 100%; height: 58px; }
+  .tb-qs-text { font-size: 23px; }
+  .tb-qs-bolt { width: 64px; height: 64px; margin: -16px 0; }
+
+  /* Salon / Alt Kat / Paketler sekmeleri */
+  .tb-msekmeler {
+    display: flex; gap: 4px; padding: 4px; flex-shrink: 0;
+    background: rgba(246, 247, 235, 0.12); border-radius: 14px;
+  }
+  .tb-msekmeler button {
+    flex: 1; height: 40px; border: none; border-radius: 11px; background: transparent;
+    font-size: 14px; font-weight: 800; color: #F6F7EB !important; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .tb-msekmeler button.on { background: #F6F7EB; color: #393E41 !important; }
+  .tb-msekme-sayi {
+    min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; font-size: 11px; line-height: 20px;
+    background: #E94F37; color: #fff !important;
+  }
+  .tb-shell[data-msekme="salon"] .tb-left > .tb-section:nth-child(2),
+  .tb-shell[data-msekme="salon"] .tb-packages,
+  .tb-shell[data-msekme="alt"] .tb-left > .tb-section:nth-child(1),
+  .tb-shell[data-msekme="alt"] .tb-packages,
+  .tb-shell[data-msekme="paket"] .tb-left { display: none; }
+  .tb-shell .tb-left > .tb-section > .tb-section-title,
+  .tb-shell .tb-packages-header > .tb-section-title { display: none; }
+
+  .tb-columns { flex: none; display: block; gap: 0; }
+  .tb-left { overflow: visible; gap: 10px; }
+  .tb-section { padding: 10px; border-radius: 18px; }
+  .tb-mgrid, .tb-flow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
+  /* Masa kartı */
+  .tb-card { width: auto; min-height: 126px; }
+  .tb-card-name { font-size: 18px; }
+  .tb-card-amount { font-size: 24px; }
+  .tb-menu-btn { width: 34px; height: 34px; }
+  .tb-card-note .txt { font-size: 11px; }
+  .tb-note-paste { width: 30px; height: 30px; }
+  .tb-empty-label { font-size: 16px; }
+  .tb-badge { font-size: 10.5px; }
+  /* Süreye göre dolan renk alanının üst kenarında hafif dalga */
+  .tb-card:not(.tb-card-compact) .tb-liquid::before {
+    content: ""; position: absolute; left: -24px; right: -24px; top: -7px; height: 8px;
+    background: radial-gradient(circle at 12px 8px, var(--fill-color, #4CA47D) 8px, transparent 8.5px) 0 0 / 24px 8px repeat-x;
+    animation: tb-mdalga 2.6s linear infinite;
+  }
+  @keyframes tb-mdalga { to { transform: translateX(24px); } }
+
+  /* Masa menüsü (Taşı / Birleştir / Masayı Kapat): telefonda alttan açılan büyük düğmeler */
+  .tb-menu {
+    left: 12px !important; right: 12px; top: auto !important;
+    bottom: calc(var(--mnav-pay) + 12px); width: auto; padding: 8px; gap: 6px; border-radius: 20px;
+  }
+  .tb-menu button { padding: 15px 14px; font-size: 15px; border-radius: 14px; }
+
+  /* Paketler */
+  .tb-packages { width: auto; padding: 10px; overflow: visible; border-radius: 18px; }
+  .tb-packages-header { position: static; }
+  .tb-add-package { min-height: 52px; }
+  .tb-bosvar-header-btn { min-height: 52px; padding: 0 14px; }
+  .tb-card-compact { min-height: 64px; padding: 10px 12px; }
+  .tb-close-btn { width: 34px; height: 34px; }
+  .tb-bosvar-package-row button { min-height: 40px; }
+
+  /* Yüzen butonlar (Son İşlemler / Cari Uyarı) alt menünün üstünde dursun */
+  .tb-history-wrap { bottom: calc(var(--mnav-pay) + 12px); right: 12px; }
+  .tb-cari-uyari-wrap { bottom: calc(var(--mnav-pay) + 12px); right: 74px; }
+  .tb-history-fab, .tb-cari-uyari-fab { width: 50px; height: 50px; }
+  .tb-history-panel, .tb-cari-uyari-panel { width: calc(100vw - 24px); max-width: 380px; }
+  .tb-cari-uyari-wrap .tb-cari-uyari-panel { margin-right: -62px; }
+
+  .tb-mtoast {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--mnav-pay) + 74px); z-index: 300;
+    background: #393E41; color: #fff !important; padding: 10px 16px; border-radius: 999px; font-size: 13px; font-weight: 700;
+    max-width: calc(100vw - 24px); text-align: center;
+  }
+
+  /* Pencereler */
+  .tb-modal-overlay, .tb-bosvar-prompt-overlay { padding: 12px; align-items: flex-end; }
+  .tb-modal { max-width: 100%; padding: 18px; }
+  .tb-mutfak-ekmek-row { flex-direction: column; width: 100%; max-height: 92dvh; overflow-y: auto; gap: 10px; }
+  .tb-mutfak-ekmek-row > * { width: 100%; max-width: 100%; min-width: 0; }
+  .tb-ekmek-modal { min-width: 0; max-width: 100%; max-height: none; }
+  .tb-bosvar-prompt-modal { width: 100%; max-width: 100%; }
+
+  /* =====================================================================
+     SATIŞ (DirectSale) — Hızlı Satış / masa / paket
+     ===================================================================== */
+  .ds-shell { height: 100dvh; width: 100%; }
+  .ds-body { flex-direction: column; padding: 8px 8px 0; gap: 8px; }
+  .ds-main { gap: 8px; }
+
+  /* Üst şerit: [Geri/Masa/Gönder] [masa seçimi] [taşı][birleştir] / [yapıştır][not][Boş Var] */
+  .ds-header { flex-direction: row; flex-wrap: wrap; padding: 8px; gap: 8px; border-radius: 16px; }
+  .ds-header-actions { order: 0; padding-right: 0; gap: 6px; }
+  .ds-header-actions button { height: 44px; padding: 0 12px; font-size: 14px; }
+  .ds-header-actions .ds-header-print-btn,
+  .ds-header-actions .ds-header-pay-btn { display: none; } /* yazdırma telefonda yok; Ödeme Al alttaki şeritte */
+  .ds-header-table { order: 1; flex: 1; min-width: 0; gap: 6px; justify-content: flex-start; }
+  .ds-table-select-mini { max-width: none; height: 44px; font-size: 13.5px; }
+  .ds-mini-btn { width: 44px; height: 44px; flex-shrink: 0; }
+  .ds-header-note { order: 2; flex: 1 0 100%; min-width: 0; }
+  .ds-header-note input { flex: 1; width: auto; max-width: none; height: 44px; font-size: 16px; min-width: 0; }
+  .ds-paste-btn { width: 44px; height: 44px; flex-shrink: 0; }
+  .ds-header-note .bv-tik-btn { height: 44px; flex-shrink: 0; white-space: nowrap; }
+
+  .ds-category-strip { gap: 6px; scrollbar-width: none; }
+  .ds-category-strip::-webkit-scrollbar { display: none; }
+  .ds-cat-card { height: 40px; padding: 0 14px; font-size: 13px; }
+  .ds-favorites { padding: 6px 8px; gap: 8px; border-radius: 14px; }
+  .ds-favorites-row { scrollbar-width: none; }
+  .ds-edit-fav-btn { width: 40px; height: 40px; flex-shrink: 0; }
+  .ds-fav-chip { min-height: 40px; }
+
+  /* Ürünler */
+  .ds-products { padding: 8px; border-radius: 16px; }
+  .ds-products-scrollbtns, .ds-split-col-scrollbtns { display: none !important; }
+  .ds-product-group { margin-bottom: 14px; }
+  .ds-product-grid,
+  .ds-product-grid.kahvalti-grid,
+  .ds-product-grid.yemekler-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .ds-subcat-label { font-size: 13px !important; margin-bottom: 6px; }
+  .pb-card, .ds-product-grid.kahvalti-grid .pb-card { min-height: 66px; padding: 7px 8px; }
+  .pb-name, .ds-product-grid.kahvalti-grid .pb-name, .ds-split-col .pb-name { font-size: 13px !important; line-height: 1.2; }
+  .pb-price { font-size: 12.5px !important; }
+  .pb-icon-svg, .ds-product-grid.kahvalti-grid .pb-icon-svg, .ds-product-grid.kahvalti-grid .pb-icon-watermark { width: 30px; height: 30px; }
+  .pb-icon-watermark { font-size: 34px; }
+  /* Soğuk sandviç: Büyük ve Küçük sütunları yan yana kalır */
+  .ds-split-col { padding: 8px 6px; }
+  .ds-split-col .ds-product-grid { grid-template-columns: minmax(0, 1fr); }
+  .ds-split-col-head { padding-bottom: 6px; margin-bottom: 8px; }
+  .ds-split-col-title { font-size: 13px !important; }
+
+  /* Sepet çekmecesi (masaüstündeki sağ sipariş paneli) */
+  .ds-order-panel.ds-msepet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 80;
+    width: auto; max-height: 86dvh; border-radius: 22px 22px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    transform: translateY(105%); visibility: hidden;
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 220ms;
+  }
+  .ds-order-panel.ds-msepet.acik { transform: translateY(0); visibility: visible; transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .ds-msepet-ortu { position: fixed; inset: 0; z-index: 79; background: rgba(0, 0, 0, 0.45); }
+  .ds-msepet-bas {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 12px 14px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .ds-msepet-bas span { font-size: 16px; font-weight: 800; color: #E94F37 !important; }
+  .ds-msepet-bas button {
+    width: 38px; height: 38px; border-radius: 50%; border: none; background: rgba(255, 255, 255, 0.1);
+    display: flex; align-items: center; justify-content: center; color: #F3F1E6 !important;
+  }
+  .ds-msepet-bas button svg { color: #F3F1E6 !important; }
+  .ds-msepet .ds-order-list { padding: 10px 12px 6px; min-height: 80px; }
+  .ds-msepet .ds-order-tools { padding: 8px 12px; }
+  .ds-msepet .ds-note-btn, .ds-msepet .ds-numpad-toggle { height: 48px; font-size: 13px; }
+  .ds-msepet .ds-paste-btn-lg { height: 48px; }
+  .ds-msepet .ds-total-box { padding: 10px 14px 12px; }
+  .ds-msepet .ds-total-row span:last-child { font-size: 30px; }
+
+  /* Alt şerit: sepeti aç + Ödeme Al */
+  .ds-mserit {
+    flex-shrink: 0; display: flex; gap: 8px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+  .ds-mserit button { height: 52px; border: none; border-radius: 14px; cursor: pointer; font-family: inherit; }
+  .ds-mserit-sepet {
+    flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 12px;
+    background: #393E41; color: #F3F1E6 !important;
+  }
+  .ds-mserit-sepet .sol, .ds-mserit-sepet .sag { display: flex; align-items: center; gap: 6px; color: #F3F1E6 !important; white-space: nowrap; }
+  .ds-mserit-sepet .sol { font-size: 14px; font-weight: 700; overflow: hidden; }
+  .ds-mserit-sepet .sag { font-size: 17px; font-weight: 800; }
+  .ds-mserit-sepet svg { color: #F3F1E6 !important; flex-shrink: 0; }
+  .ds-mserit-ode { padding: 0 18px; background: #E94F37; color: #fff !important; font-size: 16px; font-weight: 800; }
+  .ds-mserit-ode:disabled { opacity: 0.4; }
+  .ds-toast { bottom: 76px; max-width: calc(100vw - 24px); white-space: normal; text-align: center; z-index: 120; }
+
+  /* Pencereler */
+  .ds-modal-overlay { padding: 10px; align-items: flex-end; }
+  .ds-modal { max-width: 100% !important; width: 100% !important; max-height: 92dvh; overflow-y: auto; padding: 16px; }
+  .ds-pay-modal-wrap { flex-direction: column; gap: 10px; width: 100%; max-height: 92dvh; overflow-y: auto; }
+  .ds-modal.ds-pay-modal { padding: 16px; max-height: none; }
+  .ds-pay-modal .ds-modal-head { padding-bottom: 10px; margin-bottom: 12px; }
+  .ds-pay-modal .ds-modal-head h3 { font-size: 19px; }
+  .ds-pay-modal-total { padding: 14px 16px; margin-bottom: 14px; gap: 10px; }
+  .ds-pay-modal-total span { font-size: 13px; }
+  .ds-pay-modal-total strong { font-size: 30px; }
+  .ds-pay-grid, .ds-pay-modal .ds-pay-grid { flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  .ds-pay-grid button { flex: 1 1 calc(50% - 5px); height: 84px; }
+  .ds-pay-grid button .lbl { font-size: 15px; }
+  .ds-pay-grid button svg { width: 28px; height: 28px; }
+  .ds-pay-back-btn { height: 52px; }
+  .ds-change-calc-panel { width: 100%; }
+  .ds-table-picker-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ds-table-picker-modal { max-height: 88dvh; }
+  .ds-cari-firma-grid, .ds-cari-bireysel-list { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: 38dvh; }
+  .ds-modal.ds-numpad-modal, .ds-modal.ds-price-modal { padding: 16px; }
+  .ds-numpad-modal .ds-numpad-grid button { height: 52px; }
+
+  /* =====================================================================
+     CARİLER — liste ve detay ayrı ekran; mesajlar sadece kopyalanır
+     ===================================================================== */
+  .cr-shell {
+    height: 100dvh; width: 100%;
+    padding: 10px 10px calc(var(--mnav-pay) + 12px);
+    overflow-y: auto; overflow-x: hidden;
+  }
+  .cr-columns { flex-direction: column; height: auto; gap: 10px; }
+  .cr-shell[data-msecili="1"] .cr-left { display: none; }
+  .cr-shell[data-msecili="0"] .cr-right { display: none; }
+  .cr-left { width: 100%; }
+  .cr-list-wrap { flex: none; }
+  .cr-list { overflow: visible; max-height: none; }
+  .cr-item { padding: 12px; }
+  .cr-item-name { font-size: 14.5px; }
+  .cr-item-balance { font-size: 14px; }
+  .cr-item-phone { font-size: 12px; }
+  .cr-item-date, .cr-item-note { font-size: 11px; }
+  .cr-tabs button { min-height: 44px; }
+  .cr-show-all { min-height: 36px; }
+  .cr-add-btn { min-height: 50px; }
+
+  .cr-mgeri {
+    align-self: flex-start; display: flex; align-items: center; gap: 6px;
+    height: 40px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--border, #CDEEDB);
+    background: #fff; font-size: 14px; font-weight: 800; color: #153826 !important; cursor: pointer;
+  }
+  .cr-mgeri svg { color: #153826 !important; }
+  .cr-right { overflow: visible; gap: 10px; }
+  .cr-summary-card { padding: 14px; }
+  .cr-summary-head { flex-direction: column; align-items: stretch; gap: 10px; }
+  .cr-summary-head h2 { font-size: 19px; }
+  .cr-summary-actions { flex-wrap: wrap; gap: 8px; }
+  .cr-summary-actions > * { flex: 1 1 auto; }
+  .cr-pay-btn, .cr-ozet-btn { height: 44px; font-size: 13px; justify-content: center; }
+  .cr-summary-grid { grid-template-columns: minmax(0, 1fr); }
+  .cr-summary-grid > div { font-size: 13px; }
+  .cr-detail-tabs { flex-wrap: wrap; }
+  .cr-detail-tabs button { height: 42px; font-size: 13px; }
+  .cr-detail-tabs .cr-dokum-btn { flex: 1 0 100%; justify-content: center; }
+  .cr-detail-body { padding: 12px; overflow: visible; }
+
+  /* Pencereler: tam genişlik, alttan; WhatsApp düğmeleri yerine sadece Kopyala */
+  .cr-modal-overlay { padding: 10px; align-items: flex-end; }
+  .cr-modal { max-width: 100% !important; width: 100% !important; max-height: 92dvh; overflow-y: auto; padding: 16px; }
+  /* Telefonda WhatsApp düğmesi mesajı panoya kopyalar (etiketi de "Kopyala" olur) */
+  .cr-share-actions button.whatsapp { background: #E94F37 !important; border-color: #E94F37 !important; color: #fff !important; }
+  .cr-share-actions button.whatsapp svg { color: #fff !important; }
+  .cr-share-actions button { height: 50px; font-size: 15px; }
+  .cr-share-textarea { font-size: 14px; }
+  .cr-odeme-tur-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cr-futura-butonlar { flex-wrap: wrap; }
+  .cr-toast { bottom: calc(var(--mnav-pay) + 16px); max-width: calc(100vw - 24px); }
+}

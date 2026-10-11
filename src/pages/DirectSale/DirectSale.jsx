@@ -6,12 +6,13 @@ import {
   Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote, PackageOpen,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
   Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp, ArrowLeft, Package, Calculator, Delete,
-  MessageCircle, Building2, User, MapPin, Phone, ZoomIn, ZoomOut, Maximize2,
+  MessageCircle, Building2, User, MapPin, Phone, ZoomIn, ZoomOut, Maximize2, ReceiptText,
 } from 'lucide-react';
 import ProductButton, { getDisplayName } from '../../components/ProductButton';
 import { resolveButtonStyle } from '../../constants/themeDefaults';
 import BosVarPanel from '../../components/bosvar/BosVarPanel';
 import OdemeTarihiSecici from '../../components/OdemeTarihi/OdemeTarihiSecici';
+import useIsMobile, { panoyaKopyala } from '../../hooks/useIsMobile';
 import { bugunAnahtar, trTarih, odemeSecimiGecerli } from '../../utils/odemeTarihi';
 import '../../components/bosvar/bosvar.css';
 
@@ -244,6 +245,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [photoModalUrl, setPhotoModalUrl] = useState(null); // paketçi fotoğrafını pop-up'ta göstermek için
 
   const currentOrder = draftItems;
+  // Telefon görünümü: sipariş paneli alttan açılan çekmece olur (masaüstünde kullanılmaz)
+  const mobil = useIsMobile();
+  const [mSepetAcik, setMSepetAcik] = useState(false);
 
   function getCurrentDraftTotal() {
     const subtotal = currentOrder.reduce((s, i) => s + (i.note ? 0 : i.fiyat), 0);
@@ -616,6 +620,11 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     return digits;
   }
   function waShare(text, phone) {
+    // Telefonda WhatsApp'a yönlendirilmez: mesaj panoya kopyalanır, istenen telefondan yapıştırılır.
+    if (mobil) {
+      panoyaKopyala(text).then((ok) => showToast(ok ? 'Mesaj kopyalandı — WhatsApp\'a yapıştırabilirsin' : 'Mesaj kopyalanamadı'));
+      return;
+    }
     const digits = normalizeTrPhone(phone);
     if (!digits || digits === '90') {
       showToast('Kayıtlı numara yok');
@@ -709,7 +718,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   function confirmSendWithWhatsapp() {
     if (!cariConfirm) return;
     const cari = cariConfirm.cari;
-    if (!cari.telefon) {
+    if (!cari.telefon && !mobil) {
       setCariWaPhoneEntry(true);
       setCariWaPhoneDraft('');
       return;
@@ -1255,7 +1264,14 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
         </main>
 
         {/* SİPARİŞ / SEPET PANELİ */}
-        <aside className="ds-order-panel">
+        {mobil && mSepetAcik && <div className="ds-msepet-ortu" onClick={() => setMSepetAcik(false)} />}
+        <aside className={mobil ? `ds-order-panel ds-msepet ${mSepetAcik ? 'acik' : ''}` : 'ds-order-panel'}>
+          {mobil && (
+            <div className="ds-msepet-bas">
+              <span>{selectedTable} siparişi</span>
+              <button onClick={() => setMSepetAcik(false)} aria-label="Sepeti kapat"><X size={20} /></button>
+            </div>
+          )}
           <div
             ref={orderListRef}
             className={`ds-order-list ${currentOrder.length > 14 ? 'ultra-compact' : currentOrder.length > 7 ? 'compact' : ''}`}
@@ -1383,6 +1399,22 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
           )}
         </aside>
       </div>
+
+      {mobil && (
+        <div className="ds-mserit">
+          <button className="ds-mserit-sepet" onClick={() => setMSepetAcik(true)}>
+            <span className="sol"><ReceiptText size={18} /> {currentOrder.filter((i) => !i.note).length} ürün{selectedItems.length > 0 ? ` · ${selectedItems.length} seçili` : ''}</span>
+            <span className="sag">{TL(selectedItems.length > 0 ? selectedTotal : finalTotal)} <ChevronUp size={18} /></span>
+          </button>
+          <button
+            className="ds-mserit-ode"
+            disabled={isOrderEmpty || (isPaketEkrani && !!tableBosvars[selectedTable])}
+            onClick={() => { setMSepetAcik(false); setShowChangeCalc(false); setReceivedAmount(''); setPayMode(true); }}
+          >
+            Ödeme Al
+          </button>
+        </div>
+      )}
 
       {toast && <div className="ds-toast">{toast}</div>}
 
@@ -1704,7 +1736,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   </div>
                   <button className="ds-cari-wa-btn" disabled={!cariOdemeGecerli} onClick={confirmSendWithWhatsapp}>
                     <MessageCircle size={15} />
-                    {cariConfirm.cari.telefon ? 'WhatsApp\'tan İlet' : 'Kayıtlı Numarası Yok'}
+                    {mobil ? 'Onayla ve mesajı kopyala' : cariConfirm.cari.telefon ? 'WhatsApp\'tan İlet' : 'Kayıtlı Numarası Yok'}
                   </button>
                 </>
               ) : (
@@ -1756,7 +1788,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                     {cariConfirm.cari.tip === 'bireysel' && (
                       <button className="ds-cari-wa-btn" disabled={!cariOdemeGecerli} onClick={confirmSendWithWhatsapp}>
                         <MessageCircle size={15} />
-                        {cariConfirm.cari.telefon ? 'WhatsApp\'tan İlet' : 'Kayıtlı Numarası Yok'}
+                        {mobil ? 'Onayla ve mesajı kopyala' : cariConfirm.cari.telefon ? 'WhatsApp\'tan İlet' : 'Kayıtlı Numarası Yok'}
                       </button>
                     )}
                   </>

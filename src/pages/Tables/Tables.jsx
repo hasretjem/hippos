@@ -12,6 +12,7 @@ import {
   Undo2, Banknote, CreditCard, UtensilsCrossed, BookOpen, X, Check, Zap, Lock,
   StickyNote, MessageCircle, Trash2, Printer, Copy, PackageOpen,
 } from 'lucide-react';
+import useIsMobile, { panoyaKopyala } from '../../hooks/useIsMobile';
 
 // Sipariş kartlarında ürün metninin sonuna eklenen marka etiketi — kaynak siparisMetni
 // (useHipposData.js) değiştirilmedi, sadece görüntülemede ekleniyor.
@@ -21,6 +22,10 @@ const EKMEK_SIPARIS_MARKA = {
   domatesli: 'LA LORRAINE',
   kucukKepek: 'UNO',
 };
+
+// Telefonda salon planı yerine numara sırasıyla gösterilen masalar — masaüstü salon planında
+// (renderSalonGrid) yer alan masaların AYNISI.
+const SALON_MOBIL = ['Masa 3', 'Masa 4', 'Masa 5', 'Masa 6', 'Masa 7', 'Masa 8', 'Masa 9', 'Masa 10', 'Masa 11'];
 
 const PAIR_SECOND = new Set(TABLE_PAIRS.map((p) => p[1]));
 const PAIR_FIRST = new Map(TABLE_PAIRS.map((p) => [p[0], p[1]]));
@@ -55,6 +60,10 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     submitBosvarKaydi,
     bosvarBildirimleri,
   } = data;
+
+  // Telefon görünümü: Salon / Alt Kat / Paketler sekmeli gösterilir (masaüstünde kullanılmaz)
+  const mobil = useIsMobile();
+  const [mSekme, setMSekme] = useState('salon');
 
   // Renk-zaman kademesi her 30 dk'da bir değişsin diye periyodik yeniden çizim
   const [, tick] = useState(0);
@@ -93,7 +102,16 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
     if (!digits.startsWith('90')) digits = '90' + digits;
     return digits;
   }
+  const [mKopyaMesaj, setMKopyaMesaj] = useState('');
   function waShare(text, phone) {
+    // Telefonda WhatsApp'a yönlendirilmez: mesaj panoya kopyalanır, istenen telefondan yapıştırılır.
+    if (mobil) {
+      panoyaKopyala(text).then((ok) => {
+        setMKopyaMesaj(ok ? 'Mesaj kopyalandı — WhatsApp\'a yapıştırabilirsin' : 'Mesaj kopyalanamadı');
+        setTimeout(() => setMKopyaMesaj(''), 2200);
+      });
+      return;
+    }
     const digits = normalizeTrPhone(phone);
     if (!digits || digits === '90') return;
     const win = window.open(`https://wa.me/${digits}?text=${encodeURIComponent(text)}`, '_blank');
@@ -639,7 +657,8 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
   }
 
   return (
-    <div className="tb-shell">
+    <div className="tb-shell" data-msekme={mobil ? mSekme : undefined}>
+      {mobil && mKopyaMesaj && <div className="tb-mtoast">{mKopyaMesaj}</div>}
       <div className="tb-top-row">
         <div className="tb-logo-capsule">
           <img src="/hippos-logo.gif" alt="Hippos" className="tb-logo-gif" />
@@ -678,11 +697,29 @@ export default function Tables({ data, setSelectedTable, onNavigate }) {
         </button>
       </div>
 
+      {mobil && (() => {
+        const doluSay = (liste) => liste.filter((t) => (orders[t] || []).length > 0).length;
+        const sekmeler = [
+          ['salon', 'Salon', doluSay(SALON_MOBIL)],
+          ['alt', 'Alt Kat', doluSay(ALT_TABLES)],
+          ['paket', 'Paketler', packages.length + bosvarKayitListesi.length],
+        ];
+        return (
+          <div className="tb-msekmeler">
+            {sekmeler.map(([k, ad, sayi]) => (
+              <button key={k} className={mSekme === k ? 'on' : ''} onClick={() => setMSekme(k)}>
+                {ad}{sayi > 0 && <span className="tb-msekme-sayi">{sayi}</span>}
+              </button>
+            ))}
+          </div>
+        );
+      })()}
+
       <div className="tb-columns">
         <div className="tb-left">
           <section className="tb-section">
             <h2 className="tb-section-title">Salon</h2>
-            {renderSalonGrid()}
+            {mobil ? <div className="tb-mgrid">{SALON_MOBIL.map((t) => renderTableCard(t))}</div> : renderSalonGrid()}
           </section>
           <section className="tb-section">
             <h2 className="tb-section-title">Alt Kat</h2>

@@ -7,6 +7,7 @@ import {
   Banknote, CreditCard, UtensilsCrossed, Landmark, StickyNote, ArrowLeft, Download, Trash2, Pencil, Undo2, CalendarDays,
 } from 'lucide-react';
 import OdemeTarihiSecici from '../../components/OdemeTarihi/OdemeTarihiSecici';
+import useIsMobile from '../../hooks/useIsMobile';
 import { getDisplayName } from '../../components/ProductButton';
 import { odemeGunuDurumu, odemeSecimiGecerli, trTarih, isGunuAnahtarMs } from '../../utils/odemeTarihi';
 
@@ -363,6 +364,8 @@ export default function Cariler({ data, onNavigate }) {
     cariTeslimatBildirimleri, onaylaCariTeslimatBildirim, reddetCariTeslimatBildirim,
     cariDuzeltmeler, silCariHareket, guncelleCariHareket, geriAlSilinenCariHareket, products,
   } = data;
+  // Telefon görünümü: cari seçilince liste gizlenir, sadece detay görünür (masaüstünde kullanılmaz)
+  const mobil = useIsMobile();
 
   function bekleyenBildirim(cariId) {
     return cariTeslimatBildirimleri.find((b) => b.cariId === cariId && b.durum === 'bekliyor') || null;
@@ -503,6 +506,8 @@ export default function Cariler({ data, onNavigate }) {
     return digits;
   }
   function whatsappShare(text, phone) {
+    // Telefonda WhatsApp'a yönlendirilmez: mesaj panoya kopyalanır, istenen telefondan yapıştırılır.
+    if (mobil) { copyText(text); return; }
     const digits = normalizeTrPhone(phone);
     if (!digits || digits === '90') {
       showToast('Bu caride kayıtlı telefon numarası yok');
@@ -882,7 +887,7 @@ export default function Cariler({ data, onNavigate }) {
   const faturalarListe = selectedCari ? cariFaturalar.filter((f) => f.cariId === selectedCari.id).sort((a, b) => b.eklenmeTs - a.eklenmeTs) : [];
 
   return (
-    <div className="cr-shell">
+    <div className="cr-shell" data-msecili={mobil ? (selectedCariId ? '1' : '0') : undefined}>
       <div className="cr-columns">
         {/* SOL: LİSTE */}
         <div className="cr-left">
@@ -1005,6 +1010,11 @@ export default function Cariler({ data, onNavigate }) {
             </div>
           ) : (
             <>
+              {mobil && (
+                <button className="cr-mgeri" onClick={() => setSelectedCariId(null)}>
+                  <ArrowLeft size={18} /> Cariler
+                </button>
+              )}
               {bekleyenBildirim(selectedCari.id) && (
                 <CariBekleyenKart
                   bildirim={bekleyenBildirim(selectedCari.id)}
@@ -1437,13 +1447,13 @@ export default function Cariler({ data, onNavigate }) {
             </div>
             <textarea className="cr-share-textarea" rows={5} value={odemeShareText} onChange={(e) => setOdemeShareText(e.target.value)} />
             <div className="cr-share-actions">
-              <button onClick={() => copyText(odemeShareText)}><Copy size={14} /> Kopyala</button>
+              {!mobil && <button onClick={() => copyText(odemeShareText)}><Copy size={14} /> Kopyala</button>}
               <button className="whatsapp" onClick={() => {
                 whatsappShare(odemeShareText, selectedCari.telefon);
                 const d = new Date();
                 const bugunStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                 updateCari(selectedCari.id, { tahsilatMesajTarih: bugunStr });
-              }}><MessageCircle size={14} /> WhatsApp ile Paylaş</button>
+              }}>{mobil ? <><Copy size={14} /> Kopyala</> : <><MessageCircle size={14} /> WhatsApp ile Paylaş</>}</button>
             </div>
             {(() => {
               const d = new Date();
@@ -1626,8 +1636,8 @@ export default function Cariler({ data, onNavigate }) {
             </div>
             <textarea className="cr-share-textarea mono" rows={20} value={ozetText} onChange={(e) => setOzetText(e.target.value)} />
             <div className="cr-share-actions">
-              <button onClick={() => copyText(ozetText)}><Copy size={14} /> Kopyala</button>
-              <button className="whatsapp" onClick={() => whatsappShare(ozetText, selectedCari.telefon)}><MessageCircle size={14} /> WhatsApp ile Paylaş</button>
+              {!mobil && <button onClick={() => copyText(ozetText)}><Copy size={14} /> Kopyala</button>}
+              <button className="whatsapp" onClick={() => whatsappShare(ozetText, selectedCari.telefon)}>{mobil ? <><Copy size={14} /> Kopyala</> : <><MessageCircle size={14} /> WhatsApp ile Paylaş</>}</button>
             </div>
             {(() => {
               const bugunStr = new Date().toISOString().slice(0, 10);
