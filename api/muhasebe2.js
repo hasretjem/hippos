@@ -684,8 +684,8 @@ async function makbuzGrubuUret(db, body, grupId, zaman) {
 // ---------------------------------------------------------------------------
 // Kayıt grubu (fatura + makbuzlar): anlık görüntü, düzenleme, silme, geri alma
 // ---------------------------------------------------------------------------
-const FF_KOLON = ['id', 'tarih', 'firma_id', 'firma_adi', 'fatura_no', 'aciklama', 'gider_kategorisi', 'odeme_turu', 'odeme_hesabi', 'kasa', 'fatura_tutari', 'kdv', 'iade', 'kasa_grubu', 'grup_id', 'kaynak', 'kayit_zamani'];
-const MK_KOLON = ['id', 'tarih', 'makbuz_turu', 'firma_id', 'firma_adi', 'fatura_no', 'aciklama', 'odeme_turu', 'odeme_hesabi', 'kasa', 'tutar', 'otomatik', 'grup_id', 'kaynak', 'kasa_grubu', 'kayit_zamani'];
+const FF_KOLON = ['id', 'tarih', 'firma_id', 'firma_adi', 'fatura_no', 'aciklama', 'gider_kategorisi', 'odeme_turu', 'odeme_hesabi', 'kasa', 'fatura_tutari', 'kdv', 'iade', 'kasa_grubu', 'grup_id', 'kaynak', 'kayit_zamani', 'elle_degisti'];
+const MK_KOLON = ['id', 'tarih', 'makbuz_turu', 'firma_id', 'firma_adi', 'fatura_no', 'aciklama', 'odeme_turu', 'odeme_hesabi', 'kasa', 'tutar', 'otomatik', 'grup_id', 'kaynak', 'kasa_grubu', 'kayit_zamani', 'elle_degisti'];
 const sec = (r, kolonlar) => Object.fromEntries(kolonlar.map((k) => [k, r[k] === undefined ? null : r[k]]));
 const idSirala = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 const KAYNAK_YER = { yemek_karti: 'Yemek Kartları sekmesinden', tahakkuk: 'Tahakkuklar sekmesinden', avans: "Personel Klasörü'nden", izin: "Personel Klasörü'nden", hizli_gider: 'Harcama modülünden', gunsonu: "Gün Sonu sayfasından", devir: 'Devir aktarımından' };
@@ -719,6 +719,7 @@ function ozelKontrol(error) {
   if (!error) return;
   const m = String(error.message || '');
   if (m.includes('DONEM_KILITLI')) throw new HataMesaji(409, 'Bu dönem veya sonrası için tahakkuk edilmiş; maaş değişikliği bu dönemden itibaren yapılamaz.');
+  if (m.includes('SATIR_YOK')) throw new HataMesaji(404, 'Kayıt bulunamadı');
   if (m.includes('KILITLI')) throw new HataMesaji(409, 'Bu kayıt başka bir sekmeden yönetiliyor, buradan değiştirilemez.');
   if (m.includes('PERSONEL_YOK')) throw new HataMesaji(404, 'Personel bulunamadı');
   if (m.includes('AVANS_YOK')) throw new HataMesaji(404, 'Avans kaydı bulunamadı');
@@ -944,7 +945,7 @@ async function tahakkukVeri(db, donem) {
 //   Yarına devir   = dünden devir + bugünkü nakit - ana kasa harcaması
 // ---------------------------------------------------------------------------
 const GS_KOLON = ['tarih', 'sira', 'toplam_nakit', 'nakit_kupur', 'kasa_avansi', 'pos_toplam', 'pos_satirlari', 'ana_kasa_toplam', 'ana_kasa_harcamalar',
-  'gunluk_kasa_toplam', 'gunluk_kasa_harcamalar', 'cari_toplam', 'cari_detay', 'yemek_toplam', 'yemek_detay', 'ciro', 'ana_kasa_takibi', 'kaydeden_saat'];
+  'gunluk_kasa_toplam', 'gunluk_kasa_harcamalar', 'cari_toplam', 'cari_detay', 'yemek_toplam', 'yemek_detay', 'ciro', 'ana_kasa_takibi', 'kaydeden_saat', 'elle_degisti'];
 const gsSatir = (r) => Object.fromEntries(GS_KOLON.map((k) => [k, r[k] === undefined || r[k] === null ? (k === 'sira' ? null : '') : r[k]]));
 const gsParse = (t, v) => {
   if (!t) return v;
@@ -989,6 +990,7 @@ export function gsKayit(r) {
     ciro: gsParse(r.ciro, {}),
     anaKasaTakibi: gsParse(r.ana_kasa_takibi, {}),
     kaydedenSaat: r.kaydeden_saat || '',
+    elleDegisti: gsParse(r.elle_degisti, {}) || {},
   };
 }
 
@@ -1036,6 +1038,15 @@ export function gsDuzenle(eskiRow, alanlar = {}) {
     yeni.toplam_nakit = gsYaz(toplamNakit);
   }
 
+  // Datalar'dan elle girilen toplam (kupür dökümü ile uyuşmayabilir): işaretlenir. Kupür/avans elle düzenlenirse işaret kalkar.
+  const elle = { ...(gsParse(eskiRow.elle_degisti, {}) || {}) };
+  if (nakitDegisti) delete elle.nakit;
+  if (alanlar.toplamNakitElle !== undefined) {
+    toplamNakit = gsTutarGir(alanlar.toplamNakitElle, 'Toplam nakit', true);
+    yeni.toplam_nakit = gsYaz(toplamNakit);
+    elle.nakit = true;
+  }
+
   // --- POS
   let posToplam = e.posToplam;
   if (alanlar.posTutarlari !== undefined) {
@@ -1048,6 +1059,12 @@ export function gsDuzenle(eskiRow, alanlar = {}) {
     posToplam = gsTopla(...satirlar.map((x) => gsSayi(x.tutar)));
     yeni.pos_satirlari = JSON.stringify(satirlar);
     yeni.pos_toplam = gsYaz(posToplam);
+    delete elle.pos;
+  }
+  if (alanlar.posToplamElle !== undefined) {
+    posToplam = gsTutarGir(alanlar.posToplamElle, 'POS toplamı');
+    yeni.pos_toplam = gsYaz(posToplam);
+    elle.pos = true;
   }
 
   // --- yemek kartı (marka x kolon)
@@ -1084,6 +1101,7 @@ export function gsDuzenle(eskiRow, alanlar = {}) {
     gunluk = gsTutarGir(alanlar.gunlukKasaToplam, 'Günlük kasa harcaması');
     yeni.gunluk_kasa_toplam = gsYaz(gunluk);
   }
+  yeni.elle_degisti = Object.keys(elle).length ? JSON.stringify(elle) : '';
   if (alanlar.kaydedenSaat !== undefined) yeni.kaydeden_saat = String(alanlar.kaydedenSaat ?? '').trim().slice(0, 10);
 
   // --- ana kasa takibi ve ciro (yalnızca sayısal olarak değiştiyse yeniden yazılır; CARİ değerleri korunur)
@@ -1163,7 +1181,7 @@ async function gelirSenkron(db, tr) {
   const { data: tl, error: tlHata } = await db.from('m2_firmalar').select('id').eq('ad', 'TL Kasa').maybeSingle();
   kontrol(tlHata);
   if (!tl) return;
-  const { data: gs, error: gsHata } = await db.from('gs_kayitlar').select('toplam_nakit,gunluk_kasa_toplam,pos_toplam').eq('tarih', tr).maybeSingle();
+  const { data: gs, error: gsHata } = await db.from('gs_kayitlar').select('toplam_nakit,gunluk_kasa_toplam,pos_toplam,elle_degisti').eq('tarih', tr).maybeSingle();
   kontrol(gsHata);
   const sayilan = gs ? gsSayi(gs.toplam_nakit) : 0;
   const gunluk = gs ? (await tlKasaOzeti(db)).gun(iso).gunluk : 0; // günlük harcama defterden (kayıttaki değer kaynak değil)
@@ -1176,6 +1194,11 @@ async function gelirSenkron(db, tr) {
     p_aciklama: `Günsonu geliri — sayılan ${fmt(sayilan)} + günlük harcama ${fmt(gunluk)}`,
   });
   kontrol(error);
+  const elleGs = gs ? gsParse(gs.elle_degisti, {}) || {} : {};
+  if (elleGs.nakit) {
+    const { error: eh } = await db.from('m2_makbuzlar').update({ elle_degisti: true }).eq('grup_id', gelirGrupId(iso)).eq('kaynak', 'gunsonu');
+    kontrol(eh);
+  }
 
   // Kredi kartı (POS) toplamı: tek anlaşmalı POS (Ödeal), komisyon yok → Ödeal Kredi Kartı'na otomatik makbuz.
   const { data: od, error: odHata } = await db.from('m2_firmalar').select('id').eq('ad', 'Ödeal Kredi Kartı').maybeSingle();
@@ -1190,6 +1213,10 @@ async function gelirSenkron(db, tr) {
     p_aciklama: `Günsonu kredi kartı (POS) — ${fmt(pos)}`,
   });
   kontrol(odYaz);
+  if (elleGs.pos) {
+    const { error: eh } = await db.from('m2_makbuzlar').update({ elle_degisti: true }).eq('grup_id', odealGrupId(iso)).eq('kaynak', 'gunsonu');
+    kontrol(eh);
+  }
 }
 
 // Harcama paneli verisi: günün TL Kasa nakit çıkışları, günlük/ana bloklara ayrılmış, toplamlar ve giriş kutusu seçenekleri.
@@ -1387,7 +1414,7 @@ export function gsTurevle(ozet, liste, gelirOverride = {}) {
 }
 
 // TL Kasa'yı etkileyen bir işlemden sonra, etkilenen günlerin Günsonu Geliri'ni defterdeki günlük harcamaya göre yeniler.
-const TL_YAZAN = new Set(['fisFaturaKaydet', 'makbuzKaydet', 'kayitDuzenle', 'kayitAlan', 'kayitSil', 'kayitGeriYaz', 'avansKaydet', 'avansSil', 'hizliGiderKaydet', 'hizliGiderSil', 'hizliGiderGeriYaz', 'harcamaDegistir', 'harcamaSil']);
+const TL_YAZAN = new Set(['fisFaturaKaydet', 'makbuzKaydet', 'kayitDuzenle', 'kayitAlan', 'kayitSil', 'kayitGeriYaz', 'avansKaydet', 'avansSil', 'hizliGiderKaydet', 'hizliGiderSil', 'hizliGiderGeriYaz', 'harcamaDegistir', 'harcamaSil', 'datalarDegistir', 'datalarSil', 'datalarDurumYaz']);
 
 async function etkilenenGunler(db, body) {
   const kume = new Set([isGunuIstanbul()]);
@@ -1410,6 +1437,341 @@ async function gelirTazele(db, isoKume) {
     kontrol(error);
     if (data) await gelirSenkron(db, tr);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Datalar'dan KAYNAKLI kayıt düzenleme / silme
+//  Her kaynaktaki (hızlı gider, avans, izin, tahakkuk, yemek kartı, devir, günsonu) bir satır Datalar'dan değiştirilince
+//  satırın bağlı olduğu kaynak kaydı da AYNI işlemde değişir ve "elle değiştirildi" işareti iki yerde de tutulur.
+//  Hesap saf fonksiyondur (kaynakDegisiklikHesapla); veritabanı okuma/yazma ayrıdır. Her işlem geri alınabilir durum döner.
+// ---------------------------------------------------------------------------
+const DUZ_ALANLAR = ['tutar', 'tarih', 'aciklama', 'giderKategorisi', 'kasaGrubu'];
+const DUZ_FF = ['id', 'tarih', 'fatura_no', 'aciklama', 'gider_kategorisi', 'fatura_tutari', 'kdv', 'kasa_grubu', 'elle_degisti'];
+const DUZ_MK = ['id', 'tarih', 'fatura_no', 'aciklama', 'tutar', 'kasa_grubu', 'elle_degisti'];
+const duzSec = (r, k) => Object.fromEntries(k.map((x) => [x, r[x] === undefined ? null : r[x]]));
+const sayiDuz = (v) => (v === null || v === undefined ? null : Number(v));
+
+// girdi: { tip: 'fatura'|'makbuz', satir, grup: {faturalar, makbuzlar}, alan, deger, elle, tarihKilitli(donem)=>bool,
+//          avans, izinler, kalem, tahakkuk, kesim, odeme, kart }
+export function kaynakDegisiklikHesapla(g) {
+  const { tip, satir, grup, alan } = g;
+  const elle = g.elle !== false;
+  const kaynak = satir.kaynak || null;
+  if (!DUZ_ALANLAR.includes(alan)) throw new HataMesaji(400, 'Bu alan buradan değiştirilemez');
+  if (!kaynak) throw new HataMesaji(409, 'Bu kayıt Düzenle düğmesiyle değiştirilir');
+
+  const t = alan === 'tutar' ? tutarCoz(g.deger) : null;
+  if (alan === 'tutar' && !(t > 0)) throw new HataMesaji(400, 'Tutar sıfırdan büyük olmalı (iade/eksi yön kayıtta zaten saklı)');
+  let tarih = null;
+  if (alan === 'tarih') tarih = tarihKontrol(g.deger);
+  const kasaGrubu = alan === 'kasaGrubu' ? (g.deger === 'gunluk' ? 'gunluk' : g.deger === 'ana' ? 'ana' : null) : null;
+  if (alan === 'kasaGrubu' && !kasaGrubu) throw new HataMesaji(400, 'Kasa seçimi geçersiz');
+
+  // Bir satıra uygulanacak değişiklik
+  const yama = (r, satirTipi) => {
+    const o = { elle_degisti: elle };
+    if (alan === 'tutar') {
+      if (satirTipi === 'fatura') {
+        const eski = Number(r.fatura_tutari) || 0;
+        o.fatura_tutari = t;
+        if (r.kdv !== null && r.kdv !== undefined && eski > 0) o.kdv = r2(Number(r.kdv) * (t / eski));
+      } else o.tutar = t;
+    } else if (alan === 'tarih') o.tarih = tarih;
+    else if (alan === 'aciklama') o.aciklama = metin(g.deger);
+    else if (alan === 'giderKategorisi') o.gider_kategorisi = String(g.deger || '').trim();
+    else if (alan === 'kasaGrubu') o.kasa_grubu = kasaGrubu;
+    return o;
+  };
+  const duzenlenecek = []; // {tip, satir, yama}
+  const ekle = (satirTipi, r, extra = {}) => duzenlenecek.push({ tip: satirTipi, satir: r, yama: { ...yama(r, satirTipi), ...extra } });
+  const hepsi = () => [...grup.faturalar.map((r) => ['fatura', r]), ...grup.makbuzlar.map((r) => ['makbuz', r])];
+  let yanEski = {};
+  let yanYeni = {};
+  const ana = grup.faturalar[0] || grup.makbuzlar.find((m) => !m.otomatik) || null;
+
+  if (alan === 'giderKategorisi' && tip !== 'fatura') throw new HataMesaji(400, 'Kategori yalnızca fatura/fiş satırında değişir');
+  if (alan === 'aciklama' && tip === 'makbuz' && satir.otomatik) throw new HataMesaji(400, 'Otomatik satırın açıklaması değiştirilemez');
+
+  if (kaynak === 'hizli_gider') {
+    if (alan === 'tutar' || alan === 'tarih' || alan === 'kasaGrubu') hepsi().forEach(([k, r]) => ekle(k, r));
+    else if (alan === 'aciklama') {
+      if (!ana || ana.id !== satir.id) throw new HataMesaji(409, 'Açıklama yalnızca harcamanın ana satırında değiştirilir');
+      ekle(tip, satir);
+    } else ekle(tip, satir);
+  } else if (kaynak === 'avans') {
+    const a = g.avans;
+    if (!a) throw new HataMesaji(404, 'Avans kaydı bulunamadı');
+    if (alan === 'giderKategorisi') throw new HataMesaji(400, 'Avans kaydında kategori yok');
+    const aEski = { grup_id: a.grup_id, tarih: a.tarih, tutar: Number(a.tutar), aciklama: a.aciklama || '', elle: !!a.elle_degisti };
+    const aYeni = { ...aEski, elle };
+    if (alan === 'tutar') {
+      grup.makbuzlar.forEach((r) => ekle('makbuz', r));
+      aYeni.tutar = t;
+    } else if (alan === 'tarih') {
+      grup.makbuzlar.forEach((r) => ekle('makbuz', r));
+      aYeni.tarih = tarih;
+    } else if (alan === 'kasaGrubu') {
+      grup.makbuzlar.forEach((r) => ekle('makbuz', r));
+    } else if (alan === 'aciklama') {
+      const duz = String(g.deger ?? '').replace(/^Avans(?: — )?/, '').trim();
+      ekle('makbuz', satir, { aciklama: duz ? `Avans — ${duz}` : 'Avans' });
+      aYeni.aciklama = duz;
+    }
+    yanEski = { avans: aEski };
+    yanYeni = { avans: aYeni };
+  } else if (kaynak === 'izin') {
+    if (tip !== 'fatura') throw new HataMesaji(400, 'Geçersiz izin satırı');
+    if (alan === 'tutar') {
+      if (g.tarihKilitli && g.tarihKilitli(String(satir.tarih).slice(0, 7))) throw new HataMesaji(409, 'Bu dönem tahakkuk edilmiş; izin kesintisi değiştirilemez. Önce tahakkuku geri alın.');
+      const izinler = [...(g.izinler || [])].sort((x, y) => (x.tarih < y.tarih ? -1 : 1));
+      if (!izinler.length) throw new HataMesaji(404, 'İzin kaydı bulunamadı');
+      const paylar = kurusDagit(Math.round(t * 100), izinler.length);
+      yanEski = { izinler: izinler.map((z) => ({ id: z.id, kesinti: Number(z.kesinti), elle: !!z.elle_degisti })) };
+      yanYeni = { izinler: izinler.map((z, i) => ({ id: z.id, kesinti: paylar[i] / 100, elle })) };
+      ekle('fatura', satir);
+    } else if (alan === 'giderKategorisi') ekle('fatura', satir);
+    else throw new HataMesaji(409, "İzin kaydının tarihi ve açıklaması Personel Klasörü'ndeki izin girişinden değiştirilir");
+  } else if (kaynak === 'tahakkuk') {
+    if (tip !== 'fatura') throw new HataMesaji(400, 'Geçersiz tahakkuk satırı');
+    if (alan === 'kasaGrubu') throw new HataMesaji(400, 'Tahakkuk fişinde kasa seçimi yok');
+    if (alan === 'tutar') {
+      const k = g.kalem;
+      if (!k) throw new HataMesaji(404, 'Tahakkuk kalemi bulunamadı');
+      yanEski = { kalem: { tahakkuk_id: k.tahakkuk_id, firma_id: k.firma_id, brut: Number(k.brut), net: Number(k.net), elle: !!k.elle_degisti }, tahakkuk: { id: k.tahakkuk_id } };
+      yanYeni = { kalem: { tahakkuk_id: k.tahakkuk_id, firma_id: k.firma_id, brut: t, net: k.tur === 'Personel' ? r2(t - (Number(k.kesinti) || 0)) : t, elle }, tahakkuk: { id: k.tahakkuk_id } };
+      ekle('fatura', satir);
+    } else if (alan === 'tarih') {
+      grup.faturalar.forEach((r) => ekle('fatura', r));
+      yanEski = { tahakkuk: { id: satir.grup_id, tarih: g.tahakkuk?.tarih } };
+      yanYeni = { tahakkuk: { id: satir.grup_id, tarih } };
+    } else ekle('fatura', satir);
+  } else if (kaynak === 'yemek_karti') {
+    if (alan === 'kasaGrubu') throw new HataMesaji(400, 'Yemek kartı kaydında kasa seçimi yok');
+    if (g.kesim) {
+      const ks = g.kesim;
+      const eskiK = {
+        id: ks.id, fatura_tarihi: ks.fatura_tarihi, matrah: Number(ks.matrah), fatura_kdv: Number(ks.fatura_kdv), fatura_toplami: Number(ks.fatura_toplami),
+        kesinti_matrah: Number(ks.kesinti_matrah), kesinti_kdv: Number(ks.kesinti_kdv), kesinti_toplami: Number(ks.kesinti_toplami),
+        bankaya_yatacak: Number(ks.bankaya_yatacak), elle: !!ks.elle_degisti,
+      };
+      const yeniK = { ...eskiK, elle };
+      if (alan === 'tutar') {
+        if (tip === 'fatura') {
+          const kk = Number(g.kart?.kesinti_kdv ?? 0.2);
+          const kdv = r2((t * kk) / (1 + kk));
+          Object.assign(yeniK, { kesinti_toplami: t, kesinti_kdv: kdv, kesinti_matrah: r2(t - kdv), bankaya_yatacak: r2(eskiK.fatura_toplami - t) });
+          ekle('fatura', satir, { kdv });
+        } else {
+          const fk = Number(g.kart?.fatura_kdv ?? 0.1);
+          const fkdv = r2((t * fk) / (1 + fk));
+          Object.assign(yeniK, { fatura_toplami: t, fatura_kdv: fkdv, matrah: r2(t - fkdv), bankaya_yatacak: r2(t - eskiK.kesinti_toplami) });
+          ekle('makbuz', satir);
+        }
+      } else if (alan === 'tarih') {
+        hepsi().forEach(([k, r]) => ekle(k, r));
+        yeniK.fatura_tarihi = tarih;
+      } else ekle(tip, satir);
+      yanEski = { kesim: eskiK };
+      yanYeni = { kesim: yeniK };
+    } else if (g.odeme) {
+      const o = g.odeme;
+      const eskiO = { id: o.id, tutar: Number(o.tutar), gelis_tarihi: o.gelis_tarihi, elle: !!o.elle_degisti };
+      const yeniO = { ...eskiO, elle };
+      if (alan === 'giderKategorisi') throw new HataMesaji(400, 'Bu kayıtta kategori yok');
+      if (alan === 'tutar') {
+        grup.makbuzlar.forEach((r) => ekle('makbuz', r));
+        yeniO.tutar = t;
+      } else if (alan === 'tarih') {
+        grup.makbuzlar.forEach((r) => ekle('makbuz', r));
+        yeniO.gelis_tarihi = tarih;
+      } else ekle('makbuz', satir);
+      yanEski = { odeme: eskiO };
+      yanYeni = { odeme: yeniO };
+    } else throw new HataMesaji(404, 'Yemek kartı kaydı bulunamadı');
+  } else if (kaynak === 'devir') {
+    if (alan === 'kasaGrubu') throw new HataMesaji(400, 'Devir kaydında kasa seçimi yok');
+    ekle(tip, satir);
+  } else {
+    throw new HataMesaji(409, `Bu kayıt ${KAYNAK_YER[kaynak] || 'başka bir yerden'} yönetiliyor, buradan değiştirilemez.`);
+  }
+
+  const eskiF = [];
+  const eskiM = [];
+  const yeniF = [];
+  const yeniM = [];
+  duzenlenecek.forEach(({ tip: k, satir: r, yama: y }) => {
+    if (k === 'fatura') {
+      eskiF.push(duzSec(r, DUZ_FF));
+      yeniF.push({ ...duzSec(r, DUZ_FF), ...y });
+    } else {
+      eskiM.push(duzSec(r, DUZ_MK));
+      yeniM.push({ ...duzSec(r, DUZ_MK), ...y });
+    }
+  });
+  return {
+    eski: { faturalar: eskiF, makbuzlar: eskiM, yan: yanEski },
+    yeni: { faturalar: yeniF, makbuzlar: yeniM, yan: yanYeni },
+  };
+}
+
+async function duzSatirBul(db, id) {
+  if (!id) throw new HataMesaji(400, 'satirId gerekli');
+  const f = await db.from('m2_fis_faturalar').select('*').eq('id', id).maybeSingle();
+  kontrol(f.error);
+  if (f.data) return { tip: 'fatura', satir: f.data };
+  const m = await db.from('m2_makbuzlar').select('*').eq('id', id).maybeSingle();
+  kontrol(m.error);
+  if (m.data) return { tip: 'makbuz', satir: m.data };
+  throw new HataMesaji(404, 'Kayıt bulunamadı');
+}
+
+// Hesaplama için gereken bağlı kayıtları okur.
+async function kaynakVeriTopla(db, { tip, satir }, alan) {
+  const g = { tip, satir, alan };
+  g.grup = await grupOku(db, satir.grup_id);
+  const kaynak = satir.kaynak;
+  if (kaynak === 'avans') {
+    const { data, error } = await db.from('m2_personel_avans').select('*').eq('grup_id', satir.grup_id).maybeSingle();
+    kontrol(error);
+    g.avans = data;
+  } else if (kaynak === 'izin') {
+    const { data, error } = await db.from('m2_personel_izin').select('*').or(`grup_id.eq.${satir.grup_id},id.eq.${satir.grup_id}`);
+    kontrol(error);
+    g.izinler = data || [];
+    const kilitli = await tahakkukluDonemler(db, [String(satir.tarih).slice(0, 7)]);
+    g.tarihKilitli = (donem) => kilitli.some((x) => x.donem === donem);
+  } else if (kaynak === 'tahakkuk') {
+    const [k, th] = await Promise.all([
+      db.from('m2_tahakkuk_kalemleri').select('*').eq('tahakkuk_id', satir.grup_id).eq('firma_id', satir.firma_id).maybeSingle(),
+      db.from('m2_tahakkuklar').select('id,tarih').eq('id', satir.grup_id).maybeSingle(),
+    ]);
+    kontrol(k.error);
+    kontrol(th.error);
+    g.kalem = k.data;
+    g.tahakkuk = th.data;
+  } else if (kaynak === 'yemek_karti') {
+    const [ks, od] = await Promise.all([
+      db.from('m2_yk_kesimler').select('*').eq('grup_id', satir.grup_id).maybeSingle(),
+      db.from('m2_yk_odemeler').select('*').eq('grup_id', satir.grup_id).maybeSingle(),
+    ]);
+    kontrol(ks.error);
+    kontrol(od.error);
+    g.kesim = ks.data;
+    g.odeme = od.data;
+    if (ks.data) g.kart = await ykKartGetir(db, ks.data.kart_id);
+  }
+  return g;
+}
+
+async function durumYaz(db, d) {
+  const { error } = await db.rpc('m2_satir_yaz', { p_faturalar: d.faturalar || [], p_makbuzlar: d.makbuzlar || [], p_yan: d.yan || {} });
+  ozelKontrol(error);
+}
+
+async function kategoriDogrula(db, ad) {
+  const { data, error } = await db.from('m2_kategoriler').select('id').eq('ad', ad).maybeSingle();
+  kontrol(error);
+  if (!data) throw new HataMesaji(400, 'Kategori bulunamadı');
+}
+
+// Günsonu geliri / POS satırı: kaynak günsonu kaydıdır; ilgili günün kaydı değişir, devir defterden yeniden hesaplanır.
+async function gunsonuAlanYaz(db, tarihTR, alanlar) {
+  const liste = await gsHepsi(db);
+  const idx = liste.findIndex((r) => r.tarih === tarihTR);
+  if (idx < 0) throw new HataMesaji(404, 'Bu güne ait günsonu kaydı yok; önce Gün Sonu sayfasından kaydedin.');
+  const oz = await tlKasaOzeti(db);
+  const eskiTurev = gsTurevle(oz, liste);
+  const { row } = gsDuzenle(eskiTurev[idx], alanlar);
+  if (JSON.stringify(row) === JSON.stringify(eskiTurev[idx])) return { degisiklikYok: true };
+  const { error } = await db.rpc('m2_gunsonu_degistir', { p_tarihler: [row.tarih], p_satirlar: [row] });
+  kontrol(error);
+  await gelirSenkron(db, row.tarih);
+  return { oncesi: [liste[idx]], sonrasi: [row] };
+}
+
+async function datalarDegistir(db, body) {
+  const alan = body.alan;
+  const bulunan = await duzSatirBul(db, body.satirId);
+  const { tip, satir } = bulunan;
+  if (alan === 'giderKategorisi') await kategoriDogrula(db, String(body.deger || '').trim());
+
+  if (satir.kaynak === 'gunsonu') {
+    if (alan !== 'tutar') throw new HataMesaji(409, "Günsonu kaydında yalnızca tutar değiştirilir (tarih ve diğerleri Günsonları sekmesinden)");
+    const t = tutarCoz(body.deger);
+    if (!(t > 0)) throw new HataMesaji(400, 'Tutar sıfırdan büyük olmalı');
+    const iso = String(satir.tarih).slice(0, 10);
+    const oz = await tlKasaOzeti(db);
+    const alanlar = satir.grup_id === gelirGrupId(iso) ? { toplamNakitElle: gsTopla(t, -oz.gun(iso).gunluk) } : { posToplamElle: t };
+    const r = await gunsonuAlanYaz(db, isoToTR(iso), alanlar);
+    if (r.degisiklikYok) return { ok: true, degisiklikYok: true };
+    return { ok: true, gunsonu: { oncesi: r.oncesi, sonrasi: r.sonrasi } };
+  }
+
+  const girdi = await kaynakVeriTopla(db, bulunan, alan);
+  Object.assign(girdi, { deger: body.deger, elle: body.elle });
+  const h = kaynakDegisiklikHesapla(girdi);
+  await durumYaz(db, h.yeni);
+  return { ok: true, geri: h.eski, ileri: h.yeni };
+}
+
+async function datalarSil(db, body) {
+  const { satir } = await duzSatirBul(db, body.satirId);
+  const kaynak = satir.kaynak;
+  const grupId = satir.grup_id;
+  if (kaynak === 'hizli_gider') {
+    const eski = await grupOku(db, grupId);
+    const { error } = await db.rpc('m2_hizli_sil', { p_grup: grupId });
+    ozelKontrol(error);
+    return { ok: true, oncesi: eski };
+  }
+  if (kaynak === 'avans') {
+    const { data, error } = await db.from('m2_personel_avans').select('id').eq('grup_id', grupId).maybeSingle();
+    kontrol(error);
+    if (!data) throw new HataMesaji(404, 'Avans kaydı bulunamadı');
+    const sil = await db.rpc('m2_avans_sil', { p_id: data.id });
+    ozelKontrol(sil.error);
+    return { ok: true };
+  }
+  if (kaynak === 'yemek_karti') {
+    const ks = await db.from('m2_yk_kesimler').select('id').eq('grup_id', grupId).maybeSingle();
+    kontrol(ks.error);
+    if (ks.data) {
+      const { error } = await db.rpc('m2_yk_kesim_sil', { p_kesim_id: ks.data.id });
+      ykKontrol(error);
+      return { ok: true };
+    }
+    const od = await db.from('m2_yk_odemeler').select('id').eq('grup_id', grupId).maybeSingle();
+    kontrol(od.error);
+    if (!od.data) throw new HataMesaji(404, 'Yemek kartı kaydı bulunamadı');
+    const { error } = await db.rpc('m2_yk_odeme_sil', { p_odeme_id: od.data.id });
+    ykKontrol(error);
+    return { ok: true };
+  }
+  if (kaynak === 'tahakkuk') {
+    const d1 = await db.from('m2_fis_faturalar').delete().eq('id', satir.id);
+    kontrol(d1.error);
+    const d2 = await db.from('m2_tahakkuk_kalemleri').delete().eq('tahakkuk_id', grupId).eq('firma_id', satir.firma_id);
+    kontrol(d2.error);
+    const kalan = await db.from('m2_fis_faturalar').select('fatura_tutari').eq('grup_id', grupId).eq('kaynak', 'tahakkuk');
+    kontrol(kalan.error);
+    if (!(kalan.data || []).length) {
+      const sil = await db.rpc('m2_tahakkuk_sil', { p_id: grupId });
+      ozelKontrol(sil.error);
+    } else {
+      const toplam = r2((kalan.data || []).reduce((x, f) => x + Number(f.fatura_tutari), 0));
+      const u = await db.from('m2_tahakkuklar').update({ toplam }).eq('id', grupId);
+      kontrol(u.error);
+    }
+    return { ok: true };
+  }
+  if (kaynak === 'devir') {
+    const d = await db.from('m2_fis_faturalar').delete().eq('id', satir.id);
+    kontrol(d.error);
+    return { ok: true };
+  }
+  if (kaynak === 'izin') throw new HataMesaji(409, "İzin kesintisi, Personel Klasörü'nde ilgili izin kaydı silinerek kaldırılır.");
+  if (kaynak === 'gunsonu') throw new HataMesaji(409, 'Günsonu kaydı Günsonları sekmesinden silinir.');
+  throw new HataMesaji(409, 'Bu kayıt Sil düğmesiyle (grup olarak) silinir');
 }
 
 export default async function handler(req, res) {
@@ -1521,7 +1883,7 @@ export default async function handler(req, res) {
         const { data, error } = await db
           .from('m2_datalar')
           .select(
-            'id,tarih,evrak_turu,firma_adi,fatura_no,aciklama,gider_kategorisi,odeme_turu,odeme_sekli,tutar,kdv,tahsilat,odeme_tediye,otomatik,kayit_zamani,sira,grup_id,kaynak',
+            'id,tarih,evrak_turu,firma_adi,fatura_no,aciklama,gider_kategorisi,odeme_turu,odeme_sekli,tutar,kdv,tahsilat,odeme_tediye,otomatik,kayit_zamani,sira,grup_id,kaynak,elle_degisti,kasa_grubu',
           )
           .order('tarih', { ascending: false })
           .order('kayit_zamani', { ascending: false })
@@ -1549,6 +1911,8 @@ export default async function handler(req, res) {
         otomatik: !!r.otomatik,
         grupId: r.grup_id || null,
         kaynak: r.kaynak || null,
+        elleDegisti: !!r.elle_degisti,
+        kasaGrubu: r.kasa_grubu || null,
       }));
       return res.status(200).json({ kayitlar, sinirli: kayitlar.length >= DATALAR_SAYFA * DATALAR_MAKS_SAYFA });
     }
@@ -2309,6 +2673,12 @@ export default async function handler(req, res) {
       const iadeler = gruplar.map((g) => izinGrubuIade(per, sonuc.filter((z) => (z.grup_id || z.id) === g), katAd, g)).filter(Boolean);
       const { error: izinHata } = await db.rpc('m2_izin_degistir', { p_izinler: izinSatirlari, p_faturalar: iadeler, p_silinen: [], p_gruplar: gruplar });
       ozelKontrol(izinHata);
+      // Kesinti elle girildiyse (otomatik hesaptan farklı) "elle değiştirildi" işareti iki kayıtta da tutulur; değilse temizlenir.
+      const elleKesinti = girilen && toplamK !== otomatikK;
+      const eh1 = await db.from('m2_personel_izin').update({ elle_degisti: elleKesinti }).in('id', izinSatirlari.map((z) => z.id));
+      kontrol(eh1.error);
+      const eh2 = await db.from('m2_fis_faturalar').update({ elle_degisti: elleKesinti }).eq('kaynak', 'izin').in('grup_id', gruplar);
+      kontrol(eh2.error);
       return res.status(200).json({ ok: true, gun: gunler.length, kesinti: toplamK / 100 });
     }
     if (resource === 'izinSil') {
@@ -2326,6 +2696,11 @@ export default async function handler(req, res) {
       const iade = izinGrubuIade(per, (hepsi || []).filter((z) => (z.grup_id || z.id) === gk && z.id !== data.id), katAd, gk);
       const sil = await db.rpc('m2_izin_degistir', { p_izinler: [], p_faturalar: iade ? [iade] : [], p_silinen: [body.id], p_gruplar: [gk] });
       ozelKontrol(sil.error);
+      // Gruptaki kalan izin günlerinden biri elle düzeltilmişse iade faturası da "elle" işaretli kalır.
+      if (iade && (hepsi || []).some((z) => (z.grup_id || z.id) === gk && z.id !== data.id && z.elle_degisti)) {
+        const eh = await db.from('m2_fis_faturalar').update({ elle_degisti: true }).eq('kaynak', 'izin').eq('grup_id', gk);
+        kontrol(eh.error);
+      }
       return res.status(200).json({ ok: true });
     }
 
@@ -2557,33 +2932,44 @@ export default async function handler(req, res) {
       const eski = await grupOku(db, grupId);
       if (grupBosMu(eski)) throw new HataMesaji(404, 'Kayıt bulunamadı');
       const kaynak = grupKaynagi(eski);
-      if (kaynak && kaynak !== 'hizli_gider') throw new HataMesaji(409, `Bu kayıt ${KAYNAK_YER[kaynak] || 'başka bir sekmeden'} yönetiliyor, buradan değiştirilemez.`);
+      if (kaynak !== 'hizli_gider') throw new HataMesaji(409, `Bu kayıt ${KAYNAK_YER[kaynak] || 'başka bir sekmeden'} yönetiliyor, buradan değiştirilemez.`);
       if (resource === 'harcamaSil') {
-        await grupDegistir(db, grupId, { faturalar: [], makbuzlar: [] });
+        const { error } = await db.rpc('m2_hizli_sil', { p_grup: grupId });
+        ozelKontrol(error);
         return res.status(200).json({ ok: true, grupId, oncesi: eski, sonrasi: { faturalar: [], makbuzlar: [] } });
       }
-      const yeni = JSON.parse(JSON.stringify(eski));
-      const tumu = [...yeni.faturalar, ...yeni.makbuzlar];
-      if (body.tutar !== undefined) {
-        const t = tutarCoz(body.tutar);
-        if (!(t > 0)) throw new HataMesaji(400, 'Tutar sıfırdan büyük olmalı');
-        yeni.faturalar.forEach((f) => {
-          const eskiTutar = Number(f.fatura_tutari) || 0;
-          if (f.kdv !== null && f.kdv !== undefined && eskiTutar > 0) f.kdv = r2((Number(f.kdv) || 0) * (t / eskiTutar));
-          f.fatura_tutari = t;
-        });
-        yeni.makbuzlar.forEach((m) => (m.tutar = t));
+      // Tutar, açıklama ve tarih sırayla (her biri tek işlemde, tüm satırlarda); işaret "elle değiştirildi" olarak tutulur.
+      const anaSatir = eski.faturalar[0] || eski.makbuzlar.find((m) => !m.otomatik);
+      const anaTip = eski.faturalar[0] ? 'fatura' : 'makbuz';
+      let degisti = false;
+      for (const alan of ['tutar', 'aciklama', 'tarih']) {
+        if (body[alan] === undefined || body[alan] === null) continue;
+        if (alan !== 'aciklama' && String(body[alan]).trim() === '') continue;
+        const guncel = await duzSatirBul(db, anaSatir.id);
+        const girdi = await kaynakVeriTopla(db, guncel, alan);
+        Object.assign(girdi, { alan, deger: body[alan] });
+        await durumYaz(db, kaynakDegisiklikHesapla({ ...girdi, tip: anaTip }).yeni);
+        degisti = true;
       }
-      if (body.aciklama !== undefined) {
-        const satir = yeni.faturalar[0] || yeni.makbuzlar.find((m) => !m.otomatik);
-        if (satir) satir.aciklama = metin(body.aciklama);
-      }
-      if (body.tarih) {
-        const tarih = tarihKontrol(body.tarih);
-        tumu.forEach((r) => (r.tarih = tarih));
-      }
-      await grupDegistir(db, grupId, yeni);
+      if (!degisti) return res.status(200).json({ ok: true, grupId, oncesi: eski, sonrasi: eski });
       return res.status(200).json({ ok: true, grupId, oncesi: eski, sonrasi: await grupOku(db, grupId) });
+    }
+
+    // Datalar'dan tek satır düzenleme: bağlı kaynak kaydı da aynı işlemde değişir (bkz. kaynakDegisiklikHesapla).
+    if (resource === 'datalarDegistir') {
+      const j = await datalarDegistir(db, body);
+      return res.status(200).json(j);
+    }
+    if (resource === 'datalarSil') {
+      const j = await datalarSil(db, body);
+      return res.status(200).json(j);
+    }
+    // Geri al / ileri al: önceden döndürülen tam durum olduğu gibi yazılır.
+    if (resource === 'datalarDurumYaz') {
+      const d = body.durum;
+      if (!d || typeof d !== 'object') throw new HataMesaji(400, 'durum gerekli');
+      await durumYaz(db, { faturalar: d.faturalar || [], makbuzlar: d.makbuzlar || [], yan: d.yan || {} });
+      return res.status(200).json({ ok: true });
     }
 
     // Günsonu Geliri'ni kayıtlı günsonu verisinden yeniden hesaplar (idempotent: aynı gün tek kayıt, tekrar kaydedince güncellenir).

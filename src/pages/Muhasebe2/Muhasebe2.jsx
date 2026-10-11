@@ -22,7 +22,7 @@ import useIsMobile from '../../hooks/useIsMobile';
 const FATURA_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi', 'Ortaklar', 'Cari'];
 const MAKBUZ_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi', 'Ortaklar'];
 const MAKS_GECMIS = 3;
-const KAYNAK_ETIKET = { yemek_karti: 'Yemek Kartları', tahakkuk: 'Tahakkuklar', avans: 'Personel Klasörü', izin: 'Personel Klasörü', devir: 'Devir', hizli_gider: 'Harcama' };
+const KAYNAK_ETIKET = { yemek_karti: 'Yemek Kartları', tahakkuk: 'Tahakkuklar', avans: 'Personel Klasörü', izin: 'Personel Klasörü', devir: 'Devir', hizli_gider: 'Harcama', gunsonu: 'Günsonları' };
 
 // XML faturadaki tedarikçi adını Muhasebe2 firmalarıyla eşler (tam eşleşme, sonra kelime benzerliği).
 const FIRMA_DURAK = new Set(['ltd', 'sti', 'şti', 'as', 'aş', 'a.ş', 'a.ş.', 'san', 'tic', 've', 'limited', 'anonim', 'sirketi', 'şirketi', 'ticaret', 'sanayi', 'gida', 'gıda', 'paz', 'pazarlama', 'ith', 'ihr']);
@@ -107,8 +107,14 @@ export default function Muhasebe2({ onNavigate }) {
 
   // Her işlem sunucudan {grupId, oncesi, sonrasi} anlık görüntüsüyle döner; geri alma bunları kullanır.
   const gecmiseEkle = useCallback((sonuc, etiket) => {
+    let kayit;
+    if (sonuc.geri) kayit = { tur: 'datalar', geri: sonuc.geri, ileri: sonuc.ileri, etiket };
+    else if (sonuc.gunsonu) kayit = { tur: 'gunsonu', oncesi: sonuc.gunsonu.oncesi, sonrasi: sonuc.gunsonu.sonrasi, etiket };
+    else if (sonuc.hizliSil) kayit = { tur: 'hizliSil', grupId: sonuc.hizliSil.grupId, oncesi: sonuc.hizliSil.oncesi, etiket };
+    else if (!sonuc.sonrasi) return; // geri alınamayan işlem
+    else kayit = { grupId: sonuc.grupId, oncesi: sonuc.oncesi, sonrasi: sonuc.sonrasi, etiket };
     setGecmis((g) => {
-      const liste = [...g.liste.slice(0, g.index + 1), { grupId: sonuc.grupId, oncesi: sonuc.oncesi, sonrasi: sonuc.sonrasi, etiket }].slice(-MAKS_GECMIS);
+      const liste = [...g.liste.slice(0, g.index + 1), kayit].slice(-MAKS_GECMIS);
       return { liste, index: liste.length - 1 };
     });
   }, []);
@@ -121,14 +127,26 @@ export default function Muhasebe2({ onNavigate }) {
       if (!hedef) return;
       islemKilidi.current = true;
       try {
-        await api('kayitGeriYaz', {
-          method: 'POST',
-          body: {
-            grupId: hedef.grupId,
-            beklenen: yon === 'geri' ? hedef.sonrasi : hedef.oncesi,
-            yazilacak: yon === 'geri' ? hedef.oncesi : hedef.sonrasi,
-          },
-        });
+        if (hedef.tur === 'datalar') {
+          await api('datalarDurumYaz', { method: 'POST', body: { durum: yon === 'geri' ? hedef.geri : hedef.ileri } });
+        } else if (hedef.tur === 'gunsonu') {
+          await api('gunsonuGeriYaz', {
+            method: 'POST',
+            body: { beklenen: yon === 'geri' ? hedef.sonrasi : hedef.oncesi, yazilacak: yon === 'geri' ? hedef.oncesi : hedef.sonrasi },
+          });
+        } else if (hedef.tur === 'hizliSil') {
+          if (yon === 'geri') await api('hizliGiderGeriYaz', { method: 'POST', body: hedef.oncesi });
+          else await api('hizliGiderSil', { method: 'POST', body: { id: hedef.grupId } });
+        } else {
+          await api('kayitGeriYaz', {
+            method: 'POST',
+            body: {
+              grupId: hedef.grupId,
+              beklenen: yon === 'geri' ? hedef.sonrasi : hedef.oncesi,
+              yazilacak: yon === 'geri' ? hedef.oncesi : hedef.sonrasi,
+            },
+          });
+        }
         setGecmis((g) => ({ ...g, index: g.index + (yon === 'geri' ? -1 : 1) }));
         bildir(`${yon === 'geri' ? 'Geri alındı' : 'İleri alındı'}: ${hedef.etiket}`);
         setYenileSayac((n) => n + 1);
@@ -1015,17 +1033,44 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
       return null;
     }
   }
-  // Hızlı gider (Harcama modülü) kayıtları Datalar'dan da düzenlenir: tutar / tarih / açıklama grubun TÜM satırlarında birlikte değişir
-  // (günlük kasa harcaması ise Günsonları ve devir de defterden yeniden hesaplanır).
-  const hizliMi = (r) => r.kaynak === 'hizli_gider';
-  const hizliAnaSatirMi = (r) => {
+  // Datalar bilgi merkezidir: tüm kaynaklar buradan düzenlenir/silinir; bağlı kaynak kaydı (avans, izin, tahakkuk, yemek kartı,
+  // günsonu, devir) aynı işlemde sunucuda güncellenir ve satıra "elle" işareti düşer.
+  const tutarDeger = (r) => Math.abs(r.tutar ?? r.tahsilat ?? r.odemeTediye ?? 0);
+  const tutarAlani = (r) => (r.tutar != null ? 'tutar' : r.tahsilat != null ? 'tahsilat' : r.odemeTediye != null ? 'odemeTediye' : null);
+  const anaSatirMi = (r) => {
     const grup = (kayitlar || []).filter((x) => x.grupId === r.grupId);
     const ana = grup.find((x) => x.evrakTuru === 'Fatura/Fiş' || x.evrakTuru === 'İade Faturası') || grup.find((x) => !x.otomatik);
     return !!ana && ana.id === r.id;
   };
-  const hizliTutar = (r) => Math.abs(r.tutar ?? r.tahsilat ?? r.odemeTediye ?? 0);
-  const hizliDegistir = (r, alan, deger, etiket) => islemYap({ grupId: r.grupId, [alan]: deger }, 'harcamaDegistir', etiket, 'Harcama güncellendi; Günsonları ve devir yeniden hesaplandı');
+  const kaynakVar = (r) => !!r.kaynak;
+  const tutarDuzenlenir = (r) => kaynakVar(r) && tutarAlani(r) === 'tutar' && r.tutar !== 0;
+  const tarihDuzenlenir = (r) => kaynakVar(r) && r.kaynak !== 'gunsonu' && r.kaynak !== 'izin';
+  const aciklamaDuzenlenir = (r) => kaynakVar(r) && !['gunsonu', 'izin'].includes(r.kaynak) && !r.otomatik && (r.kaynak !== 'hizli_gider' || anaSatirMi(r));
+  const kategoriDuzenlenir = (r) => kaynakVar(r) && !['gunsonu', 'avans'].includes(r.kaynak) && (r.evrakTuru === 'Fatura/Fiş' || r.evrakTuru === 'İade Faturası');
+  const kasaDuzenlenir = (r) => (r.kaynak === 'hizli_gider' || r.kaynak === 'avans') && !!r.kasaGrubu;
+  const kaynakDegistir = (r, alan, deger, etiket) =>
+    islemYap({ satirId: r.id, grupId: r.grupId, alan, deger }, 'datalarDegistir', `${etiket}`, 'Güncellendi; bağlı kaynak kaydı ve Günsonları/devir yeniden hesaplandı');
   const alanDegistir = (r, alan, deger, etiket) => islemYap({ grupId: r.grupId, satirId: r.id, alan, deger }, 'kayitAlan', etiket);
+  const degistir = (r, alan, deger, etiket) => (kaynakVar(r) ? kaynakDegistir(r, alan, deger, etiket) : alanDegistir(r, alan, deger, etiket));
+  const KAYNAK_UYARI = {
+    avans: 'Personel avans kaydı da silinir (geri alınamaz).',
+    yemek_karti: 'Yemek kartı kesim/ödeme kaydı da silinir (geri alınamaz).',
+    tahakkuk: 'Tahakkuk kalemi/toplamı da güncellenir (geri alınamaz).',
+    devir: 'Devir kaydı silinir (geri alınamaz).',
+    hizli_gider: 'Günsonları ve devir yeniden hesaplanır.',
+  };
+  async function kaynakSil(r) {
+    const grup = (kayitlar || []).filter((x) => x.grupId === r.grupId);
+    const ek = KAYNAK_UYARI[r.kaynak] ? `\n\n${KAYNAK_UYARI[r.kaynak]}` : '';
+    const mesaj =
+      r.kaynak === 'hizli_gider' && grup.length > 1
+        ? `Bu harcama ${grup.length} satırdan oluşuyor:\n• ${grup.map((x) => x.evrakTuru).join('\n• ')}\n\nHepsi silinecek.${ek}\nEmin misiniz?`
+        : `${r.firmaAdi} — ${r.evrakTuru} kaydı silinecek.${ek}\nEmin misiniz?`;
+    if (!window.confirm(mesaj)) return;
+    const j = await islemYap({ satirId: r.id, grupId: r.grupId }, 'datalarSil', `${r.firmaAdi} kaydı silindi`, 'Kayıt silindi; bağlı kaynak kaydı da güncellendi');
+    // yalnızca hızlı gider silme geri alınabilir (diğerleri kaynak tablolarını da etkilediği için)
+    if (j && r.kaynak === 'hizli_gider' && j.oncesi) onIslem({ hizliSil: { grupId: r.grupId, oncesi: j.oncesi } }, `${r.firmaAdi} harcaması silindi`);
+  }
   function grupSil(r) {
     const grup = (kayitlar || []).filter((x) => x.grupId === r.grupId);
     const mesaj =
@@ -1106,39 +1151,56 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
             {gorunen.map((r) => (
               <tr key={r.id} className={r.otomatik ? 'oto' : ''}>
                 <td className="nowrap">
-                  <DuzenlenebilirHucre aktif={duzenlemeModu && (!r.kaynak || hizliMi(r))} tur="date" deger={r.tarih} metin={tarihTR(r.tarih)} onKaydet={(v) => (hizliMi(r) ? hizliDegistir(r, 'tarih', v, 'harcama tarihi') : alanDegistir(r, 'tarih', v, 'tarih değişikliği'))} />
+                  <DuzenlenebilirHucre aktif={duzenlemeModu && (!r.kaynak || tarihDuzenlenir(r))} tur="date" deger={r.tarih} metin={tarihTR(r.tarih)} onKaydet={(v) => degistir(r, 'tarih', v, 'tarih değişikliği')} />
                 </td>
                 <td className="nowrap">
                   <span className={`m2-badge ${EVRAK_SINIFI[r.evrakTuru] || ''}`}>{r.evrakTuru}</span>
                 </td>
-                <td>{r.firmaAdi}</td>
+                <td>
+                  {r.firmaAdi}
+                  {r.elleDegisti && (
+                    <span className="m2-elle" title="Bu kayıt Datalar'dan elle değiştirildi">
+                      {' '}✎ elle
+                    </span>
+                  )}
+                </td>
                 <td>
                   <DuzenlenebilirHucre aktif={duzenlemeModu && !r.kaynak} deger={r.faturaNo} metin={r.faturaNo} onKaydet={(v) => alanDegistir(r, 'faturaNo', v, 'fatura no değişikliği')} />
                 </td>
                 <td>
-                  <DuzenlenebilirHucre aktif={duzenlemeModu && ((!r.kaynak && !r.otomatik) || (hizliMi(r) && hizliAnaSatirMi(r)))} deger={r.aciklama} metin={r.aciklama} onKaydet={(v) => (hizliMi(r) ? hizliDegistir(r, 'aciklama', v, 'harcama açıklaması') : alanDegistir(r, 'aciklama', v, 'açıklama değişikliği'))} />
+                  <DuzenlenebilirHucre aktif={duzenlemeModu && ((!r.kaynak && !r.otomatik) || aciklamaDuzenlenir(r))} deger={r.aciklama} metin={r.aciklama} onKaydet={(v) => degistir(r, 'aciklama', v, 'açıklama değişikliği')} />
                 </td>
                 <td>
                   <DuzenlenebilirHucre
-                    aktif={duzenlemeModu && !r.kaynak && (r.evrakTuru === 'Fatura/Fiş' || r.evrakTuru === 'İade Faturası')}
+                    aktif={duzenlemeModu && (kaynakVar(r) ? kategoriDuzenlenir(r) : r.evrakTuru === 'Fatura/Fiş' || r.evrakTuru === 'İade Faturası')}
                     tur="select"
                     secenekler={kategoriler}
                     deger={r.giderKategorisi}
                     metin={r.giderKategorisi}
-                    onKaydet={(v) => alanDegistir(r, 'giderKategorisi', v, 'kategori değişikliği')}
+                    onKaydet={(v) => degistir(r, 'giderKategorisi', v, 'kategori değişikliği')}
                   />
                 </td>
                 <td className="nowrap">{r.odemeTuru}</td>
-                <td className="nowrap">{r.odemeSekli}</td>
+                <td className="nowrap">
+                  <DuzenlenebilirHucre
+                    aktif={duzenlemeModu && kasaDuzenlenir(r)}
+                    tur="select"
+                    secenekler={['gunluk', 'ana']}
+                    deger={r.kasaGrubu}
+                    metin={r.odemeSekli}
+                    onKaydet={(v) => kaynakDegistir(r, 'kasaGrubu', v, 'kasa değişikliği')}
+                  />
+                  {kasaDuzenlenir(r) && duzenlemeModu && r.kasaGrubu && <span className="m2-elle"> ({r.kasaGrubu === 'gunluk' ? 'günlük' : 'ana'} kasa)</span>}
+                </td>
                 <td className={`sayi ${r.tutar < 0 ? 'm2-neg' : ''}`}>
-                  <DuzenlenebilirHucre aktif={duzenlemeModu && hizliMi(r) && r.tutar != null} deger={String(hizliTutar(r))} metin={para(r.tutar)} onKaydet={(v) => hizliDegistir(r, 'tutar', v, 'harcama tutarı')} />
+                  <DuzenlenebilirHucre aktif={duzenlemeModu && tutarDuzenlenir(r)} deger={String(tutarDeger(r))} metin={para(r.tutar)} onKaydet={(v) => kaynakDegistir(r, 'tutar', v, 'tutar değişikliği')} />
                 </td>
                 <td className={`sayi ${r.kdv < 0 ? 'm2-neg' : ''}`}>{para(r.kdv)}</td>
                 <td className="sayi">
-                  <DuzenlenebilirHucre aktif={duzenlemeModu && hizliMi(r) && r.tutar == null && r.tahsilat != null} deger={String(hizliTutar(r))} metin={para(r.tahsilat)} onKaydet={(v) => hizliDegistir(r, 'tutar', v, 'harcama tutarı')} />
+                  <DuzenlenebilirHucre aktif={duzenlemeModu && kaynakVar(r) && r.tutar == null && r.tahsilat != null} deger={String(tutarDeger(r))} metin={para(r.tahsilat)} onKaydet={(v) => kaynakDegistir(r, 'tutar', v, 'tutar değişikliği')} />
                 </td>
                 <td className="sayi">
-                  <DuzenlenebilirHucre aktif={duzenlemeModu && hizliMi(r) && r.tutar == null && r.tahsilat == null && r.odemeTediye != null} deger={String(hizliTutar(r))} metin={para(r.odemeTediye)} onKaydet={(v) => hizliDegistir(r, 'tutar', v, 'harcama tutarı')} />
+                  <DuzenlenebilirHucre aktif={duzenlemeModu && kaynakVar(r) && r.tutar == null && r.tahsilat == null && r.odemeTediye != null} deger={String(tutarDeger(r))} metin={para(r.odemeTediye)} onKaydet={(v) => kaynakDegistir(r, 'tutar', v, 'tutar değişikliği')} />
                 </td>
                 {mobil && (() => {
                   const m = [r.tutar, r.tahsilat, r.odemeTediye].find((x) => x !== null && x !== undefined && x !== 0);
@@ -1146,24 +1208,16 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
                 })()}
                 {duzenlemeModu && (
                   <td>
-                    {hizliMi(r) ? (
+                    {r.kaynak === 'izin' || r.kaynak === 'gunsonu' ? (
+                      <span className="m2-kilit" title={r.kaynak === 'izin' ? "İzin silme Personel Klasörü'nden" : 'Günsonu silme Günsonları sekmesinden'}>
+                        🔒 {KAYNAK_ETIKET[r.kaynak] || r.kaynak}
+                      </span>
+                    ) : r.kaynak ? (
                       <div className="m2-yk-islem">
-                        <button
-                          className="m2-btn sec mini"
-                          onClick={() => {
-                            const grup = (kayitlar || []).filter((x) => x.grupId === r.grupId);
-                            if (window.confirm(`Bu harcama ${grup.length} satırdan oluşuyor:\n• ${grup.map((x) => x.evrakTuru).join('\n• ')}\n\nHepsi silinecek (Günsonları ve devir yeniden hesaplanır). Emin misiniz?`)) {
-                              islemYap({ grupId: r.grupId }, 'harcamaSil', `${r.firmaAdi} harcaması silindi`, 'Harcama silindi (Ctrl+Z ile geri alabilirsiniz)');
-                            }
-                          }}
-                        >
+                        <button className="m2-btn sec mini" onClick={() => kaynakSil(r)}>
                           Sil
                         </button>
                       </div>
-                    ) : r.kaynak ? (
-                      <span className="m2-kilit" title={`Bu kayıt ${KAYNAK_ETIKET[r.kaynak] || 'başka bir sekmeden'} yönetilir`}>
-                        🔒 {KAYNAK_ETIKET[r.kaynak] || r.kaynak}
-                      </span>
                     ) : (
                       <div className="m2-yk-islem">
                         <button className="m2-btn sec mini" onClick={() => setDuzenleGrup(r.grupId)}>
@@ -1584,7 +1638,17 @@ function EkstreModal({ firma, bildir, onKapat }) {
                     <td className="nowrap">{r.evrakTuru}</td>
                     <td>{r.belgeNo}</td>
                     <td>{r.aciklama}</td>
-                    <td className="nowrap">{r.odemeSekli}</td>
+                    <td className="nowrap">
+                  <DuzenlenebilirHucre
+                    aktif={duzenlemeModu && kasaDuzenlenir(r)}
+                    tur="select"
+                    secenekler={['gunluk', 'ana']}
+                    deger={r.kasaGrubu}
+                    metin={r.odemeSekli}
+                    onKaydet={(v) => kaynakDegistir(r, 'kasaGrubu', v, 'kasa değişikliği')}
+                  />
+                  {kasaDuzenlenir(r) && duzenlemeModu && r.kasaGrubu && <span className="m2-elle"> ({r.kasaGrubu === 'gunluk' ? 'günlük' : 'ana'} kasa)</span>}
+                </td>
                     <td className="sayi">{r.borc ? paraFmt(r.borc) : ''}</td>
                     <td className="sayi">{r.alacak ? paraFmt(r.alacak) : ''}</td>
                     <td className={`sayi bakiye ${durumBul(r.bakiye)}`}>{paraFmt(r.bakiye)}</td>

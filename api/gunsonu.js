@@ -141,7 +141,7 @@ export default async function handler(req, res) {
       // Aynı tarihe ait kayıt varsa üzerine yaz (o gün birden fazla kez kaydedilebilsin diye).
       // Postgres upsert bunu tek işlemde yapıyor — önce "var mı" diye okumaya gerek yok.
       const rowValues = recordToRow(req.body, saat);
-      const { error } = await db.from('gs_kayitlar').upsert(satirdanNesne(rowValues), { onConflict: 'tarih' });
+      const { error } = await db.from('gs_kayitlar').upsert({ ...satirdanNesne(rowValues), elle_degisti: null }, { onConflict: 'tarih' });
       if (error) throw new Error(`gün sonu kaydedilemedi: ${error.message}`);
 
       return res.status(200).json({ ok: true, tarih, saat });
