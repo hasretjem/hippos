@@ -1020,6 +1020,7 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
 
   // ---- Düzenleme Modu: hücre düzeltme, satır düzenle/sil (grubun TAMAMI birlikte değişir) ----
   const [duzenleGrup, setDuzenleGrup] = useState(null);
+  const [kaynakDuzenle, setKaynakDuzenle] = useState(null);
   async function islemYap(govde, kaynak, etiket, ekle) {
     try {
       const j = await api(kaynak, { method: 'POST', body: govde });
@@ -1047,6 +1048,7 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
   const tarihDuzenlenir = (r) => kaynakVar(r) && r.kaynak !== 'gunsonu' && r.kaynak !== 'izin';
   const aciklamaDuzenlenir = (r) => kaynakVar(r) && !['gunsonu', 'izin'].includes(r.kaynak) && !r.otomatik && (r.kaynak !== 'hizli_gider' || anaSatirMi(r));
   const kategoriDuzenlenir = (r) => kaynakVar(r) && !['gunsonu', 'avans'].includes(r.kaynak) && (r.evrakTuru === 'Fatura/Fiş' || r.evrakTuru === 'İade Faturası');
+  const kdvDuzenlenir = (r) => kaynakVar(r) && !['gunsonu', 'avans'].includes(r.kaynak) && r.kdv != null && (r.evrakTuru === 'Fatura/Fiş' || r.evrakTuru === 'İade Faturası');
   const kasaDuzenlenir = (r) => (r.kaynak === 'hizli_gider' || r.kaynak === 'avans') && !!r.kasaGrubu;
   const kaynakDegistir = (r, alan, deger, etiket) =>
     islemYap({ satirId: r.id, grupId: r.grupId, alan, deger }, 'datalarDegistir', `${etiket}`, 'Güncellendi; bağlı kaynak kaydı ve Günsonları/devir yeniden hesaplandı');
@@ -1195,7 +1197,9 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
                 <td className={`sayi ${r.tutar < 0 ? 'm2-neg' : ''}`}>
                   <DuzenlenebilirHucre aktif={duzenlemeModu && tutarDuzenlenir(r)} deger={String(tutarDeger(r))} metin={para(r.tutar)} onKaydet={(v) => kaynakDegistir(r, 'tutar', v, 'tutar değişikliği')} />
                 </td>
-                <td className={`sayi ${r.kdv < 0 ? 'm2-neg' : ''}`}>{para(r.kdv)}</td>
+                <td className={`sayi ${r.kdv < 0 ? 'm2-neg' : ''}`}>
+                  <DuzenlenebilirHucre aktif={duzenlemeModu && kdvDuzenlenir(r)} deger={r.kdv == null ? '' : String(Math.abs(r.kdv))} metin={para(r.kdv)} onKaydet={(v) => kaynakDegistir(r, 'kdv', v, 'KDV değişikliği')} />
+                </td>
                 <td className="sayi">
                   <DuzenlenebilirHucre aktif={duzenlemeModu && kaynakVar(r) && r.tutar == null && r.tahsilat != null} deger={String(tutarDeger(r))} metin={para(r.tahsilat)} onKaydet={(v) => kaynakDegistir(r, 'tutar', v, 'tutar değişikliği')} />
                 </td>
@@ -1209,11 +1213,19 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
                 {duzenlemeModu && (
                   <td>
                     {r.kaynak === 'izin' || r.kaynak === 'gunsonu' ? (
-                      <span className="m2-kilit" title={r.kaynak === 'izin' ? "İzin silme Personel Klasörü'nden" : 'Günsonu silme Günsonları sekmesinden'}>
-                        🔒 {KAYNAK_ETIKET[r.kaynak] || r.kaynak}
-                      </span>
+                      <div className="m2-yk-islem">
+                        <button className="m2-btn sec mini" onClick={() => setKaynakDuzenle(r)}>
+                          Düzenle
+                        </button>
+                        <span className="m2-kilit" title={r.kaynak === 'izin' ? "İzin silme Personel Klasörü'nden" : 'Günsonu silme Günsonları sekmesinden'}>
+                          🔒 Silme: {KAYNAK_ETIKET[r.kaynak] || r.kaynak}
+                        </span>
+                      </div>
                     ) : r.kaynak ? (
                       <div className="m2-yk-islem">
+                        <button className="m2-btn sec mini" onClick={() => setKaynakDuzenle(r)}>
+                          Düzenle
+                        </button>
                         <button className="m2-btn sec mini" onClick={() => kaynakSil(r)}>
                           Sil
                         </button>
@@ -1235,6 +1247,29 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
           </tbody>
         </table>
       </div>
+
+      {kaynakDuzenle && (
+        <KaynakDuzenleModal
+          satir={kaynakDuzenle}
+          kategoriler={kategoriler}
+          kategoriAktif={kategoriDuzenlenir(kaynakDuzenle)}
+          kdvAktif={kdvDuzenlenir(kaynakDuzenle)}
+          tarihAktif={tarihDuzenlenir(kaynakDuzenle)}
+          aciklamaAktif={aciklamaDuzenlenir(kaynakDuzenle)}
+          tutarAktif={tutarAlani(kaynakDuzenle) !== null}
+          kasaAktif={kasaDuzenlenir(kaynakDuzenle)}
+          tutarDeger={tutarDeger(kaynakDuzenle)}
+          onKapat={() => setKaynakDuzenle(null)}
+          onKaydet={async (degisimler) => {
+            for (const d of degisimler) {
+              const j = await islemYap({ satirId: kaynakDuzenle.id, grupId: kaynakDuzenle.grupId, alan: d.alan, deger: d.deger }, 'datalarDegistir', d.etiket);
+              if (!j) return false;
+            }
+            bildir('Güncellendi; bağlı kaynak kaydı ve Günsonları/devir yeniden hesaplandı');
+            return true;
+          }}
+        />
+      )}
 
       {duzenleGrup && (
         <KayitDuzenleModal
@@ -1746,6 +1781,81 @@ function DuzenlenebilirHucre({ aktif, tur = 'text', secenekler, deger, metin, on
 
 // Datalar'daki bir kaydı (fatura/fiş veya makbuz grubu) aynı form alanlarıyla düzenler.
 // Kaydedince grubun TÜM satırları (otomatik makbuzlar dahil) tek işlemde yeniden yazılır.
+// Kaynaklı (avans, izin, tahakkuk, yemek kartı, devir, günsonu, hızlı gider) satırlar için tek pencerede düzenleme.
+// Kapalı alanlar kaynağı başka yerden yönetildiği için değişmez; değişen alanlar sırayla uygulanır.
+function KaynakDuzenleModal({ satir, kategoriler, kategoriAktif, kdvAktif, tarihAktif, aciklamaAktif, tutarAktif, kasaAktif, tutarDeger, onKaydet, onKapat }) {
+  const [tarih, setTarih] = useState(satir.tarih || '');
+  const [aciklama, setAciklama] = useState(satir.aciklama || '');
+  const [kategori, setKategori] = useState(satir.giderKategorisi || '');
+  const [tutar, setTutar] = useState(String(tutarDeger));
+  const [kdv, setKdv] = useState(satir.kdv == null ? '' : String(Math.abs(satir.kdv)));
+  const [kasa, setKasa] = useState(satir.kasaGrubu || '');
+  const [bekliyor, setBekliyor] = useState(false);
+  const kapaliNeden = {
+    izin: "İzin tarihi/açıklaması Personel Klasörü'ndeki izin girişinden değişir.",
+    gunsonu: 'Günsonu kaydında yalnızca tutar değişir (diğerleri Günsonları sekmesinden).',
+    avans: 'Avans kaydında kategori ve KDV yoktur.',
+    yemek_karti: 'Yemek kartı kayıtlarında kasa seçimi yoktur.',
+    tahakkuk: 'Tahakkuk fişinde kasa seçimi yoktur.',
+    devir: 'Devir kaydında kasa seçimi yoktur.',
+  }[satir.kaynak];
+  async function kaydet() {
+    const d = [];
+    if (tutarAktif && tutar !== String(tutarDeger)) d.push({ alan: 'tutar', deger: tutar, etiket: 'tutar değişikliği' });
+    if (kdvAktif && kdv !== (satir.kdv == null ? '' : String(Math.abs(satir.kdv)))) d.push({ alan: 'kdv', deger: kdv, etiket: 'KDV değişikliği' });
+    if (tarihAktif && tarih !== (satir.tarih || '')) d.push({ alan: 'tarih', deger: tarih, etiket: 'tarih değişikliği' });
+    if (aciklamaAktif && aciklama !== (satir.aciklama || '')) d.push({ alan: 'aciklama', deger: aciklama, etiket: 'açıklama değişikliği' });
+    if (kategoriAktif && kategori !== (satir.giderKategorisi || '')) d.push({ alan: 'giderKategorisi', deger: kategori, etiket: 'kategori değişikliği' });
+    if (kasaAktif && kasa !== (satir.kasaGrubu || '')) d.push({ alan: 'kasaGrubu', deger: kasa, etiket: 'kasa değişikliği' });
+    if (!d.length) return onKapat();
+    setBekliyor(true);
+    const ok = await onKaydet(d);
+    setBekliyor(false);
+    if (ok) onKapat();
+  }
+  return (
+    <ModalKabuk baslik={`${satir.firmaAdi} — ${satir.evrakTuru}`} onKapat={onKapat}>
+      <label className="m2-label">Tarih</label>
+      <input className="m2-input" type="date" value={tarih} disabled={!tarihAktif} onChange={(e) => setTarih(e.target.value)} />
+      <label className="m2-label">Açıklama</label>
+      <input className="m2-input" value={aciklama} disabled={!aciklamaAktif} onChange={(e) => setAciklama(e.target.value)} />
+      {(kategoriAktif || satir.giderKategorisi) && (
+        <>
+          <label className="m2-label">Gider Kategorisi</label>
+          <select className="m2-select" value={kategori} disabled={!kategoriAktif} onChange={(e) => setKategori(e.target.value)}>
+            {!kategoriler.includes(kategori) && <option value={kategori}>{kategori || '—'}</option>}
+            {kategoriler.map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
+      <label className="m2-label">Tutar</label>
+      <input className="m2-input" value={tutar} disabled={!tutarAktif} onChange={(e) => setTutar(e.target.value)} />
+      {satir.kdv != null && (
+        <>
+          <label className="m2-label">KDV</label>
+          <input className="m2-input" value={kdv} disabled={!kdvAktif} onChange={(e) => setKdv(e.target.value)} />
+        </>
+      )}
+      {(kasaAktif || satir.kasaGrubu) && (
+        <>
+          <label className="m2-label">Kasa</label>
+          <select className="m2-select" value={kasa} disabled={!kasaAktif} onChange={(e) => setKasa(e.target.value)}>
+            <option value="gunluk">Günlük kasa</option>
+            <option value="ana">Ana kasa</option>
+          </select>
+        </>
+      )}
+      {kapaliNeden && <div className="m2-info">{kapaliNeden}</div>}
+      <div className="m2-info">Kaydedince bağlı kaynak kaydı da güncellenir ve satıra "✎ elle" işareti düşer.</div>
+      <ModalAksiyon onKapat={onKapat} onKaydet={kaydet} bekliyor={bekliyor} />
+    </ModalKabuk>
+  );
+}
+
 function KayitDuzenleModal({ grupId, veri, bildir, onKaydet, onKapat }) {
   const [grup, setGrup] = useState(null);
   const [hata, setHata] = useState('');

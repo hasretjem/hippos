@@ -1446,7 +1446,7 @@ async function gelirTazele(db, isoKume) {
 //  satırın bağlı olduğu kaynak kaydı da AYNI işlemde değişir ve "elle değiştirildi" işareti iki yerde de tutulur.
 //  Hesap saf fonksiyondur (kaynakDegisiklikHesapla); veritabanı okuma/yazma ayrıdır. Her işlem geri alınabilir durum döner.
 // ---------------------------------------------------------------------------
-const DUZ_ALANLAR = ['tutar', 'tarih', 'aciklama', 'giderKategorisi', 'kasaGrubu'];
+const DUZ_ALANLAR = ['tutar', 'tarih', 'aciklama', 'giderKategorisi', 'kasaGrubu', 'kdv'];
 const DUZ_FF = ['id', 'tarih', 'fatura_no', 'aciklama', 'gider_kategorisi', 'fatura_tutari', 'kdv', 'kasa_grubu', 'elle_degisti'];
 const DUZ_MK = ['id', 'tarih', 'fatura_no', 'aciklama', 'tutar', 'kasa_grubu', 'elle_degisti'];
 const duzSec = (r, k) => Object.fromEntries(k.map((x) => [x, r[x] === undefined ? null : r[x]]));
@@ -1465,6 +1465,8 @@ export function kaynakDegisiklikHesapla(g) {
   if (alan === 'tutar' && !(t > 0)) throw new HataMesaji(400, 'Tutar sıfırdan büyük olmalı (iade/eksi yön kayıtta zaten saklı)');
   let tarih = null;
   if (alan === 'tarih') tarih = tarihKontrol(g.deger);
+  if (alan === 'kdv' && tip !== 'fatura') throw new HataMesaji(400, 'KDV yalnızca fatura/fiş satırında değişir');
+  const kdvYeni = alan === 'kdv' ? kdvCoz(g.deger, Number(satir.fatura_tutari) || 0) : null;
   const kasaGrubu = alan === 'kasaGrubu' ? (g.deger === 'gunluk' ? 'gunluk' : g.deger === 'ana' ? 'ana' : null) : null;
   if (alan === 'kasaGrubu' && !kasaGrubu) throw new HataMesaji(400, 'Kasa seçimi geçersiz');
 
@@ -1481,6 +1483,7 @@ export function kaynakDegisiklikHesapla(g) {
     else if (alan === 'aciklama') o.aciklama = metin(g.deger);
     else if (alan === 'giderKategorisi') o.gider_kategorisi = String(g.deger || '').trim();
     else if (alan === 'kasaGrubu') o.kasa_grubu = kasaGrubu;
+    else if (alan === 'kdv') o.kdv = kdvYeni;
     return o;
   };
   const duzenlenecek = []; // {tip, satir, yama}
@@ -1502,7 +1505,7 @@ export function kaynakDegisiklikHesapla(g) {
   } else if (kaynak === 'avans') {
     const a = g.avans;
     if (!a) throw new HataMesaji(404, 'Avans kaydı bulunamadı');
-    if (alan === 'giderKategorisi') throw new HataMesaji(400, 'Avans kaydında kategori yok');
+    if (alan === 'giderKategorisi' || alan === 'kdv') throw new HataMesaji(400, 'Avans kaydında kategori/KDV yok');
     const aEski = { grup_id: a.grup_id, tarih: a.tarih, tutar: Number(a.tutar), aciklama: a.aciklama || '', elle: !!a.elle_degisti };
     const aYeni = { ...aEski, elle };
     if (alan === 'tutar') {
@@ -1530,7 +1533,7 @@ export function kaynakDegisiklikHesapla(g) {
       yanEski = { izinler: izinler.map((z) => ({ id: z.id, kesinti: Number(z.kesinti), elle: !!z.elle_degisti })) };
       yanYeni = { izinler: izinler.map((z, i) => ({ id: z.id, kesinti: paylar[i] / 100, elle })) };
       ekle('fatura', satir);
-    } else if (alan === 'giderKategorisi') ekle('fatura', satir);
+    } else if (alan === 'giderKategorisi' || alan === 'kdv') ekle('fatura', satir);
     else throw new HataMesaji(409, "İzin kaydının tarihi ve açıklaması Personel Klasörü'ndeki izin girişinden değiştirilir");
   } else if (kaynak === 'tahakkuk') {
     if (tip !== 'fatura') throw new HataMesaji(400, 'Geçersiz tahakkuk satırı');
@@ -1571,6 +1574,10 @@ export function kaynakDegisiklikHesapla(g) {
       } else if (alan === 'tarih') {
         hepsi().forEach(([k, r]) => ekle(k, r));
         yeniK.fatura_tarihi = tarih;
+      } else if (alan === 'kdv') {
+        if (kdvYeni === null) throw new HataMesaji(400, 'Yemek kartı kesintisinde KDV boş bırakılamaz');
+        Object.assign(yeniK, { kesinti_kdv: kdvYeni, kesinti_matrah: r2(eskiK.kesinti_toplami - kdvYeni) });
+        ekle('fatura', satir);
       } else ekle(tip, satir);
       yanEski = { kesim: eskiK };
       yanYeni = { kesim: yeniK };
@@ -1578,7 +1585,7 @@ export function kaynakDegisiklikHesapla(g) {
       const o = g.odeme;
       const eskiO = { id: o.id, tutar: Number(o.tutar), gelis_tarihi: o.gelis_tarihi, elle: !!o.elle_degisti };
       const yeniO = { ...eskiO, elle };
-      if (alan === 'giderKategorisi') throw new HataMesaji(400, 'Bu kayıtta kategori yok');
+      if (alan === 'giderKategorisi' || alan === 'kdv') throw new HataMesaji(400, 'Bu kayıtta kategori/KDV yok');
       if (alan === 'tutar') {
         grup.makbuzlar.forEach((r) => ekle('makbuz', r));
         yeniO.tutar = t;
