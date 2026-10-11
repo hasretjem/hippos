@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayiFmt, tarihTR, useModalKaydet } from './m2Ortak';
+import { ElleRozet, ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayiFmt, tarihTR, useModalKaydet } from './m2Ortak';
 
 // ---------------------------------------------------------------------------
 // Tahakkuklar: fiş/fatura gelmeden ödeme yapılan giderleri (personel maaşı, sabit giderler) gider yapar.
@@ -157,6 +157,7 @@ export default function TahakkuklarSekmesi({ aktif, bildir, kategoriler, onDegis
                   <tr key={p.id}>
                     <td>
                       <strong>{p.adSoyad}</strong>
+                      <ElleRozet var={p.elleDegisti} />
                     </td>
                     <td>{p.gorev}</td>
                     <td className="sayi">{TL(p.maas)}</td>
@@ -229,6 +230,7 @@ export default function TahakkuklarSekmesi({ aktif, bildir, kategoriler, onDegis
                   <tr key={g.id}>
                     <td>
                       <strong>{g.ad}</strong>
+                      <ElleRozet var={g.elleDegisti} />
                     </td>
                     <td>{g.kategori}</td>
                     <td className="sayi">{TL(g.tutar)}</td>
@@ -403,7 +405,10 @@ function DetayModal({ personel, donem, onKapat }) {
                     <td className="nowrap">{tarihTR(i.tarih)}</td>
                     <td>{i.tur === 'Yarım' ? 'Yarım gün' : 'Tam gün'}</td>
                     <td className="sayi">{TL(i.kesinti)}</td>
-                    <td>{i.sebep}</td>
+                    <td>
+                      {i.sebep}
+                      <ElleRozet var={i.elleDegisti} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -442,7 +447,10 @@ function DetayModal({ personel, donem, onKapat }) {
                     <td className="nowrap">{tarihTR(a.tarih)}</td>
                     <td className="sayi">{TL(a.tutar)}</td>
                     <td>{a.odemeSekli}</td>
-                    <td>{a.aciklama}</td>
+                    <td>
+                      {a.aciklama}
+                      <ElleRozet var={a.elleDegisti} />
+                    </td>
                   </tr>
                 ))}
               </tbody>

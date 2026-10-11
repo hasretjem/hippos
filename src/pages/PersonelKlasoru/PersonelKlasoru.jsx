@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, Eye, EyeOff, Plus } from 'lucide-react';
-import { CekmeceKutusu, ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, tarihTR, trNorm, useModalKaydet } from '../Muhasebe2/m2Ortak';
+import { CekmeceKutusu, ElleRozet, ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, tarihTR, trNorm, useModalKaydet } from '../Muhasebe2/m2Ortak';
 import '../Muhasebe2/Muhasebe2.css';
 import './PersonelKlasoru.css';
 
@@ -365,7 +365,10 @@ function PersonelDetay({ id, bildir, yontemler, onDegisti }) {
                   <td className="nowrap">{tarihTR(i.tarih)}</td>
                   <td>{i.tur === 'Yarım' ? 'Yarım gün' : 'Tam gün'}</td>
                   <td className="sayi">{goster ? TL(i.kesinti) : GIZLI}</td>
-                  <td>{i.sebep}</td>
+                  <td>
+                    {i.sebep}
+                    <ElleRozet var={i.elleDegisti} />
+                  </td>
                   <td>
                     <div className="m2-yk-islem">
                       <button className="m2-btn sec mini" disabled={kilit} onClick={() => setIzinModal({ kayit: i })}>
@@ -413,7 +416,10 @@ function PersonelDetay({ id, bildir, yontemler, onDegisti }) {
                   <td className="nowrap">{tarihTR(a.tarih)}</td>
                   <td className="sayi">{TL(a.tutar)}</td>
                   <td>{a.odemeSekli}</td>
-                  <td>{a.aciklama}</td>
+                  <td>
+                    {a.aciklama}
+                    <ElleRozet var={a.elleDegisti} />
+                  </td>
                   <td>
                     <div className="m2-yk-islem">
                       <button className="m2-btn sec mini" onClick={() => setAvansModal({ kayit: a })}>

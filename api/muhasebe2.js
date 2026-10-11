@@ -439,6 +439,7 @@ const kartCamel = (k) => ({
 });
 const kesimCamel = (k) => ({
   id: k.id,
+  elleDegisti: !!k.elle_degisti,
   faturaTarihi: k.fatura_tarihi,
   vade: k.vade || '',
   matrah: sayiN(k.matrah),
@@ -909,7 +910,7 @@ async function tahakkukVeri(db, donem) {
       : { maas, calisilanGun: pt.calisilanGun, ucretliGun: pt.ucretliGun, izinGun: pt.izinGun, brut: pt.brut, kesinti: pt.kesinti, net: pt.net };
     const avans = r2((ar.data || []).filter((a) => a.personel_id === p.id && String(a.tarih).startsWith(donem)).reduce((x, a) => x + Number(a.tutar), 0));
     const b = bakiye.get(p.firma_id) || 0;
-    personeller.push({ id: p.id, adSoyad: p.ad_soyad, gorev: p.gorev || '', firmaId: p.firma_id, ...snap, avans, bakiye: r2(b), odenecek: r2(b + (tahakkuk ? 0 : snap.brut)), fisYazilir: snap.brut > 0 });
+    personeller.push({ elleDegisti: !!(kalem && kalem.elle_degisti), id: p.id, adSoyad: p.ad_soyad, gorev: p.gorev || '', firmaId: p.firma_id, ...snap, avans, bakiye: r2(b), odenecek: r2(b + (tahakkuk ? 0 : snap.brut)), fisYazilir: snap.brut > 0 });
   });
   personeller.sort((a, b) => a.adSoyad.localeCompare(b.adSoyad, 'tr'));
 
@@ -924,7 +925,7 @@ async function tahakkukVeri(db, donem) {
       .filter((k) => k.tur === 'Sabit Gider')
       .map((k) => {
         const g = giderler.find((x) => x.id === k.kaynak_id);
-        return { id: k.kaynak_id, ad: k.ad, tutar: sayiN(k.net), kdv: g ? g.kdv : null, kategori: g ? g.kategori : '', baslangicDonem: g ? g.baslangicDonem : '', pasifDonem: g ? g.pasifDonem : '', firmaId: k.firma_id };
+        return { elleDegisti: !!k.elle_degisti, id: k.kaynak_id, ad: k.ad, tutar: sayiN(k.net), kdv: g ? g.kdv : null, kategori: g ? g.kategori : '', baslangicDonem: g ? g.baslangicDonem : '', pasifDonem: g ? g.pasifDonem : '', firmaId: k.firma_id };
       });
   } else {
     sabitGiderler = giderler.filter(gecerli);
@@ -1968,7 +1969,7 @@ export default async function handler(req, res) {
             ? (od.data || [])
                 .filter((o) => o.kesim_id === kes.id)
                 .sort((a, b) => (a.gelis_tarihi < b.gelis_tarihi ? -1 : 1))
-                .map((o) => ({ id: o.id, tutar: sayiN(o.tutar), gelisTarihi: o.gelis_tarihi, hesapAdi: o.hesap_adi }))
+                .map((o) => ({ id: o.id, tutar: sayiN(o.tutar), gelisTarihi: o.gelis_tarihi, hesapAdi: o.hesap_adi, elleDegisti: !!o.elle_degisti }))
             : [];
           const gelenToplam = r2(odemeler.reduce((x, o) => x + o.tutar, 0));
           const ar = aralik.get(k.id);
@@ -2069,11 +2070,11 @@ export default async function handler(req, res) {
         puantaj,
         izinler: izinler
           .filter((i) => String(i.tarih).startsWith(donem))
-          .map((i) => ({ id: i.id, tarih: i.tarih, tur: i.tur, sebep: i.sebep || '', grupId: i.grup_id || null, ...(goster ? { kesinti: Number(i.kesinti) } : {}) })),
+          .map((i) => ({ id: i.id, tarih: i.tarih, tur: i.tur, sebep: i.sebep || '', grupId: i.grup_id || null, elleDegisti: !!i.elle_degisti, ...(goster ? { kesinti: Number(i.kesinti) } : {}) })),
         avanslar: (av.data || [])
           .filter((a) => String(a.tarih).startsWith(donem))
           .sort((a, b) => (a.tarih < b.tarih ? -1 : 1))
-          .map((a) => ({ id: a.id, tarih: a.tarih, tutar: Number(a.tutar), odemeTuru: a.odeme_turu, odemeSekli: a.kasa || a.odeme_hesabi || '', aciklama: a.aciklama || '' })),
+          .map((a) => ({ id: a.id, tarih: a.tarih, tutar: Number(a.tutar), odemeTuru: a.odeme_turu, odemeSekli: a.kasa || a.odeme_hesabi || '', aciklama: a.aciklama || '', elleDegisti: !!a.elle_degisti })),
         notlar: goster ? (nt.data || []).sort((a, b) => (a.kayit_zamani < b.kayit_zamani ? 1 : -1)).map((n) => ({ id: n.id, tarih: n.kayit_zamani, metin: n.metin })) : null,
       });
     }
@@ -2134,9 +2135,9 @@ export default async function handler(req, res) {
         adSoyad: per.ad_soyad,
         donem,
         izinler: (iz.data || []).filter((i) => String(i.tarih).startsWith(donem)).sort((a, b) => (a.tarih < b.tarih ? -1 : 1))
-          .map((i) => ({ id: i.id, tarih: i.tarih, tur: i.tur, kesinti: Number(i.kesinti), sebep: i.sebep || '' })),
+          .map((i) => ({ id: i.id, tarih: i.tarih, tur: i.tur, kesinti: Number(i.kesinti), sebep: i.sebep || '', elleDegisti: !!i.elle_degisti })),
         avanslar: (av.data || []).filter((a) => String(a.tarih).startsWith(donem)).sort((a, b) => (a.tarih < b.tarih ? -1 : 1))
-          .map((a) => ({ id: a.id, tarih: a.tarih, tutar: Number(a.tutar), odemeSekli: a.kasa || a.odeme_hesabi || '', aciklama: a.aciklama || '' })),
+          .map((a) => ({ id: a.id, tarih: a.tarih, tutar: Number(a.tutar), odemeSekli: a.kasa || a.odeme_hesabi || '', aciklama: a.aciklama || '', elleDegisti: !!a.elle_degisti })),
       });
     }
 

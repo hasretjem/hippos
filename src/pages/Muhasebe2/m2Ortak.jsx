@@ -100,3 +100,12 @@ export function CekmeceKutusu({ deger, onChange }) {
     </label>
   );
 }
+// Datalar'dan elle değiştirilmiş kayıtlar için küçük rozet.
+export function ElleRozet({ var: gorunur = true, yazi = '✎ elle', ipucu = "Bu kayıt Muhasebe → Datalar'dan elle değiştirildi" }) {
+  if (!gorunur) return null;
+  return (
+    <span className="m2-elle" title={ipucu}>
+      {' '}{yazi}
+    </span>
+  );
+}

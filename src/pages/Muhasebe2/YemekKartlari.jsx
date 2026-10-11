@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, tarihTR, useModalKaydet } from './m2Ortak';
+import { ElleRozet, ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, tarihTR, useModalKaydet } from './m2Ortak';
 import { yemekKartiHesapla } from './yemekKartiHesap';
 
 // ---------------------------------------------------------------------------
@@ -159,6 +159,7 @@ export default function YemekKartlariSekmesi({ aktif, bildir, yontemler, onDegis
                 >
                   <td>
                     <strong>{s.kart.ad}</strong>
+                    <ElleRozet var={k && (k.elleDegisti || s.odemeler.some((o) => o.elleDegisti))} />
                     {s.cari && <span className="m2-sub">{s.cari.ad}</span>}
                   </td>
                   <td className="nowrap">{k ? tarihTR(k.faturaTarihi) : '—'}</td>
@@ -526,6 +527,7 @@ function ParaGeldiModal({ satir, bankalar, onKaydet, onGeriAl, onBitti, onKapat 
             <div key={o.id} className="m2-row" style={{ justifyContent: 'space-between', marginTop: 6 }}>
               <span>
                 {tarihTR(o.gelisTarihi)} • {o.hesapAdi} • <strong>{TL(o.tutar)}</strong>
+                <ElleRozet var={o.elleDegisti} />
               </span>
               <button className="m2-btn sec mini" onClick={() => geriAl(o)}>
                 Geri Al

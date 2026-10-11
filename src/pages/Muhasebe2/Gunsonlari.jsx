@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, ModalAksiyon, ModalKabuk, TL, useModalKaydet } from './m2Ortak';
+import { ElleRozet, api, ModalAksiyon, ModalKabuk, TL, useModalKaydet } from './m2Ortak';
 
 // Günsonları: Muhasebe1'deki "Gün Sonu Kayıtları" tablosunun aynısı (aynı gs_kayitlar verisi) + Düzenleme Modu'nda
 // Düzenle / Sil. Düzenleme toplamları (nakit, POS, yemek kartı, ciro) sunucuda otomatik hesaplanır. Devir ve harcama
@@ -224,8 +224,14 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
                     <td>{d ? AYLAR[d.m - 1] : '-'}</td>
                     <td>{d ? d.d : '-'}</td>
                     <td>{k.kaydedenSaat || '-'}</td>
-                    <td className="sayi">{sayiYaz(k.toplamNakitPara)}</td>
-                    <td className="sayi">{sayiYaz(k.posToplam)}</td>
+                    <td className="sayi">
+                      {sayiYaz(k.toplamNakitPara)}
+                      <ElleRozet var={k.elleDegisti?.nakit} yazi="✎" ipucu="Nakit toplamı Datalar'dan elle düzeltildi" />
+                    </td>
+                    <td className="sayi">
+                      {sayiYaz(k.posToplam)}
+                      <ElleRozet var={k.elleDegisti?.pos} yazi="✎" ipucu="POS toplamı Datalar'dan elle düzeltildi" />
+                    </td>
                     <td className="sayi">
                       {sayiYaz(anaH)}
                       {anaH > 0 && <DetayDugme onClick={() => setDetay({ tip: 'anaKasaHarcamalar', kayit: k })} />}
