@@ -22,7 +22,7 @@ import useIsMobile from '../../hooks/useIsMobile';
 const FATURA_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi', 'Ortaklar', 'Cari'];
 const MAKBUZ_ODEME_TURLERI = ['Nakit', 'Kredi Kartı', 'Banka Havalesi', 'Ortaklar'];
 const MAKS_GECMIS = 3;
-const KAYNAK_ETIKET = { yemek_karti: 'Yemek Kartları', tahakkuk: 'Tahakkuklar', avans: 'Personel Klasörü', izin: 'Personel Klasörü', devir: 'Devir' };
+const KAYNAK_ETIKET = { yemek_karti: 'Yemek Kartları', tahakkuk: 'Tahakkuklar', avans: 'Personel Klasörü', izin: 'Personel Klasörü', devir: 'Devir', hizli_gider: 'Harcama' };
 
 // XML faturadaki tedarikçi adını Muhasebe2 firmalarıyla eşler (tam eşleşme, sonra kelime benzerliği).
 const FIRMA_DURAK = new Set(['ltd', 'sti', 'şti', 'as', 'aş', 'a.ş', 'a.ş.', 'san', 'tic', 've', 'limited', 'anonim', 'sirketi', 'şirketi', 'ticaret', 'sanayi', 'gida', 'gıda', 'paz', 'pazarlama', 'ith', 'ihr']);
@@ -1015,6 +1015,16 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
       return null;
     }
   }
+  // Hızlı gider (Harcama modülü) kayıtları Datalar'dan da düzenlenir: tutar / tarih / açıklama grubun TÜM satırlarında birlikte değişir
+  // (günlük kasa harcaması ise Günsonları ve devir de defterden yeniden hesaplanır).
+  const hizliMi = (r) => r.kaynak === 'hizli_gider';
+  const hizliAnaSatirMi = (r) => {
+    const grup = (kayitlar || []).filter((x) => x.grupId === r.grupId);
+    const ana = grup.find((x) => x.evrakTuru === 'Fatura/Fiş' || x.evrakTuru === 'İade Faturası') || grup.find((x) => !x.otomatik);
+    return !!ana && ana.id === r.id;
+  };
+  const hizliTutar = (r) => Math.abs(r.tutar ?? r.tahsilat ?? r.odemeTediye ?? 0);
+  const hizliDegistir = (r, alan, deger, etiket) => islemYap({ grupId: r.grupId, [alan]: deger }, 'harcamaDegistir', etiket, 'Harcama güncellendi; Günsonları ve devir yeniden hesaplandı');
   const alanDegistir = (r, alan, deger, etiket) => islemYap({ grupId: r.grupId, satirId: r.id, alan, deger }, 'kayitAlan', etiket);
   function grupSil(r) {
     const grup = (kayitlar || []).filter((x) => x.grupId === r.grupId);
@@ -1096,7 +1106,7 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
             {gorunen.map((r) => (
               <tr key={r.id} className={r.otomatik ? 'oto' : ''}>
                 <td className="nowrap">
-                  <DuzenlenebilirHucre aktif={duzenlemeModu && !r.kaynak} tur="date" deger={r.tarih} metin={tarihTR(r.tarih)} onKaydet={(v) => alanDegistir(r, 'tarih', v, 'tarih değişikliği')} />
+                  <DuzenlenebilirHucre aktif={duzenlemeModu && (!r.kaynak || hizliMi(r))} tur="date" deger={r.tarih} metin={tarihTR(r.tarih)} onKaydet={(v) => (hizliMi(r) ? hizliDegistir(r, 'tarih', v, 'harcama tarihi') : alanDegistir(r, 'tarih', v, 'tarih değişikliği'))} />
                 </td>
                 <td className="nowrap">
                   <span className={`m2-badge ${EVRAK_SINIFI[r.evrakTuru] || ''}`}>{r.evrakTuru}</span>
@@ -1106,7 +1116,7 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
                   <DuzenlenebilirHucre aktif={duzenlemeModu && !r.kaynak} deger={r.faturaNo} metin={r.faturaNo} onKaydet={(v) => alanDegistir(r, 'faturaNo', v, 'fatura no değişikliği')} />
                 </td>
                 <td>
-                  <DuzenlenebilirHucre aktif={duzenlemeModu && !r.kaynak && !r.otomatik} deger={r.aciklama} metin={r.aciklama} onKaydet={(v) => alanDegistir(r, 'aciklama', v, 'açıklama değişikliği')} />
+                  <DuzenlenebilirHucre aktif={duzenlemeModu && ((!r.kaynak && !r.otomatik) || (hizliMi(r) && hizliAnaSatirMi(r)))} deger={r.aciklama} metin={r.aciklama} onKaydet={(v) => (hizliMi(r) ? hizliDegistir(r, 'aciklama', v, 'harcama açıklaması') : alanDegistir(r, 'aciklama', v, 'açıklama değişikliği'))} />
                 </td>
                 <td>
                   <DuzenlenebilirHucre
@@ -1120,17 +1130,37 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
                 </td>
                 <td className="nowrap">{r.odemeTuru}</td>
                 <td className="nowrap">{r.odemeSekli}</td>
-                <td className={`sayi ${r.tutar < 0 ? 'm2-neg' : ''}`}>{para(r.tutar)}</td>
+                <td className={`sayi ${r.tutar < 0 ? 'm2-neg' : ''}`}>
+                  <DuzenlenebilirHucre aktif={duzenlemeModu && hizliMi(r) && r.tutar != null} deger={String(hizliTutar(r))} metin={para(r.tutar)} onKaydet={(v) => hizliDegistir(r, 'tutar', v, 'harcama tutarı')} />
+                </td>
                 <td className={`sayi ${r.kdv < 0 ? 'm2-neg' : ''}`}>{para(r.kdv)}</td>
-                <td className="sayi">{para(r.tahsilat)}</td>
-                <td className="sayi">{para(r.odemeTediye)}</td>
+                <td className="sayi">
+                  <DuzenlenebilirHucre aktif={duzenlemeModu && hizliMi(r) && r.tutar == null && r.tahsilat != null} deger={String(hizliTutar(r))} metin={para(r.tahsilat)} onKaydet={(v) => hizliDegistir(r, 'tutar', v, 'harcama tutarı')} />
+                </td>
+                <td className="sayi">
+                  <DuzenlenebilirHucre aktif={duzenlemeModu && hizliMi(r) && r.tutar == null && r.tahsilat == null && r.odemeTediye != null} deger={String(hizliTutar(r))} metin={para(r.odemeTediye)} onKaydet={(v) => hizliDegistir(r, 'tutar', v, 'harcama tutarı')} />
+                </td>
                 {mobil && (() => {
                   const m = [r.tutar, r.tahsilat, r.odemeTediye].find((x) => x !== null && x !== undefined && x !== 0);
                   return <td className={`sayi ${m < 0 ? 'm2-neg' : ''}`}>{para(m)}</td>;
                 })()}
                 {duzenlemeModu && (
                   <td>
-                    {r.kaynak ? (
+                    {hizliMi(r) ? (
+                      <div className="m2-yk-islem">
+                        <button
+                          className="m2-btn sec mini"
+                          onClick={() => {
+                            const grup = (kayitlar || []).filter((x) => x.grupId === r.grupId);
+                            if (window.confirm(`Bu harcama ${grup.length} satırdan oluşuyor:\n• ${grup.map((x) => x.evrakTuru).join('\n• ')}\n\nHepsi silinecek (Günsonları ve devir yeniden hesaplanır). Emin misiniz?`)) {
+                              islemYap({ grupId: r.grupId }, 'harcamaSil', `${r.firmaAdi} harcaması silindi`, 'Harcama silindi (Ctrl+Z ile geri alabilirsiniz)');
+                            }
+                          }}
+                        >
+                          Sil
+                        </button>
+                      </div>
+                    ) : r.kaynak ? (
                       <span className="m2-kilit" title={`Bu kayıt ${KAYNAK_ETIKET[r.kaynak] || 'başka bir sekmeden'} yönetilir`}>
                         🔒 {KAYNAK_ETIKET[r.kaynak] || r.kaynak}
                       </span>
