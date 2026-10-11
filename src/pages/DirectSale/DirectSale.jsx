@@ -1349,6 +1349,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 })()}
               </div>
             )}
+            {mobil && (
+              <button
+                className="ds-msepet-ode"
+                disabled={isOrderEmpty || (isPaketEkrani && !!tableBosvars[selectedTable])}
+                onClick={() => { setMSepetAcik(false); setShowChangeCalc(false); setReceivedAmount(''); setPayMode(true); }}
+              >
+                <Wallet size={18} /> Ödeme Al
+              </button>
+            )}
           </div>
           {isPaketEkrani && paketciHareketleri.length > 0 && (
             <div className="ds-courier-panel">

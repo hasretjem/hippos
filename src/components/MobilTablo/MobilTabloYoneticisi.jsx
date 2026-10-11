@@ -15,7 +15,7 @@ import { useEffect } from 'react';
 // gizleme yalnızca CSS ile yapılır. Filtre düğmeleri, satır tıklamaları, düzenleme alanları aynen çalışır.
 // =====================================================================
 
-const TABLO_SECICI = 'table.m2-table, table.vr-izgara, table.pkl-puantaj';
+const TABLO_SECICI = 'table.m2-table, table.vr-izgara';
 const VARSAYILAN_SUTUN_SAYISI = 5;
 
 // Bazı tablolar için varsayılan görünür sütunlar (başlık metninde geçen kelimeler, küçük harf).
@@ -127,7 +127,9 @@ function seciciCiz(table, kayit) {
 function sabitleriIsaretle(table, b) {
   // Ana sütun (ürün / firma adı gibi) diğerlerinden geniş tutulur ki ad okunabilsin
   const v = VARSAYILANLAR.find((x) => table.classList.contains(x.sinif));
-  const anaSira = v && v.ana ? b.findIndex((s) => !s.sabit && kucuk(s.ad).includes(v.ana)) : b.findIndex((s) => !s.sabit);
+  const anaSira = v && v.ana
+    ? b.findIndex((s) => !s.sabit && kucuk(s.ad).includes(v.ana))
+    : b.findIndex((s) => !s.sabit && /(^| )(ad|adı)( |$)|firma|ürün|malzeme|açıklama|personel|cari|kalem/.test(kucuk(s.ad)));
   b.forEach((s, i) => {
     if (i === anaSira) s.hucre.setAttribute('data-mana', '');
     else s.hucre.removeAttribute('data-mana');
