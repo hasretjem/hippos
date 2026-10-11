@@ -10,3 +10,8 @@ createRoot(document.getElementById('root')).render(
     <App />
   </StrictMode>,
 )
+
+// Servis çalışanı: Chrome'da "Uygulamayı yükle" seçeneğinin çıkması için (önbellek tutmaz)
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}) })
+}

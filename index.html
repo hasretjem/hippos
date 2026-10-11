@@ -4,6 +4,20 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#393E41" />
+    <script>
+      // Hangi adresten açıldıysa o uygulamanın simgesi/adı bağlanır: / , /paketci , /mutfak
+      (function () {
+        var y = location.pathname, k = y.indexOf('/paketci') === 0 ? 'paketci' : y.indexOf('/mutfak') === 0 ? 'mutfak' : 'ana';
+        var h = document.head;
+        function ekle(rel, href) { var l = document.createElement('link'); l.rel = rel; l.href = href; h.appendChild(l); }
+        ekle('manifest', '/pwa/' + k + '.webmanifest');
+        ekle('apple-touch-icon', '/pwa/' + k + '-apple-180.png');
+        var t = { paketci: 'Hippos Paketçi', mutfak: 'Hippos Mutfak', ana: 'Hippos' }[k];
+        var m = document.createElement('meta'); m.name = 'apple-mobile-web-app-title'; m.content = t; h.appendChild(m);
+        var c = document.createElement('meta'); c.name = 'apple-mobile-web-app-capable'; c.content = 'yes'; h.appendChild(c);
+      })();
+    </script>
     <title>Hippos</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
