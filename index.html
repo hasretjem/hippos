@@ -8,6 +8,9 @@
     <script>
       // Hangi adresten açıldıysa o uygulamanın simgesi/adı bağlanır: / , /paketci , /mutfak
       (function () {
+        // Telefonda ana site /ana adresine alınır: kurulu ana uygulama sadece /ana'yı kapsasın,
+        // böylece /paketci ve /mutfak ayrı uygulama olarak kurulabilsin. Bilgisayarda adres değişmez.
+        try { if (location.pathname === '/' && window.matchMedia('(pointer: coarse)').matches) history.replaceState(null, '', '/ana' + location.search + location.hash); } catch (e) {}
         var y = location.pathname, k = y.indexOf('/paketci') === 0 ? 'paketci' : y.indexOf('/mutfak') === 0 ? 'mutfak' : 'ana';
         var h = document.head;
         function ekle(rel, href) { var l = document.createElement('link'); l.rel = rel; l.href = href; h.appendChild(l); }

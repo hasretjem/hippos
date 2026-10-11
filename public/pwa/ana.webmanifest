@@ -1,10 +1,10 @@
 {
-  "id": "/",
+  "id": "/ana",
   "name": "Hippos",
   "short_name": "Hippos",
   "lang": "tr",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/ana",
+  "scope": "/ana",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#393E41",
