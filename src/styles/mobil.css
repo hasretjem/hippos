@@ -1,11 +1,12 @@
 /* =====================================================================
    HIPPOS — TELEFON GÖRÜNÜMÜ
-   Bu dosyadaki HER kural (max-width: 640px) içindedir. Kasadaki bilgisayarlarda
-   (ve 640px'ten geniş her ekranda) hiçbiri devreye girmez; masaüstü görünüm aynen kalır.
+   Bu dosyadaki HER kural telefon sorgusu içindedir: dik tutuşta genişlik ≤640px, yan tutuşta
+   dokunmatik + yatay + yükseklik ≤500px. Kasadaki bilgisayarlarda hiçbiri devreye girmez.
+   (Aynı sorgu src/hooks/useIsMobile.js içinde de var — ikisi birlikte değiştirilmeli.)
    Yazı renklerinde !important bilinçli: genel stiller yazıyı beyaz yapıp okunmaz kılıyor.
    ===================================================================== */
 
-@media (max-width: 640px) {
+@media (max-width: 640px), (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
 
   /* ---------- Genel ---------- */
   :root { --mnav-kapali: calc(34px + env(safe-area-inset-bottom, 0px)); --mnav-acik: calc(104px + env(safe-area-inset-bottom, 0px)); }
@@ -201,7 +202,16 @@
   .pb-icon-watermark { font-size: 34px; }
   /* Soğuk sandviç: Büyük ve Küçük sütunları yan yana kalır */
   .ds-split-col { padding: 8px 6px; }
-  .ds-split-col .ds-product-grid { grid-template-columns: minmax(0, 1fr); }
+  /* Soğuk Sandviç: Büyük ve Küçük tarafların her biri 4'lü sıra (masaüstündeki gibi), Kahvaltı 4'lü */
+  .ds-products.split-active { padding: 2px; }
+  .ds-split-col .ds-product-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; }
+  .ds-split-col .pb-card { min-height: 60px; padding: 3px 2px 4px; border-radius: 9px; }
+  .ds-split-col .pb-name { font-size: 10px !important; line-height: 1.12; letter-spacing: -0.2px; overflow-wrap: anywhere; hyphens: auto; }
+  .ds-split-col .pb-price { font-size: 10px !important; }
+  .ds-split-col .pb-icon-svg, .ds-split-col .pb-icon-watermark { width: 22px; height: 22px; font-size: 22px; top: -3px; right: -3px; }
+  .ds-split-col { padding: 6px 3px; }
+  .ds-product-grid.kahvalti-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+  .ds-product-grid.kahvalti-grid .pb-name { font-size: 12px !important; }
   .ds-split-col-head { padding-bottom: 6px; margin-bottom: 8px; }
   .ds-split-col-title { font-size: 13px !important; }
 
@@ -480,4 +490,60 @@
   /* Muhasebe / Personel / Reçete pencereleri */
   .m2-modal-bg { padding: 8px; align-items: flex-end; }
   .m2-modal, .m2-modal.genis { max-width: 100% !important; width: 100% !important; max-height: 94dvh; overflow-y: auto; }
+
+  /* =====================================================================
+     YAN TUTUŞ (telefon yatay) — genişlik bol, yükseklik az
+     ===================================================================== */
+  @media (orientation: landscape) and (min-width: 641px) {
+    :root { --mnav-acik: calc(82px + env(safe-area-inset-bottom, 0px)); }
+    .mnav-butonlar button { height: 44px; flex-direction: row; gap: 6px; }
+
+    /* Masalar */
+    .tb-top-row { flex-wrap: nowrap; }
+    .tb-logo-capsule, .tb-mutfak-not-btn, .tb-quicksale { height: 48px; }
+    .tb-quicksale { order: 1; flex: 1 1 auto; }
+    .tb-mutfak-not-btn { order: 2; flex: 0 0 auto; }
+    .tb-qs-bolt { width: 52px; height: 52px; margin: -12px 0; }
+    .tb-mgrid, .tb-flow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .tb-package-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .tb-card { min-height: 112px; }
+
+    /* Satış: üst şerit tek satır, ürünler 6'lı (Kahvaltı 4, Soğuk Sandviç 4+4 kalır) */
+    .ds-header { flex-wrap: nowrap; padding: 6px; gap: 6px; }
+    .ds-header-actions button { height: 40px; }
+    .ds-header-table { flex: 1 1 200px; }
+    .ds-table-select-mini, .ds-mini-btn, .ds-paste-btn { height: 40px; }
+    .ds-mini-btn, .ds-paste-btn { width: 40px; }
+    .ds-header-note { flex: 1 1 300px; }
+    .ds-header-note input, .ds-header-note .bv-tik-btn { height: 40px; }
+    .ds-cat-card { height: 36px; }
+    .ds-favorites { padding: 4px 8px; }
+    .ds-fav-chip, .ds-edit-fav-btn { min-height: 34px; height: 34px; }
+    .ds-product-grid, .ds-product-grid.yemekler-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .ds-product-grid.kahvalti-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .ds-split-col .ds-product-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .ds-split-col .pb-name { font-size: 12px !important; }
+    .ds-mserit { padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); }
+    .ds-mserit button { height: 44px; }
+    .ds-order-panel.ds-msepet { left: auto; width: min(520px, 100%); max-height: 96dvh; border-radius: 22px 0 0 0; }
+    .ds-pay-grid button { flex: 1 1 0; height: 72px; }
+
+    /* Yönetim */
+    .st-actions-row, .st-actions-row:has(> :nth-child(8):last-child) { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+
+    /* Gün Sonu: iki sütun */
+    .gs-content-3col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    /* Muhasebe: Fiş/Fatura ve Makbuz yan yana */
+    .m2-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    /* Muhasebe / Personel / Reçeteler: başlık ve sekmeler tek ince satır, tabloya yer kalsın */
+    .m2-shell { padding-top: 8px; }
+    .m2-ust { margin-bottom: 6px; }
+    .m2-title { display: none; }
+    .m2-tabs { flex-wrap: nowrap; overflow-x: auto; margin-bottom: 8px; scrollbar-width: none; }
+    .m2-tabs::-webkit-scrollbar { display: none; }
+    .m2-tabs > * { flex-shrink: 0; padding-top: 7px; padding-bottom: 7px; }
+    table.m2-datalar[data-mtablo] tr > th:first-child { width: 11%; }
+    table[data-mtablo][data-msayi="6"] th[data-mana], table[data-mtablo][data-msayi="7"] th[data-mana], table[data-mtablo][data-msayi="8"] th[data-mana] { width: 18%; }
+  }
 }

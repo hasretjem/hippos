@@ -16,12 +16,16 @@ import { useEffect } from 'react';
 // =====================================================================
 
 const TABLO_SECICI = 'table.m2-table, table.vr-izgara';
-const VARSAYILAN_SUTUN_SAYISI = 5;
+// Dik tutuşta 5, yan tutuşta (geniş ekran) 9 sütuna kadar varsayılan olarak gösterilir.
+const yatay = () => window.innerWidth > 640;
+const sutunSayisi = () => (yatay() ? 9 : 5);
 
 // Bazı tablolar için varsayılan görünür sütunlar (başlık metninde geçen kelimeler, küçük harf).
 const VARSAYILANLAR = [
-  { sinif: 'm2-datalar', sutunlar: ['tarih', 'evrak', 'firma', 'miktar'], ana: 'firma' },
-  { sinif: 'rc-urun-tablo', sutunlar: ['ürün', 'satış', 'kâr %'], ana: 'ürün' },
+  { sinif: 'm2-datalar', sutunlar: ['tarih', 'evrak', 'firma', 'miktar'], ana: 'firma',
+    yatay: ['tarih', 'evrak', 'firma', 'açıklama', 'gider kategorisi', 'ödeme türü', 'miktar'] },
+  { sinif: 'rc-urun-tablo', sutunlar: ['ürün', 'satış', 'kâr %'], ana: 'ürün',
+    yatay: ['ürün', 'kategori', 'satış', 'maliyet', 'kâr', 'durum'] },
   { sinif: 'rc-ham-tablo', sutunlar: ['malzeme', 'birim', 'fiyat', 'tarih'], ana: 'malzeme' },
   { sinif: 'm2-ekstre', sutunlar: ['tarih', 'açıklama', 'borç', 'alacak', 'bakiye'], ana: 'açıklama' },
 ];
@@ -46,7 +50,8 @@ function basliklar(table) {
 function tabloAnahtari(table, adlar) {
   const sinif = Array.from(table.classList).filter((c) => c !== 'm2-table').join('.');
   const etiket = table.getAttribute('data-tablo') || table.getAttribute('data-panel') || '';
-  return `hippos-msutun:${sinif}:${etiket}:${adlar.join('|')}`.slice(0, 240);
+  // Dik ve yan tutuşun sütun seçimleri ayrı hatırlanır
+  return `hippos-msutun:${yatay() ? 'y' : 'd'}:${sinif}:${etiket}:${adlar.join('|')}`.slice(0, 240);
 }
 
 function gorunurleriBul(table, b, anahtar) {
@@ -60,11 +65,12 @@ function gorunurleriBul(table, b, anahtar) {
   const v = VARSAYILANLAR.find((x) => table.classList.contains(x.sinif));
   const set = new Set();
   if (v) {
-    b.forEach((s, i) => { if (!s.sabit && v.sutunlar.some((k) => kucuk(s.ad).includes(k))) set.add(i); });
+    const liste = yatay() && v.yatay ? v.yatay : v.sutunlar;
+    b.forEach((s, i) => { if (!s.sabit && liste.some((k) => kucuk(s.ad).includes(k))) set.add(i); });
   }
   if (!set.size) {
     let n = 0;
-    b.forEach((s, i) => { if (!s.sabit && n < VARSAYILAN_SUTUN_SAYISI) { set.add(i); n++; } });
+    b.forEach((s, i) => { if (!s.sabit && n < sutunSayisi()) { set.add(i); n++; } });
   }
   return set;
 }
@@ -151,7 +157,7 @@ function uygula(table, kayit) {
   table.setAttribute('data-msayi', String(Math.min(gorunenSayi, 8)));
   sabitleriIsaretle(table, b);
   stilYaz(id, b, gorunur);
-  if (b.filter((s) => !s.sabit).length > VARSAYILAN_SUTUN_SAYISI) seciciCiz(table, kayit);
+  if (b.filter((s) => !s.sabit).length > sutunSayisi()) seciciCiz(table, kayit);
   else if (kayit.bar) { kayit.bar.remove(); kayit.bar = null; }
 }
 
@@ -221,7 +227,9 @@ export default function MobilTabloYoneticisi() {
     gozlemci.observe(document.body, { childList: true, subtree: true });
     tara();
     document.addEventListener('click', hucreTik, true);
+    window.addEventListener('resize', planla); // telefon yan/dik çevrilince yeniden düzenle
     return () => {
+      window.removeEventListener('resize', planla);
       gozlemci.disconnect();
       clearTimeout(zaman);
       document.removeEventListener('click', hucreTik, true);
