@@ -1218,7 +1218,7 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
                           Düzenle
                         </button>
                         <span className="m2-kilit" title={r.kaynak === 'izin' ? "İzin silme Personel Klasörü'nden" : 'Günsonu silme Günsonları sekmesinden'}>
-                          🔒 Silme: {KAYNAK_ETIKET[r.kaynak] || r.kaynak}
+                          🔒 {KAYNAK_ETIKET[r.kaynak] || r.kaynak}
                         </span>
                       </div>
                     ) : r.kaynak ? (
