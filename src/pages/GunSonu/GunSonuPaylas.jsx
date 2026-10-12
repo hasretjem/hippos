@@ -157,6 +157,21 @@ function sigdir(kart) {
   });
 }
 
+// Telefonda görsel bazen stiller yüklenmeden çiziliyordu (yazılar düz, dizilimsiz). html2canvas kartı geçici bir
+// çerçeveye kopyalarken stil dosyasını yeniden indirmesini beklemek yerine, kartın stillerini doğrudan kopyaya yazarız.
+function kartStilleri() {
+  let css = '';
+  for (const sh of Array.from(document.styleSheets)) {
+    let kurallar;
+    try { kurallar = sh.cssRules; } catch { continue; }
+    for (const r of Array.from(kurallar || [])) {
+      const t = r.cssText || '';
+      if ((typeof CSSFontFaceRule !== 'undefined' && r instanceof CSSFontFaceRule) || t.includes('.gsk')) css += `${t}\n`;
+    }
+  }
+  return css;
+}
+
 export default function GunSonuPaylas({ v, onKapat }) {
   const kartRef = useRef(null);
   const [png, setPng] = useState(null); // { blob, url }
@@ -177,7 +192,13 @@ export default function GunSonuPaylas({ v, onKapat }) {
           await document.fonts.ready;
         }
         sigdir(kartRef.current);
-        const canvas = await html2canvas(kartRef.current, { scale: 1, backgroundColor: null, useCORS: true, logging: false, width: 1080, height: KART_YUKSEKLIK, windowWidth: 1080 });
+        const canvas = await html2canvas(kartRef.current, { scale: 1, backgroundColor: null, useCORS: true, logging: false, width: 1080, height: KART_YUKSEKLIK, windowWidth: 1080,
+          onclone: async (doc) => {
+            const st = doc.createElement('style');
+            st.textContent = kartStilleri();
+            doc.head.appendChild(st);
+            if (doc.fonts) { try { await doc.fonts.ready; } catch { /* yazı tipi beklenemedi */ } }
+          } });
         const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
         if (!blob) throw new Error('bos');
         url = URL.createObjectURL(blob);
