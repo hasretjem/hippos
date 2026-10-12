@@ -1119,3 +1119,7 @@
   font-weight: 700;
   white-space: nowrap;
 }
+
+.m2-chips.tight.sar {
+  flex-wrap: wrap;
+}

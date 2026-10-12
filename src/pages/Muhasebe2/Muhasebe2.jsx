@@ -1317,6 +1317,16 @@ function bugunTRMetin() {
   return tarihTR(bugunISO());
 }
 
+// Hesap Özetleri grup filtresi: cari grubu (sunucudaki f.grup) -> ekrandaki grup.
+const HESAP_GRUPLARI = [
+  { anahtar: 'bankaKart', etiket: 'Banka ve Kartlar', gruplar: ['Kasa', 'Banka', 'Kredi Kartı', 'Ödeme şekli'] },
+  { anahtar: 'ortaklar', etiket: 'Ortaklar', gruplar: ['Cepten'] },
+  { anahtar: 'yemek', etiket: 'Yemek Kartları', gruplar: ['Yemek Kartı'] },
+  { anahtar: 'personel', etiket: 'Personel', gruplar: ['Personel'] },
+  { anahtar: 'sabit', etiket: 'Sabit Giderler', gruplar: ['Sabit Gider'] },
+  { anahtar: 'cariler', etiket: 'Cariler', gruplar: ['Firma'] },
+];
+
 function HesapOzetleriSekmesi({ aktif, bildir, onDegisti }) {
   const [firmalar, setFirmalar] = useState(null);
   const [kategoriler, setKategoriler] = useState([]);
@@ -1324,7 +1334,7 @@ function HesapOzetleriSekmesi({ aktif, bildir, onDegisti }) {
   const [yukleniyor, setYukleniyor] = useState(false);
   const [ara, setAra] = useState('');
   const [durum, setDurum] = useState('tumu'); // tumu | alacakli | borclu | yok
-  const [bolum, setBolum] = useState('tumu'); // tumu | cariler | kasaBanka
+  const [bolum, setBolum] = useState('tumu'); // tumu | HESAP_GRUPLARI anahtarı
   const [bakiyesizGizle, setBakiyesizGizle] = useState(false);
   const [sirala, setSirala] = useState('bakiye'); // bakiye | ad | son
   const [ekstreFirma, setEkstreFirma] = useState(null);
@@ -1363,7 +1373,10 @@ function HesapOzetleriSekmesi({ aktif, bildir, onDegisti }) {
     let l = firmalar || [];
     const q = trNorm(ara);
     if (q) l = l.filter((f) => trNorm(f.ad).includes(q));
-    if (bolum !== 'tumu') l = l.filter((f) => f.bolum === bolum);
+    if (bolum !== 'tumu') {
+      const g = HESAP_GRUPLARI.find((x) => x.anahtar === bolum);
+      if (g) l = l.filter((f) => g.gruplar.includes(f.grup));
+    }
     if (durum !== 'tumu') l = l.filter((f) => durumBul(f.bakiye) === durum);
     if (bakiyesizGizle) l = l.filter((f) => durumBul(f.bakiye) !== 'yok');
     const ad = (a, b) => a.ad.localeCompare(b.ad, 'tr');
@@ -1431,10 +1444,9 @@ function HesapOzetleriSekmesi({ aktif, bildir, onDegisti }) {
           {chip('borclu', durum, setDurum, 'Borçlu')}
           {chip('yok', durum, setDurum, 'Bakiyesiz')}
         </div>
-        <div className="m2-chips tight">
+        <div className="m2-chips tight sar">
           {chip('tumu', bolum, setBolum, 'Tüm gruplar')}
-          {chip('cariler', bolum, setBolum, 'Cariler')}
-          {chip('kasaBanka', bolum, setBolum, 'Kasa ve Banka')}
+          {HESAP_GRUPLARI.map((g) => chip(g.anahtar, bolum, setBolum, g.etiket))}
         </div>
         <label className="m2-onay">
           <input type="checkbox" checked={bakiyesizGizle} onChange={(e) => setBakiyesizGizle(e.target.checked)} /> Bakiyesizleri gizle
