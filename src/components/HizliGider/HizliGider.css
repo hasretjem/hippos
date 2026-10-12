@@ -36,6 +36,7 @@
 .hg-c { background: #eaf2fc; border-color: #c5dcf5; border-left-color: #4a8fd6; } .hg-c .hg-rb { color: #1b4f8f !important; }
 .hg-s { background: #fdf2d6; border-color: #f0d89a; border-left-color: #e0a82e; } .hg-s .hg-rb { color: #7a4b00 !important; }
 .hg-p { background: #efe9fb; border-color: #d3c8f3; border-left-color: #8c75d6; } .hg-p .hg-rb { color: #4a2f99 !important; }
+.hg-b { background: #e0f4f1; border-color: #a6d9d1; border-left-color: #1fa592; } .hg-b .hg-rb { color: #0b5a4e !important; }
 .hg-k { background: #f1f2ee; border-color: #dcdfd6; border-left-color: #a9aea3; } .hg-k .hg-rb { color: #4c5256 !important; }
 .hg-kilit .hg-ad, .hg-kilit .hg-t { color: #4c5256 !important; }
 .hg-kilit .hg-i { cursor: default; }
@@ -43,10 +44,11 @@
 
 /* Giriş satırı: boşken kesikli, yazarken/seçince rengi değişir (sol şerit + zemin), düzenlerken de AYNI tek satır */
 .hg-giris { padding: 7px 8px 7px 10px; border-radius: 10px; border: 1px dashed rgba(57, 62, 65, 0.4); margin: 0 0 5px; background: #fff; position: relative; transition: background 0.18s, border-color 0.18s; }
-.hg-giris.hg-c, .hg-giris.hg-s, .hg-giris.hg-p { border-style: solid; border-left-width: 4px; }
+.hg-giris.hg-c, .hg-giris.hg-s, .hg-giris.hg-p, .hg-giris.hg-b { border-style: solid; border-left-width: 4px; }
 .hg-giris.hg-c { background: #eaf2fc; border-color: #c5dcf5; border-left-color: #4a8fd6; }
 .hg-giris.hg-s { background: #fdf2d6; border-color: #f0d89a; border-left-color: #e0a82e; }
 .hg-giris.hg-p { background: #efe9fb; border-color: #d3c8f3; border-left-color: #8c75d6; }
+.hg-giris.hg-b { background: #e0f4f1; border-color: #a6d9d1; border-left-color: #1fa592; }
 .hg-duzen { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12); }
 .hg-gr { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 .hg-isim { position: relative; flex: 1 1 110px; min-width: 110px; display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid rgba(57, 62, 65, 0.22); border-radius: 8px; padding: 0 6px; height: 34px; }
@@ -66,8 +68,9 @@
 
 .hg-dd { position: absolute; left: 0; right: -4px; top: 100%; margin-top: 4px; background: #fff; border: 1px solid rgba(57, 62, 65, 0.35); border-radius: 10px; overflow: hidden; z-index: 20; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.2); min-width: 240px; }
 .hg-di { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 0; background: #fff; text-align: left; cursor: pointer; font-size: 13px; color: #1f2326 !important; border-radius: 0; }
+.hg-dd.hg-yukari { top: auto; bottom: 100%; margin-top: 0; margin-bottom: 4px; z-index: 60; }
 .hg-di small { color: #4c5256 !important; font-size: 12px; }
-.hg-di.hg-c { background: #eaf2fc; } .hg-di.hg-s { background: #fdf2d6; } .hg-di.hg-p { background: #efe9fb; }
+.hg-di.hg-c { background: #eaf2fc; } .hg-di.hg-s { background: #fdf2d6; } .hg-di.hg-p { background: #efe9fb; } .hg-di.hg-b { background: #e0f4f1; }
 .hg-di.hg-ak { outline: 2px solid #393e41; outline-offset: -2px; }
 
 .hg-cp { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 7px 0 0; }
@@ -75,7 +78,7 @@
 .hg-ch { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(57, 62, 65, 0.25); background: #fff; color: #1f2326 !important; cursor: pointer; }
 .hg-ch:hover { border-color: #393e41; }
 .hg-ch i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; border: 1px solid; }
-.hg-ch i.hg-c { background: #5b9bd9; border-color: #1b4f8f; } .hg-ch i.hg-s { background: #e0a82e; border-color: #7a4b00; } .hg-ch i.hg-p { background: #8c75d6; border-color: #4a2f99; }
+.hg-ch i.hg-c { background: #5b9bd9; border-color: #1b4f8f; } .hg-ch i.hg-s { background: #e0a82e; border-color: #7a4b00; } .hg-ch i.hg-p { background: #8c75d6; border-color: #4a2f99; } .hg-ch i.hg-b { background: #1fa592; border-color: #0b5a4e; }
 
 .hg-uyari { display: flex; gap: 8px; align-items: flex-start; padding: 9px 11px; border-radius: 10px; background: #fdf2d6; border: 1px solid #f0d89a; font-size: 12px; margin: -4px 0 14px; }
 .hg-uyari, .hg-uyari span { color: #7a4b00 !important; }

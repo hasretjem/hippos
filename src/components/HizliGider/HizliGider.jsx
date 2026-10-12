@@ -44,8 +44,8 @@ function sayiCoz(v) {
   const n = t.includes(',') ? parseFloat(t.replace(/\./g, '').replace(',', '.')) : parseFloat(t);
   return Number.isFinite(n) ? n : 0;
 }
-const renk = (tur) => (tur === 'cari' ? 'hg-c' : tur === 'serbest' ? 'hg-s' : tur === 'personel' || tur === 'sabit' || tur === 'ortak' || tur === 'banka' ? 'hg-p' : 'hg-k');
-const ETIKET = { cari: 'Cari', serbest: 'Serbest', personel: 'Avans / maaş ödemesi', sabit: 'Sabit gider ödemesi', ortak: 'Ortak (kasa hareketi)', banka: 'Banka / kart (kasa hareketi)' };
+const renk = (tur) => (tur === 'cari' ? 'hg-c' : tur === 'serbest' ? 'hg-s' : tur === 'banka' ? 'hg-b' : tur === 'personel' || tur === 'sabit' || tur === 'ortak' ? 'hg-p' : 'hg-k');
+const ETIKET = { cari: 'Cari', serbest: 'Serbest', personel: 'Avans / maaş ödemesi', sabit: 'Sabit gider ödemesi', ortak: 'Ortak (kasa hareketi)', banka: 'Banka/kart' };
 const IKON = { cari: Building2, serbest: PencilLine, personel: UserRound, sabit: CalendarClock, ortak: UserRound, banka: Building2 };
 function Rozet({ tur, metin, kisa }) {
   const Ikon = IKON[tur] || Lock;
@@ -205,6 +205,14 @@ function GirisSatiri({ hg, kasaGrubu, satir, onBitti, onIptal, bildir, onayIste,
   const [kategori, setKategori] = useState((satir && satir.kategori) || hg.varsayilanKategori);
   const [kg, setKg] = useState(satir ? satir.kasaGrubu : kasaGrubu);
   const [acik, setAcik] = useState(false);
+  const [yukari, setYukari] = useState(false);
+  const isimRef = useRef(null);
+  // Liste sayfanın altına yakınsa (alt menünün altında kalmasın) yukarı doğru açılır.
+  const listeAc = () => {
+    const r = isimRef.current && isimRef.current.getBoundingClientRect();
+    if (r) setYukari(window.innerHeight - r.bottom < 300 && r.top > 260);
+    setAcik(true);
+  };
   const [aktif, setAktif] = useState(0);
   const [bekliyor, setBekliyor] = useState(false);
   const tutarRef = useRef(null);
@@ -284,7 +292,7 @@ function GirisSatiri({ hg, kasaGrubu, satir, onBitti, onIptal, bildir, onayIste,
   return (
     <div className={`hg-giris ${turGorunen ? renk(turGorunen) : 'hg-e'} ${duzen ? 'hg-duzen' : ''}`}>
       <div className="hg-gr">
-        <div className="hg-isim">
+        <div className="hg-isim" ref={isimRef}>
           {etiket && <Rozet tur={turGorunen} metin={etiket} kisa={duzen} />}
           <input
             className="hg-ara"
@@ -292,13 +300,13 @@ function GirisSatiri({ hg, kasaGrubu, satir, onBitti, onIptal, bildir, onayIste,
             value={metin}
             readOnly={kilitliAd}
             aria-label="Ne için"
-            onChange={(e) => { setMetin(e.target.value); setSecim(null); setAcik(true); setAktif(0); }}
-            onFocus={() => !kilitliAd && setAcik(true)}
+            onChange={(e) => { setMetin(e.target.value); setSecim(null); listeAc(); setAktif(0); }}
+            onFocus={() => !kilitliAd && listeAc()}
             onBlur={() => setTimeout(() => setAcik(false), 150)}
             onKeyDown={adTus}
           />
           {acik && !kilitliAd && secenekler.length > 0 && (
-            <div className="hg-dd" role="listbox">
+            <div className={`hg-dd ${yukari ? 'hg-yukari' : ''}`} role="listbox">
               {secenekler.map((o, i) => (
                 <button key={o.t + (o.c ? o.c.id : '')} type="button" role="option" aria-selected={i === aktif} className={`hg-di ${o.t === 'cari' ? renk(o.c.tur) : o.t === 'serbest' ? 'hg-s' : ''} ${i === aktif ? 'hg-ak' : ''}`} onMouseDown={(e) => { e.preventDefault(); sec(o); }}>
                   {o.t === 'cari' && (<><span>{o.c.ad}</span><small>{o.c.tur === 'cari' ? 'kayıtlı cari' : o.c.tur === 'personel' ? 'personel: avans / maaş ödemesi' : o.c.tur === 'ortak' ? 'ortak: eksi = kasaya para koydu' : o.c.tur === 'banka' ? 'banka/kart: ödeme ve para hareketi' : 'sabit gider ödemesi'}</small></>)}
