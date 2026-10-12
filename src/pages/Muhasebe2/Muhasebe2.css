@@ -1123,3 +1123,15 @@
 .m2-chips.tight.sar {
   flex-wrap: wrap;
 }
+
+/* Düzenleme modunda İşlem sütunu: her zaman görünür (sağa yapışık), tek satır */
+.m2-table td.m2-islem-td {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: #fff;
+  white-space: nowrap;
+  box-shadow: -6px 0 8px -6px rgba(0, 0, 0, 0.25);
+}
+.m2-table td.m2-islem-td .m2-yk-islem { flex-wrap: nowrap; }
+.m2-table td.m2-islem-td .m2-btn.mini { white-space: nowrap; flex: 0 0 auto; }

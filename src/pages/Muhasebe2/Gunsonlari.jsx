@@ -255,7 +255,7 @@ export default function GunsonlariSekmesi({ aktif, duzenlemeModu, bildir, yenile
                     <td className="sayi">{sayiYaz(ciroToplam(k))}</td>
                     <td>{k.anaKasaTakibi && Object.keys(k.anaKasaTakibi).length ? <DetayDugme onClick={() => setDetay({ tip: 'anaKasaTakibi', kayit: k })} /> : '—'}</td>
                     {duzenlemeModu && (
-                      <td>
+                      <td className="m2-islem-td">
                         <div className="m2-yk-islem">
                           {!k.eskiBicim && (
                             <button className="m2-btn sec mini" onClick={() => setDuzenle(k)}>

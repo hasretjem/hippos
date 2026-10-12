@@ -1211,7 +1211,7 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
                   return <td className={`sayi ${m < 0 ? 'm2-neg' : ''}`}>{para(m)}</td>;
                 })()}
                 {duzenlemeModu && (
-                  <td>
+                  <td className="m2-islem-td">
                     {r.kaynak === 'izin' || r.kaynak === 'gunsonu' ? (
                       <div className="m2-yk-islem">
                         <button className="m2-btn sec mini" onClick={() => setKaynakDuzenle(r)}>
