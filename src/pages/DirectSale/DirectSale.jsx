@@ -552,7 +552,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     // Satış kimliği ürün kalemlerine de geçiyor — fiş bağı bu.
     const satisId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
     setSalesHistory((prev) => [
-      { id: satisId, ts: Date.now(), table: selectedTable, amount: totalPayIskontoSonrasi, method: `CARİ + ${method}`, itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
+      { id: satisId, ts: Date.now(), table: selectedTable, amount: totalPayIskontoSonrasi, method: `CARİ + ${method}`, cariTutar: cariPay, itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
       ...prev,
     ]);
     logSoldItems(toClose, selectedTable, satisId);

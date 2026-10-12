@@ -122,7 +122,7 @@ function rowToSubcategory(r) {
 }
 
 function rowToSale(r) {
-  return { id: r.id, ts: Number(r.ts), table: r.table_name, amount: Number(r.amount), method: r.method, itemsCount: r.items_count, date: r.date_display };
+  return { id: r.id, ts: Number(r.ts), table: r.table_name, amount: Number(r.amount), method: r.method, itemsCount: r.items_count, date: r.date_display, cariTutar: r.cari_tutar != null ? Number(r.cari_tutar) : null };
 }
 function rowToSoldItem(r) {
   return { id: r.id, ts: Number(r.ts), ad: r.ad, fiyat: Number(r.fiyat), kategori: r.kategori || '', altKategori: r.alt_kategori || '', table: r.table_name };
@@ -1226,7 +1226,7 @@ export default function useHipposData(scope = 'full') {
     const newOnes = salesHistory.filter((s) => !syncedSaleIdsRef.has(s.id));
     if (newOnes.length === 0) return;
     newOnes.forEach((s) => syncedSaleIdsRef.add(s.id));
-    const rows = newOnes.map((s) => ({ id: s.id, ts: s.ts, table_name: s.table, amount: s.amount, method: s.method, items_count: s.itemsCount, date_display: s.date }));
+    const rows = newOnes.map((s) => ({ id: s.id, ts: s.ts, table_name: s.table, amount: s.amount, method: s.method, items_count: s.itemsCount, date_display: s.date, cari_tutar: s.cariTutar != null ? s.cariTutar : null }));
     supabase.from('sales_history').insert(rows).then(({ error }) => {
       if (error) console.error('Satış kaydı senkronize edilemedi:', error.message);
     });

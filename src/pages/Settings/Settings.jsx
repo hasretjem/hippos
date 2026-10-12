@@ -341,7 +341,19 @@ export default function Settings({ data, onNavigate }) {
   const totals = useMemo(() => {
     const t = { NAKİT: 0, 'KREDİ KARTI': 0, 'YEMEK KARTI': 0, CARİ: 0 };
     todaysSales.forEach((s) => {
-      if (t[s.method] !== undefined) t[s.method] += s.amount;
+      if (t[s.method] !== undefined) {
+        t[s.method] += s.amount;
+      } else if (typeof s.method === 'string' && s.method.startsWith('CARİ + ')) {
+        // Bölünmüş satış: cari kısmı cariye, kalanı diğer ödeme türüne yazılır.
+        const diger = s.method.slice('CARİ + '.length);
+        if (diger === 'CARİ') {
+          t['CARİ'] += s.amount;
+        } else if (s.cariTutar != null && t[diger] !== undefined) {
+          const cariKismi = Math.min(Math.max(s.cariTutar, 0), s.amount);
+          t['CARİ'] += cariKismi;
+          t[diger] += s.amount - cariKismi;
+        }
+      }
     });
     // Bugünkü cari tahsilatları salesHistory'deki TAHSİLAT_ kayıtlarından oku
     // (cariOdemeler archiveCari tarafından silinebildiği için güvenilmez)
