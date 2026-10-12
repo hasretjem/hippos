@@ -1221,6 +1221,12 @@ async function gelirSenkron(db, tr) {
 }
 
 // Harcama paneli verisi: günün TL Kasa nakit çıkışları, günlük/ana bloklara ayrılmış, toplamlar ve giriş kutusu seçenekleri.
+// Harcamalar panelinde "banka/kart" cari: yalnız Banka Havalesi / Kredi Kartı yöntemi olan ödeme şekilleri.
+// TL Kasa (Nakit) ve Ortaklar buraya girmez.
+export function bankaKartMi(turler) {
+  return (turler.includes('Banka Havalesi') || turler.includes('Kredi Kartı')) && !turler.includes('Nakit') && !turler.includes('Ortaklar');
+}
+
 async function hizliGiderVeri(db, iso) {
   const tr = isoToTR(iso);
   const { data: tl, error: tlHata } = await db.from('m2_firmalar').select('id').eq('ad', 'TL Kasa').maybeSingle();
@@ -1248,9 +1254,20 @@ async function hizliGiderVeri(db, iso) {
       const mFirmaIdler = [...new Set((mk.data || []).filter((x) => !x.otomatik && x.kaynak === 'hizli_gider').map((x) => x.firma_id))];
       const mFirmalar = new Map();
       if (mFirmaIdler.length) {
-        const mf = await db.from('m2_firmalar').select('id,firma_turu').in('id', mFirmaIdler);
+        const [mf, yo0] = await Promise.all([
+          db.from('m2_firmalar').select('id,ad,firma_turu').in('id', mFirmaIdler),
+          db.from('m2_odeme_yontemleri').select('ad,odeme_turu'),
+        ]);
         kontrol(mf.error);
-        (mf.data || []).forEach((x) => mFirmalar.set(x.id, x.firma_turu));
+        kontrol(yo0.error);
+        (mf.data || []).forEach((x) => {
+          let t = x.firma_turu;
+          if (t === 'Ödeme Şekli') {
+            const turler = (yo0.data || []).filter((y) => norm(y.ad) === norm(x.ad)).map((y) => y.odeme_turu);
+            t = bankaKartMi(turler) ? 'Banka/Kart' : 'Ödeme Şekli';
+          }
+          mFirmalar.set(x.id, t);
+        });
       }
       satirlar = idler.map((g) => {
         const k = karKayitlar.find((x) => x.grup_id === g);
@@ -1270,7 +1287,7 @@ async function hizliGiderVeri(db, iso) {
         if (m && m.kaynak === 'avans') return { ...temel, tur: 'personel', ad: m.firma_adi, aciklama: String(m.aciklama || '').replace(/^Avans(?: — )?/, ''), tutar: Number(m.tutar), firmaId: m.firma_id, avansId: a ? a.id : null, personelId: a ? a.personel_id : null, kilitli: false };
         if (m && m.kaynak === 'hizli_gider') {
           const ft = mFirmalar.get(m.firma_id);
-          const tur = ft === 'Personel' ? 'personel' : ft === 'Ödeme Şekli' ? 'ortak' : 'sabit';
+          const tur = ft === 'Personel' ? 'personel' : ft === 'Banka/Kart' ? 'banka' : ft === 'Ödeme Şekli' ? 'ortak' : 'sabit';
           return { ...temel, tur, ad: m.firma_adi, aciklama: m.aciklama || '', tutar: isaret * Number(m.tutar), firmaId: m.firma_id, kilitli: false };
         }
         return { ...temel, tur: 'diger', ad: m ? m.firma_adi : 'Nakit ödeme', aciklama: m ? m.aciklama || '' : '', tutar: Number(k.tutar), kilitli: true, kilitEtiketi: 'Makbuz formundan' };
@@ -1290,11 +1307,11 @@ async function hizliGiderVeri(db, iso) {
     db.from('m2_kategoriler').select('ad'),
     db.from('m2_fis_faturalar').select('firma_id,firma_adi,aciklama,tarih').eq('kaynak', 'hizli_gider'),
     db.from('m2_makbuzlar').select('firma_id,tarih').in('kaynak', ['avans', 'hizli_gider']).eq('otomatik', false),
-    db.from('m2_odeme_yontemleri').select('ad').eq('odeme_turu', 'Ortaklar'),
+    db.from('m2_odeme_yontemleri').select('ad,odeme_turu'),
     db.from('m2_firmalar').select('id,ad').eq('firma_turu', 'Ödeme Şekli'),
   ]);
   [fr, pr, sg, kt, fk, mk2, oy, of].forEach((x) => kontrol(x.error));
-  const ortakAdlari = new Set((oy.data || []).map((x) => norm(x.ad)));
+  const ortakAdlari = new Set((oy.data || []).filter((x) => x.odeme_turu === 'Ortaklar').map((x) => norm(x.ad)));
   const personeller = new Map((pr.data || []).filter((x) => !x.cikis_tarihi).map((x) => [x.firma_id, x.id]));
   const sabitler = new Set((sg.data || []).filter((x) => !x.pasif_donem).map((x) => x.firma_id));
   const cariler = [];
@@ -1305,6 +1322,9 @@ async function hizliGiderVeri(db, iso) {
     else if (f.firma_turu === 'Sabit Gider' && sabitler.has(f.id)) cariler.push({ id: f.id, ad: f.ad, tur: 'sabit' });
   });
   (of.data || []).filter((f) => ortakAdlari.has(norm(f.ad))).forEach((f) => cariler.push({ id: f.id, ad: f.ad, tur: 'ortak' }));
+  (of.data || [])
+    .filter((f) => !ortakAdlari.has(norm(f.ad)) && bankaKartMi((oy.data || []).filter((y) => norm(y.ad) === norm(f.ad)).map((y) => y.odeme_turu)))
+    .forEach((f) => cariler.push({ id: f.id, ad: f.ad, tur: 'banka' }));
   const kullanim = new Map();
   const say = (m, k) => m.set(k, (m.get(k) || 0) + 1);
   const bas120 = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
@@ -2844,7 +2864,7 @@ export default async function handler(req, res) {
     // cari ve serbest: Nakit fatura (fiş + otomatik ödeme makbuzu + TL Kasa karşı makbuzu), serbest harcama "Diğer Giderler" carisine yazılır.
     // sabit: yalnız ödeme makbuzu (sabit giderin kendisi tahakkukta fiş olur). Personel avansı avansKaydet ile yazılır.
     if (resource === 'hizliGiderKaydet') {
-      if (!['cari', 'serbest', 'sabit', 'ortak', 'personel'].includes(body.tur)) throw new HataMesaji(400, 'Harcama türü geçersiz');
+      if (!['cari', 'serbest', 'sabit', 'ortak', 'personel', 'banka'].includes(body.tur)) throw new HataMesaji(400, 'Harcama türü geçersiz');
       // Tutar işaretlidir: artı = kasadan çıkan harcama, eksi = kasaya giren para (iade / ortak girişi).
       const imzali = tutarCoz(body.tutar);
       if (imzali === 0) throw new HataMesaji(400, 'Tutar sıfır olamaz');
@@ -2869,7 +2889,7 @@ export default async function handler(req, res) {
       }
       let fatura = null;
       let makbuzlar;
-      if (body.tur === 'sabit' || body.tur === 'personel' || body.tur === 'ortak') {
+      if (body.tur === 'sabit' || body.tur === 'personel' || body.tur === 'ortak' || body.tur === 'banka') {
         const { data: f, error: fh } = await db.from('m2_firmalar').select('id,ad,firma_turu').eq('id', body.firmaId).maybeSingle();
         kontrol(fh);
         if (body.tur === 'sabit' && (!f || f.firma_turu !== 'Sabit Gider')) throw new HataMesaji(400, 'Sabit gider seçin');
@@ -2878,6 +2898,12 @@ export default async function handler(req, res) {
           const { data: oy, error: oh } = await db.from('m2_odeme_yontemleri').select('id').eq('odeme_turu', 'Ortaklar').eq('ad', f ? f.ad : '').maybeSingle();
           kontrol(oh);
           if (!f || f.firma_turu !== 'Ödeme Şekli' || !oy) throw new HataMesaji(400, 'Ortak seçin');
+        }
+        if (body.tur === 'banka') {
+          if (!f || f.firma_turu !== 'Ödeme Şekli') throw new HataMesaji(400, 'Banka/kart seçin');
+          const { data: yl, error: yh } = await db.from('m2_odeme_yontemleri').select('ad,odeme_turu');
+          kontrol(yh);
+          if (!bankaKartMi((yl || []).filter((y) => norm(y.ad) === norm(f.ad)).map((y) => y.odeme_turu))) throw new HataMesaji(400, 'Banka/kart seçin');
         }
         // Fiş açılmaz, yalnız makbuz: artı = firmaya ödeme (TL Kasa'dan çıkar), eksi = firmadan tahsilat (TL Kasa'ya girer).
         // Ortakta ters bakılır gibi görünse de aynı kural: eksi = ortak kasaya para koydu → ortak alacaklı (tahsilat), TL Kasa borçlu.

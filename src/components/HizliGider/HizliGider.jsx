@@ -44,9 +44,9 @@ function sayiCoz(v) {
   const n = t.includes(',') ? parseFloat(t.replace(/\./g, '').replace(',', '.')) : parseFloat(t);
   return Number.isFinite(n) ? n : 0;
 }
-const renk = (tur) => (tur === 'cari' ? 'hg-c' : tur === 'serbest' ? 'hg-s' : tur === 'personel' || tur === 'sabit' || tur === 'ortak' ? 'hg-p' : 'hg-k');
-const ETIKET = { cari: 'Cari', serbest: 'Serbest', personel: 'Avans / maaş ödemesi', sabit: 'Sabit gider ödemesi', ortak: 'Ortak (kasa hareketi)' };
-const IKON = { cari: Building2, serbest: PencilLine, personel: UserRound, sabit: CalendarClock, ortak: UserRound };
+const renk = (tur) => (tur === 'cari' ? 'hg-c' : tur === 'serbest' ? 'hg-s' : tur === 'personel' || tur === 'sabit' || tur === 'ortak' || tur === 'banka' ? 'hg-p' : 'hg-k');
+const ETIKET = { cari: 'Cari', serbest: 'Serbest', personel: 'Avans / maaş ödemesi', sabit: 'Sabit gider ödemesi', ortak: 'Ortak (kasa hareketi)', banka: 'Banka / kart (kasa hareketi)' };
+const IKON = { cari: Building2, serbest: PencilLine, personel: UserRound, sabit: CalendarClock, ortak: UserRound, banka: Building2 };
 function Rozet({ tur, metin, kisa }) {
   const Ikon = IKON[tur] || Lock;
   // Düzenlerken yer kazanmak için yalnızca simge (tür rengi ve ipucu yeterli)
@@ -171,7 +171,7 @@ function Blok({ baslik, ipucu, kasaGrubu, satirlar, toplam, toplamEtiket, hg, bi
         if (silOnay === s.id) {
           return (
             <div key={s.id} className="hg-cf">
-              <span>{s.ad} {TL(s.tutar)} silinsin mi? {s.tur === 'personel' && s.avansId ? 'Avans makbuzu silinir, personel carisi eski haline döner.' : s.tur === 'personel' || s.tur === 'sabit' || s.tur === 'ortak' ? 'Makbuzlar silinir, cari eski haline döner.' : s.tutar < 0 ? 'İade faturası ve tahsilat makbuzu birlikte silinir.' : 'Fiş ve ödeme makbuzu birlikte silinir.'}</span>
+              <span>{s.ad} {TL(s.tutar)} silinsin mi? {s.tur === 'personel' && s.avansId ? 'Avans makbuzu silinir, personel carisi eski haline döner.' : s.tur === 'personel' || s.tur === 'sabit' || s.tur === 'ortak' || s.tur === 'banka' ? 'Makbuzlar silinir, cari eski haline döner.' : s.tutar < 0 ? 'İade faturası ve tahsilat makbuzu birlikte silinir.' : 'Fiş ve ödeme makbuzu birlikte silinir.'}</span>
               <span className="hg-cfb"><button type="button" className="hg-bt" onClick={() => setSilOnay(null)}>Vazgeç</button><button type="button" className="hg-bt hg-dn" onClick={() => sil(s)}>Sil</button></span>
             </div>
           );
@@ -196,7 +196,7 @@ function secimDen(s) {
 
 function GirisSatiri({ hg, kasaGrubu, satir, onBitti, onIptal, bildir, onayIste, onsecim, onYeniCari }) {
   const duzen = !!satir;
-  const kilitliAd = duzen && (satir.tur === 'personel' || satir.tur === 'sabit' || satir.tur === 'ortak');
+  const kilitliAd = duzen && (satir.tur === 'personel' || satir.tur === 'sabit' || satir.tur === 'ortak' || satir.tur === 'banka');
   const [metin, setMetin] = useState(satir ? satir.ad : '');
   const [secim, setSecim] = useState(satir ? secimDen(satir) : null);
   const [tutar, setTutar] = useState(satir ? String(satir.tutar).replace('.', ',') : '');
@@ -274,9 +274,11 @@ function GirisSatiri({ hg, kasaGrubu, satir, onBitti, onIptal, bildir, onayIste,
   let ipucuMetni = '';
   if (yazilan < 0) {
     if (turGorunen === 'ortak') ipucuMetni = 'Ortak kasaya para koydu: ortak alacaklı, TL Kasa borçlu. Fiş açılmaz.';
+    else if (turGorunen === 'banka') ipucuMetni = 'Bankadan/karttan kasaya para girişi: tahsilat makbuzu, banka/kart alacaklı, kasa borçlu. Fiş ve iade faturası açılmaz.';
     else if (turGorunen === 'personel' || turGorunen === 'sabit') ipucuMetni = 'Kasaya para girişi: firmadan tahsilat makbuzu kesilir, fiş açılmaz.';
     else if (turGorunen) ipucuMetni = 'İade: iade faturası ve tahsilat makbuzu yazılır, kasa artar.';
-  } else if (turGorunen === 'ortak') ipucuMetni = 'Ortak kasadan para aldı: ortak borçlu, TL Kasa alacaklı. Fiş açılmaz.';
+  } else if (turGorunen === 'banka') ipucuMetni = 'Banka/karta ödeme (kart borcu, nakit yatırma): yalnız ödeme makbuzu, kasa azalır. Fiş açılmaz.';
+  else if (turGorunen === 'ortak') ipucuMetni = 'Ortak kasadan para aldı: ortak borçlu, TL Kasa alacaklı. Fiş açılmaz.';
   else if (turGorunen === 'personel' || turGorunen === 'sabit') ipucuMetni = 'Fiş/fatura açılmaz, yalnız ödeme makbuzu kesilir.';
   const ikinci = notAcik || turGorunen === 'serbest';
   return (
@@ -299,7 +301,7 @@ function GirisSatiri({ hg, kasaGrubu, satir, onBitti, onIptal, bildir, onayIste,
             <div className="hg-dd" role="listbox">
               {secenekler.map((o, i) => (
                 <button key={o.t + (o.c ? o.c.id : '')} type="button" role="option" aria-selected={i === aktif} className={`hg-di ${o.t === 'cari' ? renk(o.c.tur) : o.t === 'serbest' ? 'hg-s' : ''} ${i === aktif ? 'hg-ak' : ''}`} onMouseDown={(e) => { e.preventDefault(); sec(o); }}>
-                  {o.t === 'cari' && (<><span>{o.c.ad}</span><small>{o.c.tur === 'cari' ? 'kayıtlı cari' : o.c.tur === 'personel' ? 'personel: avans / maaş ödemesi' : o.c.tur === 'ortak' ? 'ortak: eksi = kasaya para koydu' : 'sabit gider ödemesi'}</small></>)}
+                  {o.t === 'cari' && (<><span>{o.c.ad}</span><small>{o.c.tur === 'cari' ? 'kayıtlı cari' : o.c.tur === 'personel' ? 'personel: avans / maaş ödemesi' : o.c.tur === 'ortak' ? 'ortak: eksi = kasaya para koydu' : o.c.tur === 'banka' ? 'banka/kart: ödeme ve para hareketi' : 'sabit gider ödemesi'}</small></>)}
                   {o.t === 'serbest' && (<><span>"{metin.trim()}" olarak serbest yaz</span><small>Enter</small></>)}
                   {o.t === 'yeni' && (<><span>"{metin.trim()}" adıyla yeni cari aç</span><small>+</small></>)}
                 </button>
