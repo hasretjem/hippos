@@ -267,6 +267,51 @@ export function personelDokumHesapla(faturalar, makbuzlar) {
 }
 
 // ---------------------------------------------------------------------------
+// Maaş Günü Aracı: personel carisinden ödenecek NAKİT ve HAVALE (birikimli iki alt hesap).
+//  - Sigortalı personelde her tahakkukta banka payı = min(o dönemin asgari ücreti, tahakkuk brütü) doğar.
+//  - Personele bugüne kadar Banka Havalesi ile giden tüm ödemeler (avans dahil) bu paydan düşer.
+//  - Kalan havale = pay - havaleyle giden (0'ın altına inmez, cariyi aşamaz); kalan nakit = cari - kalan havale.
+//  - Dönem sınırı aranmaz: fazla/eksik havale sonraki tahakkuka kendiliğinden taşınır, sıralama sonucu değiştirmez.
+//  - Cari 0 veya eksiyse (personel bize borçlu) nakit ve havale 0'dır. Sigortasızda havale yok, cari tamamen nakittir.
+// ---------------------------------------------------------------------------
+// asgariListe: [{ donem: 'YYYY-MM', tutar }]. Dönemden önceki en yakın kayıt geçerlidir; hepsi sonraysa en eskisi.
+export function asgariBul(liste, donem) {
+  const sirali = [...(liste || [])].sort((a, b) => (a.donem < b.donem ? -1 : a.donem > b.donem ? 1 : 0));
+  if (!sirali.length) return 0;
+  let secilen = sirali[0];
+  for (const s of sirali) if (s.donem <= donem) secilen = s;
+  return Number(secilen.tutar) || 0;
+}
+
+// Sigortalı = SGK'sı var (sgk_yok değil) ve SGK başlama tarihi gelmiş.
+export function sigortaliMi(p, bugun) {
+  return !p.sgk_yok && !!p.sgk_baslama && String(p.sgk_baslama) <= bugun;
+}
+
+// tahakkuklar: [{ donem, brut }]; havaleOdenen: personele havaleyle giden net tutar (Ödeme - Tahsilat).
+export function maasGunuHesapla({ cari, sigortali, tahakkuklar, asgariListe, havaleOdenen }) {
+  const cariK = kurus(cari);
+  let yukK = 0;
+  if (sigortali) {
+    for (const t of tahakkuklar || []) {
+      const brutK = kurus(t.brut);
+      if (brutK > 0) yukK += Math.min(kurus(asgariBul(asgariListe, t.donem)), brutK);
+    }
+  }
+  const odenenK = kurus(havaleOdenen);
+  if (cariK <= 0) return { nakit: 0, havale: 0, havaleHakedis: yukK / 100, havaleOdenen: odenenK / 100 };
+  const havaleK = sigortali ? Math.min(Math.max(yukK - odenenK, 0), cariK) : 0;
+  return { nakit: (cariK - havaleK) / 100, havale: havaleK / 100, havaleHakedis: yukK / 100, havaleOdenen: odenenK / 100 };
+}
+
+// 'YYYY-MM' dönemini n ay ileri/geri alır.
+function maasAyOtele(donem, n) {
+  const [y, a] = donem.split('-').map(Number);
+  const t = y * 12 + (a - 1) + n;
+  return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`;
+}
+
+// ---------------------------------------------------------------------------
 // Yemek kartları
 // ---------------------------------------------------------------------------
 // Hesap, kuruş (tam sayı) üzerinden ve yuvarlama EN SONDA yapılır; Excel ile aynı sonucu verir.
@@ -1900,7 +1945,14 @@ export default async function handler(req, res) {
       ]);
       [fa, mk, yo].forEach((r) => kontrol(r.error));
       const { grup, bolum } = grupBul({ ad: firma.ad, firma_turu: firma.firma_turu }, yo.data || []);
-      return res.status(200).json({ firma: { id: firma.id, ad: firma.ad, grup, bolum }, ...ekstreHesapla(fa.data || [], mk.data || []) });
+      // Personel carisinde "Sigortalı" bilgisi de gösterilir (SGK'sı var ve başlama tarihi gelmiş).
+      let sigortali;
+      if (firma.firma_turu === 'Personel') {
+        const { data: per, error: perHata } = await db.from('m2_personel').select('sgk_baslama,sgk_yok').eq('firma_id', firmaId).maybeSingle();
+        kontrol(perHata);
+        if (per) sigortali = sigortaliMi(per, bugunIstanbul());
+      }
+      return res.status(200).json({ firma: { id: firma.id, ad: firma.ad, grup, bolum, ...(sigortali === undefined ? {} : { sigortali }) }, ...ekstreHesapla(fa.data || [], mk.data || []) });
     }
 
     // Datalar: bütün fatura/fiş ve makbuz kayıtları Excel düzeninde (en yeni üstte).
@@ -2069,6 +2121,113 @@ export default async function handler(req, res) {
     }
 
     // Maaş, notlar ve parasal puantaj değerleri YALNIZCA goster=1 ise döner (göz butonu açıkken ayrı istekle çekilir).
+    // ---------- Maaş Günü Aracı ----------
+    // Cari bakiye + birikimli havale payı üzerinden ödenecek nakit / havale. Göz kapalıyken (goster!=1) tutarlar hiç gönderilmez.
+    if (req.method === 'GET' && resource === 'maasGunu') {
+      const goster = String(req.query?.goster || '') === '1';
+      const takvimBugun = bugunIstanbul();
+      const buAy = takvimBugun.slice(0, 7);
+      const gecenAy = maasAyOtele(buAy, -1);
+      const [pr, br, ar, tr] = await Promise.all([
+        db.from('m2_personel').select('*'),
+        db.from('m2_firma_bakiye').select('firma_id,bakiye'),
+        db.from('m2_asgari_ucret').select('gecerli_donem,tutar'),
+        db.from('m2_tahakkuklar').select('id,donem'),
+      ]);
+      [pr, br, ar, tr].forEach((x) => kontrol(x.error));
+      const asgariListe = (ar.data || []).map((x) => ({ donem: x.gecerli_donem, tutar: Number(x.tutar) })).sort((a, b) => (a.donem < b.donem ? -1 : 1));
+      const bakiye = new Map((br.data || []).map((x) => [x.firma_id, Number(x.bakiye)]));
+      const tahakkukDonem = new Map((tr.data || []).map((t) => [t.id, t.donem]));
+      const personeller = pr.data || [];
+      const firmaIdler = personeller.map((p) => p.firma_id).filter(Boolean);
+
+      let kalemler = [];
+      let havaleMakbuzlari = [];
+      let avansKayitlari = [];
+      let izinKayitlari = [];
+      if (goster && firmaIdler.length) {
+        const [kl, hv, av, iz] = await Promise.all([
+          sayfaSayfaOku(() => db.from('m2_tahakkuk_kalemleri').select('tahakkuk_id,kaynak_id,brut').eq('tur', 'Personel').order('id')),
+          sayfaSayfaOku(() => db.from('m2_makbuzlar').select('firma_id,makbuz_turu,tutar').in('firma_id', firmaIdler).eq('odeme_turu', 'Banka Havalesi').eq('otomatik', false).order('id')),
+          db.from('m2_makbuzlar').select('id,firma_id,tarih,tutar,odeme_turu,odeme_hesabi,kasa,aciklama,kasa_grubu,kayit_zamani').in('firma_id', firmaIdler).eq('makbuz_turu', 'Ödeme').eq('otomatik', false).gte('tarih', `${gecenAy}-01`),
+          db.from('m2_fis_faturalar').select('id,firma_id,tarih,fatura_tutari,aciklama').in('firma_id', firmaIdler).eq('kaynak', 'izin').eq('iade', true).gte('tarih', `${gecenAy}-01`).lt('tarih', `${buAy}-01`),
+        ]);
+        kontrol(av.error);
+        kontrol(iz.error);
+        kalemler = kl;
+        havaleMakbuzlari = hv;
+        avansKayitlari = av.data || [];
+        izinKayitlari = iz.data || [];
+      }
+
+      const satirlar = [];
+      for (const p of personeller) {
+        const aktif = !p.cikis_tarihi || p.cikis_tarihi >= takvimBugun;
+        const cari = r2(bakiye.get(p.firma_id) || 0);
+        if (!aktif && Math.abs(cari) < 0.005) continue; // çıkmış ve borcu kalmamış personel listede görünmez
+        const sigortali = sigortaliMi(p, takvimBugun);
+        const temel = { id: p.id, adSoyad: p.ad_soyad, gorev: p.gorev || '', firmaId: p.firma_id, sigortali, aktif };
+        if (!goster) {
+          satirlar.push(temel);
+          continue;
+        }
+        const tahakkuklar = kalemler.filter((k) => k.kaynak_id === p.id).map((k) => ({ donem: tahakkukDonem.get(k.tahakkuk_id), brut: Number(k.brut) })).filter((t) => t.donem);
+        const havaleOdenen = r2(havaleMakbuzlari.filter((m) => m.firma_id === p.firma_id).reduce((x, m) => x + (m.makbuz_turu === 'Ödeme' ? 1 : -1) * Number(m.tutar), 0));
+        const h = maasGunuHesapla({ cari, sigortali, tahakkuklar, asgariListe, havaleOdenen });
+        const avanslar = avansKayitlari
+          .filter((m) => m.firma_id === p.firma_id)
+          .sort((a, b) => (a.tarih === b.tarih ? String(b.kayit_zamani || '').localeCompare(String(a.kayit_zamani || '')) : a.tarih < b.tarih ? 1 : -1))
+          .map((m) => ({ id: m.id, tarih: m.tarih, tutar: Number(m.tutar), odemeSekli: m.kasa || m.odeme_hesabi || '', odemeTuru: m.odeme_turu || '', kasaGrubu: m.kasa_grubu || '', aciklama: String(m.aciklama || '').replace(/^Avans(?: — )?/, '') }));
+        const izinler = izinKayitlari
+          .filter((f) => f.firma_id === p.firma_id)
+          .sort((a, b) => (a.tarih < b.tarih ? 1 : -1))
+          .map((f) => ({ id: f.id, tarih: f.tarih, tutar: Number(f.fatura_tutari), aciklama: f.aciklama || '' }));
+        satirlar.push({
+          ...temel,
+          cari,
+          nakit: h.nakit,
+          havale: h.havale,
+          havaleHakedis: h.havaleHakedis,
+          havaleOdenen: h.havaleOdenen,
+          avansToplam: r2(avanslar.reduce((x, a) => x + a.tutar, 0)),
+          izinToplam: r2(izinler.reduce((x, i) => x + i.tutar, 0)),
+          avanslar,
+          izinler,
+        });
+      }
+      satirlar.sort((a, b) => a.adSoyad.localeCompare(b.adSoyad, 'tr'));
+      const topla = (alan) => r2(satirlar.reduce((x, s) => x + (s[alan] || 0), 0));
+      return res.status(200).json({
+        gizli: !goster,
+        bugun: isGunuIstanbul(), // ödeme tarihi: Harcamalar paneliyle aynı iş günü
+        avansBaslangic: `${gecenAy}-01`,
+        izinDonem: gecenAy,
+        asgariListe,
+        personeller: satirlar,
+        ...(goster ? { toplam: { cari: topla('cari'), nakit: topla('nakit'), havale: topla('havale') } } : {}),
+      });
+    }
+
+    // Asgari ücret geçmişi: her satır "bu dönemden itibaren geçerli". Liste bütün olarak yazılır (silinen satır kalkar).
+    if (req.method === 'POST' && resource === 'asgariUcretKaydet') {
+      const ham = Array.isArray(body.liste) ? body.liste : [];
+      if (!ham.length) throw new HataMesaji(400, 'En az bir asgari ücret satırı gerekli');
+      const temiz = ham.map((x) => ({ gecerli_donem: String(x.donem || ''), tutar: tutarCoz(x.tutar) }));
+      if (temiz.some((x) => !DONEM_RE.test(x.gecerli_donem))) throw new HataMesaji(400, 'Dönem geçersiz');
+      if (temiz.some((x) => !(x.tutar > 0))) throw new HataMesaji(400, 'Tutar sıfırdan büyük olmalı');
+      if (new Set(temiz.map((x) => x.gecerli_donem)).size !== temiz.length) throw new HataMesaji(400, 'Aynı dönem iki kez yazılamaz');
+      const yaz = await db.from('m2_asgari_ucret').upsert(temiz, { onConflict: 'gecerli_donem' });
+      kontrol(yaz.error);
+      const mevcut = await db.from('m2_asgari_ucret').select('gecerli_donem');
+      kontrol(mevcut.error);
+      const silinecek = (mevcut.data || []).map((x) => x.gecerli_donem).filter((d) => !temiz.some((t) => t.gecerli_donem === d));
+      if (silinecek.length) {
+        const sil = await db.from('m2_asgari_ucret').delete().in('gecerli_donem', silinecek);
+        kontrol(sil.error);
+      }
+      return res.status(200).json({ ok: true });
+    }
+
     if (req.method === 'GET' && resource === 'personelDetay') {
       const per = await personelGetir(db, req.query?.id);
       const donem = DONEM_RE.test(String(req.query?.donem || '')) ? req.query.donem : bugunIstanbul().slice(0, 7);

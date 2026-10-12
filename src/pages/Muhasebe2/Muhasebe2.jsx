@@ -1597,6 +1597,11 @@ function EkstreModal({ firma, bildir, onKapat }) {
       {!veri && !hata && <div className="m2-empty">Yükleniyor…</div>}
       {gorunum && (
         <>
+          {veri.firma?.sigortali !== undefined && (
+            <div style={{ marginBottom: 8 }}>
+              <span className={`m2-durum ${veri.firma.sigortali ? 'g' : 'r'}`}>{veri.firma.sigortali ? 'Sigortalı' : 'Sigortasız'}</span>
+            </div>
+          )}
           <div className={`m2-ekstre-ozet ${d}`}>
             <div>
               <div className="m2-hc-durum">{DURUM_ETIKET[d]}</div>

@@ -3,6 +3,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Eye, EyeOff, Plus } from 'lucide-
 import { CekmeceKutusu, ElleRozet, ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, tarihTR, trNorm, useModalKaydet } from '../Muhasebe2/m2Ortak';
 import '../Muhasebe2/Muhasebe2.css';
 import './PersonelKlasoru.css';
+import MaasGunuAraci from './MaasGunuAraci';
 
 // ---------------------------------------------------------------------------
 // Personel Klasörü: çalışan ve çalışmayan personelin bilgileri, puantajı, izin ve avansları.
@@ -32,6 +33,7 @@ export default function PersonelKlasoru({ onNavigate }) {
   const [ara, setAra] = useState('');
   const [filtre, setFiltre] = useState('aktif'); // aktif | pasif | tumu
   const [secili, setSecili] = useState(null);
+  const [sekme, setSekme] = useState('personel'); // personel | maas
   const [formModal, setFormModal] = useState(false);
   const [yontemler, setYontemler] = useState([]);
   const [toast, setToast] = useState(null);
@@ -82,6 +84,19 @@ export default function PersonelKlasoru({ onNavigate }) {
       {hata && <div className="m2-err">{hata}</div>}
 
       {!secili && (
+        <div className="m2-tabs" role="tablist">
+          <button role="tab" aria-selected={sekme === 'personel'} className={`m2-tab ${sekme === 'personel' ? 'on' : ''}`} onClick={() => setSekme('personel')}>
+            Personeller
+          </button>
+          <button role="tab" aria-selected={sekme === 'maas'} className={`m2-tab ${sekme === 'maas' ? 'on' : ''}`} onClick={() => setSekme('maas')}>
+            Maaş Günü Aracı
+          </button>
+        </div>
+      )}
+
+      {!secili && sekme === 'maas' && <MaasGunuAraci yontemler={yontemler} bildir={bildir} />}
+
+      {!secili && sekme === 'personel' && (
         <div className="m2-card">
           <div className="m2-toolbar" style={{ marginTop: 0 }}>
             <input className="m2-input m2-ara" style={{ width: 220 }} placeholder="Personel ara…" value={ara} onChange={(e) => setAra(e.target.value)} />
@@ -202,8 +217,8 @@ function PersonelDetay({ id, bildir, yontemler, onDegisti }) {
             <b>{tarihTR(p.iseGiris)}</b>
           </div>
           <div className="pkl-alan">
-            <span>SGK Başlama</span>
-            <b>{p.sgkYok ? 'Yok' : p.sgkBaslama ? tarihTR(p.sgkBaslama) : '—'}</b>
+            <span>Sigortalı</span>
+            <b>{p.sgkYok || !p.sgkBaslama ? 'Hayır' : `Evet (SGK başlama: ${tarihTR(p.sgkBaslama)})`}</b>
           </div>
           <div className="pkl-alan">
             <span>Çıkış</span>
@@ -572,7 +587,8 @@ function PersonelFormModal({ personel, goster, onKaydet, onBitti, onKapat }) {
   const [maas, setMaas] = useState(personel && goster && personel.maas !== undefined ? String(personel.maas) : '');
   const [maasDonem, setMaasDonem] = useState(bugunISO().slice(0, 7));
   const [iseGiris, setIseGiris] = useState(personel?.iseGiris || bugunISO());
-  const [sgkYok, setSgkYok] = useState(!!personel?.sgkYok);
+  // Sigortalı = SGK'sı var ve başlama tarihi girilmiş. Kapalıyken kayıt "SGK yok" olarak yazılır.
+  const [sigortali, setSigortali] = useState(!!personel && !personel.sgkYok && !!personel.sgkBaslama);
   const [sgkBaslama, setSgkBaslama] = useState(personel?.sgkBaslama || '');
   const [cikisTarihi, setCikisTarihi] = useState(personel?.cikisTarihi || '');
   const [cikisSebebi, setCikisSebebi] = useState(personel?.cikisSebebi || '');
@@ -609,11 +625,30 @@ function PersonelFormModal({ personel, goster, onKaydet, onBitti, onKapat }) {
           <input className="m2-input" type="date" value={iseGiris} onChange={(e) => setIseGiris(e.target.value)} />
         </div>
         <div>
-          <label className="m2-label">SGK Başlama Tarihi</label>
-          <input className="m2-input" type="date" value={sgkYok ? '' : sgkBaslama} disabled={sgkYok} onChange={(e) => setSgkBaslama(e.target.value)} />
-          <label className="m2-onay" style={{ marginTop: 6 }}>
-            <input type="checkbox" checked={sgkYok} onChange={(e) => setSgkYok(e.target.checked)} /> SGK yok
+          <label className="m2-label">Sigortalı</label>
+          <label className="pkl-anahtar">
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="Sigortalı"
+              checked={sigortali}
+              onChange={(e) => {
+                setSigortali(e.target.checked);
+                if (e.target.checked && !sgkBaslama) setSgkBaslama(iseGiris);
+              }}
+            />
+            <span className="iz" aria-hidden="true" />
+            <span className="yazi">{sigortali ? 'Sigortalı' : 'Sigortasız'}</span>
           </label>
+          {sigortali && (
+            <>
+              <label className="m2-label" style={{ marginTop: 8 }}>
+                SGK Başlama Tarihi *
+              </label>
+              <input className="m2-input" type="date" aria-label="SGK başlama tarihi" value={sgkBaslama} onChange={(e) => setSgkBaslama(e.target.value)} />
+            </>
+          )}
+          <p className="m2-hint">Sigortalı personelin maaşında asgari ücret kadarı bankadan (havale), kalanı nakit ödenir.</p>
         </div>
         <div>
           <label className="m2-label">Çıkış Tarihi</label>
@@ -635,7 +670,7 @@ function PersonelFormModal({ personel, goster, onKaydet, onBitti, onKapat }) {
       {hata && <div className="m2-info r">{hata}</div>}
       <ModalAksiyon
         onKapat={onKapat}
-        devreDisi={!adSoyad.trim() || !iseGiris || (yeni && !(sayi(maas) > 0))}
+        devreDisi={!adSoyad.trim() || !iseGiris || (yeni && !(sayi(maas) > 0)) || (sigortali && !sgkBaslama)}
         bekliyor={bekliyor}
         onKaydet={() =>
           calistir({
@@ -645,8 +680,8 @@ function PersonelFormModal({ personel, goster, onKaydet, onBitti, onKapat }) {
             maas: yeni || maasDegisti ? maas : '',
             maasDonem: maasDegisti ? maasDonem : undefined,
             iseGiris,
-            sgkYok,
-            sgkBaslama,
+            sgkYok: !sigortali,
+            sgkBaslama: sigortali ? sgkBaslama : '',
             cikisTarihi,
             cikisSebebi,
             telefon,

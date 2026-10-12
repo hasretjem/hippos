@@ -212,3 +212,123 @@
 /* Hakediş Dökümü: m2-table'ın 1180px asgari genişliği kullanılmaz */
 .pkl-dokum { min-width: 0 !important; }
 .pkl-dokum td, .pkl-dokum th { vertical-align: middle; }
+/* ===== Maaş Günü Aracı (yazı renkleri !important: genel stiller yazıyı beyaz yapıp okunmaz kılıyordu) ===== */
+.pkl-maas { min-width: 880px !important; }
+.pkl-maas td, .pkl-maas th { vertical-align: middle; }
+.pkl-maas td { color: #393e41 !important; }
+.pkl-maas td.m2-neg { color: #c62828 !important; font-weight: 700; }
+.pkl-maas-alt {
+  margin-top: 3px;
+  font-size: 12px;
+  color: #393e41 !important;
+  opacity: 0.85;
+}
+.pkl-tikla {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  color: #e94f37 !important;
+}
+.pkl-maas-ozet {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.pkl-maas-ozet > div {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(57, 62, 65, 0.07);
+}
+.pkl-maas-ozet span {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.65;
+  color: #393e41 !important;
+}
+.pkl-maas-ozet b {
+  font-size: 19px;
+  color: #393e41 !important;
+}
+.pkl-odeme-ozet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  margin: 6px 0 12px;
+  font-size: 13px;
+  color: #393e41 !important;
+}
+.pkl-odeme-ozet b { color: #393e41 !important; }
+.pkl-odeme-ozet b.neg { color: #c62828 !important; }
+.pkl-odeme-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 760px) {
+  .pkl-odeme-grid { grid-template-columns: 1fr; }
+}
+.pkl-odeme-form {
+  padding: 12px 14px 14px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(57, 62, 65, 0.18);
+  background: rgba(57, 62, 65, 0.04);
+  color: #393e41 !important;
+}
+.pkl-odeme-form.nakit { border-color: rgba(46, 125, 50, 0.45); }
+.pkl-odeme-form.havale { border-color: rgba(30, 90, 170, 0.45); }
+.pkl-odeme-form h4 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #e94f37 !important; /* Hippos kırmızısı */
+}
+.pkl-odeme-kaydet { width: 100%; margin-top: 12px; }
+
+/* Sigortalı anahtarı (toggle) */
+.pkl-anahtar {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  color: #393e41 !important;
+}
+.pkl-anahtar input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.pkl-anahtar .iz {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  background: #b9bdbf;
+  transition: background 0.15s ease;
+}
+.pkl-anahtar .iz::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease;
+}
+.pkl-anahtar input:checked + .iz { background: #2e7d32; }
+.pkl-anahtar input:checked + .iz::after { transform: translateX(20px); }
+.pkl-anahtar input:focus-visible + .iz { outline: 2.5px solid #e94f37; outline-offset: 2px; }
+.pkl-anahtar .yazi { color: #393e41 !important; }
