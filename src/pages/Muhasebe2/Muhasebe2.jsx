@@ -1673,17 +1673,7 @@ function EkstreModal({ firma, bildir, onKapat }) {
                     <td className="nowrap">{r.evrakTuru}</td>
                     <td>{r.belgeNo}</td>
                     <td>{r.aciklama}</td>
-                    <td className="nowrap">
-                  <DuzenlenebilirHucre
-                    aktif={duzenlemeModu && kasaDuzenlenir(r)}
-                    tur="select"
-                    secenekler={['gunluk', 'ana']}
-                    deger={r.kasaGrubu}
-                    metin={r.odemeSekli}
-                    onKaydet={(v) => kaynakDegistir(r, 'kasaGrubu', v, 'kasa değişikliği')}
-                  />
-                  {kasaDuzenlenir(r) && duzenlemeModu && r.kasaGrubu && <span className="m2-elle"> ({r.kasaGrubu === 'gunluk' ? 'günlük' : 'ana'} kasa)</span>}
-                </td>
+                    <td className="nowrap">{r.odemeSekli}</td>
                     <td className="sayi">{r.borc ? paraFmt(r.borc) : ''}</td>
                     <td className="sayi">{r.alacak ? paraFmt(r.alacak) : ''}</td>
                     <td className={`sayi bakiye ${durumBul(r.bakiye)}`}>{paraFmt(r.bakiye)}</td>
