@@ -271,11 +271,20 @@ function vknTemizle(v) {
   const t = String(v ?? '').replace(/\D/g, '');
   return t.length === 10 || t.length === 11 ? t : '';
 }
-async function firmaKimlikYaz(db, vkn, firmaId, unvan) {
+// Bir VKN tek firmaya aittir. Başka firmaya bağlıysa tasi=true olmadan dokunmaz, çakışmayı bildirir.
+async function firmaKimlikYaz(db, vkn, firmaId, unvan, tasi = false) {
+  const { data: var_, error: okuHata } = await db.from('m2_firma_kimlik').select('firma_id').eq('vkn', vkn).maybeSingle();
+  kontrol(okuHata);
+  if (var_ && var_.firma_id !== firmaId && !tasi) {
+    const { data: f, error: fHata } = await db.from('m2_firmalar').select('ad').eq('id', var_.firma_id).maybeSingle();
+    kontrol(fHata);
+    return { cakisma: { firmaAd: f?.ad || 'başka bir firma' } };
+  }
   const { error } = await db
     .from('m2_firma_kimlik')
     .upsert({ vkn, firma_id: firmaId, unvan: metin(unvan) }, { onConflict: 'vkn' });
   kontrol(error);
+  return {};
 }
 
 // ---------------------------------------------------------------------------
@@ -1966,7 +1975,13 @@ export default async function handler(req, res) {
         kontrol(perHata);
         if (per) sigortali = sigortaliMi(per, bugunIstanbul());
       }
-      return res.status(200).json({ firma: { id: firma.id, ad: firma.ad, grup, bolum, ...(sigortali === undefined ? {} : { sigortali }) }, ...ekstreHesapla(fa.data || [], mk.data || []) });
+      let kimlikler;
+      if (firma.firma_turu === 'Firma') {
+        const { data: ki, error: kiHata } = await db.from('m2_firma_kimlik').select('vkn,unvan').eq('firma_id', firma.id).order('kayit_zamani');
+        kontrol(kiHata);
+        kimlikler = ki || [];
+      }
+      return res.status(200).json({ ...(kimlikler ? { kimlikler } : {}), firma: { id: firma.id, ad: firma.ad, grup, bolum, ...(sigortali === undefined ? {} : { sigortali }) }, ...ekstreHesapla(fa.data || [], mk.data || []) });
     }
 
     // Datalar: bütün fatura/fiş ve makbuz kayıtları Excel düzeninde (en yeni üstte).
@@ -2470,8 +2485,9 @@ export default async function handler(req, res) {
       kontrol(error);
       // XML faturadan açılan firma: VKN'yi aynı anda sözlüğe bağla.
       const vkn = vknTemizle(body.vkn);
-      if (vkn) await firmaKimlikYaz(db, vkn, data.id, body.unvan);
-      return res.status(200).json({ ok: true, firma: { ...data, bakiye: 0 } });
+      if (String(body.vkn || '').trim() && !vkn) throw new HataMesaji(400, 'VKN 10, TCKN 11 haneli olmalı');
+      const kimlik = vkn ? await firmaKimlikYaz(db, vkn, data.id, body.unvan) : {};
+      return res.status(200).json({ ok: true, firma: { ...data, bakiye: 0 }, ...(kimlik.cakisma ? { kimlikUyari: `Firma açıldı ama bu VKN/TCKN zaten "${kimlik.cakisma.firmaAd}" firmasına bağlı; taşımadım.` } : {}) });
     }
 
     // Fatura sözlüğü: VKN/TCKN -> firma (bir firmaya birden çok VKN bağlanabilir; bir VKN tek firmaya aittir).
@@ -2479,7 +2495,23 @@ export default async function handler(req, res) {
       const vkn = vknTemizle(body.vkn);
       if (!vkn) throw new HataMesaji(400, 'Geçerli bir VKN/TCKN gerekli');
       const firma = await firmaGetir(db, body.firmaId);
-      await firmaKimlikYaz(db, vkn, firma.id, body.unvan);
+      const sonuc = await firmaKimlikYaz(db, vkn, firma.id, body.unvan, body.tasi === true);
+      if (sonuc.cakisma) return res.status(200).json({ ok: false, cakisma: sonuc.cakisma });
+      // Düzeltme: VKN değiştiyse eski kayıt silinir.
+      const eski = vknTemizle(body.eskiVkn);
+      if (eski && eski !== vkn) {
+        const { error: silHata } = await db.from('m2_firma_kimlik').delete().eq('vkn', eski).eq('firma_id', firma.id);
+        kontrol(silHata);
+      }
+      return res.status(200).json({ ok: true });
+    }
+
+    if (resource === 'firmaKimlikSil') {
+      const vkn = vknTemizle(body.vkn);
+      if (!vkn) throw new HataMesaji(400, 'Geçerli bir VKN/TCKN gerekli');
+      const firma = await firmaGetir(db, body.firmaId);
+      const { error } = await db.from('m2_firma_kimlik').delete().eq('vkn', vkn).eq('firma_id', firma.id);
+      kontrol(error);
       return res.status(200).json({ ok: true });
     }
 

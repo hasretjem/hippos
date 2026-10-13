@@ -251,6 +251,7 @@ export default function Muhasebe2({ onNavigate }) {
   // Tanım ekleme (modallardan çağrılır) — hata fırlatırsa modal içinde gösterilir.
   async function firmaEkle(payload) {
     const j = await api('firmaEkle', { method: 'POST', body: payload });
+    if (j.kimlikUyari) bildir(j.kimlikUyari, true);
     await yukle();
     return j.firma;
   }
@@ -400,6 +401,8 @@ export default function Muhasebe2({ onNavigate }) {
       {modal?.tur === 'firma' && (
         <FirmaModal
           baslangicAd={modal.ad}
+          baslangicVkn={modal.vkn}
+          baslangicUnvan={modal.unvan}
           kategoriler={veri.kategoriler}
           onKaydet={firmaEkle}
           onBitti={bitir}
@@ -716,7 +719,7 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal, doldur, onKimlikKayde
         firmalar={veri.firmalar}
         valueId={firmaId}
         onChange={firmaSec}
-        onYeni={(ad) => onModal({ tur: 'firma', ad: ad || (vknBagla ? firmaAdiOner(vknBagla.unvan) : ''), bitince: (f) => firmaSec(f.id, f) })}
+        onYeni={(ad) => onModal({ tur: 'firma', ad: ad || (vknBagla ? firmaAdiOner(vknBagla.unvan) : ''), vkn: vknBagla ? vknBagla.vkn : '', unvan: vknBagla ? vknBagla.unvan : '', bitince: (f) => firmaSec(f.id, f) })}
       />
       {vknBagla && (
         <label className="m2-vkn-bagla">
@@ -1540,7 +1543,7 @@ function HesapOzetleriSekmesi({ aktif, bildir, onDegisti }) {
         })}
       </div>
 
-      {ekstreFirma && <EkstreModal firma={ekstreFirma} bildir={bildir} onKapat={() => setEkstreFirma(null)} />}
+      {ekstreFirma && <EkstreModal firma={ekstreFirma} bildir={bildir} onKimlikDegisti={onDegisti} onKapat={() => setEkstreFirma(null)} />}
       {duzenle && (
         <FirmaDuzenleModal
           firma={duzenle}
@@ -1589,7 +1592,125 @@ function FirmaDuzenleModal({ firma, kategoriler, onKaydet, onBitti, onKapat }) {
 }
 
 // Ekstre penceresi: en yeni işlem üstte; PDF'te sıralama eskiden yeniye.
-function EkstreModal({ firma, bildir, onKapat }) {
+// Cari kartındaki "Fatura kimlikleri": XML faturalardan öğrenilen (ya da elle girilen) VKN/TCKN'ler.
+function FaturaKimlikleri({ firmaId, ilk, bildir, onDegisti }) {
+  const [liste, setListe] = useState(ilk);
+  const [acik, setAcik] = useState(false);
+  const [yeni, setYeni] = useState('');
+  const [duzen, setDuzen] = useState(null); // { eski, vkn }
+  const [bekliyor, setBekliyor] = useState(false);
+  const gecerli = (v) => v.length === 10 || v.length === 11;
+
+  async function kaydet({ vkn, unvan, eskiVkn }) {
+    setBekliyor(true);
+    try {
+      let j = await api('firmaKimlikKaydet', { method: 'POST', body: { firmaId, vkn, unvan, eskiVkn } });
+      if (!j.ok && j.cakisma) {
+        if (!window.confirm(`Bu VKN/TCKN şu an "${j.cakisma.firmaAd}" firmasına bağlı. Bu firmaya taşınsın mı?`)) return false;
+        j = await api('firmaKimlikKaydet', { method: 'POST', body: { firmaId, vkn, unvan, eskiVkn, tasi: true } });
+      }
+      setListe((l) => [...l.filter((x) => x.vkn !== vkn && x.vkn !== eskiVkn), { vkn, unvan: unvan || '' }]);
+      if (onDegisti) onDegisti();
+      return true;
+    } catch (e) {
+      bildir(e.message, true);
+      return false;
+    } finally {
+      setBekliyor(false);
+    }
+  }
+  async function sil(k) {
+    if (!window.confirm(`${k.vkn} bu firmadan kaldırılsın mı? (Eski fiş/faturalara dokunulmaz; sonraki faturalar kendiliğinden eşleşmez.)`)) return;
+    setBekliyor(true);
+    try {
+      await api('firmaKimlikSil', { method: 'POST', body: { firmaId, vkn: k.vkn } });
+      setListe((l) => l.filter((x) => x.vkn !== k.vkn));
+      if (onDegisti) onDegisti();
+    } catch (e) {
+      bildir(e.message, true);
+    } finally {
+      setBekliyor(false);
+    }
+  }
+
+  return (
+    <div className="m2-kimlik">
+      <button type="button" className="m2-kimlik-baslik" onClick={() => setAcik((a) => !a)}>
+        Fatura kimlikleri (VKN/TCKN) <b>{liste.length}</b>
+        <span>{acik ? 'Gizle' : 'Göster'}</span>
+      </button>
+      {acik && (
+        <div className="m2-kimlik-icerik">
+          <p className="m2-hint">XML faturadaki VKN/TCKN burada toplanır; bu firmanın sonraki faturaları buradan otomatik eşleşir.</p>
+          {liste.length === 0 && <p className="m2-hint">Henüz kayıtlı VKN/TCKN yok.</p>}
+          {liste.map((k) => (
+            <div key={k.vkn} className="m2-kimlik-satir">
+              {duzen && duzen.eski === k.vkn ? (
+                <>
+                  <input
+                    className="m2-input"
+                    inputMode="numeric"
+                    value={duzen.vkn}
+                    onChange={(e) => setDuzen({ ...duzen, vkn: e.target.value.replace(/\D/g, '').slice(0, 11) })}
+                  />
+                  <button
+                    type="button"
+                    className="m2-btn mini"
+                    disabled={bekliyor || !gecerli(duzen.vkn)}
+                    onClick={async () => {
+                      if (duzen.vkn === k.vkn || (await kaydet({ vkn: duzen.vkn, unvan: k.unvan, eskiVkn: k.vkn }))) setDuzen(null);
+                    }}
+                  >
+                    Kaydet
+                  </button>
+                  <button type="button" className="m2-btn sec mini" onClick={() => setDuzen(null)}>
+                    Vazgeç
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="m2-kimlik-bilgi">
+                    <b>
+                      {k.vkn.length === 11 ? 'TCKN' : 'VKN'} {k.vkn}
+                    </b>
+                    {k.unvan ? <span title={k.unvan}>{k.unvan}</span> : null}
+                  </div>
+                  <button type="button" className="m2-btn sec mini" disabled={bekliyor} onClick={() => setDuzen({ eski: k.vkn, vkn: k.vkn })}>
+                    Düzelt
+                  </button>
+                  <button type="button" className="m2-btn sec mini" disabled={bekliyor} onClick={() => sil(k)}>
+                    Sil
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
+          <div className="m2-kimlik-satir">
+            <input
+              className="m2-input"
+              inputMode="numeric"
+              placeholder="+ VKN (10) / TCKN (11) ekle"
+              value={yeni}
+              onChange={(e) => setYeni(e.target.value.replace(/\D/g, '').slice(0, 11))}
+            />
+            <button
+              type="button"
+              className="m2-btn mini"
+              disabled={bekliyor || !gecerli(yeni)}
+              onClick={async () => {
+                if (await kaydet({ vkn: yeni, unvan: '' })) setYeni('');
+              }}
+            >
+              Ekle
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EkstreModal({ firma, bildir, onKapat, onKimlikDegisti }) {
   const [veri, setVeri] = useState(null);
   const [hata, setHata] = useState('');
   const [aralik, setAralik] = useState('tumu'); // tumu | buyil | ozel
@@ -1652,6 +1773,10 @@ function EkstreModal({ firma, bildir, onKapat }) {
               <span className={`m2-durum ${veri.firma.sigortali ? 'g' : 'r'}`}>{veri.firma.sigortali ? 'Sigortalı' : 'Sigortasız'}</span>
             </div>
           )}
+          {veri.kimlikler && (
+            <FaturaKimlikleri firmaId={firma.id} ilk={veri.kimlikler} bildir={bildir} onDegisti={onKimlikDegisti} />
+          )}
+
           <div className={`m2-ekstre-ozet ${d}`}>
             <div>
               <div className="m2-hc-durum">{DURUM_ETIKET[d]}</div>
@@ -2050,8 +2175,9 @@ function MakbuzDuzenleForm({ grup, veri, bildir, onKaydet, onKapat }) {
 // ---------------------------------------------------------------------------
 // Modallar: yeni firma / kategori / ödeme yöntemi
 // ---------------------------------------------------------------------------
-function FirmaModal({ baslangicAd, kategoriler, onKaydet, onBitti, onKapat }) {
+function FirmaModal({ baslangicAd, baslangicVkn, baslangicUnvan, kategoriler, onKaydet, onBitti, onKapat }) {
   const [ad, setAd] = useState(baslangicAd || '');
+  const [vkn, setVkn] = useState(baslangicVkn || '');
   const [varsayilanKategori, setVarsayilanKategori] = useState('');
   const { hata, bekliyor, calistir } = useModalKaydet(onKaydet, onBitti);
 
@@ -2068,12 +2194,20 @@ function FirmaModal({ baslangicAd, kategoriler, onKaydet, onBitti, onKapat }) {
           </option>
         ))}
       </select>
+      <label className="m2-label">VKN / TCKN (opsiyonel)</label>
+      <input
+        className="m2-input"
+        inputMode="numeric"
+        placeholder="10 haneli VKN ya da 11 haneli TCKN"
+        value={vkn}
+        onChange={(e) => setVkn(e.target.value.replace(/\D/g, '').slice(0, 11))}
+      />
       {hata && <div className="m2-info r">{hata}</div>}
       <ModalAksiyon
         onKapat={onKapat}
-        devreDisi={!ad.trim()}
+        devreDisi={!ad.trim() || (vkn !== '' && vkn.length !== 10 && vkn.length !== 11)}
         bekliyor={bekliyor}
-        onKaydet={() => calistir({ ad, varsayilanKategori })}
+        onKaydet={() => calistir({ ad, varsayilanKategori, ...(vkn ? { vkn, unvan: baslangicUnvan || '' } : {}) })}
       />
     </ModalKabuk>
   );

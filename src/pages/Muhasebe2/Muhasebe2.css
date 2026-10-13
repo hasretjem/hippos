@@ -1145,3 +1145,15 @@
 .m2-xc-esle-bilgi { display: grid; gap: 2px; min-width: 0; }
 .m2-xc-esle-bilgi b { font-size: 13px; color: #393e41 !important; overflow-wrap: anywhere; }
 .m2-xc-esle-bilgi span { font-size: 12px; color: rgba(57, 62, 65, .7) !important; }
+
+/* Cari kartı: fatura kimlikleri (VKN/TCKN) */
+.m2-kimlik { margin: 0 0 10px; border: 1px solid rgba(57, 62, 65, .18); border-radius: 12px; background: #fff; }
+.m2-kimlik-baslik { width: 100%; display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: none; border: 0; cursor: pointer; font-size: 13px; font-weight: 800; color: #e94f37 !important; text-align: left; }
+.m2-kimlik-baslik b { background: #e94f37; color: #fff !important; border-radius: 999px; padding: 0 8px; font-size: 12px; }
+.m2-kimlik-baslik span { margin-left: auto; font-size: 12px; text-decoration: underline; color: #e94f37 !important; }
+.m2-kimlik-icerik { padding: 0 12px 10px; display: grid; gap: 8px; }
+.m2-kimlik-satir { display: flex; gap: 6px; align-items: center; }
+.m2-kimlik-satir .m2-input { flex: 1 1 auto; min-width: 0; }
+.m2-kimlik-bilgi { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
+.m2-kimlik-bilgi b { font-size: 13px; color: #393e41 !important; }
+.m2-kimlik-bilgi span { font-size: 12px; color: rgba(57, 62, 65, .7) !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
