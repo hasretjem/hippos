@@ -379,6 +379,10 @@
   }
   table[data-mtablo] [data-mgizli] { display: none !important; }
   .m2-table-wrap { overflow-x: hidden; }
+  /* Ürün Yönetimi: satırdaki onca düğme yüzünden ürün adı 0 genişliğe sıkışıyordu. Ad kendi satırında tam genişlikte, diğer ayarlar altında sarılır */
+  .pr-row-main { flex-wrap: wrap; row-gap: 8px; gap: 8px; }
+  .pr-row-main > .pr-row-name, .pr-row-main > .pr-name-input { order: -2; flex: 1 0 100%; white-space: normal; overflow: visible; text-overflow: clip; word-break: break-word; }
+  .pr-row-main > .pr-row-tag, .pr-row-main > .pr-pasif-tag { order: -1; }
   /* Hesap Özetleri cari kartları: dik tutuşta 2 sütun (ekranda 4 kart), yan tutuşta daha fazla; yazılar kısaltılmaz, sığacak kadar küçülür */
   .m2-hc-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
   .m2-hc-kart { aspect-ratio: auto; min-height: 112px; padding: 9px 10px; border-radius: 14px; gap: 8px; }
