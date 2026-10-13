@@ -29,7 +29,7 @@ const VARSAYILANLAR = [
   { sinif: 'm2-yk', sutunlar: ['firma', 'vade', 'bankaya yatacak'], ana: 'firma',
     yatay: ['firma', 'fatura tarihi', 'matrah', 'fatura toplamı', 'vade', 'kesinti toplamı', 'bankaya yatacak'] },
   { sinif: 'rc-ham-tablo', sutunlar: ['malzeme', 'birim', 'fiyat', 'tarih'], ana: 'malzeme' },
-  { sinif: 'm2-ekstre', sutunlar: ['tarih', 'açıklama', 'borç', 'alacak', 'bakiye'], ana: 'açıklama' },
+  { sinif: 'm2-ekstre', sutunlar: ['=no', 'tarih', 'açıklama', 'borç', 'alacak', 'bakiye'], ana: 'açıklama' },
 ];
 
 const kucuk = (s) => (s || '').toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ').trim();

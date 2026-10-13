@@ -1197,3 +1197,63 @@ table:is(.m2-datalar, .m2-ekstre)[data-mtablo] tr.g-son td:nth-child(2) { box-sh
 table:is(.m2-datalar, .m2-ekstre)[data-mtablo] tr.g-alt.g-ilk td:nth-child(2), table:is(.m2-datalar, .m2-ekstre)[data-mtablo] tr.g-alt.g-orta td:nth-child(2),
 table:is(.m2-datalar, .m2-ekstre)[data-mtablo] tr.g-alt.g-son td:nth-child(2) { box-shadow: inset 4px 0 0 rgba(74, 111, 165, 0.85); }
 table:is(.m2-datalar, .m2-ekstre)[data-mtablo] .m2-oto-ok { display: none; }
+
+/* Ekstre -> Datalar: işlem numarası bağlantısı, "ekstreye dön" şeridi ve varış vurgusu */
+.m2-no-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: #b53a26 !important;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.m2-no-link:hover { color: #e94f37 !important; }
+.m2-geri-bar {
+  position: sticky;
+  top: 8px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 10px;
+  padding: 4px 6px 4px 4px;
+  border-radius: 999px;
+  background: #393e41;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+.m2-geri-dugme {
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #e94f37;
+  color: #fff !important;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.m2-geri-kapat {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff !important;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+@keyframes m2-varis {
+  0%, 55% { background: rgba(233, 79, 55, 0.22); }
+  100% { background: transparent; }
+}
+.m2-datalar tr.g-flash td { animation: m2-varis 2.6s ease-out 1; }

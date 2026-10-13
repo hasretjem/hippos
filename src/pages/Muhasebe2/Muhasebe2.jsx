@@ -80,6 +80,7 @@ export default function Muhasebe2({ onNavigate }) {
   const [sekme, setSekme] = useState('giris'); // 'giris' | 'datalar'
   const [xmlAcik, setXmlAcik] = useState(false); // yüklenen XML faturalar çekmecesi (varsayılan kapalı)
   const [xmlBekleyen, setXmlBekleyen] = useState(0);
+  const [datalarHedef, setDatalarHedef] = useState(null); // { key, no, geriAd } — ekstredeki işlem numarasından Datalar'a gidiş
   const [doldur, setDoldur] = useState(null); // { key, fatura } — çekmeceden "Aktar" ile forma gönderilir
   const zamanlayici = useRef(null);
 
@@ -377,6 +378,8 @@ export default function Muhasebe2({ onNavigate }) {
       <div style={{ display: sekme === 'datalar' ? undefined : 'none' }}>
         <DatalarSekmesi
           aktif={sekme === 'datalar'}
+          hedef={datalarHedef}
+          onGeri={() => setSekme('ozetler')}
           duzenlemeModu={duzenlemeModu}
           veri={veri}
           bildir={bildir}
@@ -386,7 +389,15 @@ export default function Muhasebe2({ onNavigate }) {
         />
       </div>
       <div style={{ display: sekme === 'ozetler' ? undefined : 'none' }}>
-        <HesapOzetleriSekmesi aktif={sekme === 'ozetler'} bildir={bildir} onDegisti={yukle} />
+        <HesapOzetleriSekmesi
+          aktif={sekme === 'ozetler'}
+          bildir={bildir}
+          onDegisti={yukle}
+          onIslemeGit={(no, firmaAd) => {
+            setDatalarHedef({ key: Date.now(), no, geriAd: firmaAd });
+            setSekme('datalar');
+          }}
+        />
       </div>
       <div style={{ display: sekme === 'yemek' ? undefined : 'none' }}>
         <YemekKartlariSekmesi aktif={sekme === 'yemek'} bildir={bildir} yontemler={veri.odemeYontemleri} onDegisti={yukle} />
@@ -991,7 +1002,7 @@ const EVRAK_SINIFI = {
   'Ödeme (Tediye) Makbuzu': 'tediye',
 };
 
-function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, onDegisti }) {
+function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, onDegisti, hedef, onGeri }) {
   // Telefonda Tutar/Tahsilat/Ödeme tek "Miktar" sütununda da gösterilir (masaüstünde bu sütun yok)
   const mobil = useIsMobile();
   const [kayitlar, setKayitlar] = useState(null);
@@ -1050,6 +1061,32 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
       return `${konum}${konum === 'g-tek' ? '' : ' g-coklu'}${alt ? ' g-alt' : ''}`;
     });
   }, [gorunen]);
+  // Ekstredeki işlem numarasından gelindi: filtreler temizlenir, işlem ekranın ortasına kaydırılır ve kısa süre vurgulanır.
+  const [geriAd, setGeriAd] = useState(null);
+  const [bekleyenNo, setBekleyenNo] = useState(null);
+  useEffect(() => {
+    if (!hedef) return;
+    tarihDokunuldu.current = true;
+    setSecim(bosSecimler());
+    setGeriAd(hedef.geriAd);
+    setBekleyenNo(hedef.no);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hedef && hedef.key]);
+  useEffect(() => {
+    if (!aktif) setGeriAd(null);
+  }, [aktif]);
+  useEffect(() => {
+    if (!bekleyenNo || !aktif || !govdeRef.current) return undefined;
+    const satirlar = Array.from(govdeRef.current.querySelectorAll(`tr[data-no="${bekleyenNo}"]`));
+    if (!satirlar.length) return undefined;
+    const zaman = setTimeout(() => {
+      satirlar[Math.floor(satirlar.length / 2)].scrollIntoView({ block: 'center', behavior: 'smooth' });
+      satirlar.forEach((x) => x.classList.add('g-flash'));
+      setTimeout(() => satirlar.forEach((x) => x.classList.remove('g-flash')), 2600);
+      setBekleyenNo(null);
+    }, 120);
+    return () => clearTimeout(zaman);
+  }, [bekleyenNo, aktif, gorunen]);
   // Üzerine gelince aynı işlemin bütün satırları vurgulanır (yalnızca masaüstü; DOM üzerinden, yeniden çizim yok).
   const govdeRef = useRef(null);
   const sonGrup = useRef('');
@@ -1153,6 +1190,16 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
 
   return (
     <div className="m2-card">
+      {geriAd && (
+        <div className="m2-geri-bar">
+          <button type="button" className="m2-geri-dugme" onClick={onGeri}>
+            ← {mobil ? 'Ekstreye dön' : `${geriAd} ekstresine dön`}
+          </button>
+          <button type="button" className="m2-geri-kapat" aria-label="Kapat" onClick={() => setGeriAd(null)}>
+            ×
+          </button>
+        </div>
+      )}
       <div className="m2-row" style={{ justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap' }}>
         <h2 style={{ margin: 0 }}>Datalar</h2>
         <div className="m2-row" style={{ flexWrap: 'wrap' }}>
@@ -1217,7 +1264,7 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
               </tr>
             )}
             {gorunen.map((r, i) => (
-              <tr key={r.id} data-grup={r.grupId || undefined} className={`${r.otomatik ? 'oto ' : ''}${grupSinifi[i]}`}>
+              <tr key={r.id} data-grup={r.grupId || undefined} data-no={r.islemNo || undefined} className={`${r.otomatik ? 'oto ' : ''}${grupSinifi[i]}`}>
                 <td className="m2-no" title={r.islemNo ? `İşlem No ${r.islemNo}` : undefined}>
                   {r.islemNo}
                 </td>
@@ -1397,7 +1444,7 @@ const HESAP_GRUPLARI = [
   { anahtar: 'cariler', etiket: 'Cariler', gruplar: ['Firma'] },
 ];
 
-function HesapOzetleriSekmesi({ aktif, bildir, onDegisti }) {
+function HesapOzetleriSekmesi({ aktif, bildir, onDegisti, onIslemeGit }) {
   const [firmalar, setFirmalar] = useState(null);
   const [kategoriler, setKategoriler] = useState([]);
   const [hata, setHata] = useState('');
@@ -1572,7 +1619,7 @@ function HesapOzetleriSekmesi({ aktif, bildir, onDegisti }) {
         })}
       </div>
 
-      {ekstreFirma && <EkstreModal firma={ekstreFirma} bildir={bildir} onKimlikDegisti={onDegisti} onKapat={() => setEkstreFirma(null)} />}
+      {ekstreFirma && <EkstreModal firma={ekstreFirma} aktif={aktif} onIslemeGit={onIslemeGit} bildir={bildir} onKimlikDegisti={onDegisti} onKapat={() => setEkstreFirma(null)} />}
       {duzenle && (
         <FirmaDuzenleModal
           firma={duzenle}
@@ -1739,7 +1786,7 @@ function FaturaKimlikleri({ firmaId, ilk, bildir, onDegisti }) {
   );
 }
 
-function EkstreModal({ firma, bildir, onKapat, onKimlikDegisti }) {
+function EkstreModal({ firma, bildir, onKapat, onKimlikDegisti, aktif = true, onIslemeGit }) {
   const [veri, setVeri] = useState(null);
   const [hata, setHata] = useState('');
   const [aralik, setAralik] = useState('tumu'); // tumu | buyil | ozel
@@ -1750,15 +1797,23 @@ function EkstreModal({ firma, bildir, onKapat, onKimlikDegisti }) {
   const bugun = bugunISO();
   const wrapRef = useRef(null);
 
+  // Ekstre, işlem numarasından Datalar'a gidilince kapanmaz, yalnızca gizlenir (sekme kapalıyken görünmez).
+  // Geri dönünce (aktif) bakiyeler yenilenir ve kaydırma konumu geri verilir.
+  const geriKonum = useRef(null);
   useEffect(() => {
+    if (!aktif) return undefined;
     let iptal = false;
     api('ekstre', { query: { firmaId: firma.id } })
       .then((j) => !iptal && setVeri(j))
       .catch((e) => !iptal && setHata(e.message));
+    if (geriKonum.current != null) {
+      const el = wrapRef.current;
+      if (el) requestAnimationFrame(() => { el.scrollTop = geriKonum.current ?? el.scrollTop; });
+    }
     return () => {
       iptal = true;
     };
-  }, [firma.id]);
+  }, [firma.id, aktif]);
 
   const baslangic = aralik === 'buyil' ? `${bugun.slice(0, 4)}-01-01` : aralik === 'ozel' ? bas : '';
   const bitis = aralik === 'ozel' ? bit : '';
@@ -1784,7 +1839,14 @@ function EkstreModal({ firma, bildir, onKapat, onKimlikDegisti }) {
   // Eskiden yeniye sıralı olduğu için pencere en alta kaydırılmış açılır: son bakiye ve toplam görünür.
   useEffect(() => {
     const el = wrapRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    if (geriKonum.current != null && aktif) {
+      el.scrollTop = geriKonum.current;
+      geriKonum.current = null;
+    } else if (geriKonum.current == null) {
+      el.scrollTop = el.scrollHeight;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gorunum]);
 
   async function pdfPaylas() {
@@ -1892,8 +1954,21 @@ function EkstreModal({ firma, bildir, onKapat, onKimlikDegisti }) {
                 )}
                 {gorunum.satirlar.map((r, i) => (
                   <tr key={r.id} className={`${r.otomatik ? 'oto ' : ''}${ekstreGrupSinifi[i]}`}>
-                    <td className="m2-no" title={r.islemNo ? `İşlem No ${r.islemNo}` : undefined}>
-                      {r.islemNo}
+                    <td className="m2-no" title={r.islemNo ? `Datalar'da göster (İşlem No ${r.islemNo})` : undefined}>
+                      {r.islemNo && onIslemeGit ? (
+                        <button
+                          type="button"
+                          className="m2-no-link"
+                          onClick={() => {
+                            geriKonum.current = wrapRef.current ? wrapRef.current.scrollTop : null;
+                            onIslemeGit(r.islemNo, firma.ad);
+                          }}
+                        >
+                          {r.islemNo}
+                        </button>
+                      ) : (
+                        r.islemNo
+                      )}
                     </td>
                     <td className="nowrap">{tarihTR(r.tarih)}</td>
                     <td className="nowrap">
