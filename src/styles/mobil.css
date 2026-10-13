@@ -379,6 +379,15 @@
   }
   table[data-mtablo] [data-mgizli] { display: none !important; }
   .m2-table-wrap { overflow-x: hidden; }
+  /* Hesap Özetleri cari kartları: dik tutuşta 2 sütun (ekranda 4 kart), yan tutuşta daha fazla; yazılar kısaltılmaz, sığacak kadar küçülür */
+  .m2-hc-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .m2-hc-kart { aspect-ratio: auto; min-height: 112px; padding: 9px 10px; border-radius: 14px; gap: 8px; }
+  .m2-hc-ad { font-size: 12px; padding-right: 24px; -webkit-line-clamp: unset; display: block; overflow: visible; }
+  .m2-hc-tag { font-size: 9px; margin-top: 2px; }
+  .m2-hc-tutar { font-size: 15px; }
+  .m2-hc-durum { font-size: 10px; }
+  .m2-hc-yardim { font-size: 9.5px; }
+  .m2-hc-duzenle { top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 7px; }
   table.m2-datalar[data-mtablo] tr > th:first-child { width: 25%; }
   table.m2-datalar[data-mtablo] td.sayi { font-size: 12px !important; }
   table[data-mtablo] .m2-badge { font-size: 10px; padding: 2px 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
