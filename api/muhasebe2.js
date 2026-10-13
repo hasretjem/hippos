@@ -1996,14 +1996,41 @@ export default async function handler(req, res) {
           )
           .order('tarih', { ascending: false })
           .order('kayit_zamani', { ascending: false })
-          .order('sira', { ascending: true })
+          .order('grup_id', { ascending: true })
+          .order('sira', { ascending: false })
           .order('id', { ascending: true })
           .range(sayfa * DATALAR_SAYFA, sayfa * DATALAR_SAYFA + DATALAR_SAYFA - 1);
         kontrol(error);
         tum = tum.concat(data || []);
         if (!data || data.length < DATALAR_SAYFA) break;
       }
+      // İşlem numaraları (grup_id -> no): aynı işlemden doğan satırlar aynı numarayı taşır.
+      const noHaritasi = new Map();
+      for (let sayfa = 0; sayfa < 20; sayfa++) {
+        const { data, error } = await db.from('m2_islem_no').select('grup_id,no').order('no').range(sayfa * 1000, sayfa * 1000 + 999);
+        kontrol(error);
+        (data || []).forEach((x) => noHaritasi.set(x.grup_id, x.no));
+        if (!data || data.length < 1000) break;
+      }
+      // Aynı işlemin satırları yan yana ve "en yeni adım üstte" sırasıyla (otomatik tahsilat, otomatik ödeme, makbuz, fatura) gelir.
+      // Grup, ilk göründüğü yerde durur (gruplar arası sıra: tarih ve kayıt zamanı, yeniden eskiye).
+      {
+        const gruplar = new Map();
+        const sirali = [];
+        tum.forEach((r) => {
+          if (!r.grup_id) return sirali.push([r]);
+          let g = gruplar.get(r.grup_id);
+          if (!g) {
+            g = [];
+            gruplar.set(r.grup_id, g);
+            sirali.push(g);
+          }
+          g.push(r);
+        });
+        tum = sirali.flatMap((g) => (g.length > 1 ? [...g].sort((a, b) => (b.sira || 0) - (a.sira || 0)) : g));
+      }
       const kayitlar = tum.map((r) => ({
+        islemNo: r.grup_id && noHaritasi.has(r.grup_id) ? String(noHaritasi.get(r.grup_id)) : '',
         id: r.id,
         tarih: r.tarih,
         evrakTuru: r.kaynak === 'devir' ? 'Devir' : r.evrak_turu,

@@ -392,7 +392,7 @@
   .m2-hc-durum { font-size: 10px; }
   .m2-hc-yardim { font-size: 9.5px; }
   .m2-hc-duzenle { top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 7px; }
-  table.m2-datalar[data-mtablo] tr > th:first-child { width: 25%; }
+  table.m2-datalar[data-mtablo] tr > th:nth-child(2) { width: 25%; }
   table.m2-datalar[data-mtablo] td.sayi { font-size: 12px !important; }
   table[data-mtablo] .m2-badge { font-size: 10px; padding: 2px 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
   .mtablo-bar {
@@ -559,7 +559,7 @@
     .m2-tabs { flex-wrap: nowrap; overflow-x: auto; margin-bottom: 8px; scrollbar-width: none; }
     .m2-tabs::-webkit-scrollbar { display: none; }
     .m2-tabs > * { flex-shrink: 0; padding-top: 7px; padding-bottom: 7px; }
-    table.m2-datalar[data-mtablo] tr > th:first-child { width: 11%; }
+    table.m2-datalar[data-mtablo] tr > th:nth-child(2) { width: 11%; }
     table[data-mtablo][data-msayi="6"] th[data-mana], table[data-mtablo][data-msayi="7"] th[data-mana], table[data-mtablo][data-msayi="8"] th[data-mana] { width: 18%; }
   }
 }

@@ -11,6 +11,7 @@ import { tarihTR, trNorm } from './m2Ortak';
 const AYLAR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 
 export const FILTRE_KOLONLARI = [
+  { anahtar: 'islemNo', baslik: 'İşlem No' },
   { anahtar: 'tarih', baslik: 'Tarih' },
   { anahtar: 'evrakTuru', baslik: 'Evrak Türü' },
   { anahtar: 'firmaAdi', baslik: 'Firma Adı' },

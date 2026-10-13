@@ -970,6 +970,7 @@ function MakbuzFormu({ veri, bildir, onKaydet, onModal }) {
 // Varsayılan: içinde bulunulan ay. Tüm kayıtlar yüklenir, filtre bunların üzerinde çalışır.
 // ---------------------------------------------------------------------------
 const DATALAR_SUTUNLAR = [
+  { baslik: 'İşlem No', filtre: 'islemNo' },
   { baslik: 'Tarih', filtre: 'tarih' },
   { baslik: 'Evrak Türü', filtre: 'evrakTuru' },
   { baslik: 'Firma Adı', filtre: 'firmaAdi' },
@@ -1029,6 +1030,8 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
     FILTRE_KOLONLARI.forEach(({ anahtar }) => {
       if (anahtar === 'tarih') {
         o.tarih = [...new Set(liste.map((r) => r.tarih).filter(Boolean))].sort();
+      } else if (anahtar === 'islemNo') {
+        o.islemNo = [...new Set(liste.map((r) => r.islemNo ?? ''))].sort((a, b) => Number(b || 0) - Number(a || 0));
       } else {
         o[anahtar] = [...new Set(liste.map((r) => r[anahtar] ?? ''))].sort((a, b) => a.localeCompare(b, 'tr'));
       }
@@ -1036,6 +1039,28 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
     return o;
   }, [kayitlar]);
   const gorunen = useMemo(() => filtreUygula(kayitlar || [], secim), [kayitlar, secim]);
+  // Görsel gruplama: ekranda alt alta gelen ve aynı işlemden doğan satırlar tek blok olarak çizilir.
+  const grupSinifi = useMemo(() => {
+    let alt = false;
+    return gorunen.map((r, i) => {
+      const onceki = i > 0 && gorunen[i - 1].grupId && gorunen[i - 1].grupId === r.grupId;
+      const sonraki = i < gorunen.length - 1 && gorunen[i + 1].grupId && gorunen[i + 1].grupId === r.grupId;
+      if (!onceki) alt = !alt;
+      const konum = onceki && sonraki ? 'g-orta' : onceki ? 'g-son' : sonraki ? 'g-ilk' : 'g-tek';
+      return `${konum}${konum === 'g-tek' ? '' : ' g-coklu'}${alt ? ' g-alt' : ''}`;
+    });
+  }, [gorunen]);
+  // Üzerine gelince aynı işlemin bütün satırları vurgulanır (yalnızca masaüstü; DOM üzerinden, yeniden çizim yok).
+  const govdeRef = useRef(null);
+  const sonGrup = useRef('');
+  function grupVurgula(e) {
+    const tr = e.target.closest ? e.target.closest('tr[data-grup]') : null;
+    const g = tr && tr.classList.contains('g-coklu') ? tr.dataset.grup : '';
+    if (g === sonGrup.current || !govdeRef.current) return;
+    sonGrup.current = g;
+    govdeRef.current.querySelectorAll('tr.g-vurgu').forEach((x) => x.classList.remove('g-vurgu'));
+    if (g) govdeRef.current.querySelectorAll(`tr[data-grup="${g}"]`).forEach((x) => x.classList.add('g-vurgu'));
+  }
   const filtreAktif = Object.values(secim).some(Boolean);
 
   function secimDegistir(anahtar, yeni) {
@@ -1176,7 +1201,7 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
               {duzenlemeModu && <th>İşlem</th>}
             </tr>
           </thead>
-          <tbody>
+          <tbody ref={govdeRef} onMouseOver={mobil ? undefined : grupVurgula} onMouseLeave={mobil ? undefined : grupVurgula}>
             {kayitlar && kayitlar.length === 0 && (
               <tr>
                 <td colSpan={DATALAR_SUTUNLAR.length + (duzenlemeModu ? 1 : 0) + (mobil ? 1 : 0)} className="m2-empty">
@@ -1191,12 +1216,16 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
                 </td>
               </tr>
             )}
-            {gorunen.map((r) => (
-              <tr key={r.id} className={r.otomatik ? 'oto' : ''}>
+            {gorunen.map((r, i) => (
+              <tr key={r.id} data-grup={r.grupId || undefined} className={`${r.otomatik ? 'oto ' : ''}${grupSinifi[i]}`}>
+                <td className="m2-no" title={r.islemNo ? `İşlem No ${r.islemNo}` : undefined}>
+                  {r.islemNo}
+                </td>
                 <td className="nowrap">
                   <DuzenlenebilirHucre aktif={duzenlemeModu && (!r.kaynak || tarihDuzenlenir(r))} tur="date" deger={r.tarih} metin={tarihTR(r.tarih)} onKaydet={(v) => degistir(r, 'tarih', v, 'tarih değişikliği')} />
                 </td>
                 <td className="nowrap">
+                  {r.otomatik && <span className="m2-oto-ok" title="Otomatik kesilen evrak">↳ </span>}
                   <span className={`m2-badge ${EVRAK_SINIFI[r.evrakTuru] || ''}`}>{r.evrakTuru}</span>
                 </td>
                 <td>
