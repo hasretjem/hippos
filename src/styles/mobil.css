@@ -562,4 +562,23 @@
     table.m2-datalar[data-mtablo] tr > th:nth-child(2) { width: 11%; }
     table[data-mtablo][data-msayi="6"] th[data-mana], table[data-mtablo][data-msayi="7"] th[data-mana], table[data-mtablo][data-msayi="8"] th[data-mana] { width: 18%; }
   }
+
+  /* ---- Datalar / Ekstre: No sütunu (sabit dar genişlik), başlık düğmeleri, özet kartı ---- */
+  table:is(.m2-datalar, .m2-ekstre)[data-mtablo] tr > th:first-child { width: 36px; }
+  table:is(.m2-datalar, .m2-ekstre)[data-mtablo] tr > th:first-child .m2-fb { display: none; }
+  table:is(.m2-datalar, .m2-ekstre)[data-mtablo] td.m2-no, table:is(.m2-datalar, .m2-ekstre)[data-mtablo] th:first-child {
+    padding-left: 3px !important; padding-right: 3px !important; text-align: right; overflow: visible; text-overflow: clip;
+  }
+  table:is(.m2-datalar, .m2-ekstre)[data-mtablo] td.m2-no .m2-no-link { font-size: 11px; }
+  /* Datalar üst satırı: kayıt sayısı kendi satırında; Bu ay / Filtreleri temizle / Yenile tek satırda */
+  .m2-card .m2-dt-btnler { display: flex; gap: 6px; flex: 1 1 100%; width: 100%; }
+  .m2-card .m2-dt-btnler .m2-btn.mini { flex: 1 1 0; min-width: 0; padding: 0 6px; height: 34px; font-size: 12px; white-space: nowrap; }
+  .m2-card .m2-dt-btnler .m2-btn.mini:nth-child(2) { flex: 1.5 1 0; }
+  /* Ekstre özeti: tutar tek satır, açıklama yazısı gerekirse 3 satıra sarılır */
+  .m2-modal .m2-ekstre-ozet { gap: 10px; padding: 10px 12px; }
+  .m2-modal .m2-ekstre-ozet > div:first-child { flex: 0 0 auto; }
+  .m2-modal .m2-ekstre-ozet .m2-hc-tutar { white-space: nowrap; font-size: 20px; }
+  .m2-modal .m2-ekstre-ozet .m2-hc-yardim { flex: 1 1 0; min-width: 0; max-width: none !important; font-size: 9.5px; line-height: 1.35; }
+  /* "Peşin ödenen … gizle" tek satır */
+  .m2-filtre .m2-onay { white-space: nowrap; font-size: min(11px, 2.6vw); gap: 4px; }
 }

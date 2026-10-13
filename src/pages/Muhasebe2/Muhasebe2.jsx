@@ -1208,15 +1208,17 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
               {gorunen.length} / {kayitlar.length} kayıt{sinirli ? ' (en yeni 20.000 yüklendi)' : ''}
             </span>
           )}
-          <button className="m2-btn sec mini" onClick={buAy}>
-            Bu ay
-          </button>
-          <button className="m2-btn sec mini" onClick={filtreleriTemizle} disabled={!filtreAktif}>
-            Filtreleri temizle
-          </button>
-          <button className="m2-btn sec mini" onClick={yukle} disabled={yukleniyor}>
-            {yukleniyor ? 'Yükleniyor…' : 'Yenile'}
-          </button>
+          <div className="m2-dt-btnler">
+            <button className="m2-btn sec mini" onClick={buAy}>
+              Bu ay
+            </button>
+            <button className="m2-btn sec mini" onClick={filtreleriTemizle} disabled={!filtreAktif}>
+              Filtreleri temizle
+            </button>
+            <button className="m2-btn sec mini" onClick={yukle} disabled={yukleniyor}>
+              {yukleniyor ? 'Yükleniyor…' : 'Yenile'}
+            </button>
+          </div>
         </div>
       </div>
 

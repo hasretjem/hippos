@@ -1257,3 +1257,6 @@ table:is(.m2-datalar, .m2-ekstre)[data-mtablo] .m2-oto-ok { display: none; }
   100% { background: transparent; }
 }
 .m2-datalar tr.g-flash td { animation: m2-varis 2.6s ease-out 1; }
+
+/* Datalar üst düğmeleri: masaüstünde eskisi gibi akar (mobilde mobil.css tek satırlık yapar) */
+.m2-dt-btnler { display: contents; }
