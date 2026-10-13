@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, FileUp, Filter, Pencil, Plus, Share2 } from 'lucide-react';
 import { dosyaAdi, durumBul, ekstreGorunum, ekstrePdfTanimi, ekstrePdfUret, paraFmt, pdfPaylasVeyaIndir } from './ekstrePdf';
-import { ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, sayiFmt, tarihTR, trNorm, useModalKaydet, CekmeceKutusu } from './m2Ortak';
+import { ModalAksiyon, ModalKabuk, TL, api, bugunISO, sayi, sayiFmt, tarihTR, trNorm, useModalKaydet, CekmeceKutusu, firmaAdiOner } from './m2Ortak';
 import YemekKartlariSekmesi from './YemekKartlari';
 import TahakkuklarSekmesi from './Tahakkuklar';
 import GunsonlariSekmesi from './Gunsonlari';
@@ -33,6 +33,13 @@ function firmaKelimeleri(ad) {
       .split(/\s+/)
       .filter((k) => k.length > 1 && !FIRMA_DURAK.has(k)),
   );
+}
+// Önce fatura sözlüğü (VKN/TCKN tam eşleşme = kesin), sonra isim benzerliği (tahmin).
+function firmaBulKimlikle(firmalar, kimlikler, vkn) {
+  const v = String(vkn || '').replace(/\D/g, '');
+  if (!v) return null;
+  const k = (kimlikler || []).find((x) => x.vkn === v);
+  return k ? firmalar.find((f) => f.id === k.firmaId) || null : null;
 }
 function firmaBul(firmalar, tedarikciAdi) {
   const hedef = firmaKelimeleri(tedarikciAdi);
@@ -66,7 +73,7 @@ function bakiyeEtiketi(b) {
 // Ana bileşen
 // ---------------------------------------------------------------------------
 export default function Muhasebe2({ onNavigate }) {
-  const [veri, setVeri] = useState({ firmalar: [], kategoriler: [], odemeYontemleri: [], bugun: '' });
+  const [veri, setVeri] = useState({ firmalar: [], kategoriler: [], odemeYontemleri: [], firmaKimlikleri: [], bugun: '' });
   const [hata, setHata] = useState('');
   const [toast, setToast] = useState(null);
   const [modal, setModal] = useState(null); // {tur, ad, odemeTuru, bitince}
@@ -247,6 +254,10 @@ export default function Muhasebe2({ onNavigate }) {
     await yukle();
     return j.firma;
   }
+  async function kimlikKaydet(payload) {
+    await api('firmaKimlikKaydet', { method: 'POST', body: payload });
+    await yukle();
+  }
   async function kategoriEkle(payload) {
     const j = await api('kategoriEkle', { method: 'POST', body: payload });
     await yukle();
@@ -329,6 +340,7 @@ export default function Muhasebe2({ onNavigate }) {
             onKaydet={fisFaturaKaydet}
             onModal={setModal}
             doldur={doldur}
+            onKimlikKaydet={kimlikKaydet}
             xmlBekleyen={xmlBekleyen}
             onXmlAc={() => setXmlAcik((a) => !a)}
             onXmlKullanildi={async (id) => {
@@ -346,6 +358,11 @@ export default function Muhasebe2({ onNavigate }) {
           {xmlAcik && (
             <XmlCekmece
               bildir={bildir}
+              firmalar={veri.firmalar}
+              kimlikler={veri.firmaKimlikleri}
+              onKimlikKaydet={kimlikKaydet}
+              onFirmaEkle={firmaEkle}
+              firmaOner={(ad) => firmaBul(veri.firmalar, ad)}
               onKapat={() => setXmlAcik(false)}
               onSayi={setXmlBekleyen}
               onAktar={(fatura) => {
@@ -564,7 +581,7 @@ function yontemPayload(tur, detay) {
 // ---------------------------------------------------------------------------
 // Fiş / Fatura girişi
 // ---------------------------------------------------------------------------
-function FisFaturaFormu({ veri, bildir, onKaydet, onModal, doldur, xmlBekleyen, onXmlAc, onXmlKullanildi }) {
+function FisFaturaFormu({ veri, bildir, onKaydet, onModal, doldur, onKimlikKaydet, xmlBekleyen, onXmlAc, onXmlKullanildi }) {
   const [iade, setIade] = useState(false); // false: Fatura/Fiş, true: İade Faturası (tutar artı girilir, sistem eksi işler)
   const [cekmece, setCekmece] = useState(false); // nakit ödeme çekmeceden verildi (günlük kasa)
   const [tarih, setTarih] = useState(veri.bugun || bugunISO());
@@ -578,13 +595,17 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal, doldur, xmlBekleyen, 
   const [detay, setDetay] = useState('');
   const [kaydediyor, setKaydediyor] = useState(false);
   const [formKey, setFormKey] = useState(0);
+  const [vknBagla, setVknBagla] = useState(null); // { vkn, unvan, isaret } — XML'deki VKN sözlüğe bağlanacak mı
   const [aktarilan, setAktarilan] = useState(null); // çekmeceden forma aktarılan XML fatura (kaydedilince "kullanıldı" olur)
 
   // Çekmeceden "Aktar": formu doldurur, KAYDETMEZ — kontrol edip kaydetmek size kalır.
   useEffect(() => {
     if (!doldur) return;
     const f = doldur.fatura;
-    const fm = firmaBul(veri.firmalar, f.tedarikciAdi);
+    const kimlikFirma = firmaBulKimlikle(veri.firmalar, veri.firmaKimlikleri, f.tedarikciVkn);
+    const fm = kimlikFirma || firmaBul(veri.firmalar, f.tedarikciAdi);
+    const vkn = String(f.tedarikciVkn || '').replace(/\D/g, '');
+    setVknBagla(vkn && !kimlikFirma ? { vkn, unvan: f.tedarikciAdi, isaret: true } : null);
     setAktarilan(f);
     setIade(false);
     setCekmece(false);
@@ -598,7 +619,7 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal, doldur, xmlBekleyen, 
     setFormKey((k) => k + 1);
     setFirmaId(fm ? fm.id : '');
     setKategori(fm && fm.varsayilan_kategori && veri.kategoriler.includes(fm.varsayilan_kategori) ? fm.varsayilan_kategori : '');
-    if (!fm) bildir(`"${f.tedarikciAdi}" için kayıtlı firma bulunamadı — firmayı seçin veya yeni firma ekleyin`, true);
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doldur && doldur.key]);
 
@@ -627,6 +648,14 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal, doldur, xmlBekleyen, 
     setKaydediyor(true);
     try {
       await onKaydet({ tarih, firmaId, faturaNo, aciklama, giderKategorisi: kategori, faturaTutari: tutar, kdv, iade, ...(cekmece && tur === 'Nakit' && !iade && tarih === veri.bugun ? { kasaGrubu: 'gunluk' } : {}), ...y });
+      if (vknBagla && vknBagla.isaret) {
+        try {
+          await onKimlikKaydet({ vkn: vknBagla.vkn, unvan: vknBagla.unvan, firmaId });
+        } catch {
+          /* fiş/fatura kaydedildi; yalnızca sözlük yazılamadı */
+        }
+      }
+      setVknBagla(null);
       setCekmece(false);
       setFirmaId('');
       setFaturaNo('');
@@ -661,7 +690,7 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal, doldur, xmlBekleyen, 
           <span>
             XML'den aktarıldı: {aktarilan.tedarikciAdi} · No {aktarilan.faturaNo}. Alanları kontrol edip kaydedin; ödeme türünü siz seçin.
           </span>
-          <button type="button" onClick={() => setAktarilan(null)}>Vazgeç</button>
+          <button type="button" onClick={() => { setAktarilan(null); setVknBagla(null); }}>Vazgeç</button>
         </div>
       )}
 
@@ -687,8 +716,17 @@ function FisFaturaFormu({ veri, bildir, onKaydet, onModal, doldur, xmlBekleyen, 
         firmalar={veri.firmalar}
         valueId={firmaId}
         onChange={firmaSec}
-        onYeni={(ad) => onModal({ tur: 'firma', ad, bitince: (f) => firmaSec(f.id, f) })}
+        onYeni={(ad) => onModal({ tur: 'firma', ad: ad || (vknBagla ? firmaAdiOner(vknBagla.unvan) : ''), bitince: (f) => firmaSec(f.id, f) })}
       />
+      {vknBagla && (
+        <label className="m2-vkn-bagla">
+          <input type="checkbox" checked={vknBagla.isaret} onChange={(e) => setVknBagla({ ...vknBagla, isaret: e.target.checked })} />
+          <span>
+            Bu faturadaki VKN'yi ({vknBagla.vkn}) seçtiğim firmaya hep bağla
+            {!firmaId && <em> — önce firmayı seçin ya da yeni firma ekleyin</em>}
+          </span>
+        </label>
+      )}
       {firma && <div className={`m2-info ${bakiyeEtiketi(firma.bakiye).ton}`}>Şu an: {bakiyeEtiketi(firma.bakiye).metin}</div>}
 
       <label className="m2-label">{iade ? 'İlgili / İade Fatura No' : 'Fatura No'}</label>

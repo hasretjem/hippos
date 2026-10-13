@@ -266,6 +266,18 @@ export function personelDokumHesapla(faturalar, makbuzlar) {
   };
 }
 
+// VKN (10 hane) ya da TCKN (11 hane); başka bir şey geçersiz sayılır.
+function vknTemizle(v) {
+  const t = String(v ?? '').replace(/\D/g, '');
+  return t.length === 10 || t.length === 11 ? t : '';
+}
+async function firmaKimlikYaz(db, vkn, firmaId, unvan) {
+  const { error } = await db
+    .from('m2_firma_kimlik')
+    .upsert({ vkn, firma_id: firmaId, unvan: metin(unvan) }, { onConflict: 'vkn' });
+  kontrol(error);
+}
+
 // ---------------------------------------------------------------------------
 // Maaş Günü Aracı: personel carisinden ödenecek NAKİT ve HAVALE (birikimli iki alt hesap).
 //  - Sigortalı personelde her tahakkukta banka payı = min(o dönemin asgari ücreti, tahakkuk brütü) doğar.
@@ -1868,13 +1880,14 @@ export default async function handler(req, res) {
 
     // ---------- Okuma ----------
     if (req.method === 'GET' && resource === 'baslangic') {
-      const [fi, ba, ka, yo] = await Promise.all([
+      const [fi, ba, ka, yo, ki] = await Promise.all([
         db.from('m2_firmalar').select('id,ad,varsayilan_kategori,firma_turu'),
         db.from('m2_firma_bakiye').select('firma_id,bakiye'),
         db.from('m2_kategoriler').select('ad').order('sira').order('ad'),
         db.from('m2_odeme_yontemleri').select('id,odeme_turu,ad').order('kayit_zamani').order('ad'),
+        db.from('m2_firma_kimlik').select('vkn,firma_id'),
       ]);
-      [fi, ba, ka, yo].forEach((r) => kontrol(r.error));
+      [fi, ba, ka, yo, ki].forEach((r) => kontrol(r.error));
       const bakiyeHaritasi = new Map((ba.data || []).map((x) => [x.firma_id, Number(x.bakiye)]));
       const firmalar = (fi.data || [])
         .map((f) => ({ ...f, bakiye: bakiyeHaritasi.get(f.id) || 0 }))
@@ -1883,6 +1896,7 @@ export default async function handler(req, res) {
         firmalar,
         kategoriler: (ka.data || []).map((k) => k.ad),
         odemeYontemleri: yo.data || [],
+        firmaKimlikleri: (ki.data || []).map((k) => ({ vkn: k.vkn, firmaId: k.firma_id })),
         bugun: bugunIstanbul(),
       });
     }
@@ -2454,7 +2468,19 @@ export default async function handler(req, res) {
         .single();
       if (error?.code === '23505') throw new HataMesaji(409, 'Bu isimde bir firma zaten var');
       kontrol(error);
+      // XML faturadan açılan firma: VKN'yi aynı anda sözlüğe bağla.
+      const vkn = vknTemizle(body.vkn);
+      if (vkn) await firmaKimlikYaz(db, vkn, data.id, body.unvan);
       return res.status(200).json({ ok: true, firma: { ...data, bakiye: 0 } });
+    }
+
+    // Fatura sözlüğü: VKN/TCKN -> firma (bir firmaya birden çok VKN bağlanabilir; bir VKN tek firmaya aittir).
+    if (resource === 'firmaKimlikKaydet') {
+      const vkn = vknTemizle(body.vkn);
+      if (!vkn) throw new HataMesaji(400, 'Geçerli bir VKN/TCKN gerekli');
+      const firma = await firmaGetir(db, body.firmaId);
+      await firmaKimlikYaz(db, vkn, firma.id, body.unvan);
+      return res.status(200).json({ ok: true });
     }
 
     if (resource === 'kategoriEkle') {

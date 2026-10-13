@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, X, ArrowRightToLine, EyeOff, Undo2, Trash2 } from 'lucide-react';
-import { TL, tarihTR, trNorm } from './m2Ortak';
+import { TL, tarihTR, trNorm, firmaAdiOner } from './m2Ortak';
 import { rcApi, xmlDosyalariniYukle } from '../Receteler/rcOrtak';
 
 const DURUMLAR = [
@@ -18,7 +18,7 @@ const SIRALAR = [
 
 // Fiş/Fatura sekmesindeki "Yüklenen faturalar" çekmecesi. Varsayılan KAPALI; Makbuz kartının üstüne açılır.
 // Buradan yalnızca Fiş/Fatura formunu doldurmak için "Aktar" denir — fiş/fatura asla otomatik kesilmez.
-export default function XmlCekmece({ onKapat, bildir, onAktar, onSayi }) {
+export default function XmlCekmece({ onKapat, bildir, onAktar, onSayi, firmalar = [], kimlikler = [], onKimlikKaydet, onFirmaEkle, firmaOner }) {
   const [liste, setListe] = useState(null);
   const [durum, setDurum] = useState('bekliyor');
   const [ara, setAra] = useState('');
@@ -152,6 +152,16 @@ export default function XmlCekmece({ onKapat, bildir, onAktar, onSayi }) {
         </div>
       </div>
 
+      <EslesmeyenFirmalar
+        liste={liste}
+        firmalar={firmalar}
+        kimlikler={kimlikler}
+        firmaOner={firmaOner}
+        onKimlikKaydet={onKimlikKaydet}
+        onFirmaEkle={onFirmaEkle}
+        bildir={bildir}
+      />
+
       <div className="m2-xc-ozet">
         {gorunen.length} fatura · {TL(toplam)}
       </div>
@@ -201,6 +211,100 @@ export default function XmlCekmece({ onKapat, bildir, onAktar, onSayi }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// Zip'ten gelen faturalarda sözlükte (VKN) karşılığı olmayan tedarikçileri tek yerde eşleştirir.
+function EslesmeyenFirmalar({ liste, firmalar, kimlikler, firmaOner, onKimlikKaydet, onFirmaEkle, bildir }) {
+  const [acik, setAcik] = useState(false);
+  const [secim, setSecim] = useState({});
+  const [yeniAd, setYeniAd] = useState({});
+  const [bekleyen, setBekleyen] = useState('');
+
+  const gruplar = useMemo(() => {
+    const bagli = new Set((kimlikler || []).map((k) => k.vkn));
+    const m = new Map();
+    (liste || []).forEach((f) => {
+      const vkn = String(f.tedarikciVkn || '').replace(/\D/g, '');
+      if (!vkn || bagli.has(vkn) || f.durum === 'gizli') return;
+      const g = m.get(vkn) || { vkn, unvan: f.tedarikciAdi, adet: 0, toplam: 0 };
+      g.adet += 1;
+      g.toplam += f.toplam || 0;
+      if (!g.unvan || g.unvan === 'Türkiye') g.unvan = f.tedarikciAdi;
+      m.set(vkn, g);
+    });
+    return [...m.values()].sort((a, b) => b.adet - a.adet || b.toplam - a.toplam);
+  }, [liste, kimlikler]);
+
+  if (!gruplar.length) return null;
+
+  async function kaydet(g) {
+    const sec = secim[g.vkn] ?? (firmaOner ? firmaOner(g.unvan)?.id : '') ?? '';
+    setBekleyen(g.vkn);
+    try {
+      if (sec === '__yeni__') {
+        const ad = (yeniAd[g.vkn] ?? firmaAdiOner(g.unvan)).trim();
+        if (!ad) throw new Error('Firma adı girin');
+        await onFirmaEkle({ ad, vkn: g.vkn, unvan: g.unvan });
+      } else if (sec) {
+        await onKimlikKaydet({ vkn: g.vkn, unvan: g.unvan, firmaId: sec });
+      } else {
+        throw new Error('Firma seçin');
+      }
+    } catch (e) {
+      bildir(e.message, true);
+    } finally {
+      setBekleyen('');
+    }
+  }
+
+  return (
+    <div className="m2-xc-esle">
+      <button type="button" className="m2-xc-esle-baslik" onClick={() => setAcik((a) => !a)}>
+        Eşleşmeyen firmalar <b>{gruplar.length}</b>
+        <span>{acik ? 'Gizle' : 'Eşleştir'}</span>
+      </button>
+      {acik && (
+        <div className="m2-xc-esle-liste">
+          <p className="m2-hint">Faturadaki VKN'yi kendi firmanıza bağlayın; o firmanın sonraki faturaları kendiliğinden eşleşir.</p>
+          {gruplar.map((g) => {
+            const sec = secim[g.vkn] ?? (firmaOner ? firmaOner(g.unvan)?.id : '') ?? '';
+            return (
+              <div key={g.vkn} className="m2-xc-esle-satir">
+                <div className="m2-xc-esle-bilgi">
+                  <b title={g.unvan}>{g.unvan}</b>
+                  <span>
+                    {g.vkn.length === 11 ? 'TCKN' : 'VKN'} {g.vkn} · {g.adet} fatura · {TL(g.toplam)}
+                  </span>
+                </div>
+                <select className="m2-select" value={sec} onChange={(e) => setSecim({ ...secim, [g.vkn]: e.target.value })}>
+                  <option value="">— Firma seçin —</option>
+                  {firmalar
+                    .filter((f) => !f.firma_turu || f.firma_turu === 'Firma')
+                    .map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.ad}
+                      </option>
+                    ))}
+                  <option value="__yeni__">＋ Yeni firma aç…</option>
+                </select>
+                {sec === '__yeni__' && (
+                  <input
+                    className="m2-input"
+                    value={yeniAd[g.vkn] ?? firmaAdiOner(g.unvan)}
+                    onChange={(e) => setYeniAd({ ...yeniAd, [g.vkn]: e.target.value })}
+                    placeholder="Yeni firma adı"
+                  />
+                )}
+                <button type="button" className="m2-btn mini" disabled={bekleyen === g.vkn || !sec} onClick={() => kaydet(g)}>
+                  {sec === '__yeni__' ? 'Oluştur ve bağla' : 'Bağla'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

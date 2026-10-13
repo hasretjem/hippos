@@ -1129,3 +1129,19 @@
 .m2-table td.m2-islem-td .m2-yk-islem { flex-wrap: nowrap; gap: 4px; }
 .m2-table td.m2-islem-td .m2-btn.mini { white-space: nowrap; flex: 0 0 auto; height: 28px; padding: 0 8px; font-size: 12.5px; }
 .m2-table td.m2-islem-td .m2-kilit { font-size: 11px; padding: 2px 6px; }
+
+/* XML faturadan VKN'yi sözlüğe bağlama kutusu */
+.m2-vkn-bagla { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 0; font-size: 13px; color: #393e41 !important; line-height: 1.4; }
+.m2-vkn-bagla input { margin-top: 3px; flex: 0 0 auto; }
+.m2-vkn-bagla em { color: #b45309 !important; font-style: normal; font-weight: 700; }
+
+/* XML çekmecesi: eşleşmeyen firmalar paneli */
+.m2-xc-esle { margin: 8px 0 4px; border: 1px solid rgba(233, 79, 55, .35); border-radius: 12px; background: rgba(233, 79, 55, .06); }
+.m2-xc-esle-baslik { width: 100%; display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: none; border: 0; cursor: pointer; font-size: 13px; font-weight: 800; color: #e94f37 !important; text-align: left; }
+.m2-xc-esle-baslik b { background: #e94f37; color: #fff !important; border-radius: 999px; padding: 0 8px; font-size: 12px; }
+.m2-xc-esle-baslik span { margin-left: auto; font-size: 12px; text-decoration: underline; color: #e94f37 !important; }
+.m2-xc-esle-liste { padding: 0 12px 10px; display: grid; gap: 10px; }
+.m2-xc-esle-satir { display: grid; gap: 6px; padding: 10px; background: #fff; border-radius: 10px; }
+.m2-xc-esle-bilgi { display: grid; gap: 2px; min-width: 0; }
+.m2-xc-esle-bilgi b { font-size: 13px; color: #393e41 !important; overflow-wrap: anywhere; }
+.m2-xc-esle-bilgi span { font-size: 12px; color: rgba(57, 62, 65, .7) !important; }

@@ -109,3 +109,11 @@ export function ElleRozet({ var: gorunur = true, yazi = '✎ elle', ipucu = "Bu 
     </span>
   );
 }
+
+// Faturadaki resmi ünvandan "Yeni firma" için okunur bir ad önerisi (kullanıcı değiştirebilir).
+export function firmaAdiOner(unvan) {
+  const durak = /\b(LTD|ŞTİ|STI|A\.?Ş\.?|SAN|TİC|VE|LİMİTED|ŞİRKETİ|ANONİM|TİCARET|SANAYİ)\b\.?/gi;
+  const t = String(unvan || '').replace(durak, ' ').replace(/\s+/g, ' ').trim();
+  const kisa = t.split(' ').slice(0, 3).join(' ');
+  return kisa.toLocaleLowerCase('tr').replace(/(^|\s)(\S)/g, (m, b, c) => b + c.toLocaleUpperCase('tr'));
+}
