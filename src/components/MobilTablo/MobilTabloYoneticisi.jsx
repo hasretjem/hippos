@@ -26,6 +26,8 @@ const VARSAYILANLAR = [
     yatay: ['tarih', 'evrak', 'firma', 'açıklama', 'gider kategorisi', 'ödeme türü', 'miktar'] },
   { sinif: 'rc-urun-tablo', sutunlar: ['ürün', 'satış', 'kâr %'], ana: 'ürün',
     yatay: ['ürün', 'kategori', 'satış', 'maliyet', 'kâr', 'durum'] },
+  { sinif: 'm2-yk', sutunlar: ['firma', 'vade', 'bankaya yatacak'], ana: 'firma',
+    yatay: ['firma', 'fatura tarihi', 'matrah', 'fatura toplamı', 'vade', 'kesinti toplamı', 'bankaya yatacak'] },
   { sinif: 'rc-ham-tablo', sutunlar: ['malzeme', 'birim', 'fiyat', 'tarih'], ana: 'malzeme' },
   { sinif: 'm2-ekstre', sutunlar: ['tarih', 'açıklama', 'borç', 'alacak', 'bakiye'], ana: 'açıklama' },
 ];
@@ -85,7 +87,7 @@ function stilYaz(id, b, gorunur) {
   const gizli = [];
   b.forEach((s, i) => { if (!s.sabit && !gorunur.has(i)) gizli.push(i + 1); });
   el.textContent = gizli
-    .map((n) => `table[data-mtablo="${id}"] > * > tr > :nth-child(${n}){display:none !important}`)
+    .map((n) => `table[data-mtablo="${id}"] > * > tr:not([data-mspanli]) > :nth-child(${n}){display:none !important}`)
     .join('\n');
 }
 
@@ -150,6 +152,31 @@ function sabitleriIsaretle(table, b) {
   });
 }
 
+// Gizlenen sütunlar yüzünden, birkaç sütunu kaplayan hücreler (ör. "Toplam" ya da "Yükleniyor…" satırı: colSpan=13)
+// tabloda hayalet sütunlar açıp gerçek sütunları sıkıştırıyordu. Kaplanan sütun sayısını görünenlere göre düşürürüz.
+function hucreKaplamalariniDuzelt(table, kayit) {
+  const { b, gorunur } = kayit;
+  const gizli = b.map((s, i) => !s.sabit && !gorunur.has(i));
+  Array.from(table.rows).forEach((tr) => {
+    const hucreler = Array.from(tr.cells);
+    const birlesik = hucreler.some((c) => (Number(c.getAttribute('data-mspan')) || c.colSpan || 1) > 1);
+    if (!birlesik) { tr.removeAttribute('data-mspanli'); return; }
+    // Birleşik hücreli satırda "kaçıncı hücre" ile "kaçıncı sütun" aynı değildir; gizlemeyi hücre bazında yaparız
+    tr.setAttribute('data-mspanli', '');
+    let sutun = 0;
+    hucreler.forEach((c) => {
+      const asil = Number(c.getAttribute('data-mspan')) || c.colSpan || 1;
+      if (asil > 1 && !c.hasAttribute('data-mspan')) c.setAttribute('data-mspan', String(asil));
+      let gorunen = 0;
+      for (let k = sutun; k < sutun + asil; k++) if (!gizli[k]) gorunen++;
+      if (gorunen === 0) c.setAttribute('data-mgizli', ''); else c.removeAttribute('data-mgizli');
+      const yeni = Math.max(1, gorunen);
+      if (asil > 1 && c.colSpan !== yeni) c.colSpan = yeni;
+      sutun += asil;
+    });
+  });
+}
+
 function uygula(table, kayit) {
   const { id, b, gorunur } = kayit;
   table.setAttribute('data-mtablo', id);
@@ -157,6 +184,7 @@ function uygula(table, kayit) {
   table.setAttribute('data-msayi', String(Math.min(gorunenSayi, 8)));
   sabitleriIsaretle(table, b);
   stilYaz(id, b, gorunur);
+  hucreKaplamalariniDuzelt(table, kayit);
   if (b.filter((s) => !s.sabit).length > sutunSayisi()) seciciCiz(table, kayit);
   else if (kayit.bar) { kayit.bar.remove(); kayit.bar = null; }
 }
@@ -176,6 +204,7 @@ function tara() {
     } else {
       kayit.b = b;
       sabitleriIsaretle(table, b);
+      hucreKaplamalariniDuzelt(table, kayit);
       if (table.getAttribute('data-mtablo') !== kayit.id) uygula(table, kayit);
       else if (kayit.bar && !kayit.bar.isConnected) seciciCiz(table, kayit);
     }
@@ -236,6 +265,9 @@ export default function MobilTabloYoneticisi() {
       document.querySelectorAll('.mtablo-bar').forEach((x) => x.remove());
       document.querySelectorAll('style[id^="mtablo-stil-"]').forEach((x) => x.remove());
       document.querySelectorAll('table[data-mtablo]').forEach((t) => { t.removeAttribute('data-mtablo'); t.removeAttribute('data-msayi'); });
+      document.querySelectorAll('[data-mspan]').forEach((c) => { c.colSpan = Number(c.getAttribute('data-mspan')) || 1; c.removeAttribute('data-mspan'); });
+      document.querySelectorAll('[data-mgizli]').forEach((c) => c.removeAttribute('data-mgizli'));
+      document.querySelectorAll('[data-mspanli]').forEach((r) => r.removeAttribute('data-mspanli'));
       if (balon) { balon.remove(); balon = null; }
     };
   }, []);

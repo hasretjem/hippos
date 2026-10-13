@@ -369,12 +369,15 @@
   table[data-mtablo][data-msayi="7"] td.sayi, table[data-mtablo][data-msayi="8"] td.sayi { font-size: 10.5px !important; }
   table[data-mtablo] td.sayi, table[data-mtablo] th.sayi { padding-left: 2px !important; padding-right: 3px !important; text-overflow: clip; }
   table[data-mtablo][data-msayi="6"] th[data-mana], table[data-mtablo][data-msayi="7"] th[data-mana], table[data-mtablo][data-msayi="8"] th[data-mana] { width: 28%; }
+  table.m2-yk[data-mtablo] td, table.m2-yk[data-mtablo] td.sayi { font-size: 11.5px !important; }
+  table.m2-yk[data-mtablo] th[data-mana] { width: 27%; }
   table[data-mtablo] td .m2-yk-islem { display: flex; flex-direction: column; gap: 4px; }
   table[data-mtablo] td .m2-btn.mini { padding: 5px 4px; font-size: 11px; width: 100%; min-width: 0; }
   table[data-mtablo] td input, table[data-mtablo] td select { width: 100%; min-width: 0; }
   table[data-mtablo] td .m2-pill, table[data-mtablo] td [class*="rozet"], table[data-mtablo] td [class*="etiket"] {
     max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle;
   }
+  table[data-mtablo] [data-mgizli] { display: none !important; }
   .m2-table-wrap { overflow-x: hidden; }
   table.m2-datalar[data-mtablo] tr > th:first-child { width: 25%; }
   table.m2-datalar[data-mtablo] td.sayi { font-size: 12px !important; }
