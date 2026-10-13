@@ -1162,7 +1162,7 @@
    Datalar: işlem numarası + görsel gruplama (sakin, tek tonlu)
    Aynı işlemden doğan satırlar: solda ince koyu şerit, aralarında ayraç yok, grup sonunda belirgin çizgi.
    --------------------------------------------------------------------------- */
-.m2-datalar tr td.m2-no {
+:is(.m2-datalar, .m2-ekstre) tr td.m2-no {
   width: 1%;
   white-space: nowrap;
   text-align: right;
@@ -1172,20 +1172,20 @@
   font-style: normal;
   padding-right: 8px;
 }
-.m2-datalar tr.g-alt td { background: rgba(57, 62, 65, 0.025); }
-.m2-datalar tr.oto.g-alt td { background: rgba(57, 62, 65, 0.05); }
-.m2-datalar tr.g-ilk td, .m2-datalar tr.g-orta td { border-bottom-color: transparent; }
-.m2-datalar tr.g-son td, .m2-datalar tr.g-tek td { border-bottom: 1px solid rgba(57, 62, 65, 0.2); }
-.m2-datalar tr.g-ilk td:first-child, .m2-datalar tr.g-orta td:first-child, .m2-datalar tr.g-son td:first-child {
+:is(.m2-datalar, .m2-ekstre) tr.g-alt td { background: rgba(57, 62, 65, 0.025); }
+:is(.m2-datalar, .m2-ekstre) tr.oto.g-alt td { background: rgba(57, 62, 65, 0.05); }
+:is(.m2-datalar, .m2-ekstre) tr.g-ilk td, :is(.m2-datalar, .m2-ekstre) tr.g-orta td { border-bottom-color: transparent; }
+:is(.m2-datalar, .m2-ekstre) tr.g-son td, :is(.m2-datalar, .m2-ekstre) tr.g-tek td { border-bottom: 1px solid rgba(57, 62, 65, 0.2); }
+:is(.m2-datalar, .m2-ekstre) tr.g-ilk td:first-child, :is(.m2-datalar, .m2-ekstre) tr.g-orta td:first-child, :is(.m2-datalar, .m2-ekstre) tr.g-son td:first-child {
   box-shadow: inset 3px 0 0 rgba(57, 62, 65, 0.4);
 }
-.m2-datalar tr.g-vurgu td { background: rgba(233, 79, 55, 0.07) !important; }
-.m2-datalar tr.g-vurgu td:first-child { box-shadow: inset 3px 0 0 #e94f37; }
+:is(.m2-datalar, .m2-ekstre) tr.g-vurgu td { background: rgba(233, 79, 55, 0.07) !important; }
+:is(.m2-datalar, .m2-ekstre) tr.g-vurgu td:first-child { box-shadow: inset 3px 0 0 #e94f37; }
 .m2-oto-ok { color: rgba(57, 62, 65, 0.45) !important; font-style: normal; font-weight: 700; }
 
 /* Telefon: İşlem No sütunu gizli olabilir; şerit görünen ilk veri sütununa (Tarih) taşınır. */
-table.m2-datalar[data-mtablo] tr.g-ilk td:first-child, table.m2-datalar[data-mtablo] tr.g-orta td:first-child,
-table.m2-datalar[data-mtablo] tr.g-son td:first-child { box-shadow: none; }
-table.m2-datalar[data-mtablo] tr.g-ilk td:nth-child(2), table.m2-datalar[data-mtablo] tr.g-orta td:nth-child(2),
-table.m2-datalar[data-mtablo] tr.g-son td:nth-child(2) { box-shadow: inset 3px 0 0 rgba(57, 62, 65, 0.4); }
-table.m2-datalar[data-mtablo] .m2-oto-ok { display: none; }
+table:is(.m2-datalar, .m2-ekstre)[data-mtablo] tr.g-ilk td:first-child, table:is(.m2-datalar, .m2-ekstre)[data-mtablo] tr.g-orta td:first-child,
+table:is(.m2-datalar, .m2-ekstre)[data-mtablo] tr.g-son td:first-child { box-shadow: none; }
+table:is(.m2-datalar, .m2-ekstre)[data-mtablo] tr.g-ilk td:nth-child(2), table:is(.m2-datalar, .m2-ekstre)[data-mtablo] tr.g-orta td:nth-child(2),
+table:is(.m2-datalar, .m2-ekstre)[data-mtablo] tr.g-son td:nth-child(2) { box-shadow: inset 3px 0 0 rgba(57, 62, 65, 0.4); }
+table:is(.m2-datalar, .m2-ekstre)[data-mtablo] .m2-oto-ok { display: none; }

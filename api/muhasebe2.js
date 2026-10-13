@@ -1981,7 +1981,17 @@ export default async function handler(req, res) {
         kontrol(kiHata);
         kimlikler = ki || [];
       }
-      return res.status(200).json({ ...(kimlikler ? { kimlikler } : {}), firma: { id: firma.id, ad: firma.ad, grup, bolum, ...(sigortali === undefined ? {} : { sigortali }) }, ...ekstreHesapla(fa.data || [], mk.data || []) });
+      const ekstre = ekstreHesapla(fa.data || [], mk.data || []);
+      // Satırlara işlem numarası (aynı işlemden doğan satırlar aynı numarayı taşır; Datalar'daki numarayla aynıdır).
+      const grupIdleri = [...new Set(ekstre.satirlar.map((r) => r.grupId).filter(Boolean))];
+      const noHaritasi = new Map();
+      for (let i = 0; i < grupIdleri.length; i += 200) {
+        const { data: nolar, error: noHata } = await db.from('m2_islem_no').select('grup_id,no').in('grup_id', grupIdleri.slice(i, i + 200));
+        kontrol(noHata);
+        (nolar || []).forEach((x) => noHaritasi.set(x.grup_id, x.no));
+      }
+      ekstre.satirlar = ekstre.satirlar.map((r) => ({ ...r, islemNo: r.grupId && noHaritasi.has(r.grupId) ? String(noHaritasi.get(r.grupId)) : '' }));
+      return res.status(200).json({ ...(kimlikler ? { kimlikler } : {}), firma: { id: firma.id, ad: firma.ad, grup, bolum, ...(sigortali === undefined ? {} : { sigortali }) }, ...ekstre });
     }
 
     // Datalar: bütün fatura/fiş ve makbuz kayıtları Excel düzeninde (en yeni üstte).

@@ -1767,6 +1767,18 @@ function EkstreModal({ firma, bildir, onKapat, onKimlikDegisti }) {
     [veri, baslangic, bitis, kapaliGizle],
   );
   const d = gorunum ? durumBul(gorunum.bakiye) : 'yok';
+  // Görsel gruplama: alt alta gelen, aynı işlemden doğan satırlar tek blok (Datalar ile aynı görünüm).
+  const ekstreGrupSinifi = useMemo(() => {
+    const l = gorunum ? gorunum.satirlar : [];
+    let alt = false;
+    return l.map((r, i) => {
+      const onceki = i > 0 && l[i - 1].grupId && l[i - 1].grupId === r.grupId;
+      const sonraki = i < l.length - 1 && l[i + 1].grupId && l[i + 1].grupId === r.grupId;
+      if (!onceki) alt = !alt;
+      const konum = onceki && sonraki ? 'g-orta' : onceki ? 'g-son' : sonraki ? 'g-ilk' : 'g-tek';
+      return `${konum}${konum === 'g-tek' ? '' : ' g-coklu'}${alt ? ' g-alt' : ''}`;
+    });
+  }, [gorunum]);
   const kasaBanka = veri?.firma?.bolum === 'kasaBanka';
 
   // Eskiden yeniye sıralı olduğu için pencere en alta kaydırılmış açılır: son bakiye ve toplam görünür.
@@ -1846,6 +1858,7 @@ function EkstreModal({ firma, bildir, onKapat, onKimlikDegisti }) {
             <table className="m2-table m2-ekstre">
               <thead>
                 <tr>
+                  <th>İşlem No</th>
                   <th>Tarih</th>
                   <th>Evrak Türü</th>
                   <th>Fatura/Makbuz No</th>
@@ -1859,13 +1872,14 @@ function EkstreModal({ firma, bildir, onKapat, onKimlikDegisti }) {
               <tbody>
                 {gorunum.satirlar.length === 0 && !gorunum.devir && (
                   <tr>
-                    <td colSpan={8} className="m2-empty">
+                    <td colSpan={9} className="m2-empty">
                       Bu cari için işlem yok.
                     </td>
                   </tr>
                 )}
                 {gorunum.devir && (
-                  <tr className="oto">
+                  <tr className="oto g-tek">
+                    <td className="m2-no" />
                     <td className="nowrap">{tarihTR(gorunum.devir.tarih)}</td>
                     <td>Devir bakiye</td>
                     <td />
@@ -1876,10 +1890,16 @@ function EkstreModal({ firma, bildir, onKapat, onKimlikDegisti }) {
                     <td className={`sayi bakiye ${durumBul(gorunum.devir.bakiye)}`}>{paraFmt(gorunum.devir.bakiye)}</td>
                   </tr>
                 )}
-                {gorunum.satirlar.map((r) => (
-                  <tr key={r.id} className={r.otomatik ? 'oto' : ''}>
+                {gorunum.satirlar.map((r, i) => (
+                  <tr key={r.id} className={`${r.otomatik ? 'oto ' : ''}${ekstreGrupSinifi[i]}`}>
+                    <td className="m2-no" title={r.islemNo ? `İşlem No ${r.islemNo}` : undefined}>
+                      {r.islemNo}
+                    </td>
                     <td className="nowrap">{tarihTR(r.tarih)}</td>
-                    <td className="nowrap">{r.evrakTuru}</td>
+                    <td className="nowrap">
+                      {r.otomatik && <span className="m2-oto-ok" title="Otomatik kesilen evrak">↳ </span>}
+                      <span className={`m2-badge ${EVRAK_SINIFI[r.evrakTuru] || ''}`}>{r.evrakTuru}</span>
+                    </td>
                     <td>{r.belgeNo}</td>
                     <td>{r.aciklama}</td>
                     <td className="nowrap">{r.odemeSekli}</td>
@@ -1891,7 +1911,7 @@ function EkstreModal({ firma, bildir, onKapat, onKimlikDegisti }) {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={5}>Toplam</td>
+                  <td colSpan={6}>Toplam</td>
                   <td className="sayi">{paraFmt(gorunum.toplamBorc)}</td>
                   <td className="sayi">{paraFmt(gorunum.toplamAlacak)}</td>
                   <td className={`sayi bakiye ${d}`}>{paraFmt(gorunum.bakiye)}</td>
