@@ -23,7 +23,7 @@ const sutunSayisi = () => (yatay() ? 9 : 5);
 // Bazı tablolar için varsayılan görünür sütunlar (başlık metninde geçen kelimeler, küçük harf).
 const VARSAYILANLAR = [
   { sinif: 'm2-datalar', sutunlar: ['tarih', 'evrak', 'firma', 'miktar'], ana: 'firma',
-    yatay: ['işlem no', 'tarih', 'evrak', 'firma', 'açıklama', 'gider kategorisi', 'ödeme türü', 'miktar'] },
+    yatay: ['=no', 'tarih', 'evrak', 'firma', 'açıklama', 'gider kategorisi', 'ödeme türü', 'miktar'] },
   { sinif: 'rc-urun-tablo', sutunlar: ['ürün', 'satış', 'kâr %'], ana: 'ürün',
     yatay: ['ürün', 'kategori', 'satış', 'maliyet', 'kâr', 'durum'] },
   { sinif: 'm2-yk', sutunlar: ['firma', 'vade', 'bankaya yatacak'], ana: 'firma',
@@ -68,7 +68,7 @@ function gorunurleriBul(table, b, anahtar) {
   const set = new Set();
   if (v) {
     const liste = yatay() && v.yatay ? v.yatay : v.sutunlar;
-    b.forEach((s, i) => { if (!s.sabit && liste.some((k) => kucuk(s.ad).includes(k))) set.add(i); });
+    b.forEach((s, i) => { if (!s.sabit && liste.some((k) => (k[0] === '=' ? kucuk(s.ad) === k.slice(1) : kucuk(s.ad).includes(k)))) set.add(i); });
   }
   if (!set.size) {
     let n = 0;

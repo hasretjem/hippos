@@ -970,7 +970,7 @@ function MakbuzFormu({ veri, bildir, onKaydet, onModal }) {
 // Varsayılan: içinde bulunulan ay. Tüm kayıtlar yüklenir, filtre bunların üzerinde çalışır.
 // ---------------------------------------------------------------------------
 const DATALAR_SUTUNLAR = [
-  { baslik: 'İşlem No', filtre: 'islemNo' },
+  { baslik: 'No', filtre: 'islemNo' },
   { baslik: 'Tarih', filtre: 'tarih' },
   { baslik: 'Evrak Türü', filtre: 'evrakTuru' },
   { baslik: 'Firma Adı', filtre: 'firmaAdi' },
@@ -1858,7 +1858,7 @@ function EkstreModal({ firma, bildir, onKapat, onKimlikDegisti }) {
             <table className="m2-table m2-ekstre">
               <thead>
                 <tr>
-                  <th>İşlem No</th>
+                  <th>No</th>
                   <th>Tarih</th>
                   <th>Evrak Türü</th>
                   <th>Fatura/Makbuz No</th>
