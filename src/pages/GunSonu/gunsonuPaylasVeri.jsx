@@ -54,9 +54,22 @@ export function paylasimVerisi(g) {
     .filter(dolu).sort(buyuktenKucuge);
 
   const cariSatir = (g.cariler || []).map((c) => ({ ad: c.ad || 'Cari', tutar: sayi(c.tutar) })).filter(dolu).sort(buyuktenKucuge);
-  const tahsilatSatir = Object.entries(g.tahsilatlar || {})
+  const turAdi = (tur) => TAHSILAT_ADI[tur] || String(tur).toLocaleLowerCase('tr-TR');
+  const tahsilatOzetSatir = Object.entries(g.tahsilatlar || {})
     .filter(([, v]) => sayi(v) !== 0)
-    .map(([tur, v]) => ({ ad: `Tahsilat (${TAHSILAT_ADI[tur] || String(tur).toLocaleLowerCase('tr-TR')})`, tutar: -sayi(v) }));
+    .map(([tur, v]) => ({ ad: `Tahsilat (${turAdi(tur)})`, tutar: -sayi(v) }));
+  // Kimden tahsilat yapıldığı görünsün: cari adı + ödeme türü. Toplamlar özetle tutmazsa eski (türe göre) görünüme dönülür.
+  const detayGrup = new Map();
+  (g.tahsilatDetay || []).forEach((o) => {
+    if (!sayi(o.tutar)) return;
+    const anahtar = `${o.ad || 'Cari'}|${o.tur}`;
+    const onceki = detayGrup.get(anahtar) || { ad: `${o.ad || 'Cari'} (${turAdi(o.tur)})`, tutar: 0 };
+    onceki.tutar -= sayi(o.tutar);
+    detayGrup.set(anahtar, onceki);
+  });
+  const detaySatir = [...detayGrup.values()].filter(dolu).sort((a, b) => a.tutar - b.tutar);
+  const topla = (liste) => Math.round(liste.reduce((t, r) => t + r.tutar, 0) * 100);
+  const tahsilatSatir = detaySatir.length && topla(detaySatir) === topla(tahsilatOzetSatir) ? detaySatir : tahsilatOzetSatir;
   const DUZ_ADI = { sil: 'silindi', tutar: 'tutar değişti', urun_ekle: 'ürün eklendi', geri_al: 'silme geri alındı' };
   const duzeltmeSatir = (g.duzeltmeler || [])
     .filter((d) => sayi(d.tutar) !== 0)

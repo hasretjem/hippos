@@ -76,10 +76,12 @@
 .gsk-et2 span { font-family: 'Archivo Black', sans-serif; font-size: 31px; line-height: 1.08; margin-top: 6px; color: #ffd23f !important; }
 
 /* Alt gizli bölge */
-.gsk-b-harcama { left: 44px; top: 1850px; width: 486px; height: 530px; }
-.gsk-b-cari { left: 550px; top: 1850px; width: 486px; height: 230px; }
+.gsk-b-cari { left: 44px; top: 1850px; width: 486px; height: 530px; }
+.gsk-b-harcama { left: 550px; top: 1850px; width: 486px; height: 230px; }
 .gsk-b-tahsilat { left: 550px; top: 2096px; width: 486px; height: 284px; }
 .gsk-b-harcama .gsk-s, .gsk-b-cari .gsk-s, .gsk-b-tahsilat .gsk-s { font-size: calc(27px * var(--k, 1)); }
+/* Uzun cari adı yazıyı küçültmez, "…" ile biter (boşluksuz) */
+.gsk-b-cari .gsk-ad, .gsk-b-tahsilat .gsk-ad { text-overflow: ellipsis; }
 .gsk-b-harcama .gsk-son, .gsk-b-cari .gsk-son, .gsk-b-tahsilat .gsk-son { font-size: calc(30px * var(--k, 1)); }
 
 /* ===== Paylaşım penceresi ===== */

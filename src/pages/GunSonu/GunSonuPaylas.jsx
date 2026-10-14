@@ -148,6 +148,7 @@ function sigdir(kart) {
     kutu.style.setProperty('--k', '1');
     const tasti = () => {
       if (kutu.scrollHeight > kutu.clientHeight + 1) return true;
+      if (kutu.classList.contains('gsk-b-cari') || kutu.classList.contains('gsk-b-tahsilat')) return false; // uzun ad "…" ile kısalır
       return [...kutu.querySelectorAll('.gsk-ad, .gsk-td, .gsk-yh')].some((e) => e.scrollWidth > e.clientWidth + 1);
     };
     while (tasti() && k > 0.45) {
@@ -170,6 +171,19 @@ function kartStilleri() {
     }
   }
   return css;
+}
+
+// html2canvas "text-overflow: ellipsis"i çizmez; uzun cari adlarını kopya üzerinde elle "…" ile (boşluksuz) kısaltırız.
+function uzunAdlariKisalt(doc) {
+  doc.querySelectorAll('.gsk-b-cari .gsk-ad, .gsk-b-tahsilat .gsk-ad').forEach((el) => {
+    if (el.scrollWidth <= el.clientWidth + 1) return;
+    const tam = el.textContent;
+    let n = tam.length;
+    while (n > 1 && el.scrollWidth > el.clientWidth + 1) {
+      n -= 1;
+      el.textContent = `${tam.slice(0, n).trimEnd()}…`;
+    }
+  });
 }
 
 export default function GunSonuPaylas({ v, onKapat }) {
@@ -198,6 +212,7 @@ export default function GunSonuPaylas({ v, onKapat }) {
             st.textContent = kartStilleri();
             doc.head.appendChild(st);
             if (doc.fonts) { try { await doc.fonts.ready; } catch { /* yazı tipi beklenemedi */ } }
+            uzunAdlariKisalt(doc);
           } });
         const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
         if (!blob) throw new Error('bos');
