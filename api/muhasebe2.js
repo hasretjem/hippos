@@ -167,6 +167,7 @@ export function grupBul(firma, yontemler) {
   if (firma.firma_turu === 'Yemek Kartı') return { grup: 'Yemek Kartı', bolum: 'cariler' };
   if (firma.firma_turu === 'Personel') return { grup: 'Personel', bolum: 'cariler' };
   if (firma.firma_turu === 'Sabit Gider') return { grup: 'Sabit Gider', bolum: 'cariler' };
+  if (firma.firma_turu === 'Müşteri') return { grup: 'Müşteri', bolum: 'cariler' };
   if (firma.firma_turu !== 'Ödeme Şekli') return { grup: 'Firma', bolum: 'cariler' };
   const turler = (yontemler || []).filter((y) => norm(y.ad) === norm(firma.ad)).map((y) => y.odeme_turu);
   if (turler.includes('Nakit')) return { grup: 'Kasa', bolum: 'kasaBanka' };
@@ -188,7 +189,7 @@ export function ekstreHesapla(faturalar, makbuzlar) {
       tarih: f.tarih,
       zaman: f.kayit_zamani || '',
       sira: 1,
-      evrakTuru: f.kaynak === 'devir' ? 'Devir' : f.iade ? 'İade Faturası' : 'Fatura/Fiş',
+      evrakTuru: f.kaynak === 'devir' ? 'Devir' : f.kaynak === 'musteri_cari' ? 'Müşteri Faturası' : f.iade ? 'İade Faturası' : 'Fatura/Fiş',
       belgeNo: f.fatura_no || '',
       aciklama: f.aciklama || '',
       odemeSekli: f.kasa || f.odeme_hesabi || '',
@@ -755,7 +756,7 @@ const FF_KOLON = ['id', 'tarih', 'firma_id', 'firma_adi', 'fatura_no', 'aciklama
 const MK_KOLON = ['id', 'tarih', 'makbuz_turu', 'firma_id', 'firma_adi', 'fatura_no', 'aciklama', 'odeme_turu', 'odeme_hesabi', 'kasa', 'tutar', 'otomatik', 'grup_id', 'kaynak', 'kasa_grubu', 'kayit_zamani', 'elle_degisti'];
 const sec = (r, kolonlar) => Object.fromEntries(kolonlar.map((k) => [k, r[k] === undefined ? null : r[k]]));
 const idSirala = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-const KAYNAK_YER = { yemek_karti: 'Yemek Kartları sekmesinden', tahakkuk: 'Tahakkuklar sekmesinden', avans: "Personel Klasörü'nden", izin: "Personel Klasörü'nden", hizli_gider: 'Harcama modülünden', gunsonu: "Gün Sonu sayfasından", devir: 'Devir aktarımından' };
+const KAYNAK_YER = { yemek_karti: 'Yemek Kartları sekmesinden', tahakkuk: 'Tahakkuklar sekmesinden', avans: "Personel Klasörü'nden", izin: "Personel Klasörü'nden", hizli_gider: 'Harcama modülünden', gunsonu: "Gün Sonu sayfasından", devir: 'Devir aktarımından', musteri_cari: 'Cariler sayfasından' };
 
 async function grupOku(db, grupId) {
   if (!grupId) throw new HataMesaji(400, 'grupId gerekli');
@@ -1865,7 +1866,152 @@ async function datalarSil(db, body) {
   }
   if (kaynak === 'izin') throw new HataMesaji(409, "İzin kesintisi, Personel Klasörü'nde ilgili izin kaydı silinerek kaldırılır.");
   if (kaynak === 'gunsonu') throw new HataMesaji(409, 'Günsonu kaydı Günsonları sekmesinden silinir.');
+  if (kaynak === 'musteri_cari') throw new HataMesaji(409, "Bu kayıt Cariler sayfasından yönetiliyor (faturayı orada geri alın).");
   throw new HataMesaji(409, 'Bu kayıt Sil düğmesiyle (grup olarak) silinir');
+}
+
+
+// ---------------------------------------------------------------------------
+// Müşteri carileri (Hippos Cariler bağlantısı)
+//  - Hippos'ta faturalandırılan her müşteri için Muhasebe2'de "Müşteri" türünde bir cari açılır (hippos_cari_id ile bağlı).
+//  - Faturalandırma: o cariye "Müşteri Faturası" yazılır (iade faturası mantığı: müşteri bize borçlanır, kategori/KDV yok).
+//  - Havale tahsilatı: müşteriye Tahsilat + seçilen banka/ortak carisine yöntemsiz otomatik Ödeme (Yemek Kartı "Para geldi" ile aynı kalıp).
+//  - Hippos'ta fatura geri alınınca Muhasebe2'deki müşteri faturası da silinir.
+// ---------------------------------------------------------------------------
+const MUSTERI_KATEGORI = 'Müşteri Faturası (Rapor Dışı)';
+
+function musteriTarih(v) {
+  const s = String(v || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const m = s.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return bugunIstanbul();
+}
+
+function musteriCariId(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) throw new HataMesaji(400, 'Cari numarası geçersiz');
+  return Math.trunc(n);
+}
+
+// Hippos carisinin Muhasebe2 karşılığını bulur, yoksa açar. İsim başka bir firmayla çakışırsa sonuna "(Müşteri)" eklenir.
+async function musteriFirmasi(db, cariId, cariAd) {
+  const { data, error } = await db.from('m2_firmalar').select('id,ad').eq('hippos_cari_id', cariId).maybeSingle();
+  kontrol(error);
+  if (data) return data;
+  const ad0 = String(cariAd || '').trim();
+  if (!ad0) throw new HataMesaji(400, 'Cari adı gerekli');
+  const adaylar = [ad0, `${ad0} (Müşteri)`, ...[2, 3, 4, 5, 6].map((n) => `${ad0} (Müşteri ${n})`)];
+  for (const ad of adaylar) {
+    const ekle = await db.from('m2_firmalar').insert({ ad, firma_turu: 'Müşteri', hippos_cari_id: cariId }).select('id,ad').single();
+    if (!ekle.error) return ekle.data;
+    if (ekle.error.code === '23505') {
+      const { data: tekrar, error: tHata } = await db.from('m2_firmalar').select('id,ad').eq('hippos_cari_id', cariId).maybeSingle();
+      kontrol(tHata);
+      if (tekrar) return tekrar; // aynı anda başka istek açmış
+      continue; // isim dolu: sıradaki adayı dene
+    }
+    kontrol(ekle.error);
+  }
+  throw new HataMesaji(409, 'Müşteri carisi için uygun bir isim bulunamadı');
+}
+
+// Müşteri faturasını yazar. Aynı Hippos faturası ikinci kez gelirse yeni kayıt açmaz (yazildi:false).
+async function musteriFaturaYaz(db, g) {
+  const hipposFaturaId = musteriCariId(g.faturaId);
+  const cariId = musteriCariId(g.cariId);
+  const tutar = tutarCoz(g.tutar);
+  if (tutar <= 0) throw new HataMesaji(400, 'Fatura tutarı sıfırdan büyük olmalı');
+  const { data: var_, error: vHata } = await db.from('m2_musteri_fatura').select('hippos_fatura_id').eq('hippos_fatura_id', hipposFaturaId).maybeSingle();
+  kontrol(vHata);
+  if (var_) return { yazildi: false };
+  const firma = await musteriFirmasi(db, cariId, g.cariAd);
+  const donem = metin(g.donem);
+  const { data, error } = await db.rpc('m2_musteri_fatura_yaz', {
+    p: {
+      hippos_fatura_id: hipposFaturaId,
+      hippos_cari_id: cariId,
+      fatura: {
+        id: randomUUID(),
+        grup_id: randomUUID(),
+        tarih: musteriTarih(g.tarih),
+        firma_id: firma.id,
+        firma_adi: firma.ad,
+        fatura_no: metin(g.faturaNo),
+        aciklama: `Cariler faturası${donem ? ` (${donem})` : ''}`,
+        gider_kategorisi: MUSTERI_KATEGORI,
+        fatura_tutari: tutar,
+      },
+    },
+  });
+  kontrol(error);
+  return { yazildi: data !== false, firmaId: firma.id, firmaAdi: firma.ad };
+}
+
+// Havale tahsilatı: müşteriye Tahsilat (yöntem+hesap) ve hesabın carisine yöntemsiz otomatik Ödeme.
+async function musteriHavaleTahsilat(db, g) {
+  const odemeId = musteriCariId(g.odemeId);
+  const cariId = musteriCariId(g.cariId);
+  const tutar = tutarCoz(g.tutar);
+  if (tutar <= 0) throw new HataMesaji(400, 'Tahsilat tutarı sıfırdan büyük olmalı');
+  const yontemTuru = g.yontemTuru;
+  if (!['Banka Havalesi', 'Ortaklar'].includes(yontemTuru)) throw new HataMesaji(400, 'Banka veya ortak seçin');
+  const hesapAdi = String(g.hesapAdi || '').trim();
+  const alan = await yontemAlanlari(db, yontemTuru, hesapAdi, null);
+
+  const { data: var_, error: vHata } = await db.from('m2_musteri_tahsilat').select('hippos_odeme_id').eq('hippos_odeme_id', odemeId).maybeSingle();
+  kontrol(vHata);
+  if (var_) return { yazildi: false };
+
+  // Fatura Muhasebe2'de henüz yoksa (bu özellikten önce kesilmiş açık fatura) önce o yazılır: tahsilattan önceki kalan tutarla.
+  let faturaNo = metin(g.faturaNo);
+  if (g.fatura) {
+    await musteriFaturaYaz(db, { ...g.fatura, cariId, cariAd: g.cariAd });
+    faturaNo = faturaNo || metin(g.fatura.faturaNo);
+  }
+  const firma = await musteriFirmasi(db, cariId, g.cariAd);
+  const yf = await yontemFirmasi(db, alan.odeme_hesabi);
+  if (yf.id === firma.id) throw new HataMesaji(400, 'Müşteri ile ödeme şekli aynı olamaz');
+
+  const tarih = g.tarih ? tarihKontrol(musteriTarih(g.tarih)) : bugunIstanbul();
+  const grupId = randomUUID();
+  const { data, error } = await db.rpc('m2_musteri_tahsilat_yaz', {
+    p: {
+      hippos_odeme_id: odemeId,
+      hippos_fatura_id: g.faturaId ? String(musteriCariId(g.faturaId)) : '',
+      grup_id: grupId,
+      makbuzlar: [
+        {
+          id: randomUUID(),
+          tarih,
+          makbuz_turu: 'Tahsilat',
+          firma_id: firma.id,
+          firma_adi: firma.ad,
+          fatura_no: faturaNo,
+          aciklama: 'Cariler tahsilatı (havale)',
+          odeme_turu: yontemTuru,
+          odeme_hesabi: alan.odeme_hesabi,
+          tutar,
+          otomatik: false,
+        },
+        {
+          id: randomUUID(),
+          tarih,
+          makbuz_turu: 'Ödeme',
+          firma_id: yf.id,
+          firma_adi: yf.ad,
+          fatura_no: faturaNo,
+          aciklama: `Otomatik: ${firma.ad} tahsilatı`,
+          odeme_turu: null,
+          odeme_hesabi: null,
+          tutar,
+          otomatik: true,
+        },
+      ],
+    },
+  });
+  kontrol(error);
+  return { yazildi: data !== false };
 }
 
 export default async function handler(req, res) {
@@ -1907,6 +2053,21 @@ export default async function handler(req, res) {
         odemeYontemleri: yo.data || [],
         firmaKimlikleri: (ki.data || []).map((k) => ({ vkn: k.vkn, firmaId: k.firma_id })),
         bugun: bugunIstanbul(),
+      });
+    }
+
+    // Cariler > Tahsil Et > Havale: seçilebilecek banka ve ortak hesapları.
+    if (req.method === 'GET' && resource === 'musteriYontemler') {
+      const { data, error } = await db
+        .from('m2_odeme_yontemleri')
+        .select('odeme_turu,ad')
+        .in('odeme_turu', ['Banka Havalesi', 'Ortaklar'])
+        .order('kayit_zamani')
+        .order('ad');
+      kontrol(error);
+      return res.status(200).json({
+        bankalar: (data || []).filter((x) => x.odeme_turu === 'Banka Havalesi').map((x) => x.ad),
+        ortaklar: (data || []).filter((x) => x.odeme_turu === 'Ortaklar').map((x) => x.ad),
       });
     }
 
@@ -2043,7 +2204,7 @@ export default async function handler(req, res) {
         islemNo: r.grup_id && noHaritasi.has(r.grup_id) ? String(noHaritasi.get(r.grup_id)) : '',
         id: r.id,
         tarih: r.tarih,
-        evrakTuru: r.kaynak === 'devir' ? 'Devir' : r.evrak_turu,
+        evrakTuru: r.kaynak === 'devir' ? 'Devir' : r.kaynak === 'musteri_cari' && r.evrak_turu === 'İade Faturası' ? 'Müşteri Faturası' : r.evrak_turu,
         firmaAdi: r.firma_adi,
         faturaNo: r.fatura_no || '',
         aciklama: r.aciklama || '',
@@ -2507,6 +2668,58 @@ export default async function handler(req, res) {
       if (error?.code === '23505') throw new HataMesaji(409, 'Bu isimde bir firma zaten var');
       kontrol(error);
       return res.status(200).json({ ok: true });
+    }
+
+    // ---------- Müşteri carileri (Hippos Cariler bağlantısı) ----------
+    if (resource === 'musteriFaturaYaz') {
+      return res.status(200).json({ ok: true, ...(await musteriFaturaYaz(db, body)) });
+    }
+
+    // Açık Hippos faturalarını toplu aktarır (tekrar çalışsa da çift kayıt açmaz).
+    if (resource === 'musteriFaturalariAktar') {
+      const liste = Array.isArray(body.faturalar) ? body.faturalar : [];
+      let yazilan = 0;
+      const hatalar = [];
+      for (const f of liste) {
+        try {
+          const r = await musteriFaturaYaz(db, f);
+          if (r.yazildi) yazilan += 1;
+        } catch (e) {
+          hatalar.push({ faturaId: f && f.faturaId, mesaj: e.message });
+        }
+      }
+      return res.status(200).json({ ok: hatalar.length === 0, yazilan, toplam: liste.length, hatalar });
+    }
+
+    if (resource === 'musteriTahsilat') {
+      return res.status(200).json({ ok: true, ...(await musteriHavaleTahsilat(db, body)) });
+    }
+
+    if (resource === 'musteriFaturaSil') {
+      const id = musteriCariId(body.faturaId);
+      const { error } = await db.rpc('m2_musteri_fatura_sil', { p_hippos_fatura_id: id });
+      if (error && String(error.message || '').includes('TAHSILAT_VAR')) throw new HataMesaji(409, 'Bu fatura için Muhasebe2\'de tahsilat kaydı var, geri alınamaz.');
+      kontrol(error);
+      return res.status(200).json({ ok: true });
+    }
+
+    // Hippos'ta cari adı değişince Muhasebe2'deki müşteri carisinin adı da değişir (çakışırsa "(Müşteri)" eklenir).
+    if (resource === 'musteriAdGuncelle') {
+      const cariId = musteriCariId(body.cariId);
+      const yeni = String(body.ad || '').trim();
+      if (!yeni) throw new HataMesaji(400, 'Cari adı gerekli');
+      const { data: firma, error: fHata } = await db.from('m2_firmalar').select('id,ad,varsayilan_kategori').eq('hippos_cari_id', cariId).maybeSingle();
+      kontrol(fHata);
+      if (!firma) return res.status(200).json({ ok: true, degisti: false });
+      const adaylar = [yeni, `${yeni} (Müşteri)`, ...[2, 3, 4, 5, 6].map((n) => `${yeni} (Müşteri ${n})`)];
+      if (adaylar.includes(firma.ad)) return res.status(200).json({ ok: true, degisti: false });
+      for (const ad of adaylar) {
+        const { error } = await db.rpc('m2_firma_guncelle', { p_firma_id: firma.id, p_ad: ad, p_varsayilan_kategori: firma.varsayilan_kategori });
+        if (error?.code === '23505') continue;
+        kontrol(error);
+        return res.status(200).json({ ok: true, degisti: true, ad });
+      }
+      throw new HataMesaji(409, 'Müşteri carisi için uygun bir isim bulunamadı');
     }
 
     // ---------- Tanımlar ----------

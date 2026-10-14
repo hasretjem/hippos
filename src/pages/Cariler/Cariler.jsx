@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import OdemeTarihiSecici from '../../components/OdemeTarihi/OdemeTarihiSecici';
 import useIsMobile from '../../hooks/useIsMobile';
+import { m2Cagri, musteriFaturaVeri } from '../../services/muhasebe2Koprusu';
 import { getDisplayName } from '../../components/ProductButton';
 import { odemeGunuDurumu, odemeSecimiGecerli, trTarih, isGunuAnahtarMs } from '../../utils/odemeTarihi';
 
@@ -678,21 +679,70 @@ export default function Cariler({ data, onNavigate }) {
     showToast('Faturalandırıldı');
   }
 
-  async function submitFuturaTamOde(odemeTur) {
-    if (!futuraTahsilatModal || !odemeTur) return;
-    await futuraTamOde(futuraTahsilatModal.faturaId, odemeTur);
+  // Havale seçilince banka/ortak hesabı da seçilir (Muhasebe2'ye yazılır). null = seçim ekranı kapalı.
+  const [havaleSecim, setHavaleSecim] = useState(null); // { yukleniyor, bankalar, ortaklar, hata }
+  const [tahsilatHata, setTahsilatHata] = useState('');
+  const [tahsilatBusy, setTahsilatBusy] = useState(false);
+  useEffect(() => { setHavaleSecim(null); setTahsilatHata(''); }, [futuraTahsilatModal?.faturaId, futuraTahsilatModal?.mod]);
+
+  async function havaleSecimiAc() {
+    if (futuraTahsilatModal?.mod === 'kismi') {
+      const t = parseFloat(String(futuraTahsilatInput).replace(',', '.')) || 0;
+      if (t <= 0) { setTahsilatHata('Önce ödeme tutarını girin'); return; }
+    }
+    setTahsilatHata('');
+    setHavaleSecim({ yukleniyor: true, bankalar: [], ortaklar: [], hata: '' });
+    try {
+      const j = await m2Cagri('musteriYontemler', { method: 'GET' });
+      setHavaleSecim({ yukleniyor: false, bankalar: j.bankalar || [], ortaklar: j.ortaklar || [], hata: '' });
+    } catch (e) {
+      setHavaleSecim({ yukleniyor: false, bankalar: [], ortaklar: [], hata: e.message });
+    }
+  }
+
+  async function submitFuturaTamOde(odemeTur, havale = null) {
+    if (!futuraTahsilatModal || !odemeTur || tahsilatBusy) return;
+    setTahsilatBusy(true);
+    setTahsilatHata('');
+    const sonuc = await futuraTamOde(futuraTahsilatModal.faturaId, odemeTur, havale);
+    setTahsilatBusy(false);
+    if (sonuc && sonuc.ok === false) { setTahsilatHata(sonuc.mesaj || 'Kaydedilemedi'); return; }
     setFuturaTahsilatModal(null);
     showToast('Fatura tahsil edildi');
   }
 
-  async function submitFuturaKismiOde(odemeTur) {
+  async function submitFuturaKismiOde(odemeTur, havale = null) {
     const tutar = parseFloat(String(futuraTahsilatInput).replace(',', '.')) || 0;
-    if (!futuraTahsilatModal || tutar <= 0 || !odemeTur) return;
-    await futuraKismiOde(futuraTahsilatModal.faturaId, tutar, odemeTur);
+    if (!futuraTahsilatModal || tutar <= 0 || !odemeTur || tahsilatBusy) return;
+    setTahsilatBusy(true);
+    setTahsilatHata('');
+    const sonuc = await futuraKismiOde(futuraTahsilatModal.faturaId, tutar, odemeTur, havale);
+    setTahsilatBusy(false);
+    if (sonuc && sonuc.ok === false) { setTahsilatHata(sonuc.mesaj || 'Kaydedilemedi'); return; }
     setFuturaTahsilatModal(null);
     setFuturaTahsilatInput('');
     showToast('Kısmi ödeme kaydedildi');
   }
+
+  // Bu özellikten önce kesilmiş / Muhasebe2'ye yazılamamış açık faturalar: müşteri carisine borç olarak aktarılır.
+  // Sunucu aynı faturayı ikinci kez yazmaz; cihazda başarılılar hatırlanır ki her açılışta tekrar gönderilmesin.
+  useEffect(() => {
+    if (!cariFaturalar || cariFaturalar.length === 0 || !cariler || cariler.length === 0) return;
+    let yapilan = {};
+    try { yapilan = JSON.parse(localStorage.getItem('m2-musteri-aktarilan') || '{}'); } catch { yapilan = {}; }
+    const liste = cariFaturalar
+      .filter((f) => !yapilan[f.id] && Math.max(0, f.tutar - (f.tahsilatTutar || 0)) > 0)
+      .map((f) => ({ f, ad: cariler.find((c) => c.id === f.cariId)?.ad }))
+      .filter((x) => x.ad);
+    if (liste.length === 0) return;
+    m2Cagri('musteriFaturalariAktar', {
+      body: { faturalar: liste.map(({ f, ad }) => musteriFaturaVeri(f, ad, Math.max(0, f.tutar - (f.tahsilatTutar || 0)))) },
+    }).then((j) => {
+      const hataliIdler = new Set((j.hatalar || []).map((h) => String(h.faturaId)));
+      liste.forEach(({ f }) => { if (!hataliIdler.has(String(f.id))) yapilan[f.id] = 1; });
+      try { localStorage.setItem('m2-musteri-aktarilan', JSON.stringify(yapilan)); } catch { /* yoksay */ }
+    }).catch((e) => console.error('Muhasebe2 müşteri faturaları aktarılamadı:', e.message));
+  }, [cariFaturalar?.length, cariler?.length]);
 
   // ---- Cari Özeti Oluştur (firma) ----
   const [ozetModalOpen, setOzetModalOpen] = useState(false);
@@ -1588,18 +1638,78 @@ export default function Cariler({ data, onNavigate }) {
                 style={{marginBottom: '12px'}}
               />
             )}
-            <p style={{fontSize: '12px', color: 'var(--ink-muted)', marginBottom: '8px'}}>Ödeme yöntemi seç:</p>
-            <div className="cr-odeme-tur-grid">
-              {['NAKİT', 'KREDİ KARTI', 'HAVALE', 'ÇEK'].map((tur) => (
-                <button
-                  key={tur}
-                  className="cr-odeme-tur-btn"
-                  onClick={() => futuraTahsilatModal.mod === 'tam' ? submitFuturaTamOde(tur) : submitFuturaKismiOde(tur)}
-                >
-                  {tur}
-                </button>
-              ))}
-            </div>
+            {!havaleSecim ? (
+              <>
+                <p style={{fontSize: '12px', color: 'var(--ink-muted)', marginBottom: '8px'}}>Ödeme yöntemi seç:</p>
+                <div className="cr-odeme-tur-grid">
+                  {['NAKİT', 'KREDİ KARTI', 'HAVALE', 'ÇEK'].map((tur) => (
+                    <button
+                      key={tur}
+                      className="cr-odeme-tur-btn"
+                      disabled={tahsilatBusy}
+                      onClick={() => {
+                        if (tur === 'HAVALE') havaleSecimiAc();
+                        else if (futuraTahsilatModal.mod === 'tam') submitFuturaTamOde(tur);
+                        else submitFuturaKismiOde(tur);
+                      }}
+                    >
+                      {tur}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="cr-havale-secim">
+                <p className="cr-havale-baslik">Havale hangi hesaba geldi?</p>
+                {havaleSecim.yukleniyor && <p className="cr-havale-not">Hesaplar yükleniyor…</p>}
+                {havaleSecim.hata && <p className="cr-havale-hata">{havaleSecim.hata}</p>}
+                {havaleSecim.bankalar.length > 0 && (
+                  <>
+                    <p className="cr-havale-grup">Banka havalesi</p>
+                    <div className="cr-odeme-tur-grid">
+                      {havaleSecim.bankalar.map((ad) => (
+                        <button
+                          key={`b-${ad}`}
+                          className="cr-odeme-tur-btn"
+                          disabled={tahsilatBusy}
+                          onClick={() => {
+                            const h = { yontemTuru: 'Banka Havalesi', hesapAdi: ad };
+                            if (futuraTahsilatModal.mod === 'tam') submitFuturaTamOde('HAVALE', h);
+                            else submitFuturaKismiOde('HAVALE', h);
+                          }}
+                        >
+                          {ad}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {havaleSecim.ortaklar.length > 0 && (
+                  <>
+                    <p className="cr-havale-grup">Ortak (cepten)</p>
+                    <div className="cr-odeme-tur-grid">
+                      {havaleSecim.ortaklar.map((ad) => (
+                        <button
+                          key={`o-${ad}`}
+                          className="cr-odeme-tur-btn"
+                          disabled={tahsilatBusy}
+                          onClick={() => {
+                            const h = { yontemTuru: 'Ortaklar', hesapAdi: ad };
+                            if (futuraTahsilatModal.mod === 'tam') submitFuturaTamOde('HAVALE', h);
+                            else submitFuturaKismiOde('HAVALE', h);
+                          }}
+                        >
+                          {ad}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+                <button className="cr-havale-geri" disabled={tahsilatBusy} onClick={() => { setHavaleSecim(null); setTahsilatHata(''); }}>‹ Yönteme dön</button>
+              </div>
+            )}
+            {tahsilatBusy && <p className="cr-havale-not">Kaydediliyor…</p>}
+            {tahsilatHata && <p className="cr-havale-hata">{tahsilatHata}</p>}
             <div className="cr-modal-footer">
               <button className="cr-secondary" onClick={() => setFuturaTahsilatModal(null)}>Vazgeç</button>
             </div>

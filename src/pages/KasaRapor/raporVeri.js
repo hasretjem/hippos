@@ -7,7 +7,7 @@ export const kurus = (n) => {
   return KURUS.format(r === 0 ? 0 : r).replace(/^-/, '−');
 };
 
-export const TUR_SIRA = ['Firma', 'Personel', 'Yemek Kartı', 'Sabit Gider', 'Kasa', 'Banka', 'Kredi Kartı', 'Ortaklar', 'Kasa / Banka'];
+export const TUR_SIRA = ['Firma', 'Müşteri', 'Personel', 'Yemek Kartı', 'Sabit Gider', 'Kasa', 'Banka', 'Kredi Kartı', 'Ortaklar', 'Kasa / Banka'];
 
 const sira = (t) => { const i = TUR_SIRA.indexOf(t); return i < 0 ? 99 : i; };
 
