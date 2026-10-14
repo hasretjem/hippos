@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../services/supabase';
+import { m2Cagri, musteriFaturaVeri } from '../services/muhasebe2Koprusu';
 
 
 export const QUICK_SALE = '⚡ Hızlı Satış';
@@ -1765,6 +1766,11 @@ export default function useHipposData(scope = 'full') {
     supabase.from('cariler').update(dbPatch).eq('id', id).then(({ error }) => {
       if (error) console.error('cari güncellenemedi:', error.message);
     });
+    // Muhasebe2'de bu müşterinin carisi varsa adı da değişsin (bağ cari numarasıyladır; yoksa hiçbir şey yapılmaz)
+    if (patch.ad !== undefined && String(patch.ad).trim()) {
+      m2Cagri('musteriAdGuncelle', { body: { cariId: id, ad: String(patch.ad).trim() } })
+        .catch((e) => console.error('Muhasebe2 müşteri adı güncellenemedi:', e.message));
+    }
   }
 
   // Cariyi ve ona ait TÜM geçmişi (hareket/ödeme/fatura/arşiv) kalıcı olarak siler.
@@ -1874,6 +1880,12 @@ export default function useHipposData(scope = 'full') {
       setCariFaturalar((prev) => prev.filter((f) => f.id !== id));
       return null;
     }
+    // Muhasebe2'ye müşteri faturası (müşteri cari borçlanır). Başarısız olursa Cariler ekranı açılışta yeniden dener.
+    const cariAd = cariler.find((c) => c.id === cariId)?.ad;
+    if (tutar > 0 && cariAd) {
+      m2Cagri('musteriFaturaYaz', { body: musteriFaturaVeri(fatura, cariAd, tutar) })
+        .catch((e) => console.error('Muhasebe2 müşteri faturası yazılamadı:', e.message));
+    }
     return id;
   }
 
@@ -1895,6 +1907,13 @@ export default function useHipposData(scope = 'full') {
     if ((fatura.tahsilatTutar || 0) > 0 || (fatura.odemeLog || []).length > 0) return { ok: false, mesaj: 'Tahsilat alınmış fatura geri alınamaz' };
     const hareketler = fatura.hareketlerSnapshot;
     const odemeler = Array.isArray(fatura.odemelerSnapshot) ? fatura.odemelerSnapshot : [];
+
+    // Muhasebe2'deki müşteri faturası da silinir (orada hiç işlem yapılmamış gibi olur). Başarısız olursa hiçbir şey geri alınmaz.
+    try {
+      await m2Cagri('musteriFaturaSil', { body: { faturaId } });
+    } catch (e) {
+      return { ok: false, mesaj: 'Muhasebe2 ile bağlantı kurulamadı, fatura geri alınmadı: ' + e.message };
+    }
 
     if (hareketler.length > 0) {
       const { error } = await supabase.from('cari_hareketler').upsert(
@@ -1926,13 +1945,37 @@ export default function useHipposData(scope = 'full') {
   }
 
   // Futura: tam tahsilat — faturayı siler, bakiye 0 ise hareketleri de arşivler
-  async function futuraTamOde(faturaId, odemeTur = 'NAKİT') {
+  // Havale ile alınan tahsilat Muhasebe2'ye de yazılır (müşteri carisine Tahsilat + seçilen banka/ortak carisine Ödeme).
+  // Yazılamazsa Hippos'ta da tahsilat kaydedilmez ({ok:false, mesaj}). Diğer ödeme yöntemleri eskisi gibidir.
+  async function havaleM2Yaz(fatura, odemeId, tutar, havale) {
+    if (!havale || !havale.yontemTuru || !havale.hesapAdi) return { ok: false, mesaj: 'Havale için banka veya ortak seçin' };
+    const cariAd = cariler.find((c) => c.id === fatura.cariId)?.ad || '';
+    const kalanOnce = Math.max(0, fatura.tutar - (fatura.tahsilatTutar || 0));
+    try {
+      await m2Cagri('musteriTahsilat', {
+        body: {
+          odemeId, faturaId: fatura.id, cariId: fatura.cariId, cariAd, tutar,
+          yontemTuru: havale.yontemTuru, hesapAdi: havale.hesapAdi, faturaNo: fatura.faturaNo || '',
+          fatura: musteriFaturaVeri(fatura, cariAd, kalanOnce),
+        },
+      });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, mesaj: 'Muhasebe2\'ye yazılamadı, tahsilat kaydedilmedi: ' + e.message };
+    }
+  }
+
+  async function futuraTamOde(faturaId, odemeTur = 'NAKİT', havale = null) {
     const fatura = cariFaturalar.find((f) => f.id === faturaId);
-    if (!fatura) return;
+    if (!fatura) return { ok: false, mesaj: 'Fatura bulunamadı' };
+    const odemeId = Date.now() + Math.floor(Math.random() * 1000);
+    if (odemeTur === 'HAVALE') {
+      const m2 = await havaleM2Yaz(fatura, odemeId, Math.max(0, fatura.tutar - (fatura.tahsilatTutar || 0)), havale);
+      if (!m2.ok) return m2;
+    }
     setCariFaturalar((prev) => prev.filter((f) => f.id !== faturaId));
     await supabase.from('cari_faturalar').delete().eq('id', faturaId).then(({ error }) => { if (error) console.error(error.message); });
     // Ödeme kaydı: cari_odemeler'e yaz (panelde ve günsonu tahsilatlarında görünsün)
-  const odemeId = Date.now() + Math.floor(Math.random() * 1000);
     const odemeTs = Date.now();
     const eklenenOdeme = { id: odemeId, cariId: fatura.cariId, ts: odemeTs, tutar: Math.max(0, fatura.tutar - (fatura.tahsilatTutar || 0)), tur: odemeTur, kaynak: 'fatura' };
     setCariOdemeler((prev) => [...prev, eklenenOdeme]);
@@ -1950,12 +1993,18 @@ export default function useHipposData(scope = 'full') {
     if (kalanFatura.length === 0 && kalanHareket.length === 0) {
       archiveCari(fatura.cariId, Math.max(0, fatura.tutar - (fatura.tahsilatTutar || 0)), eklenenOdeme);
     }
+    return { ok: true };
   }
 
   // Futura: kısmi ödeme — sadece fatura üzerindeki tahsilat artar, log'a eklenir
-  async function futuraKismiOde(faturaId, tutar, odemeTur = 'NAKİT') {
+  async function futuraKismiOde(faturaId, tutar, odemeTur = 'NAKİT', havale = null) {
     const fatura = cariFaturalar.find((f) => f.id === faturaId);
-    if (!fatura) return;
+    if (!fatura) return { ok: false, mesaj: 'Fatura bulunamadı' };
+    const odemeId = Date.now() + Math.floor(Math.random() * 1000);
+    if (odemeTur === 'HAVALE') {
+      const m2 = await havaleM2Yaz(fatura, odemeId, tutar, havale);
+      if (!m2.ok) return m2;
+    }
     const yeniTahsilat = (fatura.tahsilatTutar || 0) + tutar;
     const tarihStr = new Date().toLocaleDateString('tr-TR');
     const yeniLog = [...(fatura.odemeLog || []), { tutar, tarih: tarihStr, tur: odemeTur }];
@@ -1967,7 +2016,6 @@ export default function useHipposData(scope = 'full') {
       .eq('id', faturaId)
       .then(({ error }) => { if (error) console.error(error.message); });
     // Ödeme kaydı: cari_odemeler'e yaz (panelde ve günsonu tahsilatlarında görünsün)
-    const odemeId = Date.now() + Math.floor(Math.random() * 1000);
     const odemeTs = Date.now();
     setCariOdemeler((prev) => [...prev, { id: odemeId, cariId: fatura.cariId, ts: odemeTs, tutar, tur: odemeTur, kaynak: 'fatura' }]);
     // Satış geçmişine de TAHSİLAT_ kaydı yaz — Ayarlar'daki canlı ciro tahsilatları buradan okuyor.
@@ -1976,6 +2024,7 @@ export default function useHipposData(scope = 'full') {
       ...prev,
     ]);    supabase.from('cari_odemeler').insert({ id: odemeId, cari_id: fatura.cariId, ts: odemeTs, tutar, tur: odemeTur, kaynak: 'fatura' })
       .then(({ error }) => { if (error) console.error('futura kısmi ödeme kaydı:', error.message); });
+    return { ok: true };
   }
 
   function getCariFaturalanmamisTutar(cariId) {

@@ -998,6 +998,7 @@ const DATALAR_SUTUNLAR = [
 const EVRAK_SINIFI = {
   'Fatura/Fiş': 'fatura',
   'İade Faturası': 'iade',
+  'Müşteri Faturası': 'musteri',
   'Tahsilat Makbuzu': 'tahsilat',
   'Ödeme (Tediye) Makbuzu': 'tediye',
 };
@@ -1147,11 +1148,13 @@ function DatalarSekmesi({ aktif, duzenlemeModu, veri, bildir, yenile, onIslem, o
     return !!ana && ana.id === r.id;
   };
   const kaynakVar = (r) => !!r.kaynak;
-  const tutarDuzenlenir = (r) => kaynakVar(r) && tutarAlani(r) === 'tutar' && r.tutar !== 0;
-  const tarihDuzenlenir = (r) => kaynakVar(r) && r.kaynak !== 'gunsonu' && r.kaynak !== 'izin';
-  const aciklamaDuzenlenir = (r) => kaynakVar(r) && !['gunsonu', 'izin'].includes(r.kaynak) && !r.otomatik && (r.kaynak !== 'hizli_gider' || anaSatirMi(r));
-  const kategoriDuzenlenir = (r) => kaynakVar(r) && !['gunsonu', 'avans'].includes(r.kaynak) && (r.evrakTuru === 'Fatura/Fiş' || r.evrakTuru === 'İade Faturası');
-  const kdvDuzenlenir = (r) => kaynakVar(r) && !['gunsonu', 'avans'].includes(r.kaynak) && r.kdv != null && (r.evrakTuru === 'Fatura/Fiş' || r.evrakTuru === 'İade Faturası');
+  // Cariler sayfasından gelen müşteri kayıtları (müşteri faturası / havale tahsilatı) yalnızca orada yönetilir.
+  const musteriKilit = (r) => r.kaynak === 'musteri_cari';
+  const tutarDuzenlenir = (r) => kaynakVar(r) && !musteriKilit(r) && tutarAlani(r) === 'tutar' && r.tutar !== 0;
+  const tarihDuzenlenir = (r) => kaynakVar(r) && !musteriKilit(r) && r.kaynak !== 'gunsonu' && r.kaynak !== 'izin';
+  const aciklamaDuzenlenir = (r) => kaynakVar(r) && !musteriKilit(r) && !['gunsonu', 'izin'].includes(r.kaynak) && !r.otomatik && (r.kaynak !== 'hizli_gider' || anaSatirMi(r));
+  const kategoriDuzenlenir = (r) => kaynakVar(r) && !musteriKilit(r) && !['gunsonu', 'avans'].includes(r.kaynak) && (r.evrakTuru === 'Fatura/Fiş' || r.evrakTuru === 'İade Faturası');
+  const kdvDuzenlenir = (r) => kaynakVar(r) && !musteriKilit(r) && !['gunsonu', 'avans'].includes(r.kaynak) && r.kdv != null && (r.evrakTuru === 'Fatura/Fiş' || r.evrakTuru === 'İade Faturası');
   const kasaDuzenlenir = (r) => (r.kaynak === 'hizli_gider' || r.kaynak === 'avans') && !!r.kasaGrubu;
   const kaynakDegistir = (r, alan, deger, etiket) =>
     islemYap({ satirId: r.id, grupId: r.grupId, alan, deger }, 'datalarDegistir', `${etiket}`, 'Güncellendi; bağlı kaynak kaydı ve Günsonları/devir yeniden hesaplandı');
@@ -1444,6 +1447,7 @@ const HESAP_GRUPLARI = [
   { anahtar: 'personel', etiket: 'Personel', gruplar: ['Personel'] },
   { anahtar: 'sabit', etiket: 'Sabit Giderler', gruplar: ['Sabit Gider'] },
   { anahtar: 'cariler', etiket: 'Cariler', gruplar: ['Firma'] },
+  { anahtar: 'musteri', etiket: 'Müşteri Carileri', gruplar: ['Müşteri'] },
 ];
 
 function HesapOzetleriSekmesi({ aktif, bildir, onDegisti, onIslemeGit }) {
