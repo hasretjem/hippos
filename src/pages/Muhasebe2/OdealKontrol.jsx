@@ -4,7 +4,7 @@ import { Check, Copy, Download, FileUp, Link2, Share2, Trash2 } from 'lucide-rea
 import '@fontsource/archivo-black/400.css';
 import '@fontsource/space-grotesk/500.css';
 import '@fontsource/space-grotesk/700.css';
-import { ModalKabuk, TL, api, sayi, tarihTR, trNorm } from './m2Ortak';
+import { ModalKabuk, TL, api, tarihTR, trNorm } from './m2Ortak';
 import { xlsxOku } from './odealXlsx';
 import { kontrolHesapla, odealSatirlari, tarihAraligi } from './odealHesap';
 import './OdealKontrol.css';
@@ -100,7 +100,7 @@ export default function OdealKontrolSekmesi({ aktif, bildir }) {
     }
   }
 
-  const bakiyeGirilen = bakiye.trim() === '' ? null : sayi(bakiye);
+  const bakiyeGirilen = bakiye.trim() === '' ? null : bakiyeSayi(bakiye);
   const bakiyeFark = bakiyeGirilen !== null && veri && veri.hipposBakiye !== null ? Math.round((bakiyeGirilen - veri.hipposBakiye) * 100) / 100 : null;
 
   const giderListe = useMemo(() => {
@@ -428,6 +428,18 @@ function FirmayaBagla({ modal, firmalar, onKapat, onSec }) {
 // PNG paylaş: genişlik sabit 1080 px; içerik kadar uzar. Yalnız sorunlu satırlar gösterilir.
 // ---------------------------------------------------------------------------
 const MAKS = { gider: 14, gelen: 6, firma: 10 };
+
+// Bakiye kutusu: "104873,46", "104873.46" ya da Ödeal'dan kopyalanan "₺104.873,46" / "104.873,46 TL" gibi yazımları anlar.
+function bakiyeSayi(v) {
+  let t = String(v ?? '').trim();
+  const simge = /₺|tl/i.test(t);
+  t = t.replace(/₺|tl/gi, '').replace(/[\s\u00a0]/g, '');
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+  else if ((t.match(/\./g) || []).length > 1) t = t.replace(/\./g, '');
+  else if (simge && /^-?\d{1,3}\.\d{3}$/.test(t)) t = t.replace('.', '');
+  const n = Number(t);
+  return Number.isFinite(n) ? n : 0;
+}
 
 function OdealPaylas({ sonuc, dosya, bakiye, onKapat }) {
   const kartRef = useRef(null);
