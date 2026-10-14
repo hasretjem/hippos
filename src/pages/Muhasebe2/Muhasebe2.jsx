@@ -333,7 +333,7 @@ export default function Muhasebe2({ onNavigate }) {
           Günsonları
         </button>
         <button className={`m2-tab ${sekme === 'odeal' ? 'on' : ''}`} onClick={() => setSekme('odeal')}>
-          Ödeal Kontrol
+          Ödeal Kontrol Aracı
         </button>
       </div>
 
