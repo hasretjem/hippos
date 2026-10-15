@@ -586,6 +586,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const [cariYeniForm, setCariYeniForm] = useState(null); // { ad, telefon, adres }
   const [cariConfirm, setCariConfirm] = useState(null); // { cari }
   const [onOdemeKalan, setOnOdemeKalan] = useState(null); // { tutar, cariId, ... }
+  const [kalanCariOnay, setKalanCariOnay] = useState(null); // kalan tutar cariye yazılmadan önce onay: seçilen cari
   const [cariPickerMod, setCariPickerMod] = useState('normal'); // 'normal' | 'onOdemeKalan'
   const [personelSecModal, setPersonelSecModal] = useState(null); // { cariId, cariAd } — bekleyen sipariş
   const [personelSecimAdi, setPersonelSecimAdi] = useState(''); // satış sayfasında yeni personel adı
@@ -1645,6 +1646,30 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
         </div>
       )}
 
+      {kalanCariOnay && onOdemeKalan && (
+        <div className="ds-modal-overlay" onClick={(e) => e.stopPropagation()}>
+          <div className="ds-pay-modal-wrap" onClick={(e) => e.stopPropagation()}>
+            <div className="ds-modal ds-pay-modal">
+              <div className="ds-modal-head">
+                <h3>Kalan Tutar Cariye Yazılsın mı?</h3>
+              </div>
+              <div className="ds-pay-modal-total">
+                <span>{kalanCariOnay.ad} carisine yazılacak</span>
+                <strong>{TL(onOdemeKalan.tutar)}</strong>
+              </div>
+              <div className="ds-pay-grid">
+                <button className="credit" onClick={() => { const c = kalanCariOnay; setKalanCariOnay(null); handleOnOdemeKalanOde('CARİ', c.id); }}>
+                  <BookOpen size={36} /><span className="lbl">Evet, cariye yaz</span>
+                </button>
+              </div>
+              <button className="ds-pay-back-btn" onClick={() => setKalanCariOnay(null)}>
+                <Undo2 size={28} /> Vazgeç (ödeme yöntemine dön)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {payMode && (
         <div className="ds-modal-overlay" onClick={() => setPayMode(false)}>
           <div className="ds-pay-modal-wrap" onClick={(e) => e.stopPropagation()}>
@@ -1866,7 +1891,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                         <button key={c.id} className="ds-cari-firma-btn" onClick={() => {
                     if (cariPickerMod === 'onOdemeKalan') {
                       setCariPickerOpen(false);
-                      handleOnOdemeKalanOde('CARİ', c.id);
+                      setKalanCariOnay(c);
                     } else {
                       const personeller = (cariPersonel || []).filter((p) => p.cariId === c.id);
                       if (personeller.length > 0) {
@@ -1919,7 +1944,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                           <button className="ds-cari-bireysel-main" onClick={() => {
                             if (cariPickerMod === 'onOdemeKalan') {
                               setCariPickerOpen(false);
-                              handleOnOdemeKalanOde('CARİ', c.id);
+                              setKalanCariOnay(c);
                             } else {
                               setCariConfirm({ cari: c });
                             }
