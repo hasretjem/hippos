@@ -467,6 +467,11 @@ export default function Settings({ data, onNavigate }) {
               <span className="st-action-title">Muhasebe</span>
               <span className="st-action-sub">Fiş/fatura, makbuz, cari, tahakkuk ve gün sonları</span>
             </button>
+            <button className="st-action-card" onClick={() => onNavigate('muhasebe3')}>
+              <span className="st-action-ico"><Receipt size={22} /></span>
+              <span className="st-action-title">Muhasebe3</span>
+              <span className="st-action-sub">Bağımsız deneme muhasebesi (gider hesapları, çift taraflı kayıt)</span>
+            </button>
             <button className="st-action-card" onClick={() => onNavigate('personelklasoru')}>
               <span className="st-action-ico"><Users size={22} /></span>
               <span className="st-action-title">Personel Klasörü</span>

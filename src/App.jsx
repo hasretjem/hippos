@@ -8,6 +8,7 @@ import GunSonu from './pages/GunSonu/GunSonu';
 import Paketci from './pages/Paketci/Paketci';
 import MutfakPaneli from './pages/MutfakPaneli/MutfakPaneli';
 import Muhasebe2 from './pages/Muhasebe2/Muhasebe2';
+import Muhasebe3 from './pages/Muhasebe3/Muhasebe3';
 import PersonelKlasoru from './pages/PersonelKlasoru/PersonelKlasoru';
 import StokSiparis from './pages/StokSiparis/StokSiparis';
 import Veri from './pages/Veri/Veri';
@@ -64,7 +65,7 @@ export default function App() {
   }
 
   function handleNavigate(page, opts) {
-    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler' || page === 'endofday' || page === 'muhasebe2' || page === 'personelklasoru' || page === 'stoksiparis' || page === 'veri' || page === 'receteler' || page === 'reports') {
+    if (page === 'tables' || page === 'pos' || page === 'settings' || page === 'products' || page === 'cariler' || page === 'endofday' || page === 'muhasebe2' || page === 'muhasebe3' || page === 'personelklasoru' || page === 'stoksiparis' || page === 'veri' || page === 'receteler' || page === 'reports') {
       // Sadece alt menüden "Hızlı Satış"a bilerek tıklanınca seçili masa sıfırlanır.
       // Masalar sayfasından bir masaya girerken (opts.resetTable verilmez) buna dokunulmaz.
       if (page === 'pos' && opts?.resetTable) setSelectedTable(QUICK_SALE);
@@ -107,6 +108,9 @@ export default function App() {
       {activePage === 'muhasebe2' && (
         <Muhasebe2 onNavigate={handleNavigate} />
       )}
+      {activePage === 'muhasebe3' && (
+        <Muhasebe3 onNavigate={handleNavigate} />
+      )}
       {activePage === 'personelklasoru' && (
         <PersonelKlasoru onNavigate={handleNavigate} />
       )}
@@ -119,7 +123,7 @@ export default function App() {
       {activePage === 'receteler' && (
         <Receteler onNavigate={handleNavigate} />
       )}
-      {activePage !== 'products' && activePage !== 'pos' && activePage !== 'endofday' && activePage !== 'muhasebe2' && activePage !== 'personelklasoru' && activePage !== 'stoksiparis' && activePage !== 'veri' && activePage !== 'receteler' && <BottomNav activePage={activePage} onNavigate={handleNavigate} paketciBekleyenSayisi={(data.cariTeslimatBildirimleri || []).filter((b) => b.durum === 'bekliyor').length} stokOkunmadi={stok.toplamOkunmadi} />}
+      {activePage !== 'products' && activePage !== 'pos' && activePage !== 'endofday' && activePage !== 'muhasebe2' && activePage !== 'muhasebe3' && activePage !== 'personelklasoru' && activePage !== 'stoksiparis' && activePage !== 'veri' && activePage !== 'receteler' && <BottomNav activePage={activePage} onNavigate={handleNavigate} paketciBekleyenSayisi={(data.cariTeslimatBildirimleri || []).filter((b) => b.durum === 'bekliyor').length} stokOkunmadi={stok.toplamOkunmadi} />}
     </>
   );
 }
