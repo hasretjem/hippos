@@ -1199,3 +1199,12 @@
 .cr-havale-hata { font-size: 12px; font-weight: 700; color: #b53a26 !important; margin: 6px 0; }
 .cr-havale-geri { background: none; border: none; padding: 6px 2px; font-size: 12px; font-weight: 700; color: #e94f37 !important; cursor: pointer; }
 .cr-havale-geri:disabled { opacity: 0.5; }
+
+/* Fatura Hareketleri — PDF indir butonu */
+.cr-fh-pdf-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; height: 40px; margin: 0 0 12px; border: 0; border-radius: 10px; cursor: pointer;
+  background: #E94F37 !important; color: #FFFFFF !important; font-size: 14px; font-weight: 800;
+}
+.cr-fh-pdf-btn:disabled { opacity: .6; cursor: default; }
+.cr-fh-pdf-btn svg { color: #FFFFFF !important; }

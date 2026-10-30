@@ -10,6 +10,7 @@ import OdemeTarihiSecici from '../../components/OdemeTarihi/OdemeTarihiSecici';
 import useIsMobile from '../../hooks/useIsMobile';
 import { m2Cagri, musteriFaturaVeri } from '../../services/muhasebe2Koprusu';
 import { getDisplayName } from '../../components/ProductButton';
+import { faturaPdfIndir } from '../../utils/faturaPdf';
 import { odemeGunuDurumu, odemeSecimiGecerli, trTarih, isGunuAnahtarMs } from '../../utils/odemeTarihi';
 
 function fmtDateTime(ts) {
@@ -631,6 +632,7 @@ export default function Cariler({ data, onNavigate }) {
 
   // ---- Fatura: hareketleri görüntüle / geri al ----
   const [faturaHareketModal, setFaturaHareketModal] = useState(null); // faturaId
+  const [faturaPdfBusy, setFaturaPdfBusy] = useState(false);
   const [geriAlModal, setGeriAlModal] = useState(null);               // faturaId
   const [geriAlBusy, setGeriAlBusy] = useState(false);
   const [geriAlHata, setGeriAlHata] = useState('');
@@ -1562,6 +1564,29 @@ export default function Cariler({ data, onNavigate }) {
                 <h3 className="cr-fh-baslik">Fatura Hareketleri</h3>
                 <button className="cr-modal-x" onClick={() => setFaturaHareketModal(null)}><X size={16} /></button>
               </div>
+              <button
+                className="cr-fh-pdf-btn"
+                disabled={faturaPdfBusy}
+                onClick={async () => {
+                  setFaturaPdfBusy(true);
+                  try {
+                    await faturaPdfIndir({
+                      cari: cariler.find((c) => c.id === f.cariId) || selectedCari,
+                      fatura: f,
+                      donem: futuraDonemStr(f) || f.tarih,
+                      siparisler,
+                      odemeler,
+                    });
+                  } catch (e) {
+                    console.error('PDF oluşturulamadı', e);
+                    alert('PDF oluşturulamadı: ' + (e?.message || e));
+                  } finally {
+                    setFaturaPdfBusy(false);
+                  }
+                }}
+              >
+                <Download size={14} /> {faturaPdfBusy ? 'PDF hazırlanıyor…' : 'PDF indir'}
+              </button>
               <div className="cr-fh-ozet">
                 <div className="cr-fh-donem">{futuraDonemStr(f) || f.tarih}</div>
                 <div className="cr-fh-satir"><span>Hareket toplamı ({siparisler.length})</span><strong>{TL(hareketToplam)}</strong></div>
