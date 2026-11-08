@@ -9,7 +9,7 @@ import {
   ListChecks, Calculator, Eye, EyeOff, Share2, Search, X,
   Banknote, CreditCard, UtensilsCrossed, BookOpen, ExternalLink, ChevronRight, ChevronDown,
   Undo2, Wifi, WifiOff, Printer, Database, FileSpreadsheet, Triangle, Image as ImageIcon, RefreshCw,
-  Wheat, Copy, Check, Receipt, AlertTriangle, ClipboardList, ArrowUpDown, Users,
+  Wheat, Copy, Check, Receipt, AlertTriangle, ClipboardList, ArrowUpDown, Users, ShoppingBag,
 } from 'lucide-react';
 
 // Türkçe karakter duyarsız arama (İ/I/ı/i, ş/s, ğ/g, ü/u, ö/o, ç/c)
@@ -461,6 +461,11 @@ export default function Settings({ data, onNavigate }) {
                 {receteRozet.fiyatEksik > 0 && <span className="st-action-badge sari" title="Malzeme fiyatı eksik olan reçete sayısı">{receteRozet.fiyatEksik}</span>}
               </span>
               <span className="st-action-sub">Ürün maliyeti, ham madde fiyatları ve kâr</span>
+            </button>
+            <button className="st-action-card st-action-stok" onClick={() => onNavigate('onlinesiparis')}>
+              <span className="st-action-ico"><ShoppingBag size={22} /></span>
+              <span className="st-action-title">Online Sipariş</span>
+              <span className="st-action-sub">Yemeksepeti sandviç maliyeti, platform fiyatı ve kâr oranı</span>
             </button>
             <button className="st-action-card" onClick={() => onNavigate('muhasebe2')}>
               <span className="st-action-ico"><Receipt size={22} /></span>
