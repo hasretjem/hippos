@@ -39,7 +39,7 @@
 .ol-toplam span { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: rgba(57, 62, 65, .65) !important; }
 .ol-toplam b { font-size: 15px; color: #393e41 !important; }
 .ol-toplam .buyuk b { color: #e94f37 !important; }
-.ol-fiyat-alani { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 10px; margin: 14px 0 10px; padding-top: 12px; border-top: 1px dashed rgba(57, 62, 65, .25); }
+.ol-fiyat-alani { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0 10px; padding-top: 12px; border-top: 1px dashed rgba(57, 62, 65, .25); }
 .ol-alan { display: flex; flex-direction: column; gap: 4px; }
 .ol-alan .m2-input { height: 42px; }
 .ol-fiyat-dugme { height: 42px; border-radius: 12px; border: 1.5px solid #e94f37; background: rgba(233, 79, 55, .08); color: #e94f37 !important; font-weight: 800; font-size: 16px; cursor: pointer; }
@@ -57,21 +57,50 @@
 .ol-hedef b { color: #e94f37 !important; font-size: 14px; }
 .ol-hedef span { font-size: 12.5px; font-weight: 600; color: rgba(57, 62, 65, .75) !important; }
 
-/* Hızlı fiyat seçimi */
-.ol-fs-modal { max-width: 920px !important; width: 100%; max-height: 92vh; overflow-y: auto; }
+/* Dükkân ürünü etiketleri (kart + editör) */
+.ol-etiketler { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 8px; }
+.ol-etiket { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 10px; border-radius: 7px; font-size: 13px; line-height: 1.25; border: 1px solid rgba(0, 0, 0, .12); }
+.ol-etiket span { font-weight: 700; }
+.ol-etiket b { font-weight: 600; white-space: nowrap; opacity: .9; }
+.ol-sol { text-align: left; margin: 2px 0 8px; }
+.ol-dukkan-toplam { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; padding-top: 6px; border-top: 1px dashed rgba(57, 62, 65, .25); }
+.ol-dukkan-toplam span { font-weight: 600; color: rgba(57, 62, 65, .75) !important; }
+.ol-dukkan-toplam b { font-weight: 800; color: #393e41 !important; }
+.ol-platform { margin: 8px 0 10px; padding: 8px 10px; border-radius: 10px; background: rgba(233, 79, 55, .1); display: flex; flex-direction: column; gap: 2px; }
+.ol-platform-etiket { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: rgba(57, 62, 65, .7) !important; }
+.ol-platform-deger { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ol-platform-deger b { font-size: 24px; font-weight: 800; color: #e94f37 !important; }
+.ol-platform-duzen { display: flex; align-items: center; gap: 6px; }
+.ol-platform-duzen .m2-input { height: 38px; width: 110px; font-size: 16px; }
+.ol-link { background: none; border: 0; padding: 0; cursor: pointer; font-size: 11.5px; font-weight: 800; color: #e94f37 !important; text-decoration: underline; }
+
+/* Hızlı fiyat seçimi (çoklu seçim) */
+.ol-fs-modal { max-width: 1240px !important; width: 100%; max-height: 94vh; overflow-y: auto; }
 .ol-fs-modal .m2-modal-head h3 { color: #e94f37 !important; }
 .ol-fs-ust { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.ol-fs-elle { display: flex; gap: 8px; align-items: center; }
-.ol-fs-elle .m2-input { width: 170px; height: 40px; }
+.ol-fs-ust .m2-hint { margin: 0; }
+.ol-fs-ana { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 14px; align-items: start; }
 .ol-fs-izgara { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.ol-fs-sutun { padding: 10px; border-radius: 14px; background: rgba(57, 62, 65, .06); border: 2px solid transparent; }
-.ol-fs-sutun.vurgu { border-color: rgba(233, 79, 55, .55); }
+.ol-fs-sutun { padding: 10px; border-radius: 14px; background: rgba(57, 62, 65, .06); }
 .ol-fs-sutun h4 { margin: 0 0 8px; font-size: 13px; font-weight: 800; letter-spacing: .05em; color: #e94f37 !important; }
-.ol-fs-liste { display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow-y: auto; }
-.ol-fs-urun { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 11px 12px; border-radius: 10px; border: 1.5px solid rgba(57, 62, 65, .18); background: #fff; cursor: pointer; text-align: left; font-weight: 700; color: #393e41 !important; }
-.ol-fs-urun:hover, .ol-fs-urun:active { border-color: #e94f37; background: rgba(233, 79, 55, .08); }
-.ol-fs-urun b { color: #e94f37 !important; white-space: nowrap; }
-.ol-fs-urun small { color: rgba(57, 62, 65, .6) !important; font-weight: 600; }
+.ol-fs-karolar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 58vh; overflow-y: auto; padding: 2px; }
+.ol-fs-karo { position: relative; display: flex; }
+.ol-fs-karo .pb-card { min-height: 74px; padding: 8px 9px; }
+.ol-fs-karo .pb-name { font-size: 14px; }
+.ol-fs-karo .pb-icon-svg, .ol-fs-karo .pb-icon-watermark { width: 42px; height: 42px; font-size: 42px; }
+.ol-fs-rozet { position: absolute; top: 4px; left: 4px; z-index: 3; min-width: 24px; padding: 1px 6px; border-radius: 999px; background: #393e41; color: #fff !important; font-size: 12px; font-weight: 800; text-align: center; pointer-events: none; }
+.ol-fs-yan { position: sticky; top: 0; padding: 12px; border-radius: 14px; border: 2px solid rgba(233, 79, 55, .55); background: #fff; display: flex; flex-direction: column; gap: 10px; }
+.ol-fs-yan h4 { margin: 0; font-size: 14px; font-weight: 800; color: #e94f37 !important; }
+.ol-fs-secilenler { display: flex; flex-direction: column; gap: 5px; max-height: 44vh; overflow-y: auto; }
+.ol-fs-satir { display: grid; grid-template-columns: 22px 1fr auto 28px; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 9px; background: rgba(57, 62, 65, .07); }
+.ol-fs-sira { font-size: 12px; font-weight: 800; color: rgba(57, 62, 65, .6) !important; }
+.ol-fs-ad { font-size: 13.5px; font-weight: 700; color: #393e41 !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ol-fs-satir b { font-size: 13.5px; color: #e94f37 !important; white-space: nowrap; }
+.ol-fs-toplam { display: flex; justify-content: space-between; align-items: baseline; padding-top: 8px; border-top: 1px dashed rgba(57, 62, 65, .3); }
+.ol-fs-toplam span { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: rgba(57, 62, 65, .7) !important; }
+.ol-fs-toplam b { font-size: 22px; color: #e94f37 !important; }
+.ol-fs-elle .m2-input { width: 100%; height: 40px; }
+.ol-fs-islem { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* Malzeme / parametre formları */
 .ol-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
@@ -96,7 +125,8 @@
 @media (max-width: 860px) {
   .ol-ozet { grid-template-columns: 1fr; }
   .ol-boylar { grid-template-columns: 1fr; }
+  .ol-fs-ana { grid-template-columns: 1fr; }
   .ol-fs-izgara { grid-template-columns: 1fr; }
+  .ol-fs-yan { position: static; }
   .ol-fiyat-alani { grid-template-columns: 1fr; }
-  .ol-fs-elle .m2-input { width: 130px; }
 }

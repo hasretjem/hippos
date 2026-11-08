@@ -27,7 +27,7 @@ function netKatsayi(p) {
   return ((1 - Number(p.indirim)) / (1 + Number(p.satis_kdv))) * (1 - komisyonToplam(p));
 }
 
-// boy: { kalemler:[{malzeme_id, adet}], dukkan_fiyat, dukkan_urun, carpan, hedef_kar } (sayılar metin de olabilir)
+// boy: { kalemler:[{malzeme_id, adet}], dukkan_urunler:[ürün id'leri, tekrar edebilir], dukkan_fiyat (elle), platform_fiyat (elle), carpan, hedef_kar } (sayılar metin de olabilir)
 export function boyHesap(boy, malzMap, p, ambalaj, urunMap) {
   const satirlar = (boy.kalemler || []).map((k) => {
     const m = malzMap.get(Number(k.malzeme_id)) || null;
@@ -40,9 +40,14 @@ export function boyHesap(boy, malzMap, p, ambalaj, urunMap) {
   const kontrolVar = satirlar.some((s) => s.malzeme && s.malzeme.kontrol);
   const eksikVar = satirlar.some((s) => s.eksik);
 
-  const urun = boy.dukkan_urun ? urunMap.get(Number(boy.dukkan_urun)) || null : null;
+  // Dükkân fiyatı: seçilen satış ekranı ürünlerinin CANLI fiyat toplamı (aynı ürün birden çok kez olabilir); liste boşsa elle girilen.
+  const idler = boy.dukkan_urunler && boy.dukkan_urunler.length ? boy.dukkan_urunler : boy.dukkan_urun ? [boy.dukkan_urun] : [];
+  const dukkanUrunler = idler.map((id) => urunMap.get(Number(id)) || null);
+  const urunEksik = dukkanUrunler.some((u) => !u);
+  const urunToplam = dukkanUrunler.reduce((t, u) => t + (u ? Number(u.fiyat) || 0 : 0), 0);
   const manuel = sayi(boy.dukkan_fiyat);
-  const dukkan = urun ? Number(urun.fiyat) || null : manuel > 0 ? manuel : null;
+  const dukkan = idler.length ? urunToplam || null : manuel > 0 ? manuel : null;
+  const platformManuel = sayi(boy.platform_fiyat) > 0 ? sayi(boy.platform_fiyat) : null;
   const carpan = sayi(boy.carpan) > 0 ? sayi(boy.carpan) : Number(p.carpan);
   const hedefKar = boy.hedef_kar === '' || boy.hedef_kar === null || boy.hedef_kar === undefined ? null : sayi(boy.hedef_kar);
 
@@ -78,7 +83,9 @@ export function boyHesap(boy, malzMap, p, ambalaj, urunMap) {
       marj: musteriKdvHaric > 0 ? netKar / musteriKdvHaric : null,
     };
   };
-  const carpanli = dukkan ? platformFiyat(yukariYuvarla(dukkan * carpan)) : null;
+  // Önerilen platform fiyatı = dükkân × çarpan (yukarı yuvarlı); elle girilen platform fiyatı varsa o kullanılır (sabit kalır).
+  const onerilen = dukkan ? yukariYuvarla(dukkan * carpan) : null;
+  const carpanli = platformManuel ? { ...platformFiyat(platformManuel), manuel: true, onerilen } : onerilen ? { ...platformFiyat(onerilen), manuel: false, onerilen } : null;
 
   // Hedef kâr: elle girilen, yoksa dükkândaki net kâr
   const hedef = hedefKar !== null ? hedefKar : dukkanKar;
@@ -86,7 +93,7 @@ export function boyHesap(boy, malzMap, p, ambalaj, urunMap) {
 
   return {
     satirlar, gram, malzemeMaliyet, ambalaj: amb, toplamMaliyet, kontrolVar, eksikVar,
-    dukkan, dukkanUrun: urun, carpan, hedef, hedefKarGirildi: hedefKar !== null,
+    dukkan, dukkanUrunler, urunEksik, platformManuel, onerilen, carpan, hedef, hedefKarGirildi: hedefKar !== null,
     dukkanKar, dukkanKarOrani, dukkanMarj, carpanli, hedefli,
   };
 }

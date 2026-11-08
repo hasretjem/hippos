@@ -1,15 +1,19 @@
 import { useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { ModalKabuk, TL, trNorm } from '../Muhasebe2/m2Ortak';
+import ProductButton, { getDisplayName } from '../../components/ProductButton';
 
-// Dükkân satış fiyatı hızlı seçimi: satış ekranındaki SOĞUK SANDVİÇ ürünleri (Küçük | BÜYÜK) — dokununca fiyat alınır.
-export default function FiyatSec({ urunler, boy, onSec, onElle, onKapat }) {
+// Dükkân satış fiyatı seçimi: satış ekranındaki SOĞUK SANDVİÇ butonları (BÜYÜK solda, KÜÇÜK sağda).
+// Birden çok ürün seçilir (aynı ürün tekrar eklenebilir, her biri ayrı satır); toplamları dükkân fiyatı olur.
+export default function FiyatSec({ urunler, urunMap, kategoriMap, baslik, ilkIdler, ilkElle, onTamam, onKapat }) {
   const [ara, setAra] = useState('');
-  const [elle, setElle] = useState('');
+  const [secilen, setSecilen] = useState(() => (ilkIdler || []).map((id, i) => ({ anahtar: `${id}-${i}`, id })));
+  const [elle, setElle] = useState(ilkElle || '');
+  const [sayac, setSayac] = useState(1000);
 
   const sutunlar = useMemo(() => {
     const q = trNorm(ara);
-    const uygun = urunler.filter((u) => !q || trNorm(`${u.ad} ${u.altKategori}`).includes(q));
+    const uygun = urunler.filter((u) => !q || trNorm(`${u.ad} ${u.satisAdi || ''} ${u.altKategori}`).includes(q));
     const kucuk = [];
     const buyuk = [];
     uygun.forEach((u) => {
@@ -21,44 +25,103 @@ export default function FiyatSec({ urunler, boy, onSec, onElle, onKapat }) {
     return { kucuk: sirala(kucuk), buyuk: sirala(buyuk) };
   }, [urunler, ara]);
 
-  function Sutun({ baslik, liste, vurgu }) {
+  const adetler = useMemo(() => {
+    const m = new Map();
+    secilen.forEach((s) => m.set(s.id, (m.get(s.id) || 0) + 1));
+    return m;
+  }, [secilen]);
+
+  const ekle = (u) => {
+    setSayac((n) => n + 1);
+    setSecilen((l) => [...l, { anahtar: `y${sayac}`, id: u.id }]);
+  };
+  const cikar = (anahtar) => setSecilen((l) => l.filter((s) => s.anahtar !== anahtar));
+
+  const toplam = secilen.reduce((t, s) => t + (Number(urunMap.get(s.id)?.fiyat) || 0), 0);
+
+  function sutun(b, liste) {
     return (
-      <div className={`ol-fs-sutun ${vurgu ? 'vurgu' : ''}`}>
-        <h4>{baslik}</h4>
-        <div className="ol-fs-liste">
-          {liste.length === 0 && <p className="ol-bos">Ürün yok</p>}
-          {liste.map((u) => (
-            <button key={u.id} className="ol-fs-urun" onClick={() => onSec(u)}>
-              <span>
-                {u.ad}
-                {u.altKategori && /menü/i.test(u.altKategori) ? <small> · {u.altKategori}</small> : null}
-              </span>
-              <b>{TL(u.fiyat)}</b>
-            </button>
-          ))}
-        </div>
+      <div className="ol-fs-sutun" key={b}>
+        <h4>{b}</h4>
+        {liste.length === 0 ? (
+          <p className="ol-bos">Ürün yok</p>
+        ) : (
+          <div className="ol-fs-karolar">
+            {liste.map((u) => (
+              <div className="ol-fs-karo" key={u.id}>
+                <ProductButton product={u} category={kategoriMap.get(u.kategori) || null} isFav={false} onAdd={ekle} />
+                {adetler.get(u.id) ? <span className="ol-fs-rozet">×{adetler.get(u.id)}</span> : null}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
 
+  function tamam() {
+    onTamam({ idler: secilen.map((s) => s.id), elle: secilen.length ? '' : elle });
+  }
+
   return (
-    <ModalKabuk baslik="Dükkân satış fiyatı seç" onKapat={onKapat} genis ekSinif="ol-fs-modal">
-      <p className="m2-hint">Satış ekranındaki soğuk sandviçlerden birine dokun, fiyatı otomatik alınır (satış ekranında fiyat değişirse burada da güncellenir).</p>
+    <ModalKabuk baslik={baslik || 'Dükkân satış fiyatı seç'} onKapat={onKapat} genis ekSinif="ol-fs-modal">
       <div className="ol-fs-ust">
         <div className="rc-ara">
           <Search size={16} />
           <input className="m2-input" placeholder="Sandviç ara…" value={ara} onChange={(e) => setAra(e.target.value)} />
         </div>
-        <div className="ol-fs-elle">
-          <input className="m2-input" inputMode="decimal" placeholder="veya elle fiyat yaz" value={elle} onChange={(e) => setElle(e.target.value)} />
-          <button className="m2-btn" disabled={!elle.trim()} onClick={() => onElle(elle)}>
-            Uygula
-          </button>
-        </div>
+        <p className="m2-hint">Ürünlere dokundukça sağdaki listeye eklenir; aynı ürünü birden çok kez seçebilirsin. Toplamları dükkân fiyatı olur.</p>
       </div>
-      <div className="ol-fs-izgara">
-        <Sutun baslik="KÜÇÜK SANDVİÇ" liste={sutunlar.kucuk} vurgu={boy === 'normal'} />
-        <Sutun baslik="BÜYÜK SANDVİÇ" liste={sutunlar.buyuk} vurgu={boy === 'buyuk'} />
+
+      <div className="ol-fs-ana">
+        <div className="ol-fs-izgara">
+          {sutun('BÜYÜK SANDVİÇ', sutunlar.buyuk)}
+          {sutun('KÜÇÜK SANDVİÇ', sutunlar.kucuk)}
+        </div>
+
+        <aside className="ol-fs-yan">
+          <h4>Seçilenler ({secilen.length})</h4>
+          <div className="ol-fs-secilenler">
+            {secilen.length === 0 && <p className="ol-bos">Henüz ürün seçilmedi</p>}
+            {secilen.map((s, i) => {
+              const u = urunMap.get(s.id);
+              return (
+                <div className="ol-fs-satir" key={s.anahtar}>
+                  <span className="ol-fs-sira">{i + 1}</span>
+                  <span className="ol-fs-ad">{u ? getDisplayName(u) : 'Silinmiş ürün'}</span>
+                  <b>{u ? TL(u.fiyat) : '—'}</b>
+                  <button className="rc-ikon-btn" onClick={() => cikar(s.anahtar)} aria-label="Çıkar">
+                    <X size={16} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="ol-fs-toplam">
+            <span>Dükkân fiyatı</span>
+            <b>{TL(toplam)}</b>
+          </div>
+          <div className="ol-fs-elle">
+            <input
+              className="m2-input"
+              inputMode="decimal"
+              placeholder="veya elle fiyat yaz"
+              value={secilen.length ? '' : elle}
+              disabled={secilen.length > 0}
+              onChange={(e) => setElle(e.target.value)}
+            />
+          </div>
+          <div className="ol-fs-islem">
+            {secilen.length > 0 && (
+              <button className="m2-btn sec" onClick={() => setSecilen([])}>
+                Hepsini temizle
+              </button>
+            )}
+            <button className="m2-btn" onClick={tamam}>
+              Tamam
+            </button>
+          </div>
+        </aside>
       </div>
     </ModalKabuk>
   );

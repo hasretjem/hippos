@@ -4,6 +4,7 @@ import { ModalKabuk, TL, sayi } from '../Muhasebe2/m2Ortak';
 import { boyHesap, yuzde } from './olHesap';
 import { bosBoy, boyNormalle, sandvicKaydet } from './olVeri';
 import FiyatSec from './FiyatSec';
+import UrunEtiketleri from './UrunEtiketleri';
 
 const gramFmt = (g) => `${new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 }).format(g)} g`;
 
@@ -17,13 +18,14 @@ function Sonuc({ etiket, deger, ton, kucuk }) {
   );
 }
 
-function BoyPaneli({ baslik, boy, setBoy, veri, hesap, onFiyatSec, kopyala }) {
+function BoyPaneli({ baslik, boy, setBoy, veri, hesap, onFiyatSec, kopyala, kategoriMap }) {
   const { malzemeler, p } = veri;
   const satirGuncelle = (i, alan, deger) => setBoy({ ...boy, kalemler: boy.kalemler.map((k, j) => (j === i ? { ...k, [alan]: deger } : k)) });
   const satirEkle = () => setBoy({ ...boy, kalemler: [...boy.kalemler, { malzeme_id: '', adet: '1' }] });
   const satirSil = (i) => setBoy({ ...boy, kalemler: boy.kalemler.filter((_, j) => j !== i) });
   const h = hesap;
-  const dukkanEtiket = h.dukkanUrun ? `${h.dukkanUrun.ad} (satış ekranı)` : h.dukkan ? 'elle girilen' : '';
+  const urunSayisi = h.dukkanUrunler.length;
+  const dukkanEtiket = urunSayisi ? `${urunSayisi} ürün (satış ekranı, canlı fiyat)` : h.dukkan ? 'elle girilen' : '';
 
   return (
     <div className="ol-boy m2-card">
@@ -105,6 +107,17 @@ function BoyPaneli({ baslik, boy, setBoy, veri, hesap, onFiyatSec, kopyala }) {
           {dukkanEtiket && <small className="ol-sonuk">{dukkanEtiket}</small>}
         </label>
         <label className="ol-alan">
+          <span className="rc-etiket">Platform fiyatı (elle)</span>
+          <input
+            className="m2-input"
+            inputMode="decimal"
+            placeholder={h.onerilen ? `önerilen: ${TL(h.onerilen)}` : 'önce dükkân fiyatı seç'}
+            value={boy.platform_fiyat}
+            onChange={(e) => setBoy({ ...boy, platform_fiyat: e.target.value })}
+          />
+          <small className="ol-sonuk">boşsa önerilen fiyat; yazarsan sabit kalır</small>
+        </label>
+        <label className="ol-alan">
           <span className="rc-etiket">Çarpan</span>
           <input className="m2-input" inputMode="decimal" placeholder={String(p.carpan).replace('.', ',')} value={boy.carpan} onChange={(e) => setBoy({ ...boy, carpan: e.target.value })} />
           <small className="ol-sonuk">boşsa genel çarpan</small>
@@ -116,9 +129,17 @@ function BoyPaneli({ baslik, boy, setBoy, veri, hesap, onFiyatSec, kopyala }) {
         </label>
       </div>
 
+      {urunSayisi > 0 && <UrunEtiketleri urunler={h.dukkanUrunler} kategoriMap={kategoriMap} />}
+      {h.urunEksik && <p className="ol-uyari">Satış ekranından silinmiş bir ürün var, fiyat seçimini yenile.</p>}
+
       {h.carpanli ? (
         <div className="ol-sonuclar">
-          <Sonuc etiket="Platform fiyatı" deger={TL(h.carpanli.fiyat)} ton="ana" kucuk={`dükkân ${TL(h.dukkan)} × ${String(h.carpan).replace('.', ',')}`} />
+          <Sonuc
+            etiket="Platform fiyatı"
+            deger={TL(h.carpanli.fiyat)}
+            ton="ana"
+            kucuk={h.carpanli.manuel ? `elle girildi · önerilen ${h.onerilen ? TL(h.onerilen) : '—'}` : `dükkân ${TL(h.dukkan)} × ${String(h.carpan).replace('.', ',')}`}
+          />
           <Sonuc etiket="İndirim sonrası müşteri" deger={TL(h.carpanli.indirimli)} />
           <Sonuc etiket="Bize kalan net" deger={TL(h.carpanli.net)} kucuk="KDV ve komisyon sonrası" />
           <Sonuc etiket="Platformda net kâr" deger={TL(h.carpanli.netKar)} ton={h.carpanli.netKar >= 0 ? 'iyi' : 'kotu'} />
@@ -142,7 +163,7 @@ function BoyPaneli({ baslik, boy, setBoy, veri, hesap, onFiyatSec, kopyala }) {
   );
 }
 
-export default function SandvicDuzenle({ sandvic, veri, urunler, urunMap, onKapat, onKaydedildi }) {
+export default function SandvicDuzenle({ sandvic, veri, urunler, urunMap, kategoriMap, onKapat, onKaydedildi }) {
   const [ad, setAd] = useState(sandvic?.ad || '');
   const [normal, setNormal] = useState(() => (sandvic ? boyNormalle(sandvic.normal) : bosBoy()));
   const [buyuk, setBuyuk] = useState(() => (sandvic ? boyNormalle(sandvic.buyuk) : bosBoy()));
@@ -154,14 +175,8 @@ export default function SandvicDuzenle({ sandvic, veri, urunler, urunMap, onKapa
   const hN = useMemo(() => boyHesap(normal, malzMap, veri.p, veri.p.ambalaj_normal, urunMap), [normal, malzMap, veri.p, urunMap]);
   const hB = useMemo(() => boyHesap(buyuk, malzMap, veri.p, veri.p.ambalaj_buyuk, urunMap), [buyuk, malzMap, veri.p, urunMap]);
 
-  function fiyatSecildi(urun) {
-    const guncelle = (b) => ({ ...b, dukkan_urun: urun.id, dukkan_fiyat: '' });
-    if (secim === 'normal') setNormal(guncelle);
-    else setBuyuk(guncelle);
-    setSecim(null);
-  }
-  function fiyatElle(metin) {
-    const guncelle = (b) => ({ ...b, dukkan_urun: null, dukkan_fiyat: metin });
+  function fiyatTamam({ idler, elle }) {
+    const guncelle = (b) => ({ ...b, dukkan_urunler: idler, dukkan_fiyat: elle });
     if (secim === 'normal') setNormal(guncelle);
     else setBuyuk(guncelle);
     setSecim(null);
@@ -201,7 +216,7 @@ export default function SandvicDuzenle({ sandvic, veri, urunler, urunMap, onKapa
       </label>
 
       <div className="ol-boylar">
-        <BoyPaneli baslik="Normal boy" boy={normal} setBoy={setNormal} veri={veri} hesap={hN} onFiyatSec={() => setSecim('normal')} />
+        <BoyPaneli baslik="Normal boy" boy={normal} setBoy={setNormal} veri={veri} hesap={hN} onFiyatSec={() => setSecim('normal')} kategoriMap={kategoriMap} />
         <BoyPaneli
           baslik="Büyük boy"
           boy={buyuk}
@@ -209,6 +224,7 @@ export default function SandvicDuzenle({ sandvic, veri, urunler, urunMap, onKapa
           veri={veri}
           hesap={hB}
           onFiyatSec={() => setSecim('buyuk')}
+          kategoriMap={kategoriMap}
           kopyala={() => setBuyuk({ ...buyuk, kalemler: normal.kalemler.map((k) => ({ ...k })) })}
         />
       </div>
@@ -223,7 +239,18 @@ export default function SandvicDuzenle({ sandvic, veri, urunler, urunMap, onKapa
         </button>
       </div>
     </ModalKabuk>
-    {secim && <FiyatSec urunler={urunler} boy={secim} onSec={fiyatSecildi} onElle={fiyatElle} onKapat={() => setSecim(null)} />}
+    {secim && (
+      <FiyatSec
+        urunler={urunler}
+        urunMap={urunMap}
+        kategoriMap={kategoriMap}
+        baslik={`Dükkân satış fiyatı seç · ${secim === 'normal' ? 'Normal boy' : 'Büyük boy'}`}
+        ilkIdler={(secim === 'normal' ? normal : buyuk).dukkan_urunler}
+        ilkElle={(secim === 'normal' ? normal : buyuk).dukkan_fiyat}
+        onTamam={fiyatTamam}
+        onKapat={() => setSecim(null)}
+      />
+    )}
     </>
   );
 }

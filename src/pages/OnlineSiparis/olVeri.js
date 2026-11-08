@@ -16,13 +16,15 @@ function parametreNormalle(r) {
   });
   return o;
 }
-const BOS_BOY = { kalemler: [], dukkan_fiyat: '', dukkan_urun: null, carpan: '', hedef_kar: '' };
+const BOS_BOY = { kalemler: [], dukkan_urunler: [], dukkan_fiyat: '', platform_fiyat: '', carpan: '', hedef_kar: '' };
 export function boyNormalle(b) {
   const x = b || {};
   return {
     kalemler: (x.kalemler || []).map((k) => ({ malzeme_id: Number(k.malzeme_id), adet: k.adet === undefined || k.adet === null ? '' : String(k.adet) })),
     dukkan_fiyat: x.dukkan_fiyat === undefined || x.dukkan_fiyat === null ? '' : String(x.dukkan_fiyat),
-    dukkan_urun: x.dukkan_urun ? Number(x.dukkan_urun) : null,
+    // Eski kayıtlarda tek ürün (dukkan_urun) vardı; liste olarak okunur.
+    dukkan_urunler: Array.isArray(x.dukkan_urunler) ? x.dukkan_urunler.map(Number) : x.dukkan_urun ? [Number(x.dukkan_urun)] : [],
+    platform_fiyat: x.platform_fiyat === undefined || x.platform_fiyat === null ? '' : String(x.platform_fiyat),
     carpan: x.carpan === undefined || x.carpan === null ? '' : String(x.carpan),
     hedef_kar: x.hedef_kar === undefined || x.hedef_kar === null ? '' : String(x.hedef_kar),
   };
@@ -53,8 +55,9 @@ function boyTemizle(b) {
     kalemler: (b.kalemler || [])
       .filter((k) => k.malzeme_id)
       .map((k) => ({ malzeme_id: Number(k.malzeme_id), adet: n(k.adet) || 0 })),
-    dukkan_fiyat: b.dukkan_urun ? null : n(b.dukkan_fiyat),
-    dukkan_urun: b.dukkan_urun ? Number(b.dukkan_urun) : null,
+    dukkan_urunler: (b.dukkan_urunler || []).map(Number),
+    dukkan_fiyat: (b.dukkan_urunler || []).length ? null : n(b.dukkan_fiyat),
+    platform_fiyat: n(b.platform_fiyat),
     carpan: n(b.carpan),
     hedef_kar: n(b.hedef_kar),
   };
