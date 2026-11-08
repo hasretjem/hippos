@@ -3,11 +3,11 @@ import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 import '../Muhasebe2/Muhasebe2.css';
 import '../Receteler/Receteler.css';
 import './OnlineSiparis.css';
-import { TL, trNorm } from '../Muhasebe2/m2Ortak';
-import { boyHesap, yuzde } from './olHesap';
+import { TL } from '../Muhasebe2/m2Ortak';
+import { boyHesap } from './olHesap';
 import { olYukle, sandvicSil } from './olVeri';
 import SandvicDuzenle from './SandvicDuzenle';
-import UrunEtiketleri from './UrunEtiketleri';
+import HammaddeEtiketleri from './HammaddeEtiketleri';
 import MalzemeSekmesi from './MalzemeSekmesi';
 import ParametreSekmesi from './ParametreSekmesi';
 
@@ -18,27 +18,7 @@ const SEKMELER = [
 ];
 
 const yuzdeEtiket = (n) => `%${String(Math.round(Number(n) * 1000) / 10).replace('.', ',')}`;
-const adetFmt = (n) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }).format(Number(n) || 0);
-
-// Her dükkân ürünü etiketi için, adı en yakın eşleşen hammaddenin adedini bulur (örn. "Salam" → "Tavuk salam" ×8).
-// Aynı ürün birden çok etiketteyse adet ilk etikette yazılır; bir hammadde yalnızca bir kez kullanılır.
-function etiketAdetleri(h) {
-  const kalan = h.satirlar.filter((x) => x.malzeme && x.adet > 0).map((x) => ({ ad: trNorm(x.malzeme.ad), adet: x.adet, kullanildi: false }));
-  return h.dukkanUrunler.map((u) => {
-    if (!u) return '';
-    const a = trNorm(u.satisAdi && u.satisAdi.trim() ? u.satisAdi : u.ad);
-    const adaylar = kalan.filter((k) => !k.kullanildi && (k.ad.includes(a) || a.includes(k.ad)));
-    if (!adaylar.length) return '';
-    adaylar.sort((x, y) => x.ad.length - y.ad.length);
-    const secilen = adaylar[0];
-    // Aynı hammaddeyi gösteren tüm satırların toplamı
-    const toplam = kalan.filter((k) => k.ad === secilen.ad && !k.kullanildi).reduce((t, k) => t + k.adet, 0);
-    kalan.forEach((k) => { if (k.ad === secilen.ad) k.kullanildi = true; });
-    return adetFmt(toplam);
-  });
-}
-
-function BoyOzet({ baslik, h, kategoriMap, indirim }) {
+function BoyOzet({ baslik, h, kategoriMap, urunler, indirim }) {
   const c = h.carpanli;
   return (
     <div className="ol-ozet-boy">
@@ -47,14 +27,10 @@ function BoyOzet({ baslik, h, kategoriMap, indirim }) {
         <p className="ol-bos">Tanımlı değil</p>
       ) : (
         <>
-          {h.dukkanUrunler.length > 0 ? (
-            <UrunEtiketleri urunler={h.dukkanUrunler} kategoriMap={kategoriMap} fiyatGoster={false} adetler={etiketAdetleri(h)} />
-          ) : (
-            <p className="ol-bos ol-sol">Dükkân ürünleri seçilmedi</p>
-          )}
+          <HammaddeEtiketleri satirlar={h.satirlar} urunler={urunler} kategoriMap={kategoriMap} />
 
           <div className="ol-platform">
-            <span className="ol-platform-etiket">Platform satış fiyatı · {yuzdeEtiket(indirim)} indirimli</span>
+            <span className="ol-platform-etiket">Platform satış fiyatı · {yuzdeEtiket(indirim)}</span>
             <b className="ol-platform-buyuk">{c ? TL(c.indirimli) : '—'}</b>
             {c && <small className="ol-sonuk">liste fiyatı {TL(c.fiyat)}{c.manuel ? ' (elle)' : ''}</small>}
           </div>
@@ -64,10 +40,8 @@ function BoyOzet({ baslik, h, kategoriMap, indirim }) {
             <dd>{TL(h.toplamMaliyet)}{h.kontrolVar ? ' *' : ''}</dd>
             <dt>Platformda net kâr</dt>
             <dd className={c ? (c.netKar >= 0 ? 'iyi' : 'kotu') : ''}>{c ? TL(c.netKar) : '—'}</dd>
-            <dt>Kâr oranı</dt>
-            <dd>{c ? yuzde(c.karOrani) : '—'}</dd>
-            <dt>Marj</dt>
-            <dd>{c ? yuzde(c.marj) : '—'}</dd>
+            <dt>Dükkânda net kâr</dt>
+            <dd className={h.dukkanKar !== null ? (h.dukkanKar >= 0 ? 'iyi' : 'kotu') : ''}>{h.dukkanKar !== null ? TL(h.dukkanKar) : '—'}</dd>
           </dl>
         </>
       )}
@@ -163,8 +137,8 @@ export default function OnlineSiparis({ data, onNavigate }) {
                   </div>
                 </div>
                 <div className="ol-ozet">
-                  <BoyOzet baslik="Büyük boy" h={hB} kategoriMap={kategoriMap} indirim={veri.p.indirim} />
-                  <BoyOzet baslik="Normal boy" h={hN} kategoriMap={kategoriMap} indirim={veri.p.indirim} />
+                  <BoyOzet baslik="Büyük boy" h={hB} kategoriMap={kategoriMap} urunler={urunler} indirim={veri.p.indirim} />
+                  <BoyOzet baslik="Normal boy" h={hN} kategoriMap={kategoriMap} urunler={urunler} indirim={veri.p.indirim} />
                 </div>
               </div>
             );
