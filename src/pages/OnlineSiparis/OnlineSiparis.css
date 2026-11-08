@@ -133,6 +133,9 @@
   .ol-fs-izgara { grid-template-columns: 1fr; }
   .ol-fs-sutun { max-height: none; }
   .ol-fs-karolar { grid-template-columns: repeat(3, 1fr); }
-  .ol-fs-yan { position: static; }
+  .ol-fs-yan { position: sticky; bottom: 0; top: auto; z-index: 5; padding: 10px; gap: 6px; box-shadow: 0 -6px 16px rgba(0, 0, 0, .18); }
+  .ol-fs-secilenler { max-height: 16vh; }
+  .ol-fs-toplam b { font-size: 18px; }
+  .ol-fs-elle .m2-input { height: 36px; }
   .ol-fiyat-alani { grid-template-columns: 1fr; }
 }
