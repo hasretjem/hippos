@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { ChevronUp, Search, X } from 'lucide-react';
 import { ModalKabuk, TL, trNorm } from '../Muhasebe2/m2Ortak';
 import ProductButton, { getDisplayName } from '../../components/ProductButton';
 import { resolveButtonStyle } from '../../constants/themeDefaults';
@@ -11,6 +11,20 @@ export default function FiyatSec({ urunler, altKategoriler, urunMap, kategoriMap
   const [secilen, setSecilen] = useState(() => (ilkIdler || []).map((id, i) => ({ anahtar: `${id}-${i}`, id })));
   const [elle, setElle] = useState(ilkElle || '');
   const [sayac, setSayac] = useState(1000);
+  const [acik, setAcik] = useState(false); // mobilde Seçilenler paneli: yukarı çekilmiş mi
+  const surukle = useRef(null);
+
+  // Tutamaç: dokunup yukarı çek → açılır, aşağı it → kapanır; kısa dokunuş da değiştirir.
+  const tutBasla = (e) => { surukle.current = { y: e.clientY, devam: true }; e.currentTarget.setPointerCapture?.(e.pointerId); };
+  const tutBitir = (e) => {
+    const t = surukle.current;
+    surukle.current = null;
+    if (!t) return;
+    const dy = e.clientY - t.y;
+    if (dy < -24) setAcik(true);
+    else if (dy > 24) setAcik(false);
+    else setAcik((a) => !a);
+  };
 
   // Satış ekranıyla aynı sıralama ve gruplama: alt kategori sırası → menü sırası → ad; "Az X" ana ürününün hemen yanında.
   const sutunlar = useMemo(() => {
@@ -118,7 +132,18 @@ export default function FiyatSec({ urunler, altKategoriler, urunMap, kategoriMap
           {sutun('KÜÇÜK SANDVİÇ', 'küçük', sutunlar.kucuk)}
         </div>
 
-        <aside className="ol-fs-yan">
+        <aside className={`ol-fs-yan ${acik ? 'acik' : 'kapali'}`}>
+          <button
+            type="button"
+            className="ol-fs-tutamac"
+            aria-label={acik ? 'Seçilenleri aşağı it' : 'Seçilenleri yukarı çek'}
+            onPointerDown={tutBasla}
+            onPointerUp={tutBitir}
+            onPointerCancel={() => { surukle.current = null; }}
+          >
+            <span className="ol-fs-cubuk" />
+            <ChevronUp size={16} className="ol-fs-ok" />
+          </button>
           <h4>Seçilenler ({secilen.length})</h4>
           <div className="ol-fs-secilenler">
             {secilen.length === 0 && <p className="ol-bos">Henüz ürün seçilmedi</p>}
@@ -152,7 +177,7 @@ export default function FiyatSec({ urunler, altKategoriler, urunMap, kategoriMap
           </div>
           <div className="ol-fs-islem">
             {secilen.length > 0 && (
-              <button className="m2-btn sec" onClick={() => setSecilen([])}>
+              <button className="m2-btn sec ol-fs-temizle" onClick={() => setSecilen([])}>
                 Hepsini temizle
               </button>
             )}

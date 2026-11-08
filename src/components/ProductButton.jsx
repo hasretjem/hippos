@@ -19,6 +19,7 @@ const pendingFetches = new Map();
 
 function useSvgIcon(fileName) {
   const [svg, setSvg] = useState(() => (fileName ? svgCache.get(fileName) || null : null));
+  const [deneme, setDeneme] = useState(0);
 
   useEffect(() => {
     if (!fileName) return;
@@ -31,9 +32,14 @@ function useSvgIcon(fileName) {
         .catch(() => { pendingFetches.delete(fileName); return null; });
       pendingFetches.set(fileName, promise);
     }
-    pendingFetches.get(fileName).then((text) => { if (!cancelled && text) setSvg(text); });
+    pendingFetches.get(fileName).then((text) => {
+      if (cancelled) return;
+      if (text) setSvg(text);
+      // Ağ takılırsa (özellikle mobilde) ikon sessizce kaybolmasın: birkaç kez tekrar dene.
+      else if (deneme < 3) setTimeout(() => { if (!cancelled) setDeneme((d) => d + 1); }, 1200);
+    });
     return () => { cancelled = true; };
-  }, [fileName]);
+  }, [fileName, deneme]);
 
   return svg;
 }
