@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Check, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
 import '../Muhasebe2/Muhasebe2.css';
 import '../Receteler/Receteler.css';
 import './OnlineSiparis.css';
-import { TL } from '../Muhasebe2/m2Ortak';
+import { TL, trNorm } from '../Muhasebe2/m2Ortak';
 import { boyHesap, yuzde } from './olHesap';
-import { olYukle, sandvicKaydet, sandvicSil } from './olVeri';
+import { olYukle, sandvicSil } from './olVeri';
 import SandvicDuzenle from './SandvicDuzenle';
 import UrunEtiketleri from './UrunEtiketleri';
 import MalzemeSekmesi from './MalzemeSekmesi';
@@ -20,32 +20,26 @@ const SEKMELER = [
 const yuzdeEtiket = (n) => `%${String(Math.round(Number(n) * 1000) / 10).replace('.', ',')}`;
 const adetFmt = (n) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }).format(Number(n) || 0);
 
-function BoyOzet({ baslik, h, kategoriMap, indirim, onPlatformKaydet }) {
+// Her dükkân ürünü etiketi için, adı en yakın eşleşen hammaddenin adedini bulur (örn. "Salam" → "Tavuk salam" ×8).
+// Aynı ürün birden çok etiketteyse adet ilk etikette yazılır; bir hammadde yalnızca bir kez kullanılır.
+function etiketAdetleri(h) {
+  const kalan = h.satirlar.filter((x) => x.malzeme && x.adet > 0).map((x) => ({ ad: trNorm(x.malzeme.ad), adet: x.adet, kullanildi: false }));
+  return h.dukkanUrunler.map((u) => {
+    if (!u) return '';
+    const a = trNorm(u.satisAdi && u.satisAdi.trim() ? u.satisAdi : u.ad);
+    const adaylar = kalan.filter((k) => !k.kullanildi && (k.ad.includes(a) || a.includes(k.ad)));
+    if (!adaylar.length) return '';
+    adaylar.sort((x, y) => x.ad.length - y.ad.length);
+    const secilen = adaylar[0];
+    // Aynı hammaddeyi gösteren tüm satırların toplamı
+    const toplam = kalan.filter((k) => k.ad === secilen.ad && !k.kullanildi).reduce((t, k) => t + k.adet, 0);
+    kalan.forEach((k) => { if (k.ad === secilen.ad) k.kullanildi = true; });
+    return adetFmt(toplam);
+  });
+}
+
+function BoyOzet({ baslik, h, kategoriMap, indirim }) {
   const c = h.carpanli;
-  const [duzenliyor, setDuzenliyor] = useState(false);
-  const [metin, setMetin] = useState('');
-  const [bekliyor, setBekliyor] = useState(false);
-
-  const ac = () => {
-    setMetin(c ? String(c.fiyat).replace('.', ',') : '');
-    setDuzenliyor(true);
-  };
-  async function kaydet(deger) {
-    setBekliyor(true);
-    try {
-      await onPlatformKaydet(deger);
-      setDuzenliyor(false);
-    } finally {
-      setBekliyor(false);
-    }
-  }
-  const onaylaMetin = () => {
-    const n = Number(String(metin).replace(',', '.'));
-    if (!metin.trim()) return kaydet(null);
-    if (!(n > 0)) return undefined;
-    return kaydet(n);
-  };
-
   return (
     <div className="ol-ozet-boy">
       <h5>{baslik}</h5>
@@ -54,59 +48,15 @@ function BoyOzet({ baslik, h, kategoriMap, indirim, onPlatformKaydet }) {
       ) : (
         <>
           {h.dukkanUrunler.length > 0 ? (
-            <UrunEtiketleri urunler={h.dukkanUrunler} kategoriMap={kategoriMap} fiyatGoster={false} />
+            <UrunEtiketleri urunler={h.dukkanUrunler} kategoriMap={kategoriMap} fiyatGoster={false} adetler={etiketAdetleri(h)} />
           ) : (
-            <p className="ol-bos ol-sol">{h.dukkan ? `Dükkân fiyatı elle girilmiş: ${TL(h.dukkan)}` : 'Dükkân ürünleri seçilmedi'}</p>
+            <p className="ol-bos ol-sol">Dükkân ürünleri seçilmedi</p>
           )}
-          <ul className="ol-hammadde">
-            {h.satirlar.filter((x) => x.malzeme).map((x, i) => (
-              <li key={i}>
-                <b>{adetFmt(x.adet)}×</b> {x.malzeme.ad}{x.malzeme.birim_adi ? <small> ({x.malzeme.birim_adi})</small> : null}
-              </li>
-            ))}
-          </ul>
 
           <div className="ol-platform">
-            <span className="ol-platform-etiket">Platform satış fiyatı</span>
-            {duzenliyor ? (
-              <div className="ol-platform-duzen">
-                <input
-                  className="m2-input"
-                  inputMode="decimal"
-                  autoFocus
-                  value={metin}
-                  placeholder={h.onerilen ? String(h.onerilen) : ''}
-                  onChange={(e) => setMetin(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') onaylaMetin();
-                    if (e.key === 'Escape') setDuzenliyor(false);
-                  }}
-                />
-                <button className="rc-ikon-btn" disabled={bekliyor} onClick={onaylaMetin} aria-label="Kaydet"><Check size={16} /></button>
-                <button className="rc-ikon-btn" onClick={() => setDuzenliyor(false)} aria-label="Vazgeç"><X size={16} /></button>
-              </div>
-            ) : (
-              <div className="ol-platform-deger">
-                <b>{c ? TL(c.fiyat) : '—'}</b>
-                {c && (
-                  <button className="rc-ikon-btn" onClick={ac} aria-label="Platform fiyatını düzenle" title="Platform fiyatını düzenle">
-                    <Pencil size={14} />
-                  </button>
-                )}
-              </div>
-            )}
-            {c && !duzenliyor && (
-              <div className="ol-indirimli-satir">
-                <span>{yuzdeEtiket(indirim)} indirimli</span>
-                <b>{TL(c.indirimli)}</b>
-              </div>
-            )}
-            {c && c.manuel && !duzenliyor && (
-              <small className="ol-sonuk">
-                elle · önerilen {c.onerilen ? TL(c.onerilen) : '—'}{' '}
-                <button className="ol-link" disabled={bekliyor} onClick={() => kaydet(null)}>öneriye dön</button>
-              </small>
-            )}
+            <span className="ol-platform-etiket">Platform satış fiyatı · {yuzdeEtiket(indirim)} indirimli</span>
+            <b className="ol-platform-buyuk">{c ? TL(c.indirimli) : '—'}</b>
+            {c && <small className="ol-sonuk">liste fiyatı {TL(c.fiyat)}{c.manuel ? ' (elle)' : ''}</small>}
           </div>
 
           <dl>
@@ -157,18 +107,6 @@ export default function OnlineSiparis({ data, onNavigate }) {
   );
   const kategoriMap = useMemo(() => new Map((data?.categories || []).map((c) => [c.name, c])), [data?.categories]);
   const malzMap = useMemo(() => new Map((veri?.malzemeler || []).map((m) => [m.id, m])), [veri]);
-
-  // Kartın içinden platform fiyatını elle yaz / öneriye dön (null). Sandviç bu boyda kayıtlı kalır.
-  async function platformKaydet(s, anahtar, deger) {
-    try {
-      await sandvicKaydet({ ...s, [anahtar]: { ...s[anahtar], platform_fiyat: deger === null ? '' : String(deger) } });
-      bildir(deger === null ? 'Önerilen fiyata dönüldü' : 'Platform fiyatı kaydedildi');
-      await yukle();
-    } catch (e) {
-      bildir(e.message, true);
-      throw e;
-    }
-  }
 
   async function sil(s) {
     if (!window.confirm(`"${s.ad}" silinsin mi?`)) return;
@@ -225,8 +163,8 @@ export default function OnlineSiparis({ data, onNavigate }) {
                   </div>
                 </div>
                 <div className="ol-ozet">
-                  <BoyOzet baslik="Büyük boy" h={hB} kategoriMap={kategoriMap} indirim={veri.p.indirim} onPlatformKaydet={(d) => platformKaydet(s, 'buyuk', d)} />
-                  <BoyOzet baslik="Normal boy" h={hN} kategoriMap={kategoriMap} indirim={veri.p.indirim} onPlatformKaydet={(d) => platformKaydet(s, 'normal', d)} />
+                  <BoyOzet baslik="Büyük boy" h={hB} kategoriMap={kategoriMap} indirim={veri.p.indirim} />
+                  <BoyOzet baslik="Normal boy" h={hN} kategoriMap={kategoriMap} indirim={veri.p.indirim} />
                 </div>
               </div>
             );

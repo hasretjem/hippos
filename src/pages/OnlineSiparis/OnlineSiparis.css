@@ -60,8 +60,9 @@
 
 /* Dükkân ürünü etiketleri (kart + editör) */
 .ol-etiketler { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 8px; }
-.ol-etiket { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 10px; border-radius: 7px; font-size: 13px; line-height: 1.25; border: 1px solid rgba(0, 0, 0, .12); }
-.ol-etiket span { font-weight: 700; }
+.ol-etiket { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 10px; border-radius: 7px; font-size: 18px; line-height: 1.2; border: 1px solid rgba(0, 0, 0, .12); }
+.ol-etiket span { font-family: 'Geom-BlackItalic', sans-serif; font-weight: normal; font-style: normal; }
+.ol-etiket-adet { font-family: 'Geom-BlackItalic', sans-serif; font-weight: normal !important; font-size: 18px; opacity: 1 !important; }
 .ol-etiket b { font-weight: 600; white-space: nowrap; opacity: .9; }
 .ol-sol { text-align: left; margin: 2px 0 8px; }
 .ol-dukkan-toplam { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; padding-top: 6px; border-top: 1px dashed rgba(57, 62, 65, .25); }
@@ -175,3 +176,6 @@
 .ol-ms-liste li { padding: 8px 10px; border-radius: 7px; font-size: 14px; font-weight: 600; color: #393e41 !important; cursor: pointer; }
 .ol-ms-liste li.on { background: rgba(233, 79, 55, .14); color: #e94f37 !important; }
 .ol-ms-liste .ol-ms-bos { color: rgba(57, 62, 65, .6) !important; cursor: default; }
+
+.ol-platform-buyuk { font-size: 26px; font-weight: 800; color: #e94f37 !important; line-height: 1.1; }
+.ol-kalem-tablo th { color: #f6f7eb !important; background: #393e41; }
