@@ -139,7 +139,7 @@ export default function OnlineSiparis({ data, onNavigate }) {
 
   const urunMap = useMemo(() => new Map((data?.products || []).map((u) => [u.id, u])), [data?.products]);
   const urunler = useMemo(
-    () => (data?.products || []).filter((u) => u.kategori === 'SOĞUK SANDVİÇ' && u.durum === 'AKTIF' && !u.isAzVariant),
+    () => (data?.products || []).filter((u) => u.kategori === 'SOĞUK SANDVİÇ' && u.durum !== 'PASIF'),
     [data?.products]
   );
   const kategoriMap = useMemo(() => new Map((data?.categories || []).map((c) => [c.name, c])), [data?.categories]);
@@ -231,6 +231,7 @@ export default function OnlineSiparis({ data, onNavigate }) {
           sandvic={duzenle.sandvic}
           veri={veri}
           urunler={urunler}
+          altKategoriler={data?.subcategories || []}
           urunMap={urunMap}
           kategoriMap={kategoriMap}
           onKapat={() => setDuzenle(null)}

@@ -163,7 +163,7 @@ function BoyPaneli({ baslik, boy, setBoy, veri, hesap, onFiyatSec, kopyala, kate
   );
 }
 
-export default function SandvicDuzenle({ sandvic, veri, urunler, urunMap, kategoriMap, onKapat, onKaydedildi }) {
+export default function SandvicDuzenle({ sandvic, veri, urunler, altKategoriler, urunMap, kategoriMap, onKapat, onKaydedildi }) {
   const [ad, setAd] = useState(sandvic?.ad || '');
   const [normal, setNormal] = useState(() => (sandvic ? boyNormalle(sandvic.normal) : bosBoy()));
   const [buyuk, setBuyuk] = useState(() => (sandvic ? boyNormalle(sandvic.buyuk) : bosBoy()));
@@ -242,6 +242,7 @@ export default function SandvicDuzenle({ sandvic, veri, urunler, urunMap, katego
     {secim && (
       <FiyatSec
         urunler={urunler}
+        altKategoriler={altKategoriler}
         urunMap={urunMap}
         kategoriMap={kategoriMap}
         baslik={`Dükkân satış fiyatı seç · ${secim === 'normal' ? 'Normal boy' : 'Büyük boy'}`}

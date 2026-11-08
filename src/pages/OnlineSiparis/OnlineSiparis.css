@@ -83,11 +83,15 @@
 .ol-fs-izgara { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .ol-fs-sutun { padding: 10px; border-radius: 14px; background: rgba(57, 62, 65, .06); }
 .ol-fs-sutun h4 { margin: 0 0 8px; font-size: 13px; font-weight: 800; letter-spacing: .05em; color: #e94f37 !important; }
-.ol-fs-karolar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 58vh; overflow-y: auto; padding: 2px; }
+.ol-fs-sutun { max-height: 66vh; overflow-y: auto; }
+.ol-fs-grup { margin-bottom: 10px; }
+.ol-fs-altbaslik { margin: 0 0 6px; padding-bottom: 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #e94f37 !important; border-bottom: 1px solid rgba(57, 62, 65, .2); }
+.ol-fs-karolar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 2px; }
 .ol-fs-karo { position: relative; display: flex; }
 .ol-fs-karo .pb-card { min-height: 74px; padding: 8px 9px; }
 .ol-fs-karo .pb-name { font-size: 14px; }
 .ol-fs-karo .pb-icon-svg, .ol-fs-karo .pb-icon-watermark { width: 42px; height: 42px; font-size: 42px; }
+.ol-fs-rozet.az { left: auto; right: 4px; }
 .ol-fs-rozet { position: absolute; top: 4px; left: 4px; z-index: 3; min-width: 24px; padding: 1px 6px; border-radius: 999px; background: #393e41; color: #fff !important; font-size: 12px; font-weight: 800; text-align: center; pointer-events: none; }
 .ol-fs-yan { position: sticky; top: 0; padding: 12px; border-radius: 14px; border: 2px solid rgba(233, 79, 55, .55); background: #fff; display: flex; flex-direction: column; gap: 10px; }
 .ol-fs-yan h4 { margin: 0; font-size: 14px; font-weight: 800; color: #e94f37 !important; }
@@ -127,6 +131,8 @@
   .ol-boylar { grid-template-columns: 1fr; }
   .ol-fs-ana { grid-template-columns: 1fr; }
   .ol-fs-izgara { grid-template-columns: 1fr; }
+  .ol-fs-sutun { max-height: none; }
+  .ol-fs-karolar { grid-template-columns: repeat(3, 1fr); }
   .ol-fs-yan { position: static; }
   .ol-fiyat-alani { grid-template-columns: 1fr; }
 }
