@@ -17,7 +17,10 @@ const SEKMELER = [
   ['parametreler', 'Parametreler'],
 ];
 
-function BoyOzet({ baslik, h, kategoriMap, onPlatformKaydet }) {
+const yuzdeEtiket = (n) => `%${String(Math.round(Number(n) * 1000) / 10).replace('.', ',')}`;
+const adetFmt = (n) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }).format(Number(n) || 0);
+
+function BoyOzet({ baslik, h, kategoriMap, indirim, onPlatformKaydet }) {
   const c = h.carpanli;
   const [duzenliyor, setDuzenliyor] = useState(false);
   const [metin, setMetin] = useState('');
@@ -51,11 +54,17 @@ function BoyOzet({ baslik, h, kategoriMap, onPlatformKaydet }) {
       ) : (
         <>
           {h.dukkanUrunler.length > 0 ? (
-            <UrunEtiketleri urunler={h.dukkanUrunler} kategoriMap={kategoriMap} />
+            <UrunEtiketleri urunler={h.dukkanUrunler} kategoriMap={kategoriMap} fiyatGoster={false} />
           ) : (
             <p className="ol-bos ol-sol">{h.dukkan ? `Dükkân fiyatı elle girilmiş: ${TL(h.dukkan)}` : 'Dükkân ürünleri seçilmedi'}</p>
           )}
-          {h.dukkan > 0 && <div className="ol-dukkan-toplam"><span>Dükkân toplamı</span><b>{TL(h.dukkan)}</b></div>}
+          <ul className="ol-hammadde">
+            {h.satirlar.filter((x) => x.malzeme).map((x, i) => (
+              <li key={i}>
+                <b>{adetFmt(x.adet)}×</b> {x.malzeme.ad}{x.malzeme.birim_adi ? <small> ({x.malzeme.birim_adi})</small> : null}
+              </li>
+            ))}
+          </ul>
 
           <div className="ol-platform">
             <span className="ol-platform-etiket">Platform satış fiyatı</span>
@@ -86,6 +95,12 @@ function BoyOzet({ baslik, h, kategoriMap, onPlatformKaydet }) {
                 )}
               </div>
             )}
+            {c && !duzenliyor && (
+              <div className="ol-indirimli-satir">
+                <span>{yuzdeEtiket(indirim)} indirimli</span>
+                <b>{TL(c.indirimli)}</b>
+              </div>
+            )}
             {c && c.manuel && !duzenliyor && (
               <small className="ol-sonuk">
                 elle · önerilen {c.onerilen ? TL(c.onerilen) : '—'}{' '}
@@ -103,8 +118,6 @@ function BoyOzet({ baslik, h, kategoriMap, onPlatformKaydet }) {
             <dd>{c ? yuzde(c.karOrani) : '—'}</dd>
             <dt>Marj</dt>
             <dd>{c ? yuzde(c.marj) : '—'}</dd>
-            <dt>Dükkânda kâr oranı</dt>
-            <dd>{yuzde(h.dukkanKarOrani)}</dd>
           </dl>
         </>
       )}
@@ -212,8 +225,8 @@ export default function OnlineSiparis({ data, onNavigate }) {
                   </div>
                 </div>
                 <div className="ol-ozet">
-                  <BoyOzet baslik="Büyük boy" h={hB} kategoriMap={kategoriMap} onPlatformKaydet={(d) => platformKaydet(s, 'buyuk', d)} />
-                  <BoyOzet baslik="Normal boy" h={hN} kategoriMap={kategoriMap} onPlatformKaydet={(d) => platformKaydet(s, 'normal', d)} />
+                  <BoyOzet baslik="Büyük boy" h={hB} kategoriMap={kategoriMap} indirim={veri.p.indirim} onPlatformKaydet={(d) => platformKaydet(s, 'buyuk', d)} />
+                  <BoyOzet baslik="Normal boy" h={hN} kategoriMap={kategoriMap} indirim={veri.p.indirim} onPlatformKaydet={(d) => platformKaydet(s, 'normal', d)} />
                 </div>
               </div>
             );

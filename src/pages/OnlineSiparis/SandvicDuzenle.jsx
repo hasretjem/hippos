@@ -5,6 +5,7 @@ import { boyHesap, yuzde } from './olHesap';
 import { bosBoy, boyNormalle, sandvicKaydet } from './olVeri';
 import FiyatSec from './FiyatSec';
 import UrunEtiketleri from './UrunEtiketleri';
+import MalzemeSec from './MalzemeSec';
 
 const gramFmt = (g) => `${new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 }).format(g)} g`;
 
@@ -21,7 +22,11 @@ function Sonuc({ etiket, deger, ton, kucuk }) {
 function BoyPaneli({ baslik, boy, setBoy, veri, hesap, onFiyatSec, kopyala, kategoriMap }) {
   const { malzemeler, p } = veri;
   const satirGuncelle = (i, alan, deger) => setBoy({ ...boy, kalemler: boy.kalemler.map((k, j) => (j === i ? { ...k, [alan]: deger } : k)) });
-  const satirEkle = () => setBoy({ ...boy, kalemler: [...boy.kalemler, { malzeme_id: '', adet: '1' }] });
+  const [odakSatir, setOdakSatir] = useState(-1); // yeni eklenen satırın malzeme kutusuna imleç gelsin
+  const satirEkle = () => {
+    setOdakSatir(boy.kalemler.length);
+    setBoy({ ...boy, kalemler: [...boy.kalemler, { malzeme_id: '', adet: '1' }] });
+  };
   const satirSil = (i) => setBoy({ ...boy, kalemler: boy.kalemler.filter((_, j) => j !== i) });
   const h = hesap;
   const urunSayisi = h.dukkanUrunler.length;
@@ -59,16 +64,7 @@ function BoyPaneli({ baslik, boy, setBoy, veri, hesap, onFiyatSec, kopyala, kate
             return (
               <tr key={i}>
                 <td>
-                  <select className="m2-select" value={k.malzeme_id || ''} onChange={(e) => satirGuncelle(i, 'malzeme_id', e.target.value ? Number(e.target.value) : '')}>
-                    <option value="">Seç…</option>
-                    {malzemeler.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.ad}
-                        {m.birim_adi ? ` (${m.birim_adi})` : ''}
-                        {m.kontrol ? ' *' : ''}
-                      </option>
-                    ))}
-                  </select>
+                  <MalzemeSec malzemeler={malzemeler} deger={k.malzeme_id} onSec={(id) => satirGuncelle(i, 'malzeme_id', id)} onYeniSatir={satirEkle} otoOdak={i === odakSatir} />
                 </td>
                 <td>
                   <input className="m2-input ol-adet" inputMode="decimal" value={k.adet} onChange={(e) => satirGuncelle(i, 'adet', e.target.value)} />
@@ -116,6 +112,9 @@ function BoyPaneli({ baslik, boy, setBoy, veri, hesap, onFiyatSec, kopyala, kate
             onChange={(e) => setBoy({ ...boy, platform_fiyat: e.target.value })}
           />
           <small className="ol-sonuk">boşsa önerilen fiyat; yazarsan sabit kalır</small>
+          {h.carpanli && (
+            <small className="ol-indirimli">%{String(Math.round(Number(p.indirim) * 1000) / 10).replace('.', ',')} indirimli: <b>{TL(h.carpanli.indirimli)}</b></small>
+          )}
         </label>
         <label className="ol-alan">
           <span className="rc-etiket">Çarpan</span>
@@ -140,7 +139,7 @@ function BoyPaneli({ baslik, boy, setBoy, veri, hesap, onFiyatSec, kopyala, kate
             ton="ana"
             kucuk={h.carpanli.manuel ? `elle girildi · önerilen ${h.onerilen ? TL(h.onerilen) : '—'}` : `dükkân ${TL(h.dukkan)} × ${String(h.carpan).replace('.', ',')}`}
           />
-          <Sonuc etiket="İndirim sonrası müşteri" deger={TL(h.carpanli.indirimli)} />
+          <Sonuc etiket={`%${String(Math.round(Number(p.indirim) * 1000) / 10).replace('.', ',')} indirimli müşteri fiyatı`} deger={TL(h.carpanli.indirimli)} />
           <Sonuc etiket="Bize kalan net" deger={TL(h.carpanli.net)} kucuk="KDV ve komisyon sonrası" />
           <Sonuc etiket="Platformda net kâr" deger={TL(h.carpanli.netKar)} ton={h.carpanli.netKar >= 0 ? 'iyi' : 'kotu'} />
           <Sonuc etiket="Kâr oranı (maliyete göre)" deger={yuzde(h.carpanli.karOrani)} kucuk="net kâr ÷ maliyet" />
