@@ -10,7 +10,7 @@ function MalzemeModal({ malzeme, siraSonraki, onKapat, onKaydedildi }) {
   const [f, setF] = useState(() =>
     malzeme
       ? { ...malzeme, birim_gram: malzeme.birim_gram === null ? '' : String(malzeme.birim_gram), fiyat: String(malzeme.fiyat) }
-      : { ad: '', birim_adi: '', birim_gram: '', fiyat_turu: 'kg', fiyat: '', kontrol: false, notu: '', sira: siraSonraki }
+      : { ad: '', birim_adi: '', birim_gram: '', fiyat_turu: 'kg', fiyat: '', kontrol: false, notu: '', sira: siraSonraki, surulebilir: false, tur: 'malzeme' }
   );
   const [fatura, setFatura] = useState({ liste: '', iskonto: '', kdv: '1', bolen: '1' });
   const [hata, setHata] = useState('');
@@ -63,6 +63,17 @@ function MalzemeModal({ malzeme, siraSonraki, onKapat, onKaydedildi }) {
         <label className="ol-tam">
           <span className="rc-etiket">Not</span>
           <input className="m2-input" value={f.notu} onChange={(e) => ayarla('notu', e.target.value)} />
+        </label>
+        <label>
+          <span className="rc-etiket">Mutfak fişinde</span>
+          <select className="m2-select" value={f.tur || 'malzeme'} onChange={(e) => ayarla('tur', e.target.value)}>
+            <option value="malzeme">Malzeme (fişte yazar)</option>
+            <option value="ekmek">Ekmek (müşterinin seçtiği ekmek yazar)</option>
+            <option value="ambalaj">Ambalaj (fişte yazmaz)</option>
+          </select>
+        </label>
+        <label className="rc-onay">
+          <input type="checkbox" checked={!!f.surulebilir} onChange={(e) => ayarla('surulebilir', e.target.checked)} /> Sürülebilir (fişte ekmeğin hemen altında yazar)
         </label>
         <label className="rc-onay ol-tam">
           <input type="checkbox" checked={f.kontrol} onChange={(e) => ayarla('kontrol', e.target.checked)} /> Kesin değil / kontrol edilecek (sandviçlerde * ile işaretlenir)
@@ -146,7 +157,7 @@ export default function MalzemeSekmesi({ veri, onYenile, bildir }) {
           <tbody>
             {liste.map((m) => (
               <tr key={m.id} className={m.kontrol ? 'ol-kontrol' : ''}>
-                <td className="rc-ad">{m.ad}{m.kontrol ? ' *' : ''}</td>
+                <td className="rc-ad">{m.ad}{m.kontrol ? ' *' : ''}{m.surulebilir ? <small className="ol-rozet">sürülebilir</small> : null}{m.tur && m.tur !== 'malzeme' ? <small className="ol-rozet gri">{m.tur}</small> : null}</td>
                 <td>{m.birim_adi}</td>
                 <td className="ol-sag">{m.birim_gram === null ? '—' : m.birim_gram}</td>
                 <td className="ol-sag">{TL(m.fiyat)} / {m.fiyat_turu}</td>

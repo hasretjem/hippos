@@ -17,6 +17,8 @@ export default function ParametreSekmesi({ veri, onYenile, bildir }) {
     carpan: String(p0.carpan).replace('.', ','),
     ambalaj_normal: String(p0.ambalaj_normal).replace('.', ','),
     ambalaj_buyuk: String(p0.ambalaj_buyuk).replace('.', ','),
+    ekmek_fiyat_kucuk: String(p0.ekmek_fiyat_kucuk ?? 95).replace('.', ','),
+    ekmek_fiyat_buyuk: String(p0.ekmek_fiyat_buyuk ?? 130).replace('.', ','),
     ...Object.fromEntries(YUZDE_ALANLARI.map(([k]) => [k, String(Math.round(p0[k] * 10000) / 100).replace('.', ',')])),
   }));
   const [bekliyor, setBekliyor] = useState(false);
@@ -25,6 +27,8 @@ export default function ParametreSekmesi({ veri, onYenile, bildir }) {
     carpan: sayi(f.carpan),
     ambalaj_normal: sayi(f.ambalaj_normal),
     ambalaj_buyuk: sayi(f.ambalaj_buyuk),
+    ekmek_fiyat_kucuk: sayi(f.ekmek_fiyat_kucuk),
+    ekmek_fiyat_buyuk: sayi(f.ekmek_fiyat_buyuk),
     ...Object.fromEntries(YUZDE_ALANLARI.map(([k]) => [k, sayi(f[k]) / 100])),
   };
   const toplamKom = komisyonToplam(taslak);
@@ -65,6 +69,15 @@ export default function ParametreSekmesi({ veri, onYenile, bildir }) {
         <label>
           <span className="rc-etiket">Ambalaj maliyeti – büyük boy (TL)</span>
           <input className="m2-input" inputMode="decimal" value={f.ambalaj_buyuk} onChange={(e) => setF({ ...f, ambalaj_buyuk: e.target.value })} />
+        </label>
+        <label>
+          <span className="rc-etiket">Kendi Sandviçini Oluştur – küçük ekmek (TL)</span>
+          <input className="m2-input" inputMode="decimal" value={f.ekmek_fiyat_kucuk} onChange={(e) => setF({ ...f, ekmek_fiyat_kucuk: e.target.value })} />
+          <small className="ol-sonuk">Platformdaki liste fiyatı (indirimden önce).</small>
+        </label>
+        <label>
+          <span className="rc-etiket">Kendi Sandviçini Oluştur – büyük ekmek (TL)</span>
+          <input className="m2-input" inputMode="decimal" value={f.ekmek_fiyat_buyuk} onChange={(e) => setF({ ...f, ekmek_fiyat_buyuk: e.target.value })} />
         </label>
       </div>
 

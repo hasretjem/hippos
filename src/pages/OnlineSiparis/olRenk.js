@@ -1,3 +1,6 @@
+import { trNorm } from '../Muhasebe2/m2Ortak';
+import { resolveButtonStyle } from '../../constants/themeDefaults';
+
 // Etiket renkleri: satış ekranındaki buton rengi arka plan olur, yazı rengi kontrasta göre otomatik seçilir.
 const KOYU = '#1b1b1b';
 const ACIK = '#ffffff';
@@ -29,4 +32,22 @@ export function yaziRengi(arkaPlan, yedek) {
   const koyuOran = oran(L, parlaklik(rgbCoz(KOYU)));
   const acikOran = oran(L, parlaklik(rgbCoz(ACIK)));
   return koyuOran >= acikOran ? KOYU : ACIK;
+}
+
+
+const gorunenAd = (u) => (u?.satisAdi && u.satisAdi.trim() !== '' ? u.satisAdi : u?.ad);
+// Ada en yakın satış ekranı ürününü bulur (örn. "Tavuk salam" → "Salam"); rengi oradan alınır. Bulunamazsa null.
+export function renkBul(ad, urunler, kategoriMap) {
+  const a = trNorm(ad);
+  let en = null;
+  let enUzunluk = 0;
+  urunler.forEach((u) => {
+    const p = trNorm(gorunenAd(u));
+    if (p && (a.includes(p) || p.includes(a)) && p.length > enUzunluk) {
+      en = u;
+      enUzunluk = p.length;
+    }
+  });
+  if (!en) return null;
+  return resolveButtonStyle(en, kategoriMap.get(en.kategori) || null).backgroundColor;
 }

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Copy, Plus, X } from 'lucide-react';
+import { Fragment, useMemo, useState } from 'react';
+import { Copy, ListChecks, Plus, X } from 'lucide-react';
 import { ModalKabuk, TL, sayi } from '../Muhasebe2/m2Ortak';
 import { boyHesap, yuzde } from './olHesap';
 import { bosBoy, boyNormalle, sandvicKaydet } from './olVeri';
@@ -62,7 +62,8 @@ function BoyPaneli({ baslik, boy, setBoy, veri, hesap, onFiyatSec, kopyala, kate
           {boy.kalemler.map((k, i) => {
             const s = h.satirlar[i];
             return (
-              <tr key={i}>
+              <Fragment key={i}>
+              <tr>
                 <td>
                   <MalzemeSec malzemeler={malzemeler} deger={k.malzeme_id} onSec={(id) => satirGuncelle(i, 'malzeme_id', id)} onYeniSatir={satirEkle} otoOdak={i === odakSatir} />
                 </td>
@@ -71,12 +72,60 @@ function BoyPaneli({ baslik, boy, setBoy, veri, hesap, onFiyatSec, kopyala, kate
                 </td>
                 <td className="ol-sag">{s && s.malzeme && s.malzeme.birim_gram !== null ? gramFmt(s.gram) : '—'}</td>
                 <td className="ol-sag">{s && s.malzeme ? TL(s.maliyet) : '—'}</td>
-                <td>
+                <td className="ol-satir-islem">
+                  <button
+                    className={`rc-ikon-btn ${k.secimli ? 'ol-secimli-acik' : ''}`}
+                    title="Müşteri seçimli ürün (örn. ezme seçimi)"
+                    aria-label="Müşteri seçimli"
+                    onClick={() =>
+                      setBoy({
+                        ...boy,
+                        kalemler: boy.kalemler.map((x, j) =>
+                          j !== i ? x : x.secimli ? { malzeme_id: x.malzeme_id, adet: x.adet } : { ...x, secimli: true, soru: '', secenekler: x.malzeme_id ? [Number(x.malzeme_id)] : [] }
+                        ),
+                      })
+                    }
+                  >
+                    <ListChecks size={16} />
+                  </button>
                   <button className="rc-ikon-btn" onClick={() => satirSil(i)} aria-label="Satırı sil">
                     <X size={16} />
                   </button>
                 </td>
               </tr>
+              {k.secimli && (
+                <tr className="ol-secimli-satir">
+                  <td colSpan={5}>
+                    <div className="ol-secimli">
+                      <b>Müşteri seçimli ürün</b>
+                      <input className="m2-input" placeholder="Soru (örn. Hangi ezmeyi istersiniz?)" value={k.soru || ''} onChange={(e) => satirGuncelle(i, 'soru', e.target.value)} />
+                      <div className="ol-secenekler">
+                        {(k.secenekler || []).map((id) => (
+                          <span className="ol-secenek" key={id}>
+                            {malzemeler.find((m) => m.id === Number(id))?.ad || 'Silinmiş'}
+                            <button onClick={() => satirGuncelle(i, 'secenekler', (k.secenekler || []).filter((x) => x !== id))} aria-label="Seçeneği çıkar"><X size={12} /></button>
+                          </span>
+                        ))}
+                        <select
+                          className="m2-select ol-secenek-ekle"
+                          value=""
+                          onChange={(e) => {
+                            const id = Number(e.target.value);
+                            if (id && !(k.secenekler || []).includes(id)) satirGuncelle(i, 'secenekler', [...(k.secenekler || []), id]);
+                          }}
+                        >
+                          <option value="">+ Seçenek ekle…</option>
+                          {malzemeler.filter((m) => !(k.secenekler || []).includes(m.id)).map((m) => (
+                            <option key={m.id} value={m.id}>{m.ad}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <small className="ol-sonuk">Maliyet en pahalı seçeneğe göre hesaplanır. Satış ekranında bu soru sorulur.</small>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             );
           })}
         </tbody>
@@ -193,6 +242,10 @@ export default function SandvicDuzenle({ sandvic, veri, urunler, altKategoriler,
     }
     if ([...normal.kalemler, ...buyuk.kalemler].some((k) => !k.malzeme_id || sayi(k.adet) <= 0)) {
       setHata('Malzeme seçilmemiş ya da adedi 0 olan satır var.');
+      return;
+    }
+    if ([...normal.kalemler, ...buyuk.kalemler].some((k) => k.secimli && (k.secenekler || []).length < 2)) {
+      setHata('Müşteri seçimli üründe en az 2 seçenek olmalı.');
       return;
     }
     setBekliyor(true);

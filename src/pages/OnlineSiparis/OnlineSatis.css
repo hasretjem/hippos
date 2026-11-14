@@ -1,0 +1,137 @@
+/* Satış ekranı > Online sipariş kategorisi */
+.ds-cat-card.os-kategori { background: #e94f37 !important; border-color: #e94f37 !important; color: #fff !important; font-weight: 800; }
+.ds-cat-card.os-kategori.active { box-shadow: 0 0 0 3px rgba(233, 79, 55, 0.35); }
+
+.os-panel { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; }
+.os-ust { display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; }
+.os-sekmeler { display: flex; gap: 6px; }
+.os-sekmeler button {
+  height: 42px; padding: 0 22px; border-radius: 12px; border: 2px solid #e94f37; background: #fff;
+  color: #e94f37 !important; font-size: 15px; font-weight: 800; cursor: pointer;
+}
+.os-sekmeler button.on { background: #e94f37; color: #fff !important; }
+.os-sipno-rozet { margin-left: auto; background: #393e41; color: #fff !important; border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+.os-sipno-rozet b { color: #fff !important; }
+.os-serit {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap;
+  background: #fff4d6; border: 2px solid #e9a23b; border-radius: 12px; padding: 8px 12px;
+}
+.os-serit span { flex: 1; min-width: 0; font-size: 14px; color: #393e41 !important; }
+.os-serit span b { color: #393e41 !important; }
+.os-serit button {
+  display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 18px; border: none; border-radius: 10px;
+  background: #2f7d4f; color: #fff !important; font-size: 15px; font-weight: 800; cursor: pointer;
+}
+.os-serit button.ikincil { background: #393e41; }
+.os-govde { flex: 1; min-height: 0; }
+.os-govde.os-tek {
+  background: var(--panel-dark); border-radius: var(--r-panel); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  padding: 20px; overflow-y: auto;
+}
+.os-icecek-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.os-icecek-grid .pb-name { font-size: 16px; }
+.ds-split-col .ds-product-grid.os-menu-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ds-split-col .os-menu-grid .pb-name { font-size: 19px; }
+.ds-split-col.os-kapali { opacity: 0.28; pointer-events: none; }
+.os-bos { padding: 18px; color: #f6f7eb !important; font-size: 14px; }
+.os-bos.kucuk { padding: 10px 0; font-size: 12px; opacity: 0.8; }
+
+.os-dugme { flex-direction: column; align-items: stretch; justify-content: flex-end; gap: 4px; }
+.os-dugme .pb-text-box { flex: 0 1 auto; max-width: 100%; }
+.os-dugme .pb-name { overflow-wrap: anywhere; }
+.os-dugme .os-fiyat { align-self: flex-end; margin: 0; font-size: 14px; }
+.os-dugme.os-bufe { border: 2px dashed #fff; }
+.os-rozet {
+  position: absolute; top: 6px; right: 6px; z-index: 2; background: #393e41; color: #fff !important;
+  border-radius: 999px; padding: 2px 8px; font-size: 13px; font-weight: 800;
+}
+
+/* Sipariş penceresi */
+.os-ortu { z-index: 3000; }
+.ds-modal.os-popup {
+  width: min(640px, 96vw); max-width: 640px; max-height: 94vh; overflow-y: auto; background: #f6f7eb; padding: 18px 20px;
+}
+.os-popup-bas { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.os-popup-bas h3 { margin: 0; font-size: 20px; font-weight: 800; color: #e94f37 !important; }
+.os-alan { margin-top: 12px; }
+.os-etiket { display: block; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #393e41 !important; margin-bottom: 6px; }
+.os-ikili { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.os-ikili button {
+  display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 54px; padding: 8px 10px;
+  border-radius: 12px; border: 2px solid #c9cbbd; background: #fff; color: #393e41 !important;
+  font-size: 16px; font-weight: 700; cursor: pointer; line-height: 1.2;
+}
+.os-ikili button.on { background: #2f7d4f; border-color: #2f7d4f; color: #fff !important; }
+.os-ikili button.on svg { color: #fff !important; }
+.os-not { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.os-not textarea {
+  width: 100%; border: 2px solid #c9cbbd; border-radius: 12px; padding: 10px; font-size: 16px; font-family: inherit;
+  background: #fff; color: #393e41 !important; resize: vertical; min-height: 78px; box-sizing: border-box;
+}
+.os-not-dugmeler { display: flex; flex-direction: column; gap: 6px; }
+.os-not-dugmeler button {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 14px; min-height: 36px;
+  border-radius: 10px; border: none; background: #393e41; color: #fff !important; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.os-not-dugmeler button svg { color: #fff !important; }
+.os-not-dugmeler button.sil { background: #e94f37; }
+.os-sipno {
+  width: 100%; height: 46px; border: 2px solid #c9cbbd; border-radius: 12px; padding: 0 12px; font-size: 16px;
+  background: #fff; color: #393e41 !important; box-sizing: border-box;
+}
+.os-uyari { margin: 8px 0 0; font-size: 13px; color: #e94f37 !important; }
+.os-popup-alt { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.os-popup-fiyat { font-size: 22px; font-weight: 800; color: #393e41 !important; min-width: 90px; }
+.os-ekle {
+  flex: 1; min-height: 56px; border: none; border-radius: 14px; background: #e94f37; color: #fff !important;
+  font-size: 19px; font-weight: 800; cursor: pointer;
+}
+.os-ekle:disabled { background: #c9cbbd; color: #6b6f6a !important; cursor: not-allowed; font-size: 15px; }
+
+/* Sepet satırı: online kalem ayrıntısı */
+.ds-order-line-mid.os-satir { flex-direction: column; align-items: flex-start; gap: 2px; }
+.os-satir-alt { font-size: 11px; font-weight: 600; color: #fff !important; opacity: 0.92; line-height: 1.25; white-space: normal; }
+.os-satir-alt.not { background: #fff4d6; color: #393e41 !important; border-radius: 6px; padding: 1px 6px; opacity: 1; }
+.ds-order-line.os-bagli { margin-left: 16px; }
+.os-odeme-bilgi {
+  margin: -20px 0 20px; background: #fff4d6; border: 2px solid #e9a23b; border-radius: 12px; padding: 10px 14px;
+  font-size: 15px; color: #393e41 !important; line-height: 1.4;
+}
+.os-odeme-bilgi b { color: #393e41 !important; }
+.os-odeme-bilgi.dar { margin: 10px 0; font-size: 13px; }
+
+@media (max-width: 900px) {
+  .os-sekmeler button { height: 36px; padding: 0 12px; font-size: 13px; }
+  .os-sipno-rozet { font-size: 11px; padding: 6px 8px; }
+  .os-icecek-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .os-govde.os-tek { padding: 8px; }
+  .ds-split-col .ds-product-grid.os-menu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ds-split-col .os-menu-grid .pb-name { font-size: 12px !important; }
+  .os-dugme .os-fiyat { font-size: 10px !important; }
+  .os-rozet { font-size: 10px; padding: 1px 5px; top: 2px; right: 2px; }
+  .ds-modal.os-popup { padding: 14px; }
+  .os-ikili button { min-height: 48px; font-size: 14px; }
+  .os-not { grid-template-columns: 1fr; }
+  .os-not-dugmeler { flex-direction: row; }
+  .os-odeme-bilgi { margin: 0 0 12px; font-size: 13px; }
+}
+
+/* Mutfak fişi (yalnızca yazdırmada görünür) */
+@media print {
+  .ofis-blok { border-bottom: 1px dashed #000; padding-bottom: 6px; margin-bottom: 6px; }
+  .ofis-baslik { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; font-weight: 800; text-transform: uppercase; }
+  .ofis-baslik span:last-child { flex-shrink: 0; }
+  .ofis-alt { font-size: 13px; font-weight: 800; margin-top: 2px; }
+  .ofis-isaret { font-size: 20px; font-weight: 900; vertical-align: -2px; }
+  .ofis-not { border: 3px solid #000; padding: 5px 6px; margin: 5px 0; font-size: 19px; font-weight: 900; line-height: 1.25; overflow-wrap: anywhere; }
+  .ofis-not small { display: block; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; }
+  .ofis-liste { font-size: 15px; font-weight: 700; line-height: 1.45; }
+  .ofis-satir { display: flex; justify-content: space-between; gap: 8px; }
+  .ofis-satir span:last-child { flex-shrink: 0; font-size: 12px; }
+}
+
+/* Telefonda açık büfe malzemesi seçilirken yalnızca ilgili boy gösterilir (yer kazanmak için). */
+@media (max-width: 900px) {
+  .os-govde.ds-split-cols:has(.os-kapali) { grid-template-columns: 1fr; }
+  .ds-split-col.os-kapali { display: none; }
+}

@@ -28,13 +28,20 @@ function netKatsayi(p) {
   return (1 - Number(p.indirim)) * (1 - komisyonToplam(p));
 }
 
+// Müşterinin ödediği (indirimli) tutardan hesabımıza yatan orana: 1 − toplam komisyon
+export const netOran = (p) => 1 - komisyonToplam(p);
+export const kurus = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
 // boy: { kalemler:[{malzeme_id, adet}], dukkan_urunler:[ürün id'leri, tekrar edebilir], dukkan_fiyat (elle), platform_fiyat (elle), carpan, hedef_kar } (sayılar metin de olabilir)
 export function boyHesap(boy, malzMap, p, ambalaj, urunMap) {
   const satirlar = (boy.kalemler || []).map((k) => {
     const m = malzMap.get(Number(k.malzeme_id)) || null;
     const adet = sayi(k.adet);
     const gram = m && m.birim_gram !== null && m.birim_gram !== undefined ? adet * Number(m.birim_gram) : 0;
-    return { malzeme: m, adet, gram, maliyet: adet * birimMaliyet(m), eksik: !m };
+    // Müşteri seçimli kalemde maliyet EN PAHALI seçeneğe göre hesaplanır.
+    const secenekler = k.secimli ? (k.secenekler || []).map((id) => malzMap.get(Number(id))).filter(Boolean) : [];
+    const birim = secenekler.length ? Math.max(...secenekler.map(birimMaliyet)) : birimMaliyet(m);
+    return { malzeme: m, adet, gram, maliyet: adet * birim, eksik: !m, secimli: !!k.secimli, soru: k.soru || '', secenekler };
   });
   const gram = satirlar.reduce((t, s) => t + s.gram, 0);
   const malzemeMaliyet = satirlar.reduce((t, s) => t + s.maliyet, 0);

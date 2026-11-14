@@ -10,9 +10,12 @@ import SandvicDuzenle from './SandvicDuzenle';
 import HammaddeEtiketleri from './HammaddeEtiketleri';
 import MalzemeSekmesi from './MalzemeSekmesi';
 import ParametreSekmesi from './ParametreSekmesi';
+import ListeSekmesi from './ListeSekmesi';
 
 const SEKMELER = [
   ['sandvicler', 'Sandviçler'],
+  ['ekstralar', 'Ekstralar'],
+  ['icecekler', 'İçecekler'],
   ['malzemeler', 'Malzemeler'],
   ['parametreler', 'Parametreler'],
 ];
@@ -150,6 +153,8 @@ export default function OnlineSiparis({ data, onNavigate }) {
           )}
         </div>
       )}
+      {veri && sekme === 'ekstralar' && <ListeSekmesi tur="ekstra" veri={veri} onYenile={yukle} bildir={bildir} />}
+      {veri && sekme === 'icecekler' && <ListeSekmesi tur="icecek" veri={veri} onYenile={yukle} bildir={bildir} />}
       {veri && sekme === 'malzemeler' && <MalzemeSekmesi veri={veri} onYenile={yukle} bildir={bildir} />}
       {veri && sekme === 'parametreler' && <ParametreSekmesi veri={veri} onYenile={yukle} bildir={bildir} />}
 

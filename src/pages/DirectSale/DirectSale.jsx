@@ -15,6 +15,9 @@ import OdemeTarihiSecici from '../../components/OdemeTarihi/OdemeTarihiSecici';
 import useIsMobile, { panoyaKopyala } from '../../hooks/useIsMobile';
 import { bugunAnahtar, trTarih, odemeSecimiGecerli } from '../../utils/odemeTarihi';
 import '../../components/bosvar/bosvar.css';
+import OnlineSatis from '../OnlineSiparis/OnlineSatis';
+import OnlineFis from '../OnlineSiparis/OnlineFis';
+import { ONLINE_KATEGORI, ONLINE_ETIKET, kurus, netFiyat, notaSiparisNoEkle, onlineOzet, siparisNoBul } from '../OnlineSiparis/olSatis';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
   const {
@@ -292,8 +295,19 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   }, []);
 
   function removeItem(id) {
-    setDraftItems((prev) => prev.filter((i) => i.id !== id));
+    // "Kendi Sandviçini Oluştur" kalemi silinince ona bağlı ekstralar da silinir.
+    setDraftItems((prev) => prev.filter((i) => i.id !== id && i.online?.ustId !== id));
   }
+
+  // ---- Online sipariş (Yemeksepeti vb.) ----
+  const onlineAktif = activeCategory === ONLINE_KATEGORI && !searchQuery;
+  const onlineEkle = useCallback((kalemler) => {
+    setDraftItems((prev) => [...prev, ...kalemler]);
+  }, []);
+  // Pencereye girilen sipariş no masa notuna da yazılır (Masalar ekranında siparişi numarasından izlemek için).
+  const onlineSiparisNo = useCallback((no) => {
+    setTableNoteDraft((mevcut) => notaSiparisNoEkle(mevcut, no));
+  }, []);
 
   function toggleSelectItem(id) {
     setDraftItems((prev) => prev.map((i) => (i.id === id ? { ...i, selected: !i.selected } : i)));
@@ -313,7 +327,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     if (index === 0) return false;
     const cur = items[index];
     const prev = items[index - 1];
-    return !cur.note && !prev.note && cur.ad === prev.ad;
+    return !cur.note && !prev.note && !cur.online && cur.ad === prev.ad;
   }
 
   // ---- Masa notu — artık her harfte YAZMIYOR (realtime kotasını boşuna dolduruyordu).
@@ -652,14 +666,22 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const selected = payable.filter((i) => i.selected);
     const toClose = selected.length > 0 ? selected : payable;
     const closedIds = new Set(toClose.map((i) => i.id));
-    const totalPayHam = toClose.reduce((s, i) => s + i.fiyat, 0);
+    // Online sipariş kalemleri cariye müşteri tutarıyla değil, platformun hesabımıza YATIRACAĞI tutarla yazılır
+    // (komisyonlar düşülmüş). Aynı tutar satış kaydına, yani Günsonu'na da işlenir.
+    const onl = onlineOzet(toClose);
+    const totalPayHam = kurus(toClose.reduce((s, i) => s + (i.online ? 0 : i.fiyat), 0) + onl.net);
+    const toCloseKayit = toClose.map((i) => (i.online ? { ...i, fiyat: netFiyat(i) } : i));
     const cariObj = (cariler || []).find((c) => c.id === cariId);
     const cariIskonto = cariObj?.iskonto || 0;
     const cariOnOdeme = cariObj?.onOdeme || 0;
     const totalPayIskontoSonrasi = cariIskonto > 0 ? Math.round(totalPayHam * (1 - cariIskonto / 100)) : totalPayHam;
     const cariPay = cariOnOdeme > 0 ? Math.min(totalPayIskontoSonrasi, cariOnOdeme) : totalPayIskontoSonrasi;
     const kalan = totalPayIskontoSonrasi - cariPay;
-    const mutfakNotu = currentOrder.filter((i) => i.note).map((i) => i.ad).join(' · ');
+    const sipNo = siparisNoBul(toClose);
+    const mutfakNotu = [
+      ...currentOrder.filter((i) => i.note).map((i) => i.ad),
+      ...(onl.adet > 0 ? [`Online sipariş${sipNo ? ` no: ${sipNo}` : ''} · müşteri tutarı ${TL(onl.musteri)}`] : []),
+    ].join(' · ');
     const cariAdi = cariObj?.ad || 'Cari';
 
     // Bireysel cari: seçilen ödeme tarihini cariye yaz (en son girilen geçerli; "belirsiz" eski tarihi siler)
@@ -672,7 +694,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
     // Cariye hareketi yaz
     const hareketId = addCariHareket(cariId, {
-      urunler: toClose.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
+      urunler: toCloseKayit.map((i) => ({ ad: i.ad, fiyat: i.fiyat })),
       toplam: cariPay,
       mutfakNotu,
       personelAd: personelSecimAdi.trim() || null,
@@ -685,7 +707,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     if (kalan > 0) {
       // Sipariş açık kalır, kalan tutar modalı çıkar
       // toClose ve hareketId saklanır — iptal edilirse geri alınır
-      setOnOdemeKalan({ tutar: kalan, cariId, cariAdi, cariPay, toClose: [...toClose], closedIds, mutfakNotu, hareketId, totalPayIskontoSonrasi });
+      setOnOdemeKalan({ tutar: kalan, cariId, cariAdi, cariPay, toClose: [...toCloseKayit], closedIds, mutfakNotu, hareketId, totalPayIskontoSonrasi });
       showToast(`${cariAdi}'ya ${TL(cariPay)} yazıldı — ${TL(kalan)} kaldı`);
     } else {
       // Kalan yok — normal kapat
@@ -695,7 +717,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
         { id: satisId, ts: Date.now(), table: selectedTable, amount: totalPayIskontoSonrasi, method: 'CARİ', itemsCount: toClose.length, date: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) },
         ...prev,
       ]);
-      logSoldItems(toClose, selectedTable, satisId);
+      logSoldItems(toCloseKayit, selectedTable, satisId);
       const remaining = currentOrder.filter((i) => !closedIds.has(i.id) && !i.note);
       setDraftItems(remaining);
       if (remaining.length === 0) {
@@ -704,7 +726,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
         setTableNoteDraft('');
         if (selectedTable.startsWith('Paket ')) data.removePackageRecord(selectedTable);
       }
-      showToast('Cariye gönderildi');
+      showToast(onl.adet > 0 ? `${cariAdi} carisine ${TL(cariPay)} yazıldı` : 'Cariye gönderildi');
     }
   }
 
@@ -854,6 +876,15 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   useEffect(() => {
     setPayMode(false);
   }, [selectedTable]);
+
+  // Ödenecek kalemlerdeki online sipariş özeti (müşteri tutarı + platformun yatıracağı tutar)
+  const onlineOdeme = useMemo(() => {
+    const payable = currentOrder.filter((i) => !i.note);
+    const secili = payable.filter((i) => i.selected);
+    return onlineOzet(secili.length > 0 ? secili : payable);
+  }, [currentOrder]);
+  const fisSiparisNo = siparisNoBul(currentOrder);
+  const fisOnline = currentOrder.some((i) => i.online);
 
   const printRef = useRef(null);
   const orderListRef = useRef(null);
@@ -1113,6 +1144,12 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 </button>
               );
             })}
+            <button
+              className={`ds-cat-card os-kategori ${onlineAktif ? 'active' : ''}`}
+              onClick={() => { setActiveCategory(ONLINE_KATEGORI); setSearchQuery(''); }}
+            >
+              {ONLINE_ETIKET}
+            </button>
           </div>
 
           {/* FAVORİLER */}
@@ -1135,14 +1172,17 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
           {/* ÜRÜN GRID */}
           <div className="ds-products-wrap">
-            <div className={`ds-products ${activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery ? 'split-active' : ''}`} ref={productsScrollRef}>
-              {Object.keys(groupedProducts).length === 0 && (
+            <div className={`ds-products ${(activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery) || onlineAktif ? 'split-active' : ''}`} ref={productsScrollRef}>
+              {onlineAktif && (
+                <OnlineSatis data={data} draftItems={currentOrder} onEkle={onlineEkle} onSiparisNo={onlineSiparisNo} bildir={showToast} />
+              )}
+              {!onlineAktif && Object.keys(groupedProducts).length === 0 && (
                 <div className="ds-empty">Aradığınız kriterde ürün bulunamadı.</div>
               )}
 
               {/* SOĞUK SANDVİÇ: Büyük/Küçük alt kategorileri (ve "Menü Sandviç Büyük/Küçük" gibi
                   isminde büyük/küçük geçen her alt kategori) sol/sağ iki ayrı panelde gösterilir. */}
-              {activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery ? (
+              {onlineAktif ? null : activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery ? (
                 <div className="ds-split-cols">
                   {['büyük', 'küçük'].map((yon) => (
                     <div className={`ds-split-col ${yon}`} key={yon} ref={yon === 'büyük' ? bigColScrollRef : smallColScrollRef}>
@@ -1255,7 +1295,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 ))
               )}
             </div>
-            {!(activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery) && (
+            {!(activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery) && !onlineAktif && (
               <div className="ds-products-scrollbtns">
                 <button onClick={() => scrollByPage(productsScrollRef, -1)}><ChevronUp size={26} /></button>
                 <button onClick={() => scrollByPage(productsScrollRef, 1)}><ChevronDown size={26} /></button>
@@ -1291,18 +1331,26 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               const isDup = isConsecutiveDuplicate(currentOrder, index);
               const styleClass = item.selected ? 'selected' : isDup ? 'duplicate' : '';
               return (
-                <div key={item.id} className={`ds-order-line ${styleClass}`}>
+                <div key={item.id} className={`ds-order-line ${styleClass} ${item.online?.ustId ? 'os-bagli' : ''}`}>
                   <button className="ds-remove-btn" onClick={() => removeItem(item.id)}><X size={16} /></button>
-                  <div className="ds-order-line-mid" onClick={() => toggleSelectItem(item.id)}>
+                  <div className={`ds-order-line-mid ${item.online && (item.online.tur === 'menu' || item.online.tur === 'bufe') ? 'os-satir' : ''}`} onClick={() => toggleSelectItem(item.id)}>
                     <span className="ds-order-line-name">
                       {item.bicakGerekli && <span className="ds-bicak-mark" title="Bıçak gerekli">🔪</span>}
                       {item.ekmekGerekli && <span className="ds-ekmek-mark" title="Ekmek gerekli">🥖</span>}
                       {getDisplayName(item)}
                     </span>
+                    {item.online && (item.online.tur === 'menu' || item.online.tur === 'bufe') && (
+                      <>
+                        <span className="os-satir-alt">
+                          {item.online.ekmek} · Alt. ekmek {item.online.altEkmek ? '✓' : '✗'}{item.online.secim ? ` · ${item.online.secim}` : ''}
+                        </span>
+                        {item.online.not && <span className="os-satir-alt not">Not: {item.online.not}</span>}
+                      </>
+                    )}
                     {item.selected && <span className="ds-tag selected"><Check size={10} /> SEÇİLİ</span>}                    {!item.selected && isDup && <span className="ds-tag duplicate"><AlertTriangle size={10} /> İKAZ</span>}
                   </div>
                     <span className="ds-order-line-price" onClick={() => openPriceModal(item)}>
-                    {Math.round(item.fiyat || 0).toLocaleString('tr-TR')} ₺
+                    {(item.online ? kurus(item.fiyat) : Math.round(item.fiyat || 0)).toLocaleString('tr-TR')} ₺
                   </span>
                 </div>
               );
@@ -1682,6 +1730,11 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 <span>Ödenecek Tutar</span>
                 <strong>{TL(selectedItems.length > 0 ? selectedTotal : finalTotal)}</strong>
               </div>
+              {onlineOdeme.adet > 0 && (
+                <div className="os-odeme-bilgi">
+                  Online sipariş: <b>Cari</b> ile kapatınca cariye ve Günsonu'na platformun yatıracağı tutar yazılır: <b>{TL(onlineOdeme.net)}</b> (müşteri tutarı {TL(onlineOdeme.musteri)}).
+                </div>
+              )}
 
               <button className="ds-change-calc-toggle" onClick={() => setShowChangeCalc((v) => !v)}>
                 <Calculator size={15} /> Para Üstü Hesapla {showChangeCalc ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -1758,6 +1811,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               {!cariWaPhoneEntry ? (
                 <>
                   <div className="ds-cari-confirm-name">{cariConfirm.cari.ad.toLocaleUpperCase('tr-TR')}</div>
+                  {onlineOdeme.adet > 0 && (
+                    <div className="os-odeme-bilgi dar">Cariye yazılacak (platformun yatıracağı): <b>{TL(onlineOdeme.net)}</b> · müşteri tutarı {TL(onlineOdeme.musteri)}</div>
+                  )}
                   {personelSecimAdi && (
                     <div className="ds-cari-confirm-personel">👤 {personelSecimAdi}</div>
                   )}
@@ -1812,6 +1868,9 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 {!cariWaPhoneEntry ? (
                   <>
                     <div className="ds-cari-confirm-name">{cariConfirm.cari.ad.toLocaleUpperCase('tr-TR')}</div>
+                    {onlineOdeme.adet > 0 && (
+                      <div className="os-odeme-bilgi dar">Cariye yazılacak (platformun yatıracağı): <b>{TL(onlineOdeme.net)}</b> · müşteri tutarı {TL(onlineOdeme.musteri)}</div>
+                    )}
                     {cariConfirm.cari.tip === 'bireysel' && (
                       <div className="ds-odeme-tarih-blok"><OdemeTarihiSecici value={cariOdemeSecim} onChange={setCariOdemeSecim} /></div>
                     )}
@@ -2019,12 +2078,13 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
       {/* YAZDIRMA ŞABLONU */}
       <div id="print-receipt" ref={printRef}>
-        <h2>{selectedTable}</h2>
-        {tableNoteDraft && <div className="print-note">{tableNoteDraft}</div>}
+        <h2>{selectedTable}{fisSiparisNo ? ` · ${fisSiparisNo}` : ''}</h2>
+        {tableNoteDraft && tableNoteDraft.trim() !== fisSiparisNo && <div className="print-note">{tableNoteDraft}</div>}
         <div className="print-meta">
           <span>{new Date().toLocaleDateString('tr-TR')}</span>
           <span>{new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
+        {fisOnline ? <OnlineFis items={currentOrder} /> : (
         <div className="print-items">
           {currentOrder.map((item) => (
             <div key={item.id} className={`print-row${item.note ? ' note-row' : ''}`}>
@@ -2037,6 +2097,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
             </div>
           ))}
         </div>
+        )}
         <div className="print-total-box">
           {discountAmount > 0 && (
             <div className="print-row">
