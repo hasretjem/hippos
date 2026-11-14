@@ -140,11 +140,11 @@ function BoyPaneli({ baslik, boy, setBoy, veri, hesap, onFiyatSec, kopyala, kate
             kucuk={h.carpanli.manuel ? `elle girildi · önerilen ${h.onerilen ? TL(h.onerilen) : '—'}` : `dükkân ${TL(h.dukkan)} × ${String(h.carpan).replace('.', ',')}`}
           />
           <Sonuc etiket={`%${String(Math.round(Number(p.indirim) * 1000) / 10).replace('.', ',')} indirimli müşteri fiyatı`} deger={TL(h.carpanli.indirimli)} />
-          <Sonuc etiket="Bize kalan net" deger={TL(h.carpanli.net)} kucuk="KDV ve komisyon sonrası" />
-          <Sonuc etiket="Platformda net kâr" deger={TL(h.carpanli.netKar)} ton={h.carpanli.netKar >= 0 ? 'iyi' : 'kotu'} />
+          <Sonuc etiket="Bize kalan net" deger={TL(h.carpanli.net)} kucuk="Yemeksepeti'nin yatıracağı tutar" />
+          <Sonuc etiket="Platformda net kâr (KDV dahil)" deger={TL(h.carpanli.netKar)} ton={h.carpanli.netKar >= 0 ? 'iyi' : 'kotu'} />
           <Sonuc etiket="Kâr oranı (maliyete göre)" deger={yuzde(h.carpanli.karOrani)} kucuk="net kâr ÷ maliyet" />
-          <Sonuc etiket="Marj (satış fiyatına göre)" deger={yuzde(h.carpanli.marj)} kucuk="net kâr ÷ müşterinin ödediği (KDV hariç)" />
-          <Sonuc etiket="Dükkânda net kâr" deger={TL(h.dukkanKar)} kucuk={`oran ${yuzde(h.dukkanKarOrani)} · marj ${yuzde(h.dukkanMarj)}`} />
+          <Sonuc etiket="Marj (yatan tutara göre)" deger={yuzde(h.carpanli.marj)} kucuk="net kâr ÷ yatan tutar (KDV dahil)" />
+          <Sonuc etiket="Dükkânda net kâr (KDV dahil)" deger={TL(h.dukkanKar)} kucuk={`oran ${yuzde(h.dukkanKarOrani)} · marj ${yuzde(h.dukkanMarj)}`} />
         </div>
       ) : (
         <p className="ol-bos">Platform fiyatını görmek için dükkân satış fiyatını seç.</p>

@@ -5,8 +5,8 @@ import { sayi } from '../Muhasebe2/m2Ortak';
 
 const YUZDE_ALANLARI = [
   ['indirim', 'Yemeksepeti indirimi', 'Hızlı Büyüme Paketi: %20. İndirimi değiştirirsen çarpanı da güncelle.'],
-  ['kom_iletim', 'Sipariş iletim komisyonu', 'Yemeksepeti ekranında %12'],
-  ['kom_dagitim', 'Dağıtım hizmeti komisyonu', 'Yemeksepeti kuryesiyle teslimatta %20'],
+  ['kom_iletim', 'Komisyon', 'Yemeksepeti ekranında %20'],
+  ['kom_dagitim', 'Vale dağıtım', 'Yemeksepeti kuryesiyle teslimatta %12'],
   ['kom_kdv', 'Komisyon üzerindeki KDV', 'Komisyon KDV hariç ise %20. Faturadaki KDV indirilebiliyorsa 0 yazılabilir; muhasebecinle doğrula.'],
   ['satis_kdv', 'Satış KDV oranı', 'Varsayım %10; muhasebecinle doğrula.'],
 ];
@@ -80,7 +80,7 @@ export default function ParametreSekmesi({ veri, onYenile, bildir }) {
           )}
         </div>
       </div>
-      <p className="m2-hint">Platform fiyatı = dükkân fiyatı × çarpan (yukarı yuvarlanır). Bize kalan net = indirimli fiyat ÷ (1 + satış KDV) × (1 − toplam komisyon).</p>
+      <p className="m2-hint">Platform fiyatı = dükkân fiyatı × çarpan (yukarı yuvarlanır). Yemeksepeti'nin yatıracağı tutar = menü fiyatı × (1 − indirim) × (1 − toplam komisyon). Kâr KDV dahil gösterilir (yatan tutar − maliyet).</p>
       <div className="m2-modal-actions">
         <button className="m2-btn" disabled={bekliyor} onClick={kaydet}>{bekliyor ? '…' : 'Kaydet'}</button>
       </div>

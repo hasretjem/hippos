@@ -22,9 +22,10 @@ export function onerilenCarpan(p) {
   return d > 0 ? 1 / d : null;
 }
 
-// Müşterinin ödediği (indirimli, KDV dahil) tutardan bize kalan net tutara katsayı
+// Menü fiyatından Yemeksepeti'nin hesabımıza yatıracağı tutara katsayı (KDV dahil, Yemeksepeti ekranıyla birebir):
+// yatan = fiyat × (1 − indirim) × (1 − (iletim + dağıtım) × (1 + komisyon KDV'si)). Komisyon, KDV dahil indirimli fiyat üzerinden kesilir.
 function netKatsayi(p) {
-  return ((1 - Number(p.indirim)) / (1 + Number(p.satis_kdv))) * (1 - komisyonToplam(p));
+  return (1 - Number(p.indirim)) * (1 - komisyonToplam(p));
 }
 
 // boy: { kalemler:[{malzeme_id, adet}], dukkan_urunler:[ürün id'leri, tekrar edebilir], dukkan_fiyat (elle), platform_fiyat (elle), carpan, hedef_kar } (sayılar metin de olabilir)
@@ -54,7 +55,6 @@ export function boyHesap(boy, malzMap, p, ambalaj, urunMap) {
   const amb = Number(ambalaj) || 0;
   const toplamMaliyet = malzemeMaliyet + amb;
   const kat = netKatsayi(p);
-  const kdv = Number(p.satis_kdv);
   const ind = Number(p.indirim);
 
   // Dükkân tarafı
@@ -62,25 +62,24 @@ export function boyHesap(boy, malzMap, p, ambalaj, urunMap) {
   let dukkanKarOrani = null;
   let dukkanMarj = null;
   if (dukkan) {
-    const kdvHaric = dukkan / (1 + kdv);
-    dukkanKar = kdvHaric - malzemeMaliyet;
+    // KDV dahil kâr: kasaya giren tutar − malzeme maliyeti
+    dukkanKar = dukkan - malzemeMaliyet;
     dukkanKarOrani = malzemeMaliyet > 0 ? dukkanKar / malzemeMaliyet : null;
-    dukkanMarj = kdvHaric > 0 ? dukkanKar / kdvHaric : null;
+    dukkanMarj = dukkan > 0 ? dukkanKar / dukkan : null;
   }
 
   // Platform tarafı (dükkân fiyatı × çarpan)
   const platformFiyat = (fiyat) => {
     const indirimli = fiyat * (1 - ind);
-    const net = fiyat * kat;
+    const net = fiyat * kat; // Yemeksepeti'nin yatıracağı tutar
     const netKar = net - toplamMaliyet;
-    const musteriKdvHaric = indirimli / (1 + kdv);
     return {
       fiyat,
       indirimli,
       net,
       netKar,
       karOrani: toplamMaliyet > 0 ? netKar / toplamMaliyet : null,
-      marj: musteriKdvHaric > 0 ? netKar / musteriKdvHaric : null,
+      marj: net > 0 ? netKar / net : null,
     };
   };
   // Önerilen platform fiyatı = dükkân × çarpan (yukarı yuvarlı); elle girilen platform fiyatı varsa o kullanılır (sabit kalır).

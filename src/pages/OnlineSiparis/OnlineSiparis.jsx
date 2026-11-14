@@ -38,6 +38,8 @@ function BoyOzet({ baslik, h, kategoriMap, urunler, indirim }) {
           <dl>
             <dt>Maliyet</dt>
             <dd>{TL(h.toplamMaliyet)}{h.kontrolVar ? ' *' : ''}</dd>
+            <dt>Yemeksepeti'nin yatıracağı</dt>
+            <dd>{c ? TL(c.net) : '—'}</dd>
             <dt>Platformda net kâr</dt>
             <dd className={c ? (c.netKar >= 0 ? 'iyi' : 'kotu') : ''}>{c ? TL(c.netKar) : '—'}</dd>
             <dt>Dükkânda net kâr</dt>
