@@ -17,7 +17,7 @@ function toTitleCase(str) {
 const svgCache = new Map();
 const pendingFetches = new Map();
 
-function useSvgIcon(fileName) {
+export function useSvgIcon(fileName) {
   const [svg, setSvg] = useState(() => (fileName ? svgCache.get(fileName) || null : null));
   const [deneme, setDeneme] = useState(0);
 

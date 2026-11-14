@@ -1342,7 +1342,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                     {item.online && (item.online.tur === 'menu' || item.online.tur === 'bufe') && (
                       <>
                         <span className="os-satir-alt">
-                          {item.online.ekmek} · Alt. ekmek {item.online.altEkmek ? '✓' : '✗'}{item.online.secim ? ` · ${item.online.secim}` : ''}
+                          {item.online.ekmek} · Alt. ekmek {item.online.altEkmek ? '✓ Kabul ediyor' : '✗ Kabul etmiyor'}{item.online.secim ? ` · ${item.online.secim}` : ''}
                         </span>
                         {item.online.not && <span className="os-satir-alt not">Not: {item.online.not}</span>}
                       </>

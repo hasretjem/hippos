@@ -135,3 +135,6 @@
   .os-govde.ds-split-cols:has(.os-kapali) { grid-template-columns: 1fr; }
   .ds-split-col.os-kapali { display: none; }
 }
+
+/* Ekstralar: Soğuk Sandviç'te olup Ekstralar'da karşılığı olmayan yerler */
+.os-bos-yer { border: 2px dashed rgba(246, 247, 235, 0.14); border-radius: var(--r-card); min-height: 100%; }

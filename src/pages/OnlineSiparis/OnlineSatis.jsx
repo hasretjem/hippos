@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, ClipboardPaste, Trash2, X } from 'lucide-react';
 import './OnlineSatis.css';
 import { olYukle } from './olVeri';
-import { renkBul, yaziRengi } from './olRenk';
+import { urunBul, yaziRengi } from './olRenk';
+import { useSvgIcon } from '../../components/ProductButton';
+import { resolveButtonStyle } from '../../constants/themeDefaults';
 import { BUFE_AD, EKMEKLER, boyAd, bufeKalemi, ekstraKalemi, icecekKalemi, menuKalemi, menuListesi, menuSorulari, siparisNoBul } from './olSatis';
 
 const TL0 = (n) => `${new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }).format(Number(n) || 0)} ₺`;
@@ -17,11 +19,18 @@ const BOYLAR = ['buyuk', 'normal'];
 let onbellek = null;
 let onbellekZaman = 0;
 
-function Dugme({ ad, fiyat, renk, yazi, rozet, onClick, sinif = '' }) {
+// Menü düğmeleri için uyumlu zemin renkleri (her sandviç sabit bir renk alır).
+const MENU_RENKLERI = ['#f4a259', '#5b8e7d', '#bc4b51', '#8cb369', '#4a6fa5', '#e9c46a', '#9b5de5', '#2a9d8f', '#d17a22', '#6d597a'];
+
+function Dugme({ ad, fiyat, renk, yazi, ikon, rozet, onClick, sinif = '' }) {
   const bg = renk || '#f6f7eb';
   const fg = yazi || yaziRengi(bg);
+  const svgDosya = typeof ikon === 'string' && ikon.endsWith('.svg') ? ikon : null;
+  const svg = useSvgIcon(svgDosya);
   return (
     <button className={`pb-card os-dugme ${sinif}`} style={{ background: bg }} onClick={onClick}>
+      {svgDosya && svg && <span className="pb-icon-watermark pb-icon-svg" style={{ color: fg }} aria-hidden="true" dangerouslySetInnerHTML={{ __html: svg }} />}
+      {!svgDosya && ikon && <span className="pb-icon-watermark" aria-hidden="true">{ikon}</span>}
       {rozet ? <span className="os-rozet">×{rozet}</span> : null}
       <div className="pb-text-box">
         <span className="pb-name" style={{ color: fg }}>{ad}</span>
@@ -80,7 +89,7 @@ function SiparisPopup({ popup, ilkSiparisNo, onKapat, onEkle }) {
 
         <div className="os-alan">
           <span className="os-etiket">Alternatif ekmek istiyor mu?</span>
-          <Ikili secenekler={[[true, 'Evet'], [false, 'Hayır']]} deger={altEkmek} onSec={setAltEkmek} />
+          <Ikili secenekler={[[true, 'Evet, kabul ediyor'], [false, 'Hayır, kabul etmiyor']]} deger={altEkmek} onSec={setAltEkmek} />
         </div>
 
         {sorular.map((q) => (
@@ -157,14 +166,45 @@ export default function OnlineSatis({ data, draftItems, onEkle, onSiparisNo, bil
   const kategoriMap = useMemo(() => new Map((data.categories || []).map((c) => [c.name, c])), [data.categories]);
   const menuler = useMemo(() => (veri && veri.p ? menuListesi(veri, urunMap) : { buyuk: [], normal: [] }), [veri, urunMap]);
   const ekstralar = useMemo(() => (veri?.ekstralar || []).filter((e) => e.aktif !== false), [veri]);
+  // Ekstra düğmeleri Soğuk Sandviç ile aynı yerde dursun: "Sıra" = düğmenin yeri; atlanan numaralar boş kalır.
+  const ekstraYerleri = useMemo(() => {
+    const yerler = [];
+    let sonraki = 1;
+    [...ekstralar].sort((x, y) => x.sira - y.sira || x.id - y.id).forEach((e) => {
+      const yer = Math.max(Math.round(Number(e.sira)) || sonraki, sonraki);
+      while (yerler.length < yer - 1) yerler.push(null);
+      yerler.push(e);
+      sonraki = yer + 1;
+    });
+    return yerler;
+  }, [ekstralar]);
   const icecekler = useMemo(() => (veri?.icecekler || []).filter((e) => e.aktif !== false), [veri]);
-  const renkler = useMemo(() => {
+  // Soğuk Sandviç panellerindeki düğmeler (yer sırasıyla): ekstranın yeri = o düğmenin yeri;
+  // renk ve simge de o düğmeden gelir.
+  const panelUrunleri = useMemo(() => {
+    const sirali = (yon) =>
+      sandvicUrunleri
+        .filter((u) => !u.isAzVariant && (u.altKategori || '').toLocaleLowerCase('tr-TR') === `${yon} sandviç`)
+        .sort((a, b) => (a.menuSirasi ?? 50) - (b.menuSirasi ?? 50) || a.ad.localeCompare(b.ad, 'tr'));
+    return { buyuk: sirali('büyük'), normal: sirali('küçük') };
+  }, [sandvicUrunleri]);
+  const stil = (u) => (u ? resolveButtonStyle(u, kategoriMap.get(u.kategori) || null) : null);
+  const ekstraStili = (e, yer, boy) => {
+    const u = panelUrunleri[boy][yer] || urunBul(e.ad, sandvicUrunleri);
+    const st = stil(u);
+    return st ? { renk: st.backgroundColor, yazi: st.textColor, ikon: st.icon } : { renk: '#e5e7eb', ikon: null };
+  };
+  const icecekStilleri = useMemo(() => {
     const m = new Map();
-    ekstralar.forEach((e) => m.set(`e${e.id}`, renkBul(e.ad, sandvicUrunleri, kategoriMap)));
-    icecekler.forEach((e) => m.set(`i${e.id}`, renkBul(e.ad.replace(/\s*\(.*?\)\s*/g, ''), urunler, kategoriMap)));
-    [...menuler.buyuk, ...menuler.normal].forEach((x) => m.set(`m${x.sandvic.id}`, renkBul(x.sandvic.ad, sandvicUrunleri, kategoriMap)));
+    const digerleri = urunler.filter((u) => u.kategori !== 'SOĞUK SANDVİÇ');
+    icecekler.forEach((e) => {
+      const u = urunBul(e.ad.replace(/\s*\(.*?\)\s*/g, ''), digerleri) || urunBul(e.ad.split(' ')[0], digerleri);
+      const st = u ? resolveButtonStyle(u, kategoriMap.get(u.kategori) || null) : null;
+      m.set(e.id, st ? { renk: st.backgroundColor, yazi: st.textColor, ikon: st.icon } : { renk: '#e5e7eb', ikon: 'cup_with_straw.svg' });
+    });
     return m;
-  }, [ekstralar, icecekler, menuler, sandvicUrunleri, urunler, kategoriMap]);
+  }, [icecekler, urunler, kategoriMap]);
+  const menuRengi = (id) => MENU_RENKLERI[(Number(id) - 1 + MENU_RENKLERI.length) % MENU_RENKLERI.length];
 
   const siparisNo = siparisNoBul(draftItems);
   // Ekstra rozetleri: şerit açıkken o sandviçe eklenenler, değilken tek başına eklenenler sayılır.
@@ -252,21 +292,24 @@ export default function OnlineSatis({ data, draftItems, onEkle, onSiparisNo, bil
                       fiyat={Number(boy === 'buyuk' ? veri.p.ekmek_fiyat_buyuk : veri.p.ekmek_fiyat_kucuk) * (1 - veri.p.indirim)}
                       renk="#e94f37"
                       yazi="#ffffff"
+                      ikon="bread.svg"
                       sinif="os-bufe"
                       onClick={() => setPopup({ boy })}
                     />
                     {menuler[boy].map((x) => (
-                      <Dugme key={x.sandvic.id} ad={x.sandvic.ad} fiyat={x.fiyat} renk={renkler.get(`m${x.sandvic.id}`)} onClick={() => setPopup({ boy, menu: x })} />
+                      <Dugme key={x.sandvic.id} ad={x.sandvic.ad} fiyat={x.fiyat} renk={menuRengi(x.sandvic.id)} ikon="sandwich.svg" onClick={() => setPopup({ boy, menu: x })} />
                     ))}
                   </div>
                 ) : (
                   <div className="ds-product-grid">
-                    {ekstralar.map((e) => (
+                    {ekstraYerleri.map((e, yer) => !e ? (
+                      <div key={`bos-${yer}`} className="os-bos-yer" aria-hidden="true" />
+                    ) : (
                       <Dugme
                         key={e.id}
                         ad={e.ad}
                         fiyat={Number(boy === 'buyuk' ? e.fiyat_buyuk : e.fiyat_kucuk) * (1 - veri.p.indirim)}
-                        renk={renkler.get(`e${e.id}`) || '#e5e7eb'}
+                        {...ekstraStili(e, yer, boy)}
                         rozet={ekstraSayisi.get(`${boy}|${e.ad}`)}
                         onClick={() => {
                           onEkle([ekstraKalemi({ ekstra: e, boy, p: veri.p, ustId: aktifBufe && aktifBufe.boy === boy ? aktifBufe.id : null, siparisNo })]);
@@ -291,7 +334,7 @@ export default function OnlineSatis({ data, draftItems, onEkle, onSiparisNo, bil
                 key={e.id}
                 ad={e.ad}
                 fiyat={Number(e.fiyat) * (1 - veri.p.indirim)}
-                renk={renkler.get(`i${e.id}`) || '#e5e7eb'}
+                {...icecekStilleri.get(e.id)}
                 rozet={icecekSayisi.get(e.ad)}
                 onClick={() => {
                   onEkle([icecekKalemi({ icecek: e, p: veri.p, siparisNo })]);

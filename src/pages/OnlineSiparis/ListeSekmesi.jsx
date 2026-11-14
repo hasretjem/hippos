@@ -19,7 +19,7 @@ const TANIM = {
       ['surulebilir', 'Sürülebilir', 'onay'],
       ['aktif', 'Açık', 'onay'],
     ],
-    ipucu: 'Fiyatlar platformdaki liste fiyatıdır (indirimden önce). Adet: açık büfede bir seçimde sandviçe konan porsiyon (mutfak fişinde bu adet yazar).',
+    ipucu: 'Sıra = satış ekranındaki düğmenin yeri (Soğuk Sandviç ile aynı); atlanan numaralar boş düğme olur. Fiyatlar platformdaki liste fiyatıdır (indirimden önce). Adet: açık büfede bir seçimde sandviçe konan porsiyon (mutfak fişinde bu adet yazar).',
   },
   icecek: {
     anahtar: 'icecekler',

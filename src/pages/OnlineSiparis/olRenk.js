@@ -36,8 +36,8 @@ export function yaziRengi(arkaPlan, yedek) {
 
 
 const gorunenAd = (u) => (u?.satisAdi && u.satisAdi.trim() !== '' ? u.satisAdi : u?.ad);
-// Ada en yakın satış ekranı ürününü bulur (örn. "Tavuk salam" → "Salam"); rengi oradan alınır. Bulunamazsa null.
-export function renkBul(ad, urunler, kategoriMap) {
+// Ada en yakın satış ekranı ürününü bulur (örn. "Tavuk salam" → "Salam"). Bulunamazsa null.
+export function urunBul(ad, urunler) {
   const a = trNorm(ad);
   let en = null;
   let enUzunluk = 0;
@@ -48,6 +48,11 @@ export function renkBul(ad, urunler, kategoriMap) {
       enUzunluk = p.length;
     }
   });
+  return en;
+}
+// Rengi en yakın satış ekranı ürününden alır.
+export function renkBul(ad, urunler, kategoriMap) {
+  const en = urunBul(ad, urunler);
   if (!en) return null;
   return resolveButtonStyle(en, kategoriMap.get(en.kategori) || null).backgroundColor;
 }

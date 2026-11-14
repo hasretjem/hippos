@@ -15,7 +15,7 @@ export default function OnlineFis({ items }) {
             <span>{TLf(b.fiyat)}</span>
           </div>
           <div className="ofis-alt">
-            ALTERNATİF EKMEK: <b className="ofis-isaret">{b.altEkmek ? '✓' : '✗'}</b>
+            ALTERNATİF EKMEK: <b className="ofis-isaret">{b.altEkmek ? '✓' : '✗'}</b> {b.altEkmek ? 'Kabul ediyor' : 'Kabul etmiyor'}
           </div>
           {b.not && (
             <div className="ofis-not">
