@@ -5,7 +5,7 @@ import { olYukle } from './olVeri';
 import { urunBul, yaziRengi } from './olRenk';
 import { useSvgIcon } from '../../components/ProductButton';
 import { resolveButtonStyle } from '../../constants/themeDefaults';
-import { BUFE_AD, EKMEKLER, boyAd, bufeKalemi, ekstraKalemi, icecekKalemi, menuKalemi, menuListesi, menuSorulari, siparisNoBul } from './olSatis';
+import { BUFE_AD, EKMEKLER, boyAd, bufeKalemi, ekstraKalemi, icecekKalemi, menuKalemi, menuListesi, menuSorulari, siparisNoBul, yatan } from './olSatis';
 
 const TL0 = (n) => `${new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }).format(Number(n) || 0)} ₺`;
 const SEKMELER = [
@@ -292,7 +292,7 @@ export default function OnlineSatis({ data, draftItems, onEkle, onSiparisNo, bil
                   <div className="ds-product-grid os-menu-grid">
                     <Dugme
                       ad={BUFE_AD}
-                      fiyat={Number(boy === 'buyuk' ? veri.p.ekmek_fiyat_buyuk : veri.p.ekmek_fiyat_kucuk) * (1 - veri.p.indirim)}
+                      fiyat={yatan(boy === 'buyuk' ? veri.p.ekmek_fiyat_buyuk : veri.p.ekmek_fiyat_kucuk, veri.p)}
                       renk="#e94f37"
                       yazi="#ffffff"
                       ikon="bread.svg"
@@ -311,7 +311,7 @@ export default function OnlineSatis({ data, draftItems, onEkle, onSiparisNo, bil
                       <Dugme
                         key={e.id}
                         ad={e.ad}
-                        fiyat={Number(boy === 'buyuk' ? e.fiyat_buyuk : e.fiyat_kucuk) * (1 - veri.p.indirim)}
+                        fiyat={yatan(boy === 'buyuk' ? e.fiyat_buyuk : e.fiyat_kucuk, veri.p)}
                         {...ekstraStili(e, yer, boy)}
                         rozet={ekstraSayisi.get(`${boy}|${e.ad}`)}
                         onClick={() => {
@@ -336,7 +336,7 @@ export default function OnlineSatis({ data, draftItems, onEkle, onSiparisNo, bil
               <Dugme
                 key={e.id}
                 ad={e.ad}
-                fiyat={Number(e.fiyat) * (1 - veri.p.indirim)}
+                fiyat={yatan(e.fiyat, veri.p)}
                 {...icecekStilleri.get(e.id)}
                 rozet={icecekSayisi.get(e.ad)}
                 onClick={() => {

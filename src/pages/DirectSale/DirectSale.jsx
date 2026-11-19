@@ -16,7 +16,7 @@ import { bugunAnahtar, trTarih, odemeSecimiGecerli } from '../../utils/odemeTari
 import '../../components/bosvar/bosvar.css';
 import OnlineSatis from '../OnlineSiparis/OnlineSatis';
 import OnlineFis from '../OnlineSiparis/OnlineFis';
-import { ONLINE_KATEGORI, ONLINE_ETIKET, kurus, netDagit, notaSiparisNoEkle, onlineOzet, siparisNoBul } from '../OnlineSiparis/olSatis';
+import { ONLINE_KATEGORI, ONLINE_ETIKET, kurus, netDagit, notaSiparisNoEkle, onlineFiyatla, onlineOzet, siparisNoBul } from '../OnlineSiparis/olSatis';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
   const {
@@ -308,13 +308,13 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
 
   function removeItem(id) {
     // "Kendi Sandviçini Oluştur" kalemi silinince ona bağlı ekstralar da silinir.
-    setDraftItems((prev) => prev.filter((i) => i.id !== id && i.online?.ustId !== id));
+    setDraftItems((prev) => onlineFiyatla(prev.filter((i) => i.id !== id && i.online?.ustId !== id)));
   }
 
   // ---- Online sipariş (Yemeksepeti vb.) ----
   const onlineAktif = activeCategory === ONLINE_KATEGORI && !searchQuery;
   const onlineEkle = useCallback((kalemler) => {
-    setDraftItems((prev) => [...prev, ...kalemler]);
+    setDraftItems((prev) => onlineFiyatla([...prev, ...kalemler]));
   }, []);
   // Pencereye girilen sipariş no masa notuna da yazılır (Masalar ekranında siparişi numarasından izlemek için).
   const onlineSiparisNo = useCallback((no) => {
@@ -693,7 +693,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     const sipNo = siparisNoBul(toClose);
     const mutfakNotu = [
       ...currentOrder.filter((i) => i.note).map((i) => i.ad),
-      ...(onl.adet > 0 ? [`Online sipariş${sipNo ? ` no: ${sipNo}` : ''} · müşteri tutarı ${TL(onl.musteri)}`] : []),
+      ...(onl.adet > 0 ? [`Online sipariş${sipNo ? ` no: ${sipNo}` : ''}`] : []),
     ].join(' · ');
     const cariAdi = cariObj?.ad || 'Cari';
 
@@ -1745,7 +1745,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
               </div>
               {onlineOdeme.adet > 0 && (
                 <div className="os-odeme-bilgi">
-                  Online sipariş: <b>Cari</b> ile kapatınca cariye ve Günsonu'na platformun yatıracağı tutar yazılır: <b>{TL(onlineOdeme.net)}</b> (müşteri tutarı {TL(onlineOdeme.musteri)}).
+                  Online sipariş: <b>Cari</b> ile kapat; cariye ve Günsonu'na hesabına yatacak <b>{TL(onlineOdeme.net)}</b> yazılır.
                 </div>
               )}
 
@@ -1864,7 +1864,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 <>
                   <div className="ds-cari-confirm-name">{cariConfirm.cari.ad.toLocaleUpperCase('tr-TR')}</div>
                   {onlineOdeme.adet > 0 && (
-                    <div className="os-odeme-bilgi dar">Cariye yazılacak (platformun yatıracağı): <b>{TL(onlineOdeme.net)}</b> · müşteri tutarı {TL(onlineOdeme.musteri)}</div>
+                    <div className="os-odeme-bilgi dar">Cariye yazılacak (hesabına yatacak): <b>{TL(onlineOdeme.net)}</b></div>
                   )}
                   {personelSecimAdi && (
                     <div className="ds-cari-confirm-personel">👤 {personelSecimAdi}</div>
@@ -1921,7 +1921,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                   <>
                     <div className="ds-cari-confirm-name">{cariConfirm.cari.ad.toLocaleUpperCase('tr-TR')}</div>
                     {onlineOdeme.adet > 0 && (
-                      <div className="os-odeme-bilgi dar">Cariye yazılacak (platformun yatıracağı): <b>{TL(onlineOdeme.net)}</b> · müşteri tutarı {TL(onlineOdeme.musteri)}</div>
+                      <div className="os-odeme-bilgi dar">Cariye yazılacak (hesabına yatacak): <b>{TL(onlineOdeme.net)}</b></div>
                     )}
                     {cariConfirm.cari.tip === 'bireysel' && (
                       <div className="ds-odeme-tarih-blok"><OdemeTarihiSecici value={cariOdemeSecim} onChange={setCariOdemeSecim} /></div>

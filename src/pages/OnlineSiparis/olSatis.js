@@ -16,6 +16,8 @@ export const BUFE_AD = 'Kendi Sandviçini Oluştur';
 
 const yeniId = () => Date.now() + Math.random();
 const indirimli = (liste, p) => kurus(Number(liste) * (1 - Number(p.indirim)));
+// Satış ekranında her yerde HESABA YATACAK tutar görünür; müşterinin ödediği (indirimli) tutar yalnızca online.musteri'de saklanır.
+export const yatan = (liste, p) => yatanTutar(indirimli(liste, p), p);
 
 // Satışa hazır menüler: platform fiyatı ve malzemesi olan sandviç boyları.
 export function menuListesi(veri, urunMap) {
@@ -25,7 +27,8 @@ export function menuListesi(veri, urunMap) {
     ['buyuk', 'normal'].forEach((boy) => {
       const h = boyHesap(s[boy], malzMap, veri.p, 0, urunMap);
       if (h.satirlar.length === 0 || !h.carpanli) return;
-      liste[boy].push({ sandvic: s, boy, h, liste: h.carpanli.fiyat, fiyat: kurus(h.carpanli.indirimli) });
+      const musteri = kurus(h.carpanli.indirimli);
+      liste[boy].push({ sandvic: s, boy, h, liste: h.carpanli.fiyat, musteri, fiyat: yatanTutar(musteri, veri.p) });
     });
   });
   return liste;
@@ -62,6 +65,7 @@ export function menuKalemi({ menu, p, ekmek, altEkmek, secimler, not, siparisNo 
     id: yeniId(),
     ad: `${menu.sandvic.ad} (${boyAd(menu.boy)})`,
     fiyat: menu.fiyat,
+    musteri: menu.musteri,
     kategori: ONLINE_KATEGORI,
     altKategori: 'Menüler',
     selected: false,
@@ -85,7 +89,8 @@ export function bufeKalemi({ boy, p, ekmek, altEkmek, not, siparisNo }) {
   return {
     id: yeniId(),
     ad: `${BUFE_AD} (${boyAd(boy)})`,
-    fiyat: indirimli(liste, p),
+    fiyat: yatan(liste, p),
+    musteri: indirimli(liste, p),
     kategori: ONLINE_KATEGORI,
     altKategori: 'Menüler',
     selected: false,
@@ -100,7 +105,8 @@ export function ekstraKalemi({ ekstra, boy, p, ustId, siparisNo }) {
   return {
     id: yeniId(),
     ad: `${ekstra.ad} (${boyAd(boy)} ekstra)`,
-    fiyat: indirimli(liste, p),
+    fiyat: yatan(liste, p),
+    musteri: indirimli(liste, p),
     kategori: ONLINE_KATEGORI,
     altKategori: 'Ekstralar',
     selected: false,
@@ -122,7 +128,8 @@ export function icecekKalemi({ icecek, p, siparisNo }) {
   return {
     id: yeniId(),
     ad: icecek.ad,
-    fiyat: indirimli(icecek.fiyat, p),
+    fiyat: yatan(icecek.fiyat, p),
+    musteri: indirimli(icecek.fiyat, p),
     kategori: ONLINE_KATEGORI,
     altKategori: 'İçecekler',
     selected: false,
@@ -217,9 +224,11 @@ export function fisYapisi(items) {
 
 // Platformun hesabımıza yatıracağı tutar: sipariş toplamı üzerinden, Yemeksepeti'nin yuvarlamasıyla.
 const kalemOrani = (online) => online[0]?.online?.oran || oranlar(null);
+// Kalemin müşteri tutarı (eski kayıtlarda musteri yoksa fiyat müşteri tutarıdır).
+const musteriTutari = (i) => Number(i.musteri ?? i.fiyat) || 0;
 export function onlineOzet(items) {
   const online = (items || []).filter((i) => i.online && !i.note);
-  const musteri = kurus(online.reduce((t, i) => t + (Number(i.fiyat) || 0), 0));
+  const musteri = kurus(online.reduce((t, i) => t + musteriTutari(i), 0));
   const net = online.length ? yatanTutar(musteri, kalemOrani(online)) : 0;
   return { adet: online.length, musteri, net };
 }
@@ -227,15 +236,24 @@ export function onlineOzet(items) {
 // Yatacak tutarı kalemlere paylaştırır (cari hareketi / satış günlüğü için); toplamı onlineOzet().net ile birebir aynı.
 export function netDagit(items) {
   const online = (items || []).filter((i) => i.online && !i.note);
-  const { musteri, net } = onlineOzet(online);
+  const { net } = onlineOzet(online);
+  const oran = kalemOrani(online);
   const m = new Map();
   let kalan = net;
+  // Her kalem kendi yatacak tutarını alır; sipariş toplamıyla aradaki kuruş farkı son kaleme yazılır.
   online.forEach((i, k) => {
-    const pay = k === online.length - 1 ? kurus(kalan) : musteri > 0 ? kurus((Number(i.fiyat) || 0) * (net / musteri)) : 0;
+    const pay = k === online.length - 1 ? kurus(kalan) : yatanTutar(musteriTutari(i), oran);
     m.set(i.id, pay);
     kalan = kurus(kalan - pay);
   });
   return m;
+}
+
+// Sepetteki online kalemlerin fiyatını (yatacak tutar) sipariş toplamıyla kuruşu kuruşuna eşitler.
+export function onlineFiyatla(items) {
+  if (!(items || []).some((i) => i.online && !i.note)) return items;
+  const paylar = netDagit(items);
+  return items.map((i) => (paylar.has(i.id) && paylar.get(i.id) !== i.fiyat ? { ...i, fiyat: paylar.get(i.id) } : i));
 }
 
 export const adetYaz = (n) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }).format(Number(n) || 0);
