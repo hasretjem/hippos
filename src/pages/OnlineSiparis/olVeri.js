@@ -39,7 +39,22 @@ function sandvicNormalle(r) {
   return { ...r, sira: Number(r.sira), normal: boyNormalle(r.normal), buyuk: boyNormalle(r.buyuk) };
 }
 
+// Son başarılı yükleme bilgisayarda saklanır: Supabase yokken satış ekranındaki Online sipariş bu kopyadan çalışır.
+const OL_KOPYA = 'hippos_ol_kopya';
 export async function olYukle() {
+  try {
+    const v = await olYukleSunucu();
+    try { localStorage.setItem(OL_KOPYA, JSON.stringify(v)); } catch { /* yer yoksa kopyasız devam */ }
+    return v;
+  } catch (e) {
+    try {
+      const k = JSON.parse(localStorage.getItem(OL_KOPYA) || 'null');
+      if (k) return k;
+    } catch { /* bozuk kopya */ }
+    throw e;
+  }
+}
+async function olYukleSunucu() {
   const [m, p, s, e, i] = await Promise.all([
     supabase.from('ol_malzemeler').select('*').order('sira').order('id'),
     supabase.from('ol_parametreler').select('*').eq('id', 1).maybeSingle(),

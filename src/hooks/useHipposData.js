@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../services/supabase';
+import { anlikOku, anlikYaz } from '../services/yerelDepo';
+import { aktarimBitinceAbone, bekleyenSayisi, kuyrugaAlindi, kuyruguAktar } from '../services/baglanti';
 import { m2Cagri, musteriFaturaVeri } from '../services/muhasebe2Koprusu';
 
 
@@ -588,6 +590,8 @@ export default function useHipposData(scope = 'full') {
   // İlk Supabase yüklemesi bitince true olur — sayfalar, gerçek veri gelmeden eski/boş
   // durumu "kesin doğru" sanıp yerel taslak oluşturmasın diye bunu bekleyebilir.
   const [dataLoaded, setDataLoaded] = useState(false);
+  const dataLoadedRef = useRef(false);
+  dataLoadedRef.current = dataLoaded;
   // Paketçi mobil panelinden gelen bildirimler — bunlar SATIŞ VERİSİ DEĞİL, ayrı bir
   // "bildirim/onay" katmanı. Yönetici onaylamadan hiçbir satış/cari kaydını etkilemez.
   const [paketTeslimatlari, setPaketTeslimatlari] = useState([]);
@@ -779,8 +783,31 @@ export default function useHipposData(scope = 'full') {
   const lastAppliedUpdatedAtRef = useRef({});
   useEffect(() => {
     let cancelled = false;
+    let yukleniyor = false;
+    let tekrarGerek = false;
+    let denemeZamanlayici = null;
+    function yenidenDene(ms) {
+      if (denemeZamanlayici) clearTimeout(denemeZamanlayici);
+      denemeZamanlayici = setTimeout(() => { denemeZamanlayici = null; loadAll(); }, ms);
+    }
 
+    // ---- SUPABASE YOKKEN ÇALIŞMA ----
+    // Supabase'e ulaşılamazsa (bugünkü 555 kesintisi gibi) ekran BOŞALTILMAZ:
+    //  - uygulama zaten açıksa eldeki veri olduğu gibi kalır,
+    //  - açılışta Supabase yoksa bilgisayarda saklanan son kopyadan açılır.
+    // Kayıtlar bu arada services/baglanti.js kuyruğunda bekler; Supabase gelince önce onlar aktarılır,
+    // sonra taze veri çekilir (aksi halde sunucudaki eski veri, aktarılmamış yerel kayıtların üzerine yazardı).
     async function loadAll() {
+      if (yukleniyor) { tekrarGerek = true; return; }
+      yukleniyor = true;
+      try {
+        await loadAllIc();
+      } finally {
+        yukleniyor = false;
+        if (tekrarGerek && !cancelled) { tekrarGerek = false; loadAll(); }
+      }
+    }
+    async function loadAllIc() {
       const [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn, ss, bv, bvk, cdz] = await Promise.all([
         supabase.from('table_state').select('*'),
         supabase.from('packages').select('*'),
@@ -806,6 +833,26 @@ export default function useHipposData(scope = 'full') {
         supabase.from('cari_duzeltmeler').select('*'),
       ]);
       if (cancelled) return;
+
+      const hataVar = [ts, pk, pm, sh, si, ah, cr, ch, co, cf, cg, pr, cat, sub, pt, ctb, mhn, ss, bv, bvk, cdz].some((r) => r && r.error);
+      if (!hataVar && (await bekleyenSayisi()) > 0) {
+        // Supabase geri geldi ama gönderilmeyi bekleyen yerel kayıtlar var: önce onları aktar.
+        // Boşalınca aktarimBitinceAbone tekrar loadAll çağırır (taze veri için).
+        const bosaldi = await kuyruguAktar();
+        if (cancelled) return;
+        if (!bosaldi) yenidenDene(10000);
+        return;
+      }
+      if (hataVar) {
+        console.warn('Supabase\'e ulaşılamadı — ekran korunuyor, yeniden denenecek.');
+        if (!dataLoadedRef.current) {
+          const kopya = await anlikOku(`durum-${scope}`);
+          if (cancelled) return;
+          if (kopya) yerelKopyayiUygula(kopya);
+        }
+        yenidenDene(10000);
+        return;
+      }
 
       setProducts((pr.data || []).map(rowToProduct));
       setCategories((cat.data || []).map(rowToCategory));
@@ -861,7 +908,43 @@ export default function useHipposData(scope = 'full') {
       setCariGecmis((cg.data || []).map(rowToGecmis));
       setDataLoaded(true);
     }
+
+    // Bilgisayarda saklanan son kopyayı ekrana koyar (açılışta Supabase yoksa).
+    function yerelKopyayiUygula(k) {
+      const isGunuBasi = (() => { const t = new Date(Date.now() - 2 * 3600 * 1000); t.setHours(2, 0, 0, 0); return t.getTime(); })();
+      setProducts(k.products || []);
+      setCategories(k.categories || []);
+      setSubcategories(k.subcategories || []);
+      if (k.storeSettings) setStoreSettings(k.storeSettings);
+      setOrders({ ...emptyTableMap(FIXED_TABLES, []), ...(k.orders || {}) });
+      setTableNotes({ ...emptyTableMap(FIXED_TABLES, ''), ...(k.tableNotes || {}) });
+      setTableDiscounts({ ...emptyTableMap(FIXED_TABLES, () => ({ type: null, value: 0 })), ...(k.tableDiscounts || {}) });
+      setTableOpenedAt(k.tableOpenedAt || {});
+      setTableBosvars(k.tableBosvars || {});
+      setPackages(k.packages || []);
+      if (k.packageMeta) setPackageMeta(k.packageMeta);
+      const satislar = (k.salesHistory || []).filter((s) => s.ts >= isGunuBasi);
+      satislar.forEach((s) => syncedSaleIdsRef.add(s.id)); // bunlar zaten Supabase'te — tekrar yazılmasın
+      setSalesHistory(satislar);
+      setSoldItems((k.soldItems || []).filter((s) => (s.ts || 0) >= isGunuBasi));
+      setActionHistory(k.actionHistory || []);
+      setCariler(k.cariler || []);
+      setCariHareketler(k.cariHareketler || []);
+      setCariOdemeler(k.cariOdemeler || []);
+      setCariFaturalar(k.cariFaturalar || []);
+      setCariGecmis(k.cariGecmis || []);
+      setCariDuzeltmeler(k.cariDuzeltmeler || []);
+      setPaketTeslimatlari(k.paketTeslimatlari || []);
+      setCariTeslimatBildirimleri(k.cariTeslimatBildirimleri || []);
+      setBosvarBildirimleri(k.bosvarBildirimleri || []);
+      setBosvarKayitlari(k.bosvarKayitlari || []);
+      setMutfakHazirNotlar(k.mutfakHazirNotlar || []);
+      setDataLoaded(true);
+    }
+
     loadAll();
+    // Kuyruktaki kayıtlar Supabase'e aktarılınca taze veriyi çek (kesinti sırasında diğer kasada olanlar da gelsin).
+    const aktarimAboneligi = aktarimBitinceAbone(() => loadAll());
 
     // ---- MOBİL UYANMA TELAFİSİ ----
     // Telefon kilitlenince / tarayıcı arka plana atılınca işletim sistemi WebSocket'i kesiyor.
@@ -1116,6 +1199,8 @@ export default function useHipposData(scope = 'full') {
 
     return () => {
       cancelled = true;
+      if (denemeZamanlayici) clearTimeout(denemeZamanlayici);
+      aktarimAboneligi();
       document.removeEventListener('visibilitychange', resyncIfStale);
       window.removeEventListener('focus', resyncIfStale);
       window.removeEventListener('online', resyncIfStale);
@@ -1221,6 +1306,23 @@ export default function useHipposData(scope = 'full') {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableNotes, tableDiscounts, allTables, dataLoaded]);
 
+  // ---- Son verinin bilgisayardaki kopyası (Supabase yokken açılış için) ----
+  // Supabase'ten yüklenen ve sonra ekranda değişen her şey 2 sn sonra bilgisayara da yazılır.
+  useEffect(() => {
+    if (!dataLoaded) return undefined;
+    const t = setTimeout(() => {
+      anlikYaz(`durum-${scope}`, {
+        kayitZamani: Date.now(),
+        products, categories, subcategories, storeSettings,
+        orders, tableNotes, tableDiscounts, tableOpenedAt, tableBosvars, packages, packageMeta,
+        salesHistory, soldItems, actionHistory,
+        cariler, cariHareketler, cariOdemeler, cariFaturalar, cariGecmis, cariDuzeltmeler,
+        paketTeslimatlari, cariTeslimatBildirimleri, bosvarBildirimleri, bosvarKayitlari, mutfakHazirNotlar,
+      });
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [dataLoaded, scope, products, categories, subcategories, storeSettings, orders, tableNotes, tableDiscounts, tableOpenedAt, tableBosvars, packages, packageMeta, salesHistory, soldItems, actionHistory, cariler, cariHareketler, cariOdemeler, cariFaturalar, cariGecmis, cariDuzeltmeler, paketTeslimatlari, cariTeslimatBildirimleri, bosvarBildirimleri, bosvarKayitlari, mutfakHazirNotlar]);
+
   // ---- Yeni satış kayıtlarını Supabase'e yaz (DirectSale doğrudan setSalesHistory çağırıyor) ----
   const syncedSaleIdsRef = useRef(new Set()).current;
   useEffect(() => {
@@ -1316,10 +1418,27 @@ export default function useHipposData(scope = 'full') {
       clearPaketTeslimatlariFor(table);
       clearBosvarBildirimleriFor(table);
     }
-    return supabase.from('table_state').upsert(patch, { onConflict: 'table_name' }).then(({ error }) => {
+    return supabase.from('table_state').upsert(patch, { onConflict: 'table_name' }).then((sonuc) => {
+      const { error } = sonuc;
       if (error) {
         console.error('masa durumu yazılamadı:', error.message);
         return { success: false, error: error.message };
+      }
+      // Normalde masa listesi Supabase'in canlı bildirimiyle güncellenir. Supabase yokken bu bildirim
+      // gelmez: masanın son hali burada yerelde işlenir ki Masalar ekranı doğru görünsün ve sonraki
+      // işlem eski (boş) listeye göre yazıp öncekinin üzerine yazmasın.
+      if (kuyrugaAlindi(sonuc)) {
+        setOrders((prev) => ({ ...prev, [table]: items }));
+        if ('note' in opts) setTableNotes((prev) => ({ ...prev, [table]: opts.note || '' }));
+        if ('discount' in opts) setTableDiscounts((prev) => ({ ...prev, [table]: { type: opts.discount?.type ?? null, value: opts.discount?.value || 0 } }));
+        if (patch.opened_at !== undefined) {
+          setTableOpenedAt((prev) => {
+            const n = { ...prev };
+            if (patch.opened_at) n[table] = new Date(patch.opened_at).getTime();
+            else delete n[table];
+            return n;
+          });
+        }
       }
       return { success: true };
     });

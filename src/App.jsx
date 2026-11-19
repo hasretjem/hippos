@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import BaglantiSeridi from './components/BaglantiSeridi';
 import DirectSale from './pages/DirectSale/DirectSale';
 import Tables from './pages/Tables/Tables';
 import Settings from './pages/Settings/Settings';
@@ -79,6 +80,7 @@ export default function App() {
 
   return (
     <>
+      <BaglantiSeridi />
       {mobil && <MobilTabloYoneticisi />}
       {activePage === 'pos' && (
         <DirectSale
