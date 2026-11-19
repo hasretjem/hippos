@@ -30,7 +30,24 @@ function netKatsayi(p) {
 
 // Müşterinin ödediği (indirimli) tutardan hesabımıza yatan orana: 1 − toplam komisyon
 export const netOran = (p) => 1 - komisyonToplam(p);
-export const kurus = (n) => Math.round((Number(n) || 0) * 100) / 100;
+export const kurus = (n) => Math.round((Number(n) || 0) * 100 + Number.EPSILON * 100) / 100;
+
+// Platformun hesabımıza yatıracağı tutar — Yemeksepeti ekranıyla kuruşu kuruşuna aynı yuvarlama:
+// komisyon ve vale dağıtım ayrı ayrı yuvarlanır, KDV her birinin KDV'si ayrı yuvarlanıp toplanır.
+// tutar: müşterinin ödediği indirimli tutar (sipariş toplamı). oran: { kom, vale, kdv } ya da parametreler (p).
+export function oranlar(p) {
+  if (p && p.kom !== undefined) return p;
+  return { kom: Number(p?.kom_iletim ?? 0.2), vale: Number(p?.kom_dagitim ?? 0.12), kdv: Number(p?.kom_kdv ?? 0.2) };
+}
+export function yatanDetay(tutar, p) {
+  const o = oranlar(p);
+  const taban = kurus(tutar);
+  const komisyon = kurus(taban * o.kom);
+  const vale = kurus(taban * o.vale);
+  const kdv = kurus(kurus(komisyon * o.kdv) + kurus(vale * o.kdv));
+  return { taban, komisyon, vale, kdv, yatan: kurus(taban - komisyon - vale - kdv) };
+}
+export const yatanTutar = (tutar, p) => yatanDetay(tutar, p).yatan;
 
 // boy: { kalemler:[{malzeme_id, adet}], dukkan_urunler:[ürün id'leri, tekrar edebilir], dukkan_fiyat (elle), platform_fiyat (elle), carpan, hedef_kar } (sayılar metin de olabilir)
 export function boyHesap(boy, malzMap, p, ambalaj, urunMap) {
@@ -77,8 +94,8 @@ export function boyHesap(boy, malzMap, p, ambalaj, urunMap) {
 
   // Platform tarafı (dükkân fiyatı × çarpan)
   const platformFiyat = (fiyat) => {
-    const indirimli = fiyat * (1 - ind);
-    const net = fiyat * kat; // Yemeksepeti'nin yatıracağı tutar
+    const indirimli = kurus(fiyat * (1 - ind));
+    const net = yatanTutar(indirimli, p); // Yemeksepeti'nin yatıracağı tutar (onların yuvarlamasıyla)
     const netKar = net - toplamMaliyet;
     return {
       fiyat,

@@ -6,8 +6,7 @@ import {
   Pencil, ArrowLeftRight, Link2, ClipboardPaste, X, StickyNote, PackageOpen,
   Percent, Banknote, CreditCard, UtensilsCrossed, BookOpen, Printer, Undo2,
   Trash2, Star, Check, AlertTriangle, Wallet, Send, ChevronDown, ChevronUp, ArrowLeft, Package, Calculator, Delete,
-  MessageCircle, Building2, User, MapPin, Phone, ZoomIn, ZoomOut, Maximize2, ReceiptText,
-} from 'lucide-react';
+  MessageCircle, Building2, User, MapPin, Phone, ZoomIn, ZoomOut, Maximize2, ReceiptText, ArrowRight } from 'lucide-react';
 import ProductButton, { getDisplayName } from '../../components/ProductButton';
 import { resolveButtonStyle } from '../../constants/themeDefaults';
 import BosVarPanel from '../../components/bosvar/BosVarPanel';
@@ -17,7 +16,7 @@ import { bugunAnahtar, trTarih, odemeSecimiGecerli } from '../../utils/odemeTari
 import '../../components/bosvar/bosvar.css';
 import OnlineSatis from '../OnlineSiparis/OnlineSatis';
 import OnlineFis from '../OnlineSiparis/OnlineFis';
-import { ONLINE_KATEGORI, ONLINE_ETIKET, kurus, netFiyat, notaSiparisNoEkle, onlineOzet, siparisNoBul } from '../OnlineSiparis/olSatis';
+import { ONLINE_KATEGORI, ONLINE_ETIKET, kurus, netDagit, notaSiparisNoEkle, onlineOzet, siparisNoBul } from '../OnlineSiparis/olSatis';
 
 export default function DirectSale({ data, selectedTable, setSelectedTable, onNavigate }) {
   const {
@@ -278,7 +277,20 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
   const isOrderEmpty = currentOrder.length === 0;
 
   // ---- Ürün işlemleri — TAMAMEN YEREL, Supabase'e masadan çıkınca yazılır ----
-  const addProductToOrder = useCallback((product) => {
+  // Online siparişi olan masaya Soğuk Sandviç'ten ürün eklenirken uyar (ekstralar platform fiyatıyla Online sipariş › Ekstralar'dan eklenmeli).
+  const selectedTableRef = useRef(selectedTable);
+  selectedTableRef.current = selectedTable;
+  const onlineSiparisVarRef = useRef(false);
+  onlineSiparisVarRef.current = draftItems.some((i) => i.online);
+  const onlineUyariGecildiRef = useRef(new Set());
+  const [onlineUyari, setOnlineUyari] = useState(null); // eklenmek istenen ürün
+  const [onlineSekmeIstegi, setOnlineSekmeIstegi] = useState(null); // { sekme, n }
+
+  const addProductToOrder = useCallback((product, uyariAtla = false) => {
+    if (!uyariAtla && product.kategori === 'SOĞUK SANDVİÇ' && onlineSiparisVarRef.current && !onlineUyariGecildiRef.current.has(selectedTableRef.current)) {
+      setOnlineUyari(product);
+      return;
+    }
     const newItem = {
       id: Date.now() + Math.random(),
       ad: product.ad,
@@ -670,7 +682,8 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
     // (komisyonlar düşülmüş). Aynı tutar satış kaydına, yani Günsonu'na da işlenir.
     const onl = onlineOzet(toClose);
     const totalPayHam = kurus(toClose.reduce((s, i) => s + (i.online ? 0 : i.fiyat), 0) + onl.net);
-    const toCloseKayit = toClose.map((i) => (i.online ? { ...i, fiyat: netFiyat(i) } : i));
+    const netPaylari = netDagit(toClose);
+    const toCloseKayit = toClose.map((i) => (i.online ? { ...i, fiyat: netPaylari.get(i.id) ?? i.fiyat } : i));
     const cariObj = (cariler || []).find((c) => c.id === cariId);
     const cariIskonto = cariObj?.iskonto || 0;
     const cariOnOdeme = cariObj?.onOdeme || 0;
@@ -1174,7 +1187,7 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
           <div className="ds-products-wrap">
             <div className={`ds-products ${(activeCategory === 'SOĞUK SANDVİÇ' && !searchQuery) || onlineAktif ? 'split-active' : ''}`} ref={productsScrollRef}>
               {onlineAktif && (
-                <OnlineSatis data={data} draftItems={currentOrder} onEkle={onlineEkle} onSiparisNo={onlineSiparisNo} bildir={showToast} />
+                <OnlineSatis data={data} draftItems={currentOrder} onEkle={onlineEkle} onSiparisNo={onlineSiparisNo} bildir={showToast} sekmeIstegi={onlineSekmeIstegi} />
               )}
               {!onlineAktif && Object.keys(groupedProducts).length === 0 && (
                 <div className="ds-empty">Aradığınız kriterde ürün bulunamadı.</div>
@@ -1795,6 +1808,45 @@ export default function DirectSale({ data, selectedTable, setSelectedTable, onNa
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* ONLINE SİPARİŞ UYARISI — online siparişli masaya Soğuk Sandviç'ten ürün eklenirken */}
+      {onlineUyari && (
+        <div className="ds-modal-overlay" onClick={() => setOnlineUyari(null)}>
+          <div className="ds-modal os-uyari-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ds-modal-head">
+              <h3>Bu masada online sipariş var</h3>
+              <button className="ds-modal-x" onClick={() => setOnlineUyari(null)}><X size={16} /></button>
+            </div>
+            <p className="os-uyari-metin">
+              <b>{getDisplayName(onlineUyari)}</b> dükkân fiyatıyla eklenecek. Platform siparişindeki ekstralar, platform fiyatıyla
+              <b> Online sipariş › Ekstralar</b> sayfasından eklenmeli; yoksa cariye yazılacak tutar platformun yatıracağıyla tutmaz.
+            </p>
+            <div className="os-uyari-dugmeler">
+              <button
+                className="os-uyari-evet"
+                onClick={() => {
+                  onlineUyariGecildiRef.current.add(selectedTable);
+                  addProductToOrder(onlineUyari, true);
+                  setOnlineUyari(null);
+                }}
+              >
+                Evet, buradan ekleyeceğim
+              </button>
+              <button
+                className="os-uyari-git"
+                onClick={() => {
+                  setOnlineUyari(null);
+                  setSearchQuery('');
+                  setActiveCategory(ONLINE_KATEGORI);
+                  setOnlineSekmeIstegi((x) => ({ sekme: 'ekstralar', n: (x?.n || 0) + 1 }));
+                }}
+              >
+                Hayır, platformlar için "Ekstralar" sayfasına git <ArrowRight size={18} />
+              </button>
+            </div>
           </div>
         </div>
       )}

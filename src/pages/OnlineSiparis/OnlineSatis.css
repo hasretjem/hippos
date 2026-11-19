@@ -138,3 +138,17 @@
 
 /* Ekstralar: Soğuk Sandviç'te olup Ekstralar'da karşılığı olmayan yerler */
 .os-bos-yer { border: 2px dashed rgba(246, 247, 235, 0.14); border-radius: var(--r-card); min-height: 100%; }
+
+/* Online siparişli masaya Soğuk Sandviç'ten ekleme uyarısı */
+.ds-modal.os-uyari-modal { width: min(560px, 94vw); max-width: 560px; background: #f6f7eb; }
+.os-uyari-modal .ds-modal-head h3 { color: #e94f37 !important; }
+.os-uyari-metin { margin: 6px 0 16px; font-size: 15px; line-height: 1.45; color: #393e41 !important; }
+.os-uyari-metin b { color: #393e41 !important; }
+.os-uyari-dugmeler { display: flex; flex-direction: column; gap: 10px; }
+.os-uyari-dugmeler button {
+  display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 54px; padding: 8px 14px;
+  border-radius: 14px; border: none; font-size: 16px; font-weight: 800; cursor: pointer; text-align: center;
+}
+.os-uyari-evet { background: #fff; border: 2px solid #c9cbbd !important; color: #393e41 !important; }
+.os-uyari-git { background: #e94f37; color: #fff !important; }
+.os-uyari-git svg { color: #fff !important; flex-shrink: 0; }

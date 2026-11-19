@@ -134,10 +134,13 @@ function SiparisPopup({ popup, ilkSiparisNo, onKapat, onEkle }) {
 }
 
 // Satış ekranı > "Online sipariş" kategorisi: Menüler / Ekstralar / İçecekler.
-export default function OnlineSatis({ data, draftItems, onEkle, onSiparisNo, bildir }) {
+export default function OnlineSatis({ data, draftItems, onEkle, onSiparisNo, bildir, sekmeIstegi }) {
   const [veri, setVeri] = useState(() => onbellek);
   const [hata, setHata] = useState('');
-  const [sekme, setSekme] = useState('menuler');
+  const [sekme, setSekme] = useState(sekmeIstegi?.sekme || 'menuler');
+  useEffect(() => {
+    if (sekmeIstegi?.sekme) setSekme(sekmeIstegi.sekme);
+  }, [sekmeIstegi]);
   const [popup, setPopup] = useState(null); // { boy, menu? }
   const [aktifBufe, setAktifBufe] = useState(null); // { id, boy, ekmek }
   const kolonRef = { buyuk: useRef(null), normal: useRef(null) };

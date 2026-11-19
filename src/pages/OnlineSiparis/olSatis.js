@@ -1,6 +1,6 @@
 // Satış ekranındaki "Online sipariş" kategorisi: sipariş kalemi üretimi, mutfak fişi yapısı ve yatacak tutar hesabı.
 // Saf fonksiyonlar — ekrandan bağımsız, test edilebilir.
-import { boyHesap, kurus, netOran } from './olHesap';
+import { boyHesap, kurus, netOran, oranlar, yatanTutar } from './olHesap';
 
 export { kurus };
 export const ONLINE_KATEGORI = 'ONLINE SİPARİŞ';
@@ -53,7 +53,7 @@ function fisKalemleri(h, secimler) {
 }
 
 function online(p, alanlar) {
-  return { netOran: netOran(p), ...alanlar };
+  return { netOran: netOran(p), oran: oranlar(p), ...alanlar };
 }
 
 export function menuKalemi({ menu, p, ekmek, altEkmek, secimler, not, siparisNo }) {
@@ -215,15 +215,27 @@ export function fisYapisi(items) {
   };
 }
 
-// Platformun hesabımıza yatıracağı tutar: online kalemlerin müşteri tutarı × (1 − toplam komisyon).
+// Platformun hesabımıza yatıracağı tutar: sipariş toplamı üzerinden, Yemeksepeti'nin yuvarlamasıyla.
+const kalemOrani = (online) => online[0]?.online?.oran || oranlar(null);
 export function onlineOzet(items) {
   const online = (items || []).filter((i) => i.online && !i.note);
   const musteri = kurus(online.reduce((t, i) => t + (Number(i.fiyat) || 0), 0));
-  const net = kurus(online.reduce((t, i) => t + (Number(i.fiyat) || 0) * (Number(i.online.netOran) || 1), 0));
+  const net = online.length ? yatanTutar(musteri, kalemOrani(online)) : 0;
   return { adet: online.length, musteri, net };
 }
 
-// Cari hareketine / satış günlüğüne yazılacak kalem fiyatı (online kalemde yatacak tutar payı).
-export const netFiyat = (i) => (i.online ? kurus((Number(i.fiyat) || 0) * (Number(i.online.netOran) || 1)) : i.fiyat);
+// Yatacak tutarı kalemlere paylaştırır (cari hareketi / satış günlüğü için); toplamı onlineOzet().net ile birebir aynı.
+export function netDagit(items) {
+  const online = (items || []).filter((i) => i.online && !i.note);
+  const { musteri, net } = onlineOzet(online);
+  const m = new Map();
+  let kalan = net;
+  online.forEach((i, k) => {
+    const pay = k === online.length - 1 ? kurus(kalan) : musteri > 0 ? kurus((Number(i.fiyat) || 0) * (net / musteri)) : 0;
+    m.set(i.id, pay);
+    kalan = kurus(kalan - pay);
+  });
+  return m;
+}
 
 export const adetYaz = (n) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }).format(Number(n) || 0);
