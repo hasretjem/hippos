@@ -37,7 +37,8 @@ function Nabiz({ n, kapsama }) {
         <div className="by-etiketler">
           <em title="Ürün maliyeti tanımlı satışların toplam satışa oranı. Kâr marjı DEĞİLDİR.">Maliyeti hesaplanabilen satış: %{Math.round(kapsama.hesapOran * 100)}</em>
           <em>Yemekler hariç: %{Math.round(kapsama.yemeksizOran * 100)}</em>
-          {kapsama.tahminiOran > 0.005 && <em className="by-tahmini">+%{Math.round(kapsama.tahminiOran * 100)} elle girilen tahmini marjla</em>}
+          {kapsama.tahminiOran > 0.005 && <em className="by-tahmini" title="Maliyeti olmayan ürünler, aynı kategorideki maliyeti bilinen ürünlerin ortalama marjıyla tahmin edildi.">+%{Math.round(kapsama.tahminiOran * 100)} kategori ortalamasıyla tahmin</em>}
+          {kapsama.elleOran > 0.005 && <em className="by-tahmini" title="Ayarlar'da elle girilen kategori marjı; ürün maliyetinden hesaplanmadı.">+%{Math.round(kapsama.elleOran * 100)} elle girilen tahmini marjla</em>}
         </div>
       </div>
       <div className={`by-rakam ${sinif}`}>

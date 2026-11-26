@@ -270,6 +270,7 @@ export function modelKur(d) {
   // Ayrıntı: ürün maliyetinden hesaplanan / kategori marjından tahmin edilen; yemekler hariç oran
   let hes = 0;
   let tah = 0;
+  let elle = 0;
   let hesY = 0;
   let topY = 0;
   for (const k of kategoriler.values()) {
@@ -277,13 +278,18 @@ export function modelKur(d) {
     let mc = 0;
     son4.forEach((h) => { const x = k.hafta.get(h); if (x) { c += x.c; mc += x.mc; } });
     hes += mc;
-    if (katMarj(k.k) !== null) tah += c - mc;
+    if (katMarj(k.k) !== null) {
+      const e = elleMarj[k.k];
+      if (e !== undefined && e !== null && e !== '' && Number.isFinite(Number(e))) elle += c - mc;
+      else tah += c - mc;
+    }
     if (k.k !== 'YEMEKLER') { hesY += mc; topY += c; }
   }
   const kapsama = {
     oran: k4Ciro ? k4Bilinen / k4Ciro : 1,
     hesapOran: k4Ciro ? hes / k4Ciro : 1,
-    tahminiOran: k4Ciro ? tah / k4Ciro : 0,
+    tahminiOran: k4Ciro ? tah / k4Ciro : 0, // kategori ortalamasından tahmin
+    elleOran: k4Ciro ? elle / k4Ciro : 0, // Ayarlar'da elle girilen marjdan tahmin
     yemeksizOran: topY ? hesY / topY : 1,
     yemeksizToplam: topY,
     yemeksizHesap: hesY,
