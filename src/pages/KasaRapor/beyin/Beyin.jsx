@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Check, ChevronRight, Calculator, FlaskConical, ShoppingBasket, Store, Tags, Scale, Link2, StickyNote, Settings2, Eye, EyeOff } from 'lucide-react';
 import { beyinYukle, isaretKoy } from './beyinVeri';
-import { modelKur, tespitUret, hedefHesap, ozetCumleler, urunHaritasi, tl, yuzde, isaretli } from './beyinHesap';
+import { modelKur, tespitUret, hedefHesap, ozetCumleler, urunHaritasi, grupPerformansi, gordumImza, tl, yuzde, isaretli } from './beyinHesap';
 import BeyinArac from './BeyinAraclar';
 import './Beyin.css';
 
@@ -33,7 +33,12 @@ function Nabiz({ n, kapsama }) {
       <div className="by-rakam">
         <span>TAHMİNİ KÂR</span>
         <b>{tl(n.kar)}</b>
-        <small>{kapsama.oran < 0.95 ? `cironun %${Math.round(kapsama.oran * 100)} kadarı için hesaplandı` : 'malzeme maliyeti düşülmüş'}</small>
+        <small>satış − malzeme maliyeti</small>
+        <div className="by-etiketler">
+          <em title="Ürün maliyeti tanımlı satışların toplam satışa oranı. Kâr marjı DEĞİLDİR.">Maliyeti hesaplanabilen satış: %{Math.round(kapsama.hesapOran * 100)}</em>
+          <em>Yemekler hariç: %{Math.round(kapsama.yemeksizOran * 100)}</em>
+          {kapsama.tahminiOran > 0.005 && <em className="by-tahmini">+%{Math.round(kapsama.tahminiOran * 100)} elle girilen tahmini marjla</em>}
+        </div>
       </div>
       <div className={`by-rakam ${sinif}`}>
         <span>GEÇEN HAFTANIN AYNI SAATİNE GÖRE</span>
@@ -78,7 +83,7 @@ function Hedef({ h, ay, kapsama, onAyar }) {
         </div>
       )}
       {kapsama.oran < 0.9 && (
-        <small className="by-uyari">⚠️ Cironun %{Math.round((1 - kapsama.oran) * 100)} kadarının maliyeti bilinmiyor; kâr olduğundan düşük görünüyor. <button type="button" onClick={onAyar}>Kategori marjı gir</button></small>
+        <small className="by-uyari">⚠️ Satışların %{Math.round((1 - kapsama.oran) * 100)} kadarının maliyeti bilinmiyor; kâr ve hedef olduğundan düşük görünüyor. <button type="button" onClick={onAyar}>Kategori marjı gir</button></small>
       )}
       {h.sabit > 0 && (
         <div className="by-cubuk-blok">
@@ -109,13 +114,11 @@ function Kart({ t, onGordum, onAc }) {
       </header>
       <h3>{t.baslik}</h3>
       <p>{t.cumle}</p>
-      <p className="by-aksiyon">👉 {t.aksiyon}</p>
+      <p className="by-aksiyon">👉 {t.aksiyon}{t.not && <small className="by-kartnot"> ({t.not})</small>}</p>
       <footer>
-        {(t.detay || t.urun) && (
-          <button type="button" className="by-btn" onClick={() => onAc(t)}>
-            Detay <ChevronRight size={16} />
-          </button>
-        )}
+        <button type="button" className="by-btn" onClick={() => onAc(t)}>
+          Detay <ChevronRight size={16} />
+        </button>
         {!t.gizli && (
           <button type="button" className="by-btn by-hafif" onClick={() => onGordum(t)}>
             <Check size={16} /> Gördüm
@@ -136,7 +139,8 @@ function Harita({ harita, onUrun }) {
   ];
   return (
     <section className="by-blok">
-      <h2>Ürün haritası <small>son 4 hafta · sınır: {Math.round(harita.adetSinir)} adet, {yuzde(harita.marjSinir)} marj</small></h2>
+      <h2>Menü haritası <small>sadece menü ürünleri · son 4 hafta · sınır: {Math.round(harita.adetSinir)} adet, {yuzde(harita.marjSinir)} marj</small></h2>
+      <p className="by-ipucu">Soğuk sandviçlerde her ekmek = 1 sandviç; fiyat ve maliyet aynı fişteki malzemelerden.{harita.disarida ? ` Maliyeti olmayan ${harita.disarida} menü ürünü (yemekler dahil) haritada yok.` : ''}</p>
       <div className="by-harita">
         {KUTU.map((k) => (
           <div key={k.id} className={`by-hkutu ${k.s}`}>
@@ -158,6 +162,35 @@ function Harita({ harita, onUrun }) {
         ))}
       </div>
     </section>
+  );
+}
+
+function GrupTablo({ baslik, alt, liste, onUrun, ilk = 8, acik = false }) {
+  const [hepsi, setHepsi] = useState(false);
+  const l = hepsi ? liste : liste.slice(0, ilk);
+  return (
+    <details className="by-blok by-grup" open={acik}>
+      <summary>
+        <h2>{baslik} <small>{alt}</small></h2>
+      </summary>
+      <table className="by-gtablo">
+        <thead><tr><th>Ürün</th><th className="sag">Adet</th><th className="sag">Ciro</th><th className="sag">Kâr</th><th className="sag">Marj</th></tr></thead>
+        <tbody>
+          {l.map((u) => (
+            <tr key={u.ad} onClick={() => onUrun(u.ad)}>
+              <td>{u.ad}{u.sanal ? <small> · ort. {tl(u.fiyat)}</small> : null}</td>
+              <td className="sag">{Math.round(u.adet)}</td>
+              <td className="sag">{tl(u.ciro)}</td>
+              <td className="sag">{u.kar === null ? '—' : tl(u.kar)}</td>
+              <td className="sag">{u.marj === null ? <span className="by-soluk">maliyet yok</span> : yuzde(u.marj)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {liste.length > ilk && (
+        <button type="button" className="by-btn by-hafif" onClick={() => setHepsi((x) => !x)}>{hepsi ? 'Daha az' : `Tümü (${liste.length})`}</button>
+      )}
+    </details>
   );
 }
 
@@ -187,6 +220,7 @@ export default function Beyin() {
   const hedef = useMemo(() => (model ? hedefHesap(model, d.ayarlar) : null), [model, d]);
   const ozet = useMemo(() => (model ? ozetCumleler(model, tespitler) : []), [model, tespitler]);
   const harita = useMemo(() => (model ? urunHaritasi(model) : null), [model]);
+  const gruplar = useMemo(() => (model ? { menu: grupPerformansi(model, 'menu').sort((a, b) => b.ciro - a.ciro), ek: grupPerformansi(model, 'ek'), malzeme: grupPerformansi(model, 'malzeme') } : null), [model]);
 
   const gorunen = tespitler.filter((t) => gizlileriGoster || !t.gizli);
   const liste = hepsi ? gorunen : gorunen.slice(0, 5);
@@ -194,17 +228,14 @@ export default function Beyin() {
 
   const gordum = async (t) => {
     try {
-      await isaretKoy(`gordum:${t.anahtar}`, t.imza);
-      setD((o) => ({ ...o, isaretler: [...o.isaretler.filter((i) => i.anahtar !== `gordum:${t.anahtar}`), { anahtar: `gordum:${t.anahtar}`, imza: t.imza }] }));
+      const imza = gordumImza(model, t);
+      await isaretKoy(`gordum:${t.anahtar}`, imza);
+      setD((o) => ({ ...o, isaretler: [...o.isaretler.filter((i) => i.anahtar !== `gordum:${t.anahtar}`), { anahtar: `gordum:${t.anahtar}`, imza }] }));
     } catch (e) {
       setHata(e.message);
     }
   };
-  const kartAc = (t) => {
-    if (t.detay?.tip === 'arac') setArac({ id: t.detay.arac });
-    else if (t.detay?.tip === 'supheli') setArac({ id: 'supheli' });
-    else if (t.urun) setArac({ id: 'urun', urun: t.urun });
-  };
+  const kartAc = (t) => setArac({ id: 'kart', kart: t });
 
   if (!d) {
     return <div className="by-govde">{hata ? <div className="by-hata">{hata}</div> : <div className="by-bos">İşletmenin beyni düşünüyor…</div>}</div>;
@@ -226,7 +257,7 @@ export default function Beyin() {
       <div className="by-iki">
         <section className="by-blok by-tespitler">
           <h2>
-            Bugünün tespitleri <small>{gorunen.length} tespit{gizliSayi ? ` · ${gizliSayi} görüldü` : ''}</small>
+            {hepsi ? 'Tüm uyarılar' : `Öncelikli ${Math.min(5, gorunen.length)} uyarı`} <small>toplam {gorunen.length}{gizliSayi ? ` · ${gizliSayi} görüldü` : ''}</small>
           </h2>
           {liste.length === 0 && <div className="by-bos">Şu an dikkat gerektiren bir şey yok 👌</div>}
           {liste.map((t) => (
@@ -255,8 +286,14 @@ export default function Beyin() {
               ))}
             </ol>
           </section>
+          <GrupTablo baslik="Menü performansı" alt="ana ürünler · ciroya göre · son 4 hafta" liste={gruplar.menu} onUrun={(u) => setArac({ id: 'urun', urun: u })} acik />
           <Harita harita={harita} onUrun={(u) => setArac({ id: 'urun', urun: u })} />
         </div>
+      </div>
+
+      <div className="by-iki by-iki-esit">
+        <GrupTablo baslik="Ek ürünler" alt="içecekler, tek tek kahvaltılıklar, online ekstralar · kâra göre" liste={gruplar.ek} onUrun={(u) => setArac({ id: 'urun', urun: u })} />
+        <GrupTablo baslik="Sandviç malzemeleri" alt="ekmek ve sandviç içi kalemler · kâra göre" liste={gruplar.malzeme} onUrun={(u) => setArac({ id: 'urun', urun: u })} />
       </div>
 
       <section className="by-blok">

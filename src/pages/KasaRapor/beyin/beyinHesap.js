@@ -18,6 +18,23 @@ export function birimMaliyet(m) {
   return f;
 }
 
+// ---------- ürün grupları ----------
+// menu: müşterinin "ana ürün" olarak aldığı şeyler; ek: yan/ek ürünler; malzeme: sandviçin içine giren kalemler (ekmek dahil).
+export const GRUPLAR = { menu: 'Menü ürünü', ek: 'Ek ürün', malzeme: 'Sandviç malzemesi' };
+export function varsayilanGrup(ad, k) {
+  const a = String(ad || '').toLocaleLowerCase('tr');
+  if (k === 'SOĞUK SANDVİÇ') return /sandvi|menü|tavuklu yarım/.test(a) ? 'menu' : 'malzeme';
+  if (k === 'KAHVALTI') return /tabağı/.test(a) ? 'menu' : 'ek';
+  if (k === 'İÇECEKLER') return 'ek';
+  if (k === 'ONLINE SİPARİŞ') return /ekstra\)|cl\)/.test(a) ? 'ek' : 'menu';
+  return 'menu';
+}
+export const ekmekMi = (ad, k) => k === 'SOĞUK SANDVİÇ' && /ekmek/i.test(String(ad || ''));
+export function sandvicAdi(ekmekAd) {
+  const a = String(ekmekAd).toLocaleUpperCase('tr');
+  return `${a.includes('BÜYÜK') ? 'Büyük' : 'Küçük'} sandviç (${a.includes('KEPEK') ? 'kepekli' : 'beyaz'} ekmek)`;
+}
+
 // ---------- tarih yardımcıları (yerel saat, 'YYYY-MM-DD' metinleri) ----------
 export function gunEkle(iso, n) {
   const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
@@ -119,7 +136,72 @@ export function modelKur(d) {
       seri: u.hafta,
     });
   }
-  const urunMap = new Map(urunListe.map((u) => [u.ad, u]));
+  const grupMap = new Map((d.eslestirme || []).filter((e) => e.grup).map((e) => [e.urun_ad, e.grup]));
+  const grupOf = (ad, k) => grupMap.get(ad) || varsayilanGrup(ad, k);
+  urunListe.forEach((u) => { u.grup = grupOf(u.ad, u.k); u.grupElle = grupMap.has(u.ad); });
+
+  // Sanal sandviçler: her ekmek satırı = 1 sandviç. Ortalama fiyat/maliyet, içinde TEK ekmek olan fişlerdeki soğuk sandviç kalemlerinden.
+  const sfis = (d.sandvic && d.sandvic.fis) || [];
+  const skalem = (d.sandvic && d.sandvic.kalem) || [];
+  const sandvicler = [];
+  for (const e of urunListe.filter((u) => ekmekMi(u.ad, u.k))) {
+    const hafta = new Map();
+    for (const f of sfis) if (f.e === e.ad) hafta.set(f.h, { n: Number(f.n), c: 0, mal: 0, mc: 0 });
+    const icerikMap = new Map();
+    for (const k of skalem) {
+      if (k.e !== e.ad) continue;
+      const x = hafta.get(k.h);
+      if (!x || grupOf(k.u, 'SOĞUK SANDVİÇ') === 'menu') continue;
+      x.c += Number(k.c);
+      const mal = maliyet.get(k.u);
+      if (mal) {
+        x.mal += Number(k.a) * mal.birim;
+        x.mc += Number(k.c);
+      }
+      if (son4.includes(k.h)) {
+        const ic = icerikMap.get(k.u) || { ad: k.u, a: 0, c: 0 };
+        ic.a += Number(k.a);
+        ic.c += Number(k.c);
+        icerikMap.set(k.u, ic);
+      }
+    }
+    const t4 = son4.reduce((t, h) => { const x = hafta.get(h); if (x) { t.n += x.n; t.c += x.c; t.mal += x.mal; t.mc += x.mc; } return t; }, { n: 0, c: 0, mal: 0, mc: 0 });
+    if (!t4.n) continue;
+    const fiyat = t4.c / t4.n;
+    const marj = t4.mc > 0 ? (t4.mc - t4.mal) / t4.mc : null;
+    const birim = marj === null ? null : fiyat * (1 - marj);
+    const seri = new Map();
+    for (const [h, x] of e.seri) {
+      const w = hafta.get(h);
+      const ort = w && w.n ? w.c / w.n : fiyat;
+      const m = w && w.mc > 0 ? (w.mc - w.mal) / w.mc : marj || 0;
+      seri.set(h, { a: x.a, c: x.a * ort, m: ort, kar: x.a * ort * m });
+    }
+    sandvicler.push({
+      ad: sandvicAdi(e.ad),
+      k: 'SOĞUK SANDVİÇ',
+      grup: 'menu',
+      sanal: true,
+      ekmek: e.ad,
+      adet: e.adet,
+      ciro: e.adet * fiyat,
+      haftalikAdet: e.haftalikAdet,
+      oncekiHaftalikAdet: e.oncekiHaftalikAdet,
+      fiyat,
+      birim,
+      kar: birim === null ? null : e.adet * (fiyat - birim),
+      marj,
+      birimKar: birim === null ? null : fiyat - birim,
+      eslesti: birim !== null,
+      kaynak: 'fiş ortalaması',
+      ornek: t4.n,
+      kapsam: t4.c ? t4.mc / t4.c : 0,
+      icerik: [...icerikMap.values()].map((x) => ({ ad: x.ad, adet: x.a / t4.n, tutar: x.c / t4.n })).sort((a, b) => b.tutar - a.tutar),
+      seri,
+    });
+  }
+  const menuListe = urunListe.filter((u) => u.grup === 'menu').concat(sandvicler);
+  const urunMap = new Map(urunListe.concat(sandvicler).map((u) => [u.ad, u]));
 
   // Kategori haftalık
   const kategoriler = new Map(); // k → { k, hafta: Map h → {c, mc, kar} }
@@ -185,7 +267,29 @@ export function modelKur(d) {
     }
   }
   bilinmeyenKat.sort((a, b) => b.ciro - a.ciro);
-  const kapsama = { oran: k4Ciro ? k4Bilinen / k4Ciro : 1, bilinmeyen: k4Ciro - k4Bilinen, kategoriler: bilinmeyenKat };
+  // Ayrıntı: ürün maliyetinden hesaplanan / kategori marjından tahmin edilen; yemekler hariç oran
+  let hes = 0;
+  let tah = 0;
+  let hesY = 0;
+  let topY = 0;
+  for (const k of kategoriler.values()) {
+    let c = 0;
+    let mc = 0;
+    son4.forEach((h) => { const x = k.hafta.get(h); if (x) { c += x.c; mc += x.mc; } });
+    hes += mc;
+    if (katMarj(k.k) !== null) tah += c - mc;
+    if (k.k !== 'YEMEKLER') { hesY += mc; topY += c; }
+  }
+  const kapsama = {
+    oran: k4Ciro ? k4Bilinen / k4Ciro : 1,
+    hesapOran: k4Ciro ? hes / k4Ciro : 1,
+    tahminiOran: k4Ciro ? tah / k4Ciro : 0,
+    yemeksizOran: topY ? hesY / topY : 1,
+    yemeksizToplam: topY,
+    yemeksizHesap: hesY,
+    bilinmeyen: k4Ciro - k4Bilinen,
+    kategoriler: bilinmeyenKat,
+  };
 
   // Haftalık toplamlar (tüm işletme)
   const haftaToplam = haftalar.concat(haftaSet.has(buHafta) ? [buHafta] : []).map((h) => {
@@ -229,7 +333,8 @@ export function modelKur(d) {
   }
   const ay = { ciro: ayCiro, kar: ayKar, ayGun, gecenGun, kalanGun: ayGun - gecenGun };
 
-  return { simdi, bugun, buHafta, haftalar, son4, onceki8, maliyet, malzMap, urunListe, urunMap, kategoriler, katMarj, genelMarj, tahminiKar, haftaToplam, nabiz, ay, gunlukKar, kapsama, veri: v, d };
+  const aralik = son4.length ? `${tarihKisa(son4[0])}–${tarihKisa(gunEkle(son4[son4.length - 1], 6))}` : '';
+  return { aralik, grupOf, sandvicler, menuListe, simdi, bugun, buHafta, haftalar, son4, onceki8, maliyet, malzMap, urunListe, urunMap, kategoriler, katMarj, genelMarj, tahminiKar, haftaToplam, nabiz, ay, gunlukKar, kapsama, veri: v, d };
 }
 
 // ---------- hedef / başabaş ----------
@@ -280,7 +385,11 @@ export function tespitUret(model, ek) {
       baslik: u.ad,
       cumle: `Maliyetinin altında satılıyor: satış ${tl2(u.fiyat)}, maliyet ${tl2(u.birim)}. Son 4 haftada ${u.adet} adet.`,
       etki: u.kar * AYLIK,
-      aksiyon: `Fiyatı en az ${tl(hedefFiyat)} yap (%40 marj) ya da porsiyonu küçült.`,
+      aksiyon: `Fiyatı en az ${tl(hedefFiyat)} yap ya da porsiyonu küçült.`,
+      not: '%40 brüt marj hedefine göre',
+      kural: 'Ortalama satış fiyatı, malzeme maliyetinin altında ve son 4 haftada en az 5 adet satılmış.',
+      kaynak: `Son 4 tam hafta (${model.aralik}) satışları; maliyet: ${kalemMetni(model, u.ad)} (Online Sipariş malzeme fiyatları).`,
+      hesap: `Önerilen fiyat = maliyet ÷ (1 − 0,40) = ${tl2(u.birim)} ÷ 0,60 = ${tl2(u.birim / 0.6)} → ${tl(hedefFiyat)} (yukarı yuvarlandı). Aylık etki = (${tl2(u.fiyat)} − ${tl2(u.birim)}) × ${u.adet} adet × 30/28 = ${tl(u.kar * AYLIK)}.`,
       urun: u.ad,
     });
   }
@@ -297,7 +406,11 @@ export function tespitUret(model, ek) {
       cumle: `Marjı sadece ${yuzde(u.marj)}: ${tl2(u.fiyat)} satış, ${tl2(u.birim)} maliyet. Ayda yaklaşık ${Math.round(u.adet * AYLIK)} adet satılıyor.`,
       etki: (hedefFiyat - u.fiyat) * u.adet * AYLIK,
       etkiFirsat: true,
-      aksiyon: `Fiyat ${tl(hedefFiyat)} olursa (marj %40) ayda yaklaşık ${tl((hedefFiyat - u.fiyat) * u.adet * AYLIK)} fazla kâr.`,
+      aksiyon: `Fiyat ${tl(hedefFiyat)} olursa ayda yaklaşık ${tl((hedefFiyat - u.fiyat) * u.adet * AYLIK)} fazla kâr.`,
+      not: '%40 brüt marj hedefine göre',
+      kural: 'Marj %25\'in altında ve son 4 haftada en az 800 ₺ ciro yapmış.',
+      kaynak: `Son 4 tam hafta (${model.aralik}) satışları; maliyet: ${kalemMetni(model, u.ad)}.`,
+      hesap: `Önerilen fiyat = ${tl2(u.birim)} ÷ 0,60 = ${tl2(u.birim / 0.6)} → ${tl(hedefFiyat)}. Fırsat = (${tl(hedefFiyat)} − ${tl2(u.fiyat)}) × ${u.adet} adet × 30/28 (satış adedi aynı kalırsa).`,
       urun: u.ad,
     });
   }
@@ -320,6 +433,9 @@ export function tespitUret(model, ek) {
       etkiMetni: `${tl(fazla)} fazla görünüyor`,
       etkiEksi: true,
       aksiyon: 'Bu satışlar hesaplara katılmıyor. Doğruysa "Doğru giriş" de; yanlışsa Veri sayfasından düzelt.',
+      kural: '"Normal fiyat" = o ürünün son 17 haftadaki satış fiyatlarının medyanı (ortanca değeri). Satış, medyanın 4 katından fazla VE medyandan en az 150 ₺ yüksekse şüpheli sayılır.',
+      kaynak: 'Son 90 günün satış kayıtları. Bu satırlar ciro, kâr ve tüm tespit hesaplarından çıkarılır; "Doğru giriş" denirse geri eklenir.',
+      hesap: `Fazla görünen = Σ (girilen fiyat − medyan) = ${tl(fazla)}.`,
       detay: { tip: 'supheli', liste: supheli },
     });
   }
@@ -345,6 +461,9 @@ export function tespitUret(model, ek) {
           cumle: `${tarihKisa(h)} haftasından beri ${tl2(eski)} yerine ${tl2(yeni)} satılıyor. Bilerek mi yapıldı?`,
           etki: (yeni - eski) * u.haftalikAdet * 4 * AYLIK,
           aksiyon: yeni < eski ? 'Bilerek değilse ürünün fiyatını Menü Düzenleme\'den düzelt.' : 'Bilgi: fiyat artışı satışları düşürdü mü, haftalık grafiğe bak.',
+          kural: 'Ürünün haftalık medyan satış fiyatı bir haftadan diğerine en az %15 ve 2 ₺ değişmiş; değişiklik sonraki haftalarda da sürüyor (son 6 hafta, haftada en az 3 adet).',
+          kaynak: `Haftalık satış fiyatları: ${tarihKisa(hs[i - 1])} haftası ${tl2(eski)}, ${tarihKisa(h)} haftası ${tl2(yeni)}.`,
+          hesap: `Aylık etki = (${tl2(yeni)} − ${tl2(eski)}) × haftada ${u.haftalikAdet.toLocaleString('tr-TR', { maximumFractionDigits: 1 })} adet × 4 × 30/28.`,
           urun: u.ad,
         });
         break;
@@ -382,6 +501,9 @@ export function tespitUret(model, ek) {
         etki: (s - o) * (30 / 7) * marj,
         etkiMetni: `kârda ayda ${isaretli((s - o) * (30 / 7) * marj)}`,
         aksiyon: ilgiliNot.length ? `Not: ${ilgiliNot.map((n) => n.metin).join(' · ')}` : deg < 0 ? 'Sebebini biliyorsan not düş (örn. tatil, inşaat).' : 'Neyin işe yaradığını not düş, tekrarlayalım.',
+        kural: 'Kategorinin son 4 haftadaki ortalama haftalık cirosu, önceki 8 haftaya göre en az %12 ve 500 ₺ değişmiş.',
+        kaynak: `Son 4 hafta: ${model.aralik}; önceki 8 hafta: ${tarihKisa(onceki8[0])}'den itibaren. Notlar tablosundaki açıklamalar karta eklenir.`,
+        hesap: `Kâr etkisi = haftalık ciro farkı (${isaretli(s - o)}) × 30/7 × kategori marjı (${yuzde(marj)}${model.katMarj(k.k) === null ? ', genel ortalama' : ''}).`,
         kategori: k.k,
       });
     }
@@ -400,6 +522,9 @@ export function tespitUret(model, ek) {
       cumle: `Haftada ${u.oncekiHaftalikAdet.toLocaleString('tr-TR', { maximumFractionDigits: 1 })} adetten ${u.haftalikAdet.toLocaleString('tr-TR', { maximumFractionDigits: 1 })} adede çıktı, marjı ${yuzde(u.marj)}.`,
       etki: (u.haftalikAdet - u.oncekiHaftalikAdet) * (u.birimKar || 0) * (30 / 7),
       aksiyon: 'Öne çıkar: vitrinde/menüde görünür yap, kasada öner.',
+      kural: 'Son 4 haftanın haftalık adedi, önceki 8 haftanın 1,5 katı ya da fazlası; marj en az %50; en az 8 adet.',
+      kaynak: `Son 4 hafta (${model.aralik}) ve önceki 8 hafta satışları.`,
+      hesap: `Ek aylık kâr ≈ haftalık adet artışı × birim kâr (${tl2(u.birimKar)}) × 30/7.`,
       urun: u.ad,
     });
   }
@@ -417,6 +542,9 @@ export function tespitUret(model, ek) {
       etki: 0,
       etkiMetni: `${tl(model.kapsama.bilinmeyen)} ciro`,
       aksiyon: 'Hızlı çözüm: Ayarlar\'da bu kategoriler için tahmini marj gir (ör. yemekler %55). Kesin çözüm: ürünleri eşleştir.',
+      kural: 'Kâr hesabına giren ciro (ürün maliyeti ya da kategori marjı bilinen) toplam cironun %90\'ından az.',
+      kaynak: `Son 4 hafta (${model.aralik}). Ürün maliyetinden hesaplanan: %${Math.round(model.kapsama.hesapOran * 100)}, yemekler hariç: %${Math.round(model.kapsama.yemeksizOran * 100)}.`,
+      hesap: 'Maliyeti bilinmeyen ciro = toplam ciro − maliyeti hesaplanabilen ciro − elle marj girilen kategorilerin cirosu.',
       detay: { tip: 'arac', arac: 'ayarlar' },
     });
   }
@@ -435,7 +563,10 @@ export function tespitUret(model, ek) {
       cumle: `Son 4 haftada ${tl(ciro)} ciro yaptılar ama kârları hesaplanamıyor. En büyükleri: ${eksik.slice(0, 4).map((u) => u.ad).join(', ')}.`,
       etki: 0,
       etkiMetni: `${tl(ciro)} ciro`,
-      aksiyon: 'Eşleştirme ekranından malzemelerini ya da elle maliyetini gir.',
+      aksiyon: 'Reçete sırasına göre malzemelerini ya da elle maliyetini gir.',
+      kural: 'Son 4 haftada en az 500 ₺ ciro yapmış ama maliyeti (malzeme eşleştirmesi) olmayan ürünler.',
+      kaynak: 'Ürün–malzeme eşleştirmesi ve son 4 haftanın satışları.',
+      hesap: 'Reçete sırası ekranı, her ürünü girdiğinde maliyeti hesaplanabilen satışın yüzde kaça çıkacağını gösterir.',
       detay: { tip: 'arac', arac: 'eslestirme' },
     });
   }
@@ -452,6 +583,8 @@ export function tespitUret(model, ek) {
       cumle: `Ayın %${Math.round(hd.beklenenOran * 100)} kadarı geçti, hedefe ulaşma oranı %${Math.round((hd.oran || 0) * 100)} (${tl(hd.kar)} / ${tl(hd.hedef)}).`,
       etki: hd.kar - hd.hedef * hd.beklenenOran,
       aksiyon: `Kalan ${hd.kalanIs} iş gününde günde ${tl(hd.gunlukGereken)} kâr gerekiyor.`,
+      kural: 'Ay başından bu yana tahmini brüt kâr, ayın geçen kısmına düşen hedefin %90\'ından az.',
+      hesap: `Beklenen = ${tl(hd.hedef)} × ${model.ay.gecenGun}/${model.ay.ayGun}. Günlük gereken = (hedef − kâr) ÷ kalan iş günü.`,
     });
   }
   if (hd.sabit && hd.basabasOran !== null && hd.basabasOran < 1 && model.ay.gecenGun >= 5) {
@@ -464,6 +597,8 @@ export function tespitUret(model, ek) {
       cumle: `Ay başından brüt kâr ${tl(hd.kar)}; aynı sürede sabit gider ${tl((hd.sabit * model.ay.gecenGun) / model.ay.ayGun)}.`,
       etki: hd.kar - (hd.sabit * model.ay.gecenGun) / model.ay.ayGun,
       aksiyon: `Başabaş için günde yaklaşık ${tl(hd.gunlukBasabas)} brüt kâr gerekiyor.`,
+      kural: 'Ay başından tahmini brüt kâr, aynı sürenin sabit gider payından az (ayın en az 5. günü).',
+      hesap: `Günlük başabaş = aylık sabit gider ÷ ayda çalışılan gün = ${tl(hd.sabit)} ÷ ${Number(ayarlar.calisma_gunu) || 26}.`,
     });
   }
 
@@ -496,6 +631,9 @@ export function tespitUret(model, ek) {
       etki: -fark,
       etkiMetni: `maliyette ayda ${isaretli(fark)}`,
       aksiyon: x.yeni > x.ilkEski ? 'Etkilenen ürünlerin fiyatlarını gözden geçir (Simülatör).' : 'Maliyet düştü, kâr arttı.',
+      kural: 'Online Sipariş malzeme listesinde son 30 günde fiyatı değişen malzeme.',
+      kaynak: `Fiyat geçmişi kaydı (${String(x.zaman).slice(0, 10)}).`,
+      hesap: 'Aylık maliyet farkı = fiyat farkı × porsiyon gramajı × son 4 haftanın aylık kullanımı.',
     });
   }
 
@@ -512,6 +650,9 @@ export function tespitUret(model, ek) {
         etki: -f.fireTutar,
         etkiMetni: `${tl(f.fireTutar)} kayıp`,
         aksiyon: 'Porsiyon fazla mı konuyor, bozulan mal mı var, ikramlar mı? Gramajı kontrol et.',
+        kural: 'Alınan miktarın %15\'ten fazlası satışlara göre kullanılmış görünmüyor ve fark 200 ₺\'yi aşıyor.',
+        kaynak: 'Alımlar ve fire ekranına girilen alımlar; satışlar × porsiyon gramajı.',
+        hesap: `Kayıp = (alınan − satışa göre kullanılan) × ortalama alım fiyatı = ${tl(f.fireTutar)}.`,
       });
     }
     if (f.ortFiyat && f.malzeme.fiyat && Math.abs(f.ortFiyat - f.malzeme.fiyat) / f.malzeme.fiyat > 0.1) {
@@ -561,15 +702,35 @@ export function tespitUret(model, ek) {
     });
   }
 
-  // Görüldü işaretlenenleri gizle (durum değişince imza değişir ve kart geri gelir)
-  const gordum = new Map((isaretler || []).filter((i) => i.anahtar.startsWith('gordum:')).map((i) => [i.anahtar.slice(7), i.imza]));
+  // "Gördüm": sadece o dönem (son 4 haftalık pencere) ve o durum için kapanır. Dönem değişirse, durum (imza) değişirse
+  // ya da etkisi %50'den fazla büyürse kart geri gelir.
+  const donem = model.son4[0] || '';
+  const gordum = new Map((isaretler || []).filter((i) => i.anahtar.startsWith('gordum:')).map((i) => [i.anahtar.slice(7), i.imza || '']));
   const sirali = t
-    .map((x) => ({ ...x, gizli: gordum.has(x.anahtar) && gordum.get(x.anahtar) === x.imza }))
+    .map((x) => {
+      const kayit = gordum.get(x.anahtar);
+      let gizli = false;
+      if (kayit) {
+        const [d0, e0, ...r] = kayit.split('#');
+        gizli = d0 === donem && r.join('#') === String(x.imza) && Math.abs(x.etki || 0) <= Number(e0 || 0) * 1.5 + 1;
+      }
+      return { ...x, gizli };
+    })
     .sort((a, b) => SEVIYE[a.seviye] - SEVIYE[b.seviye] || Math.abs(b.etki || 0) - Math.abs(a.etki || 0));
   return sirali;
 }
 
 // Malzeme başına aylık kullanım (birim: malzeme kaydındaki birim — dilim, adet, ölçek…)
+export function kalemMetni(model, ad) {
+  const mal = model.maliyet.get(ad);
+  if (!mal) return 'tanımsız';
+  const p = mal.kalemler.map((k) => { const m = model.malzMap.get(k.m); return `${k.a} × ${m?.ad} (${m?.birim_adi || 'birim'}) ${tl2(k.a * birimMaliyet(m))}`; });
+  if (mal.sabit) p.push(`elle ${tl2(mal.sabit)}`);
+  return p.join(' + ') + ` = ${tl2(mal.birim)}`;
+}
+
+export const gordumImza = (model, t) => `${model.son4[0] || ''}#${Math.round(Math.abs(t.etki || 0))}#${t.imza}`;
+
 export function malzemeKullanimi(model) {
   const k = new Map();
   for (const u of model.urunListe) {
@@ -591,15 +752,15 @@ export function ozetCumleler(model, tespitler) {
     c.push(`Geçen hafta (${tarihKisa(son.h)}–${tarihKisa(gunEkle(son.h, 6))}) ciro ${tl(son.c)}, tahmini brüt kâr ${tl(son.kar)}; bir önceki haftaya göre ${Math.abs(d) < 0.01 ? 'aynı' : d > 0 ? '%' + Math.round(d * 100) + ' fazla' : '%' + Math.round(-d * 100) + ' az'}.`);
   }
   if (son) {
-    const enKarli = model.urunListe
+    const enKarli = model.menuListe
       .filter((u) => u.eslesti)
-      .map((u) => { const x = u.seri.get(son.h); return x ? { ad: u.ad, kar: x.c - x.a * model.maliyet.get(u.ad).birim } : null; })
+      .map((u) => { const x = u.seri.get(son.h); if (!x) return null; return { ad: u.ad, kar: u.sanal ? x.kar : x.c - x.a * model.maliyet.get(u.ad).birim }; })
       .filter(Boolean)
       .sort((a, b) => b.kar - a.kar)[0];
     const trendler = tespitler.filter((x) => x.anahtar.startsWith('trend:'));
     const yukselen = trendler.find((x) => x.seviye === 'yesil');
     const dusen = trendler.find((x) => x.seviye === 'turuncu');
-    let s = enKarli ? `En çok kâr bırakan ürün ${enKarli.ad} (${tl(enKarli.kar)}).` : '';
+    let s = enKarli ? `En çok kâr bırakan menü ürünü ${enKarli.ad} (${tl(enKarli.kar)}).` : '';
     if (dusen) s += ` ${dusen.kategori} düşüşte.`;
     else if (yukselen) s += ` ${yukselen.kategori} yükselişte.`;
     if (s) c.push(s.trim());
@@ -612,7 +773,7 @@ export function ozetCumleler(model, tespitler) {
 
 // ---------- ürün haritası ----------
 export function urunHaritasi(model) {
-  const l = model.urunListe.filter((u) => u.eslesti && u.adet >= 4 && u.marj !== null);
+  const l = model.menuListe.filter((u) => u.eslesti && u.adet >= 4 && u.marj !== null);
   if (!l.length) return null;
   const med = (a) => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
   const adetSinir = med(l.map((u) => u.adet));
@@ -624,7 +785,27 @@ export function urunHaritasi(model) {
     kutu[cok && karli ? 'yildiz' : cok ? 'at' : karli ? 'bulmaca' : 'tas'].push(u);
   }
   Object.values(kutu).forEach((x) => x.sort((a, b) => b.kar - a.kar));
-  return { kutu, adetSinir, marjSinir };
+  const disarida = model.menuListe.filter((u) => !u.eslesti && u.adet > 0).length;
+  return { kutu, adetSinir, marjSinir, disarida };
+}
+
+// Grup performansı tablosu (son 4 hafta)
+export function grupPerformansi(model, grup) {
+  const l = grup === 'menu' ? model.menuListe : model.urunListe.filter((u) => u.grup === grup);
+  return l.filter((u) => u.adet > 0).sort((a, b) => (b.kar ?? -1e12) - (a.kar ?? -1e12) || b.ciro - a.ciro);
+}
+
+// Reçete sırası: maliyeti olmayan ürünler (yemekler hariç), ciroya göre; her birinden sonra kapsamın yüzde kaça çıkacağı.
+export function receteSirasi(model) {
+  const k = model.kapsama;
+  let hes = k.yemeksizHesap;
+  return model.urunListe
+    .filter((u) => !u.eslesti && u.k !== 'YEMEKLER' && u.ciro > 0)
+    .sort((a, b) => b.ciro - a.ciro)
+    .map((u) => {
+      hes += u.ciro;
+      return { ...u, sonrakiOran: k.yemeksizToplam ? hes / k.yemeksizToplam : 1 };
+    });
 }
 
 // ---------- kanal & ödeme ----------

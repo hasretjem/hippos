@@ -3,11 +3,11 @@ import { X, Trash2, Plus, Save } from 'lucide-react';
 import { isaretKoy, ayarKaydet, eslestirmeKaydet, eslestirmeSil, notEkle, notSil, deneyEkle, deneySil, alimEkle, alimSil } from './beyinVeri';
 import {
   tl, tl2, yuzde, isaretli, birimMaliyet, AYLIK, tarihKisa, GUNLER,
-  urunSimulasyon, malzemeSimulasyon, yeniUrunHesap, kanalHesap, odemeHesap, saatHaritasi, sepetHesap, fireHesap, deneySonuc, malzemeKullanimi, hedefHesap,
+  urunSimulasyon, malzemeSimulasyon, yeniUrunHesap, kanalHesap, odemeHesap, saatHaritasi, sepetHesap, fireHesap, deneySonuc, malzemeKullanimi, hedefHesap, receteSirasi, GRUPLAR, varsayilanGrup,
 } from './beyinHesap';
 
 const BASLIK = {
-  urun: 'Ürün detayı', supheli: 'Yanlış girilmiş olabilecek satışlar', simulator: 'Ya şöyle yapsaydık', deney: 'Deneyler', sepet: 'Birlikte satılanlar',
+  kart: 'Tespit detayı', urun: 'Ürün detayı', supheli: 'Yanlış girilmiş olabilecek satışlar', simulator: 'Ya şöyle yapsaydık', deney: 'Deneyler', sepet: 'Birlikte satılanlar',
   kanal: 'Kanal, ödeme ve saat', fiyat: 'Fiyat bekçisi', alim: 'Alımlar ve fire', eslestirme: 'Ürün – malzeme eşleştirmesi', notlar: 'Notlar', ayarlar: 'Hedef ve ayarlar',
 };
 
@@ -37,6 +37,38 @@ function UrunDetay({ model, urun, onAc }) {
   const u = model.urunMap.get(urun);
   if (!u) return <div className="by-bos">Bu ürün son 17 haftada satılmamış.</div>;
   const mal = model.maliyet.get(u.ad);
+  if (u.sanal) {
+    return (
+      <div className="by-arac-ic">
+        <div className="by-mini">
+          <div><span>Son 4 hafta</span><b>{u.adet} sandviç</b><small>{u.ekmek} satırı sayıldı</small></div>
+          <div><span>Ortalama fiyat</span><b>{tl2(u.fiyat)}</b><small>ekmek + malzemeler</small></div>
+          <div><span>Ortalama maliyet</span><b>{u.birim === null ? '—' : tl2(u.birim)}</b><small>malzemelerin %{Math.round(u.kapsam * 100)} kadarının maliyeti biliniyor</small></div>
+          <div><span>Marj</span><b>{yuzde(u.marj)}</b><small>{u.kar !== null ? `${tl(u.kar * AYLIK)}/ay kâr` : ''}</small></div>
+        </div>
+        <p className="by-aciklama">Hesap: içinde tek ekmek olan {u.ornek} fişteki soğuk sandviç kalemlerinden ortalama alınır (birden çok sandviçli fişlerde malzemeyi hangi sandviçe gittiği bilinemediği için kullanılmaz). Adet tüm ekmek satırlarından gelir.</p>
+        <h4>Haftalık sandviç adedi</h4>
+        <Cubuklar seri={u.seri} haftalar={model.haftalar} alan="a" bicim={(x) => `${x} adet`} />
+        <h4>Ortalama bir sandviçin içeriği</h4>
+        <table className="by-tablo">
+          <thead><tr><th>Kalem</th><th className="sag">Sandviç başına</th><th className="sag">Tutar</th><th className="sag">Maliyet</th></tr></thead>
+          <tbody>
+            {u.icerik.slice(0, 20).map((x) => {
+              const m = model.maliyet.get(x.ad);
+              return (
+                <tr key={x.ad}>
+                  <td>{x.ad}</td>
+                  <td className="sag">{x.adet.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}</td>
+                  <td className="sag">{tl2(x.tutar)}</td>
+                  <td className="sag">{m ? tl2(x.adet * m.birim) : <span className="by-kotu-y">tanımsız</span>}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
   return (
     <div className="by-arac-ic">
       <div className="by-mini">
@@ -79,6 +111,7 @@ function UrunDetay({ model, urun, onAc }) {
 
 // ---------------- Şüpheli satışlar ----------------
 function Supheli({ d, setD }) {
+  const menuFiyat = new Map((d.urunler || []).map((u) => [u.ad, Number(u.fiyat)]));
   const dogru = new Set(d.isaretler.filter((i) => i.anahtar.startsWith('dogru:')).map((i) => i.anahtar.slice(6)));
   const liste = (d.veri.supheli || []).filter((s) => !dogru.has(s.id));
   const isaretle = async (s) => {
@@ -87,10 +120,10 @@ function Supheli({ d, setD }) {
   };
   return (
     <div className="by-arac-ic">
-      <p className="by-aciklama">Bu satışların fiyatı ürünün normal fiyatının çok üstünde. Hesaplara katılmıyorlar. Gerçekten doğruysa "Doğru giriş" de, hesaplara eklensin (Yenile'ye bas). Yanlışsa Veri sayfasından düzelt — bu sayfa satışlara dokunmaz.</p>
+      <p className="by-aciklama"><b>Normal fiyat</b> = o ürünün son 17 haftadaki satış fiyatlarının medyanı (ortanca). Ölçüt: girilen fiyat medyanın 4 katından fazla ve medyandan en az 150 ₺ yüksek. Menüdeki güncel fiyat da karşılaştırma için yanında. Bu satışlar hesaplara katılmıyor. Gerçekten doğruysa "Doğru giriş" de, hesaplara eklensin (Yenile'ye bas). Yanlışsa Veri sayfasından düzelt — bu sayfa satışlara dokunmaz.</p>
       {liste.length === 0 && <div className="by-bos">Şüpheli satış yok.</div>}
       <table className="by-tablo">
-        <thead><tr><th>Zaman</th><th>Masa</th><th>Ürün</th><th className="sag">Girilen</th><th className="sag">Normali</th><th /></tr></thead>
+        <thead><tr><th>Zaman</th><th>Masa</th><th>Ürün</th><th className="sag">Girilen</th><th className="sag">Medyan</th><th className="sag">Menüde</th><th /></tr></thead>
         <tbody>
           {liste.map((s) => (
             <tr key={s.id}>
@@ -99,6 +132,7 @@ function Supheli({ d, setD }) {
               <td>{s.ad}</td>
               <td className="sag by-kotu-y">{tl2(s.fiyat)}</td>
               <td className="sag">{tl2(s.medyan)}</td>
+              <td className="sag">{menuFiyat.has(s.ad) ? tl2(menuFiyat.get(s.ad)) : '—'}</td>
               <td><button type="button" className="by-btn by-hafif" onClick={() => isaretle(s)}>Doğru giriş</button></td>
             </tr>
           ))}
@@ -462,18 +496,21 @@ function Alim({ d, model, onYenile }) {
 
 // ---------------- Eşleştirme ----------------
 function Eslestirme({ d, model, setD, baslangic }) {
-  const [filtre, setFiltre] = useState('eksik');
+  const [filtre, setFiltre] = useState(baslangic ? 'hepsi' : 'sira');
   const [ara, setAra] = useState('');
   const [secili, setSecili] = useState(baslangic || null);
   const eslMap = new Map(d.eslestirme.map((e) => [e.urun_ad, e]));
   const satilan = model.urunListe.slice().sort((a, b) => b.ciro - a.ciro);
-  const liste = satilan.filter((u) => (filtre === 'eksik' ? !u.eslesti : filtre === 'tanimli' ? u.eslesti : true)).filter((u) => !ara || u.ad.toLocaleLowerCase('tr').includes(ara.toLocaleLowerCase('tr')));
+  const sira = receteSirasi(model);
+  const kaynakListe = filtre === 'sira' ? sira : satilan.filter((u) => (filtre === 'eksik' ? !u.eslesti : filtre === 'tanimli' ? u.eslesti : true));
+  const liste = kaynakListe.filter((u) => !ara || u.ad.toLocaleLowerCase('tr').includes(ara.toLocaleLowerCase('tr')));
   return (
     <div className="by-arac-ic">
       <p className="by-aciklama">Her ürünün içinde hangi malzemeden kaç birim olduğu. Maliyetler buradan ve Online Sipariş malzeme listesindeki kg fiyatlarından hesaplanır. Malzemesi listede olmayan ürünlere (içecek, bal-kaymak…) elle maliyet yazabilirsin.</p>
       <div className="by-form">
         <label>Göster
           <select value={filtre} onChange={(e) => setFiltre(e.target.value)}>
+            <option value="sira">Reçete sırası (yemekler hariç)</option>
             <option value="eksik">Maliyeti olmayanlar</option>
             <option value="tanimli">Maliyeti olanlar</option>
             <option value="hepsi">Hepsi</option>
@@ -481,15 +518,19 @@ function Eslestirme({ d, model, setD, baslangic }) {
         </label>
         <label>Ara<input value={ara} onChange={(e) => setAra(e.target.value)} placeholder="Ürün adı…" /></label>
       </div>
+      {filtre === 'sira' && (
+        <p className="by-aciklama">Maliyeti hesaplanabilen satış (yemekler hariç) şu an <b>%{Math.round(model.kapsama.yemeksizOran * 100)}</b>. Listeyi yukarıdan aşağı doldurdukça son sütundaki orana çıkar. Yemekler şimdilik kapsam dışı.</p>
+      )}
       {secili && <EslestirmeDuzenle key={secili} urunAd={secili} kayit={eslMap.get(secili)} d={d} model={model} setD={setD} onKapat={() => setSecili(null)} />}
       <table className="by-tablo">
-        <thead><tr><th>Ürün</th><th className="sag">4 hafta ciro</th><th className="sag">Maliyet</th><th className="sag">Marj</th></tr></thead>
+        <thead><tr><th>Ürün</th><th>Grup</th><th className="sag">4 hafta ciro</th><th className="sag">{filtre === 'sira' ? 'Girilince kapsam' : 'Maliyet'}</th><th className="sag">Marj</th></tr></thead>
         <tbody>
           {liste.slice(0, 150).map((u) => (
             <tr key={u.ad} className="by-tikla" onClick={() => setSecili(u.ad)}>
               <td>{u.ad} <small>{u.k}</small></td>
+              <td>{GRUPLAR[u.grup]}{u.grupElle ? ' ✎' : ''}</td>
               <td className="sag">{tl(u.ciro)}</td>
-              <td className="sag">{u.eslesti ? tl2(u.birim) : <span className="by-kotu-y">tanımsız</span>}</td>
+              <td className="sag">{filtre === 'sira' ? `%${Math.round(u.sonrakiOran * 100)}` : u.eslesti ? tl2(u.birim) : <span className="by-kotu-y">tanımsız</span>}</td>
               <td className="sag">{yuzde(u.marj)}</td>
             </tr>
           ))}
@@ -503,10 +544,12 @@ function EslestirmeDuzenle({ urunAd, kayit, d, model, setD, onKapat }) {
   const [kalemler, setKalemler] = useState(() => (kayit?.kalemler || []).map((k) => ({ m: String(k.m), a: String(k.a) })));
   const [hazir, setHazir] = useState(kayit?.hazir || '');
   const [sabit, setSabit] = useState(kayit?.sabit_maliyet === null || kayit?.sabit_maliyet === undefined ? '' : String(kayit.sabit_maliyet));
+  const urun = model.urunMap.get(urunAd);
+  const [grup, setGrup] = useState(kayit?.grup || '');
   const [mesaj, setMesaj] = useState('');
   const toplam = hazir ? null : kalemler.reduce((t, k) => t + sayi(k.a) * birimMaliyet(model.malzMap.get(Number(k.m))), 0) + sayi(sabit);
   const kaydet = async () => {
-    const satir = { urun_ad: urunAd, kalemler: hazir ? [] : kalemler.filter((k) => sayi(k.a) > 0).map((k) => ({ m: Number(k.m), a: sayi(k.a) })), hazir: hazir || null, sabit_maliyet: sabit === '' ? null : sayi(sabit) };
+    const satir = { urun_ad: urunAd, kalemler: hazir ? [] : kalemler.filter((k) => sayi(k.a) > 0).map((k) => ({ m: Number(k.m), a: sayi(k.a) })), hazir: hazir || null, sabit_maliyet: sabit === '' ? null : sayi(sabit), grup: grup || null };
     try {
       await eslestirmeKaydet(satir);
       setD((o) => ({ ...o, eslestirme: [...o.eslestirme.filter((e) => e.urun_ad !== urunAd), satir] }));
@@ -523,6 +566,14 @@ function EslestirmeDuzenle({ urunAd, kayit, d, model, setD, onKapat }) {
   return (
     <div className="by-duzenle">
       <div className="by-duzenle-bas"><b>{urunAd}</b><button type="button" className="by-ikon" onClick={onKapat} aria-label="Kapat"><X size={18} /></button></div>
+      <label className="by-tek">Rapor grubu
+        <select value={grup} onChange={(e) => setGrup(e.target.value)}>
+          <option value="">Otomatik ({GRUPLAR[varsayilanGrup(urunAd, urun?.k)]})</option>
+          <option value="menu">{GRUPLAR.menu}</option>
+          <option value="ek">{GRUPLAR.ek}</option>
+          <option value="malzeme">{GRUPLAR.malzeme}</option>
+        </select>
+      </label>
       <label className="by-tek">Hazır sandviç reçetesi (Online Sipariş'ten)
         <select value={hazir} onChange={(e) => setHazir(e.target.value)}>
           <option value="">— Kullanma, malzemeleri aşağıda gir —</option>
@@ -634,9 +685,9 @@ function Ayarlar({ d, model, setD }) {
         <label>Yemek kartı komisyonu (%)<input inputMode="decimal" value={yemek} onChange={(e) => setYemek(e.target.value)} placeholder="ör. 8" /></label>
       </div>
       <h4>Kategori bazında tahmini marj</h4>
-      <p className="by-aciklama">Ürünleri tek tek eşleştirmediğin kategoriler (yemekler, içecekler…) için yaklaşık marjı yaz; kâr, hedef ve başabaş bu kategorileri de hesaba katsın. Boş bırakırsan maliyeti bilinen ürünlerden hesaplanır.</p>
+      <p className="by-aciklama"><b>Dikkat: buraya yazdığın oran ürün maliyetinden HESAPLANMAZ, senin tahminindir.</b> Ekranda "elle girilen tahmini marj" olarak ayrıca gösterilir. Ürünleri tek tek eşleştirmediğin kategoriler (yemekler, içecekler…) için yaklaşık marjı yaz; kâr, hedef ve başabaş bu kategorileri de hesaba katsın. Boş bırakırsan maliyeti bilinen ürünlerden hesaplanır.</p>
       <table className="by-tablo">
-        <thead><tr><th>Kategori</th><th className="sag">4 hafta ciro</th><th className="sag">Hesaplanan</th><th className="sag">Tahmini marj (%)</th></tr></thead>
+        <thead><tr><th>Kategori</th><th className="sag">4 hafta ciro</th><th className="sag">Hesaplanan</th><th className="sag">Elle tahmini marj (%)</th></tr></thead>
         <tbody>
           {kategoriler.map((k) => (
             <tr key={k.k}>
@@ -655,9 +706,36 @@ function Ayarlar({ d, model, setD }) {
   );
 }
 
+function KartDetay({ t, d, model, setD, onAc }) {
+  return (
+    <div className="by-arac-ic">
+      <div className={`by-kart by-kart-ic`}>
+        <h3>{t.baslik}</h3>
+        <p>{t.cumle}</p>
+        <p className="by-aksiyon">👉 {t.aksiyon}{t.not ? ` (${t.not})` : ''}</p>
+      </div>
+      {(t.kural || t.kaynak || t.hesap) && (
+        <div className="by-seffaf">
+          {t.kural && (<><b>Kural</b><span>{t.kural}</span></>)}
+          {t.kaynak && (<><b>Veri kaynağı</b><span>{t.kaynak}</span></>)}
+          {t.hesap && (<><b>Hesap</b><span>{t.hesap}</span></>)}
+          <b>"Gördüm"</b><span>Kart bu 4 haftalık dönem için kapanır. Durum değişirse, etkisi %50'den fazla büyürse ya da yeni dönem başlarsa tekrar gelir.</span>
+        </div>
+      )}
+      {t.detay?.tip === 'supheli' && <Supheli d={d} setD={setD} />}
+      <div className="by-satir-btn">
+        {t.urun && <button type="button" className="by-btn by-ana" onClick={() => onAc({ id: 'urun', urun: t.urun })}>Ürün detayı</button>}
+        {t.urun && model.urunMap.get(t.urun)?.eslesti && !model.urunMap.get(t.urun)?.sanal && <button type="button" className="by-btn" onClick={() => onAc({ id: 'simulator', urun: t.urun })}>Simülatörde dene</button>}
+        {t.detay?.tip === 'arac' && <button type="button" className="by-btn by-ana" onClick={() => onAc({ id: t.detay.arac })}>{BASLIK[t.detay.arac]} ekranını aç</button>}
+      </div>
+    </div>
+  );
+}
+
 export default function BeyinArac({ arac, d, model, setD, onKapat, onAc, onYenile }) {
   let icerik = null;
-  if (arac.id === 'urun') icerik = <UrunDetay model={model} urun={arac.urun} onAc={onAc} />;
+  if (arac.id === 'kart') icerik = <KartDetay t={arac.kart} d={d} model={model} setD={setD} onAc={onAc} />;
+  else if (arac.id === 'urun') icerik = <UrunDetay model={model} urun={arac.urun} onAc={onAc} />;
   else if (arac.id === 'supheli') icerik = <Supheli d={d} setD={setD} />;
   else if (arac.id === 'simulator') icerik = <Simulator model={model} baslangic={arac.urun} />;
   else if (arac.id === 'deney') icerik = <Deneyler d={d} model={model} onYenile={onYenile} />;

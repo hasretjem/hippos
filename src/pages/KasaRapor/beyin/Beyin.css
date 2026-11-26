@@ -184,3 +184,29 @@
   .by-pencere { border-radius: 0; height: 100%; }
   .by-tablo th, .by-tablo td { font-size: 13px; padding: 5px 6px; }
 }
+
+/* Grup tabloları, etiketler, kart detayı */
+.by-etiketler { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.by-govde .by-etiketler em { font-style: normal; font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: #343a40; color: #f1f3f5 !important; }
+.by-govde .by-etiketler em.by-tahmini { background: #5c3d00; color: #ffe8a3 !important; }
+.by-govde .by-kartnot { font-size: 12px; font-weight: 700; color: #868e96 !important; }
+.by-govde .by-ipucu, .by-pencere .by-ipucu { font-size: 12px; font-weight: 700; color: #868e96 !important; }
+.by-grup summary { list-style: none; cursor: pointer; }
+.by-grup summary::-webkit-details-marker { display: none; }
+.by-grup summary h2::before { content: '▸ '; color: #e94f37 !important; }
+.by-grup[open] summary h2::before { content: '▾ '; }
+.by-gtablo { width: 100%; border-collapse: collapse; }
+.by-gtablo th, .by-gtablo td { padding: 5px 6px; border-bottom: 1px solid #e9ecef; font-size: 14px; text-align: left; }
+.by-govde .by-gtablo th { font-size: 11px; font-weight: 900; text-transform: uppercase; color: #868e96 !important; }
+.by-gtablo td { font-weight: 700; }
+.by-gtablo tr { cursor: pointer; }
+.by-gtablo tbody tr:hover td { background: #fff5f3; }
+.by-gtablo .sag { text-align: right; white-space: nowrap; }
+.by-govde .by-gtablo td small, .by-govde .by-soluk { color: #868e96 !important; font-weight: 700; }
+.by-iki-esit { grid-template-columns: 1fr 1fr; }
+.by-seffaf { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; background: #fff; border: 2px solid #dee2e6; border-radius: 12px; padding: 10px 12px; }
+.by-pencere .by-seffaf b { font-size: 13px; font-weight: 900; color: #e94f37 !important; }
+.by-pencere .by-seffaf span { font-size: 14px; font-weight: 600; line-height: 1.45; }
+@media (max-width: 900px) { .by-iki-esit { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .by-seffaf { grid-template-columns: 1fr; } }
+.by-kart-ic { border-color: #dee2e6; border-left-color: #e94f37; }

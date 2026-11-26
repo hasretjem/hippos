@@ -9,7 +9,7 @@ function kontrol(s) {
 
 // Tek seferde sayfanın ihtiyaç duyduğu her şey.
 export async function beyinYukle() {
-  const [veri, malz, sand, par, esl, ayar, isaret, notlar, deney, alim, fiyatGec] = await Promise.all([
+  const [veri, malz, sand, par, esl, ayar, isaret, notlar, deney, alim, fiyatGec, sandvic, urunler] = await Promise.all([
     supabase.rpc('beyin_veri', { p_hafta: 17 }),
     supabase.from('ol_malzemeler').select('id, ad, birim_adi, birim_gram, fiyat_turu, fiyat, tur').order('sira'),
     supabase.from('ol_sandvicler').select('id, ad, normal, buyuk'),
@@ -21,6 +21,8 @@ export async function beyinYukle() {
     supabase.from('beyin_deneyler').select('*').order('baslangic', { ascending: false }),
     supabase.from('beyin_alimlar').select('*').order('tarih', { ascending: false }),
     supabase.from('beyin_fiyat_gecmisi').select('*').order('zaman', { ascending: false }).limit(200),
+    supabase.rpc('beyin_sandvic', { p_hafta: 17 }),
+    supabase.from('products').select('ad, fiyat, kategori'),
   ]);
   return {
     veri: kontrol(veri),
@@ -34,6 +36,8 @@ export async function beyinYukle() {
     deneyler: kontrol(deney) || [],
     alimlar: kontrol(alim) || [],
     fiyatGecmisi: kontrol(fiyatGec) || [],
+    sandvic: kontrol(sandvic) || { fis: [], kalem: [] },
+    urunler: kontrol(urunler) || [],
   };
 }
 
@@ -54,6 +58,7 @@ export async function eslestirmeKaydet(satir) {
       urun_ad: satir.urun_ad,
       kalemler: satir.kalemler || [],
       hazir: satir.hazir || null,
+      grup: satir.grup || null,
       sabit_maliyet: satir.sabit_maliyet === '' || satir.sabit_maliyet === null || satir.sabit_maliyet === undefined ? null : Number(satir.sabit_maliyet),
       guncelleme: new Date().toISOString(),
     }),
