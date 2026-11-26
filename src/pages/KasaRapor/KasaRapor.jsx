@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, RefreshCw, Image as ImageIcon, Search } from 'lucide-react';
 import RaporPaylas from './RaporPaylas';
+import Beyin from './beyin/Beyin';
 import { raporHesapla, farkEtiketi, kurus, tarihKisa, saatYaz, trNorm, TUR_SIRA } from './raporVeri';
 import './KasaRapor.css';
 
-// Kasa & Rapor: bol sekmeli rapor sayfası. Şimdilik tek sekme: Alacak/Borç Raporu.
-const SEKMELER = [{ id: 'alacakborc', ad: 'Alacak / Borç Raporu' }];
+// Kasa & Rapor: sekmeli rapor sayfası. İlk sekme "İşletmenin Beyni" (tespitler, kâr, araçlar), ikincisi Alacak/Borç Raporu.
+const SEKMELER = [{ id: 'beyin', ad: 'İşletmenin Beyni' }, { id: 'alacakborc', ad: 'Alacak / Borç Raporu' }];
 const YENILE_MS = 30000;
 
 function Liste({ tur, baslik, alt, toplam, turler, satirlar, arama }) {
@@ -57,7 +58,7 @@ function Liste({ tur, baslik, alt, toplam, turler, satirlar, arama }) {
 }
 
 export default function KasaRapor({ onNavigate }) {
-  const [sekme, setSekme] = useState('alacakborc');
+  const [sekme, setSekme] = useState('beyin');
   const [veri, setVeri] = useState(null); // { satirlar, zaman }
   const [hata, setHata] = useState('');
   const [yukleniyor, setYukleniyor] = useState(false);
@@ -126,18 +127,24 @@ export default function KasaRapor({ onNavigate }) {
           ))}
         </nav>
         <span className="kr-bosluk" />
-        {veri && <span className="kr-zaman">Güncellendi {saatYaz(veri.zaman)}</span>}
-        <button type="button" className="kr-btn" onClick={yukle} disabled={yukleniyor}>
-          <RefreshCw size={17} className={yukleniyor ? 'kr-don' : ''} />
-          <span>Yenile</span>
-        </button>
-        <button type="button" className="kr-btn kr-ana" onClick={() => setPaylasAcik(true)} disabled={!veri}>
-          <ImageIcon size={17} />
-          <span>PNG</span>
-        </button>
+        {sekme === 'alacakborc' && (
+          <>
+            {veri && <span className="kr-zaman">Güncellendi {saatYaz(veri.zaman)}</span>}
+            <button type="button" className="kr-btn" onClick={yukle} disabled={yukleniyor}>
+              <RefreshCw size={17} className={yukleniyor ? 'kr-don' : ''} />
+              <span>Yenile</span>
+            </button>
+            <button type="button" className="kr-btn kr-ana" onClick={() => setPaylasAcik(true)} disabled={!veri}>
+              <ImageIcon size={17} />
+              <span>PNG</span>
+            </button>
+          </>
+        )}
       </header>
 
-      {hata && <div className="kr-hata">{hata}</div>}
+      {sekme === 'beyin' && <Beyin />}
+
+      {hata && sekme === 'alacakborc' && <div className="kr-hata">{hata}</div>}
 
       {sekme === 'alacakborc' && (
         <main className="kr-govde">
