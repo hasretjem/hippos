@@ -318,6 +318,7 @@ export function tespitUret(model, ek) {
       cumle: `En sonuncusu: ${ilk.ts.slice(8, 10)}.${ilk.ts.slice(5, 7)} ${ilk.ts.slice(11)} · ${ilk.masa} · ${ilk.ad} ${tl(ilk.fiyat)} (normali ${tl(ilk.medyan)}).`,
       etki: fazla,
       etkiMetni: `${tl(fazla)} fazla görünüyor`,
+      etkiEksi: true,
       aksiyon: 'Bu satışlar hesaplara katılmıyor. Doğruysa "Doğru giriş" de; yanlışsa Veri sayfasından düzelt.',
       detay: { tip: 'supheli', liste: supheli },
     });

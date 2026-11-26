@@ -344,7 +344,7 @@ function Kanal({ d, model }) {
                 {saat.saatler.map((s) => {
                   const c = saat.h.get(`${i + 1}-${s}`) || 0;
                   const o = saat.max ? c / saat.max : 0;
-                  return <td key={s} className={o > 0.55 ? 'by-isi-koyu' : ''} style={{ background: `rgba(233,79,55,${0.06 + o * 0.94})` }} title={`${g} ${s}:00 · ${tl(c)}`}>{c >= 1000 ? `${Math.round(c / 100) / 10}b` : Math.round(c)}</td>;
+                  return <td key={s} className={o > 0.55 ? 'by-isi-koyu' : ''} style={{ background: `rgba(233,79,55,${0.06 + o * 0.94})` }} title={`${g} ${s}:00 · ${tl(c)}`}>{c >= 1000 ? `${(Math.round(c / 100) / 10).toLocaleString('tr-TR')}b` : Math.round(c)}</td>;
                 })}
               </tr>
             ))}

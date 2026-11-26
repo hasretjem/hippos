@@ -104,7 +104,7 @@ function Kart({ t, onGordum, onAc }) {
           {SEVIYE_IKON[t.seviye]} {t.tur}
         </span>
         {(t.etkiMetni || t.etki) ? (
-          <span className={`by-etki ${t.etki < 0 ? 'by-eksi' : 'by-arti'}`}>{t.etkiMetni || `${t.etkiFirsat ? 'fırsat ' : ''}${isaretli(t.etki)}/ay`}</span>
+          <span className={`by-etki ${t.etki < 0 || t.etkiEksi ? 'by-eksi' : 'by-arti'}`}>{t.etkiMetni || `${t.etkiFirsat ? 'fırsat ' : ''}${isaretli(t.etki)}/ay`}</span>
         ) : null}
       </header>
       <h3>{t.baslik}</h3>
