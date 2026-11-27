@@ -3,6 +3,7 @@ import { RefreshCw, Check, ChevronRight, Calculator, FlaskConical, ShoppingBaske
 import { beyinYukle, isaretKoy } from './beyinVeri';
 import { modelKur, tespitUret, hedefHesap, ozetCumleler, urunHaritasi, grupPerformansi, gordumImza, tl, yuzde, isaretli } from './beyinHesap';
 import BeyinArac from './BeyinAraclar';
+import { kategoriKiyas } from './beyinKategori';
 import './Beyin.css';
 
 const ARACLAR = [
@@ -166,6 +167,32 @@ function Harita({ harita, onUrun }) {
   );
 }
 
+function Kategoriler({ satirlar, onAc }) {
+  const yt = (n) => (n === null || !Number.isFinite(n) ? '—' : `${n > 0 ? '+' : n < 0 ? '−' : ''}%${Math.round(Math.abs(n) * 100)}`);
+  return (
+    <section className="by-blok">
+      <h2>Kategoriler <small>son 4 hafta · birine dokun: kendi içinde değerlendirme</small></h2>
+      <table className="by-gtablo by-kiyas">
+        <thead><tr><th>Kategori</th><th className="sag">Ciro</th><th>Ciro payı</th><th className="sag">Brüt kâr</th><th>Kâr payı*</th><th className="sag">Marj</th><th className="sag">Trend</th></tr></thead>
+        <tbody>
+          {satirlar.map((s) => (
+            <tr key={s.k} onClick={() => onAc(s.k)}>
+              <td><b>{s.k}</b></td>
+              <td className="sag">{tl(s.ciro)}</td>
+              <td className="by-paycell"><i style={{ width: `${s.ciroPay * 100}%` }} /><span>%{Math.round(s.ciroPay * 100)}</span></td>
+              <td className="sag">{s.kar === null ? '—' : tl(s.kar)}</td>
+              <td className="by-paycell by-yesilpay">{s.karPay === null ? <span className="by-soluk">maliyet yok</span> : (<><i style={{ width: `${s.karPay * 100}%` }} /><span>%{Math.round(s.karPay * 100)}</span></>)}</td>
+              <td className="sag">{yuzde(s.marj)}</td>
+              <td className={`sag ${s.trend !== null && s.trend <= -0.1 ? 'by-kotu-y' : s.trend !== null && s.trend >= 0.1 ? 'by-iyi-y' : ''}`}>{yt(s.trend)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="by-ipucu">* Kâr payı: maliyeti bilinen (ya da tahmini marjı girilen) kategoriler arasındaki pay.</p>
+    </section>
+  );
+}
+
 function GrupTablo({ baslik, alt, liste, onUrun, ilk = 8, acik = false }) {
   const [hepsi, setHepsi] = useState(false);
   const l = hepsi ? liste : liste.slice(0, ilk);
@@ -221,6 +248,7 @@ export default function Beyin() {
   const hedef = useMemo(() => (model ? hedefHesap(model, d.ayarlar) : null), [model, d]);
   const ozet = useMemo(() => (model ? ozetCumleler(model, tespitler) : []), [model, tespitler]);
   const harita = useMemo(() => (model ? urunHaritasi(model) : null), [model]);
+  const kiyas = useMemo(() => (model ? kategoriKiyas(model) : []), [model]);
   const gruplar = useMemo(() => (model ? { menu: grupPerformansi(model, 'menu').sort((a, b) => b.ciro - a.ciro), ek: grupPerformansi(model, 'ek'), malzeme: grupPerformansi(model, 'malzeme') } : null), [model]);
 
   const gorunen = tespitler.filter((t) => gizlileriGoster || !t.gizli);
@@ -296,6 +324,8 @@ export default function Beyin() {
         <GrupTablo baslik="Ek ürünler" alt="içecekler, tek tek kahvaltılıklar, online ekstralar · kâra göre" liste={gruplar.ek} onUrun={(u) => setArac({ id: 'urun', urun: u })} />
         <GrupTablo baslik="Sandviç malzemeleri" alt="ekmek ve sandviç içi kalemler · kâra göre" liste={gruplar.malzeme} onUrun={(u) => setArac({ id: 'urun', urun: u })} />
       </div>
+
+      <Kategoriler satirlar={kiyas} onAc={(k) => setArac({ id: 'kategori', k })} />
 
       <section className="by-blok">
         <h2>Araçlar</h2>

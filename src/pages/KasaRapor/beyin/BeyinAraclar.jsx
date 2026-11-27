@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { X, Trash2, Plus, Save } from 'lucide-react';
+import Kategori from './Kategori';
 import { isaretKoy, ayarKaydet, eslestirmeKaydet, eslestirmeSil, notEkle, notSil, deneyEkle, deneySil, alimEkle, alimSil } from './beyinVeri';
 import {
   tl, tl2, yuzde, isaretli, birimMaliyet, AYLIK, tarihKisa, GUNLER,
@@ -7,7 +8,7 @@ import {
 } from './beyinHesap';
 
 const BASLIK = {
-  kart: 'Tespit detayı', urun: 'Ürün detayı', supheli: 'Yanlış girilmiş olabilecek satışlar', simulator: 'Ya şöyle yapsaydık', deney: 'Deneyler', sepet: 'Birlikte satılanlar',
+  kategori: 'Kategori', kart: 'Tespit detayı', urun: 'Ürün detayı', supheli: 'Yanlış girilmiş olabilecek satışlar', simulator: 'Ya şöyle yapsaydık', deney: 'Deneyler', sepet: 'Birlikte satılanlar',
   kanal: 'Kanal, ödeme ve saat', fiyat: 'Fiyat bekçisi', alim: 'Alımlar ve fire', eslestirme: 'Ürün – malzeme eşleştirmesi', notlar: 'Notlar', ayarlar: 'Hedef ve ayarlar',
 };
 
@@ -546,10 +547,11 @@ function EslestirmeDuzenle({ urunAd, kayit, d, model, setD, onKapat }) {
   const [sabit, setSabit] = useState(kayit?.sabit_maliyet === null || kayit?.sabit_maliyet === undefined ? '' : String(kayit.sabit_maliyet));
   const urun = model.urunMap.get(urunAd);
   const [grup, setGrup] = useState(kayit?.grup || '');
+  const [birlesik, setBirlesik] = useState(kayit?.birlesik_ad || '');
   const [mesaj, setMesaj] = useState('');
   const toplam = hazir ? null : kalemler.reduce((t, k) => t + sayi(k.a) * birimMaliyet(model.malzMap.get(Number(k.m))), 0) + sayi(sabit);
   const kaydet = async () => {
-    const satir = { urun_ad: urunAd, kalemler: hazir ? [] : kalemler.filter((k) => sayi(k.a) > 0).map((k) => ({ m: Number(k.m), a: sayi(k.a) })), hazir: hazir || null, sabit_maliyet: sabit === '' ? null : sayi(sabit), grup: grup || null };
+    const satir = { urun_ad: urunAd, kalemler: hazir ? [] : kalemler.filter((k) => sayi(k.a) > 0).map((k) => ({ m: Number(k.m), a: sayi(k.a) })), hazir: hazir || null, sabit_maliyet: sabit === '' ? null : sayi(sabit), grup: grup || null, birlesik_ad: birlesik.trim() || null };
     try {
       await eslestirmeKaydet(satir);
       setD((o) => ({ ...o, eslestirme: [...o.eslestirme.filter((e) => e.urun_ad !== urunAd), satir] }));
@@ -573,6 +575,9 @@ function EslestirmeDuzenle({ urunAd, kayit, d, model, setD, onKapat }) {
           <option value="ek">{GRUPLAR.ek}</option>
           <option value="malzeme">{GRUPLAR.malzeme}</option>
         </select>
+      </label>
+      <label className="by-tek">Birleşik ad (kategori tablosunda küçük/büyük boyların toplandığı ad)
+        <input value={birlesik} onChange={(e) => setBirlesik(e.target.value)} placeholder="Boş bırakırsan otomatik (malzeme adı)" />
       </label>
       <label className="by-tek">Hazır sandviç reçetesi (Online Sipariş'ten)
         <select value={hazir} onChange={(e) => setHazir(e.target.value)}>
@@ -734,7 +739,8 @@ function KartDetay({ t, d, model, setD, onAc }) {
 
 export default function BeyinArac({ arac, d, model, setD, onKapat, onAc, onYenile }) {
   let icerik = null;
-  if (arac.id === 'kart') icerik = <KartDetay t={arac.kart} d={d} model={model} setD={setD} onAc={onAc} />;
+  if (arac.id === 'kategori') icerik = <Kategori k={arac.k} d={d} model={model} setD={setD} />;
+  else if (arac.id === 'kart') icerik = <KartDetay t={arac.kart} d={d} model={model} setD={setD} onAc={onAc} />;
   else if (arac.id === 'urun') icerik = <UrunDetay model={model} urun={arac.urun} onAc={onAc} />;
   else if (arac.id === 'supheli') icerik = <Supheli d={d} setD={setD} />;
   else if (arac.id === 'simulator') icerik = <Simulator model={model} baslangic={arac.urun} />;
@@ -750,7 +756,7 @@ export default function BeyinArac({ arac, d, model, setD, onKapat, onAc, onYenil
     <div className="by-perde" onClick={onKapat} role="presentation">
       <div className="by-pencere" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
         <header>
-          <h2>{arac.id === 'urun' ? arac.urun : BASLIK[arac.id]}</h2>
+          <h2>{arac.id === 'urun' ? arac.urun : arac.id === 'kategori' ? arac.k : BASLIK[arac.id]}</h2>
           <button type="button" className="by-ikon" onClick={onKapat} aria-label="Kapat"><X size={22} /></button>
         </header>
         <div className="by-pencere-govde">{icerik}</div>

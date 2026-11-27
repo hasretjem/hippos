@@ -210,3 +210,33 @@
 @media (max-width: 900px) { .by-iki-esit { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .by-seffaf { grid-template-columns: 1fr; } }
 .by-kart-ic { border-color: #dee2e6; border-left-color: #e94f37; }
+
+/* Kategoriler */
+.by-paycell { min-width: 90px; position: relative; }
+.by-paycell i { display: inline-block; height: 10px; border-radius: 5px; background: #e94f37; vertical-align: middle; margin-right: 6px; max-width: 60px; min-width: 2px; }
+.by-yesilpay i { background: #2f9e44; }
+.by-govde .by-paycell span, .by-pencere .by-paycell span { font-size: 12px; font-weight: 800; color: #495057 !important; }
+.by-kiyas tr { cursor: pointer; }
+.by-hedef-kat { background: #fff; border: 2px solid #dee2e6; border-radius: 12px; padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+.by-pencere .by-orta { width: 160px !important; }
+.by-ktespit { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; }
+.by-ktespit .by-kart h3 { font-size: 16px; }
+.by-ktablo td b { font-weight: 900; }
+.by-ktablo td svg { vertical-align: middle; color: #868e96 !important; }
+.by-alt > td { background: #f8f9fa; padding: 8px !important; }
+.by-icte { margin-bottom: 6px; }
+.by-cikar { background: #fff8e1; border: 2px solid #ffe08a; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.by-pencere .by-cikar span { font-size: 14px; font-weight: 600; }
+.by-png { background: #fff; border-radius: 12px; padding: 10px; }
+.by-png-bas { display: flex; justify-content: space-between; gap: 8px; padding: 2px 4px 8px; flex-wrap: wrap; }
+.by-pencere .by-png-bas b { font-size: 17px; font-weight: 900; color: #e94f37 !important; }
+.by-pencere .by-png-bas span { font-size: 12px; font-weight: 700; color: #868e96 !important; }
+.by-kutu { display: inline-flex !important; flex-direction: row !important; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; }
+.by-pencere .by-kutu input { width: 18px; height: 18px; }
+.by-derin .by-cbk em { font-style: normal; font-size: 10px; font-weight: 800; color: #495057 !important; }
+.by-set { background: #ebfbee; border: 2px solid #b2f2bb; border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.by-set ul { margin: 0; padding-left: 20px; }
+.by-pencere .by-set li { font-size: 14px; font-weight: 700; }
+.by-pencere .by-set li small { color: #495057 !important; font-weight: 600; }
+.by-pencere .by-set span { font-size: 14px; font-weight: 600; }
+.by-ciftler { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 6px; }

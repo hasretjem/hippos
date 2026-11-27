@@ -59,6 +59,7 @@ export async function eslestirmeKaydet(satir) {
       kalemler: satir.kalemler || [],
       hazir: satir.hazir || null,
       grup: satir.grup || null,
+      birlesik_ad: satir.birlesik_ad ? String(satir.birlesik_ad).trim() || null : null,
       sabit_maliyet: satir.sabit_maliyet === '' || satir.sabit_maliyet === null || satir.sabit_maliyet === undefined ? null : Number(satir.sabit_maliyet),
       guncelleme: new Date().toISOString(),
     }),
@@ -87,4 +88,9 @@ export async function alimEkle(a) {
 }
 export async function alimSil(id) {
   kontrol(await supabase.from('beyin_alimlar').delete().eq('id', id));
+}
+
+// Kategori sayfası için fiş bazlı istatistikler (kategori açılınca çekilir).
+export async function kategoriYukle(kategori) {
+  return kontrol(await supabase.rpc('beyin_kategori', { p_kategori: kategori }));
 }
